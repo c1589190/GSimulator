@@ -119,7 +119,9 @@ class ImportCommandUrlTest {
         InteractionResult result = importCommand.execute(
                 arg("https://192.0.2.1/test --fetch-only --no-crawl"), session);
         assertNotNull(result);
-        assertTrue(result.displayText().contains("Web 导入") || result.displayText().contains("Web import") || !result.success());
+        assertTrue(result.displayText().contains("Web 导入")
+                || result.displayText().contains("Web import")
+                || !result.success());
     }
 
     @Test

@@ -196,7 +196,9 @@ public class MediaWikiCrawler {
             if (path != null && (path.startsWith("/wiki/") || path.startsWith("/zh/") || path.startsWith("/en/"))) {
                 String[] parts = path.split("/");
                 if (parts.length >= 3) {
-                    String title = java.net.URLDecoder.decode(parts[parts.length - 1], java.nio.charset.StandardCharsets.UTF_8);
+                    String title = java.net.URLDecoder.decode(
+                            parts[parts.length - 1],
+                            java.nio.charset.StandardCharsets.UTF_8);
                     return PageIdentifier.forTitle(title);
                 }
             }
@@ -222,7 +224,9 @@ public class MediaWikiCrawler {
      */
     public String titleToUrl(String title) {
         try {
-            String encoded = java.net.URLEncoder.encode(title.replace(" ", "_"), java.nio.charset.StandardCharsets.UTF_8);
+            String encoded = java.net.URLEncoder.encode(
+                    title.replace(" ", "_"),
+                    java.nio.charset.StandardCharsets.UTF_8);
             return baseUrl + "/wiki/" + encoded;
         } catch (Exception e) {
             return baseUrl + "/wiki/" + title.replace(" ", "_");

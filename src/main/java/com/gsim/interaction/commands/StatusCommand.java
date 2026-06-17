@@ -72,14 +72,22 @@ public class StatusCommand implements InteractionCommand {
 
         // Services
         sb.append("--- 服务状态 ---\n");
-        sb.append("ChromaDB:      ").append(config.isChromaEnabled() ? "已启用 (" + config.getChromaBaseUrl() + ")" : "未启用").append("\n");
+        sb.append("ChromaDB:      ")
+                .append(config.isChromaEnabled()
+                        ? "已启用 (" + config.getChromaBaseUrl() + ")"
+                        : "未启用")
+                .append("\n");
         sb.append("LLM:           ").append("已配置 (" + config.getLlmModel() + ")").append("\n");
         sb.append("WebResearch:   ").append(config.isWebResearchEnabled() ? "已启用" : "未启用").append("\n\n");
 
         // Session
         sb.append("--- 会话 ---\n");
         sb.append("会话开始时间:  ").append(ctx.getSessionStartedAt()).append("\n");
-        sb.append("Campaign ID:   ").append(ctx.getCurrentCampaignId() != null ? ctx.getCurrentCampaignId() : "无").append("\n");
+        sb.append("Campaign ID:   ")
+                .append(ctx.getCurrentCampaignId() != null
+                        ? ctx.getCurrentCampaignId()
+                        : "无")
+                .append("\n");
         sb.append("Turn ID:       ").append(ctx.getCurrentTurnId() != null ? ctx.getCurrentTurnId() : "无").append("\n");
 
         sb.append("\n======================================\n");

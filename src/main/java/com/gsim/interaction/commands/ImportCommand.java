@@ -221,6 +221,7 @@ public class ImportCommand implements InteractionCommand {
             sb.append(importResult.summary()).append("\n");
         }
 
-        return InteractionResult.ok(result.summary(), sb.toString(), result.writtenFiles().stream().map(Path::toString).toList());
+        return InteractionResult.ok(result.summary(), sb.toString(),
+                result.writtenFiles().stream().map(Path::toString).toList());
     }
 }
