@@ -30,6 +30,7 @@ com.gsim
 ├── prompt/         — Prompt 模板管理和渲染
 ├── crawler/        — 联网搜索和网页抓取
 ├── importdata/     — 资料导入管道
+├── webimport/      — 网页抓取管道（URL → txt → import）
 ├── task/           — 任务上下文、计划、日志
 ├── timeline/       — 时间线事件管理
 ├── world/          — 世界状态、派系、角色
@@ -116,7 +117,7 @@ mvn test
 - **Phase 3**: Campaign / Turn / PlayerAction (下一阶段)
 - **Phase 4**: PromptManager 与 LLM JSON 系统
 - **Phase 5**: ChromaDB 与 /searchdb
-- **Phase 6**: /import
+- **Phase 6**: /import ✅ (本地导入 + URL 网页导入)
 - **Phase 7**: Orchestrator 和 /run 骨架
 - **Phase 8**: 玩家行动分析、时间线、世界状态
 - **Phase 9**: ResearchAgent

@@ -52,6 +52,12 @@ cp .env.example .env
 | `/player <玩家名> <行动内容>` | 登记玩家行动 |
 | `/run [强制要求]` | 结算当前回合 |
 | `/import` | 从 import/ 导入资料到知识库 |
+| `/import <URL>` | 抓取网页并导入知识库 |
+| `/import <URL> --fetch-only` | 只抓取网页生成 txt，不入库 |
+| `/import <URL> --no-crawl` | 只抓取当前页面 |
+| `/import <URL> --max-pages N` | 限制抓取页数 (默认 50) |
+| `/import <URL> --depth N` | 限制递归深度 (默认 2) |
+| `/import <URL> --delay-ms N` | 请求间隔毫秒 (默认 1000) |
 | `/searchdb <查询内容>` | 语义查询知识库 |
 | `/actions` | 显示当前回合玩家行动 |
 | `/clearactions` | 清空当前回合未结算行动 |
@@ -101,7 +107,8 @@ src/main/java/com/gsim/
 ├── llm/                   # LLM 客户端封装
 ├── prompt/                # Prompt 管理
 ├── crawler/               # 联网爬虫
-├── importdata/            # 资料导入
+├── importdata/            # 资料导入（本地 + URL）
+├── webimport/             # 网页抓取管道
 ├── task/                  # 任务上下文和日志
 ├── timeline/              # 时间线
 ├── world/                 # 世界状态

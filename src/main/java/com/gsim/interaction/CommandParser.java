@@ -46,8 +46,8 @@ public class CommandParser {
             }
         }
 
-        // 对于 /run, /searchdb 命令，全部剩余文本作为一个参数
-        if ("run".equals(commandName) || "searchdb".equals(commandName)) {
+        // 对于 /run, /searchdb, /import 命令，全部剩余文本作为一个参数
+        if ("run".equals(commandName) || "searchdb".equals(commandName) || "import".equals(commandName)) {
             return new ParsedCommand(commandName, new String[]{rawArgs});
         }
 

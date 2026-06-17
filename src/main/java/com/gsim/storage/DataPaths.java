@@ -26,6 +26,7 @@ public class DataPaths {
         ensureDir(config.getImportDir());
         ensureDir(config.getImportDir().resolve("done"));
         ensureDir(config.getImportDir().resolve("failed"));
+        ensureDir(config.getImportDir().resolve("web"));
         ensureDir(config.getOutputDir());
         ensureDir(config.getLogDir());
         ensureDir(config.getDataDir().resolve("campaigns"));

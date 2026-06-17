@@ -13,6 +13,9 @@ import com.gsim.interaction.commands.ClearActionsCommand;
 import com.gsim.interaction.commands.SaveCommand;
 import com.gsim.interaction.commands.LoadCommand;
 import com.gsim.interaction.commands.TurnCommand;
+import com.gsim.interaction.commands.ImportCommand;
+import com.gsim.importdata.ImportManager;
+import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
 
@@ -55,7 +58,11 @@ public class GSimulatorApplication {
         manager.registerCommand(new LoadCommand());
         manager.registerCommand(new TurnCommand());
 
-        // TODO Phase 4+: /run, /import, /searchdb
+        // Phase 6: /import (local + URL)
+        ImportManager importManager = new ImportManager(ctx.getConfig(), new FakeChromaClient());
+        manager.registerCommand(new ImportCommand(ctx.getConfig(), importManager));
+
+        // TODO Phase 4+: /run, /searchdb
     }
 
     /**

@@ -24,14 +24,29 @@ dependency-reduced-pom.xml
 Thumbs.db
 
 # Data (runtime-generated, not source code)
+data/knowledge/
 data/campaigns/
 data/demo/
 data/logs/
 data/outputs/
 data/pending-imports/
+data/cache/
+data/web-cache/
+
+# Import directory — generated txt not committed
+import/*
+!import/.gitkeep
+!import/done/
+!import/done/.gitkeep
+!import/failed/
+!import/failed/.gitkeep
+!import/web/
+!import/web/.gitkeep
 
 # Environment (contains secrets)
 .env
+.env.*
+!.env.example
 
 # Claude Code local settings
 .claude/settings.local.json
