@@ -6,8 +6,15 @@ import com.gsim.campaign.PlayerActionService;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.InteractionSession;
+import com.gsim.llm.LlmClient;
+import com.gsim.llm.OpenAiLlmClient;
 import com.gsim.storage.DataPaths;
+import com.gsim.tool.LocalFileSearchService;
+import com.gsim.tool.ToolRegistry;
+import com.gsim.tool.WikiSearchTool;
 import com.gsim.util.TimeProvider;
+
+import java.nio.file.Path;
 
 /**
  * 应用上下文 — 整个应用的单例依赖容器。
@@ -22,6 +29,8 @@ public class ApplicationContext {
     private final CampaignService campaignService;
     private final TurnService turnService;
     private final PlayerActionService playerActionService;
+    private final LlmClient llmClient;
+    private final ToolRegistry toolRegistry;
     private final InteractionContext interactionContext;
     private final InteractionSession interactionSession;
     private final InteractionManager interactionManager;
@@ -36,11 +45,24 @@ public class ApplicationContext {
         this.turnService = new TurnService(dataPaths, timeProvider);
         this.playerActionService = new PlayerActionService(dataPaths, timeProvider);
 
+        // LLM
+        this.llmClient = new OpenAiLlmClient(
+                config.getLlmBaseUrl(), config.getLlmApiKey(),
+                config.getLlmModel(), config.getLlmTemperature(),
+                config.getLlmTimeoutSeconds());
+
+        // Tool 系统
+        this.toolRegistry = new ToolRegistry();
+        Path wikiDir = config.getImportDir().resolve("web").resolve("prts.wiki");
+        LocalFileSearchService searchService = new LocalFileSearchService(wikiDir);
+        this.toolRegistry.register(new WikiSearchTool(searchService));
+
         // 交互层
         this.interactionContext = new InteractionContext();
         this.interactionSession = new InteractionSession(
                 interactionContext, config,
-                campaignService, turnService, playerActionService);
+                campaignService, turnService, playerActionService,
+                toolRegistry, llmClient);
         this.interactionManager = new InteractionManager();
     }
 
@@ -75,6 +97,14 @@ public class ApplicationContext {
 
     public PlayerActionService getPlayerActionService() {
         return playerActionService;
+    }
+
+    public LlmClient getLlmClient() {
+        return llmClient;
+    }
+
+    public ToolRegistry getToolRegistry() {
+        return toolRegistry;
     }
 
     public InteractionContext getInteractionContext() {

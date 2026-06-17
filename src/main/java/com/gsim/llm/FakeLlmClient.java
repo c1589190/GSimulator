@@ -1,24 +1,35 @@
 package com.gsim.llm;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 假的 LLM 客户端，用于测试和离线开发。
- * 可通过 setNextResponse 预设返回内容。
+ * 支持预设单次响应或响应序列。
  */
 public class FakeLlmClient implements LlmClient {
 
-    private String nextResponse;
+    private final List<String> responses = new ArrayList<>();
+    private int callCount = 0;
+    private String defaultResponse = "{}";
     private boolean available;
 
     public FakeLlmClient() {
-        this.nextResponse = "{\"message\": \"This is a fake LLM response.\"}";
         this.available = true;
     }
 
     /**
-     * 预设下一次调用的返回内容。
+     * 预设下一次调用的返回内容（覆盖 defaultResponse）。
      */
     public void setNextResponse(String response) {
-        this.nextResponse = response;
+        this.defaultResponse = response;
+    }
+
+    /**
+     * 添加一个按顺序的响应。
+     */
+    public void addResponse(String response) {
+        this.responses.add(response);
     }
 
     /**
@@ -33,7 +44,14 @@ public class FakeLlmClient implements LlmClient {
         if (!available) {
             return LlmResponse.failure("FakeLlmClient is not available");
         }
-        return LlmResponse.success(nextResponse, "fake-model", nextResponse.length());
+        String content;
+        if (callCount < responses.size()) {
+            content = responses.get(callCount);
+        } else {
+            content = defaultResponse;
+        }
+        callCount++;
+        return LlmResponse.success(content, "fake-model", content.length());
     }
 
     @Override

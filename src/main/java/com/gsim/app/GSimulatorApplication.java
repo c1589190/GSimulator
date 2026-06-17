@@ -1,29 +1,15 @@
 package com.gsim.app;
 
+import com.gsim.agent.OrchestratorAgent;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionManager;
-import com.gsim.interaction.commands.ExitCommand;
-import com.gsim.interaction.commands.HelpCommand;
-import com.gsim.interaction.commands.StatusCommand;
-import com.gsim.interaction.commands.NewTurnCommand;
-import com.gsim.interaction.commands.PlayerCommand;
-import com.gsim.interaction.commands.ActionsCommand;
-import com.gsim.interaction.commands.ClearActionsCommand;
-import com.gsim.interaction.commands.SaveCommand;
-import com.gsim.interaction.commands.LoadCommand;
-import com.gsim.interaction.commands.TurnCommand;
-import com.gsim.interaction.commands.ImportCommand;
-import com.gsim.interaction.commands.ToolCommand;
+import com.gsim.interaction.commands.*;
 import com.gsim.importdata.ImportManager;
 import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
-import com.gsim.tool.LocalFileSearchService;
 import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.WikiSearchTool;
-
-import java.nio.file.Path;
 
 /**
  * GSimulator 应用启动器。
@@ -46,6 +32,8 @@ public class GSimulatorApplication {
     }
 
     private void registerCommands(InteractionManager manager) {
+        ToolRegistry toolRegistry = ctx.getToolRegistry();
+
         // /help — 显示所有命令
         manager.registerCommand(new HelpCommand(manager::getCommands));
 
@@ -69,13 +57,12 @@ public class GSimulatorApplication {
         manager.registerCommand(new ImportCommand(ctx.getConfig(), importManager));
 
         // Tool 系统: /tool wiki_search
-        ToolRegistry toolRegistry = new ToolRegistry();
-        Path wikiDir = ctx.getConfig().getImportDir().resolve("web").resolve("prts.wiki");
-        LocalFileSearchService searchService = new LocalFileSearchService(wikiDir);
-        toolRegistry.register(new WikiSearchTool(searchService));
         manager.registerCommand(new ToolCommand(toolRegistry));
 
-        // TODO Phase 4+: /run, /searchdb
+        // Phase 7+: /run
+        OrchestratorAgent orchestrator = new OrchestratorAgent(
+                ctx.getLlmClient(), toolRegistry, ctx.getConfig().getLlmModel());
+        manager.registerCommand(new RunCommand(orchestrator));
     }
 
     /**
