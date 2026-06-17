@@ -14,10 +14,16 @@ import com.gsim.interaction.commands.SaveCommand;
 import com.gsim.interaction.commands.LoadCommand;
 import com.gsim.interaction.commands.TurnCommand;
 import com.gsim.interaction.commands.ImportCommand;
+import com.gsim.interaction.commands.ToolCommand;
 import com.gsim.importdata.ImportManager;
 import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
+import com.gsim.tool.LocalFileSearchService;
+import com.gsim.tool.ToolRegistry;
+import com.gsim.tool.WikiSearchTool;
+
+import java.nio.file.Path;
 
 /**
  * GSimulator 应用启动器。
@@ -61,6 +67,13 @@ public class GSimulatorApplication {
         // Phase 6: /import (local + URL)
         ImportManager importManager = new ImportManager(ctx.getConfig(), new FakeChromaClient());
         manager.registerCommand(new ImportCommand(ctx.getConfig(), importManager));
+
+        // Tool 系统: /tool wiki_search
+        ToolRegistry toolRegistry = new ToolRegistry();
+        Path wikiDir = ctx.getConfig().getImportDir().resolve("web").resolve("prts.wiki");
+        LocalFileSearchService searchService = new LocalFileSearchService(wikiDir);
+        toolRegistry.register(new WikiSearchTool(searchService));
+        manager.registerCommand(new ToolCommand(toolRegistry));
 
         // TODO Phase 4+: /run, /searchdb
     }
