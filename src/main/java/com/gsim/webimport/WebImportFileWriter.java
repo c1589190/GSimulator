@@ -29,15 +29,34 @@ public class WebImportFileWriter {
     }
 
     /**
-     * 将抓取的页面写入文件。
+     * 将抓取的页面写入文件（无子目录）。
      * @return 写入的文件路径
      */
     public Path write(CrawledPage page) throws IOException {
+        return write(page, "");
+    }
+
+    /**
+     * 将抓取的页面写入文件，支持指定子目录。
+     * 输出路径：import/web/{host}/{subdir}/{safe-title}-{hash}.txt
+     *
+     * @param page   已抓取页面
+     * @param subdir 子目录（空字符串表示无子目录）
+     * @return 写入的文件路径
+     */
+    public Path write(CrawledPage page, String subdir) throws IOException {
         ensureDir();
 
         // 创建 host 子目录
         Path hostDir = webImportDir.resolve(sanitizeFilename(page.host()));
-        Files.createDirectories(hostDir);
+        Path targetDir = hostDir;
+        if (subdir != null && !subdir.isBlank()) {
+            targetDir = hostDir.resolve(subdir.trim().replaceAll("^/+|/+$", "").replaceAll("\\.{2,}", ""));
+            if (targetDir.toString().contains("..")) {
+                throw new IOException("Invalid subdir (path traversal): " + subdir);
+            }
+        }
+        Files.createDirectories(targetDir);
 
         // 生成文件名
         String safeTitle = sanitizeFilename(page.title());
@@ -50,7 +69,7 @@ public class WebImportFileWriter {
 
         String hash = shortHash(page.url());
         String filename = safeTitle + "-" + hash + ".txt";
-        Path filePath = hostDir.resolve(filename);
+        Path filePath = targetDir.resolve(filename);
 
         // 构建文件内容
         String content = buildFileContent(page);

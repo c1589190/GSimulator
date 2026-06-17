@@ -47,7 +47,7 @@ public class ImportCommand implements InteractionCommand {
     @Override
     public String description() {
         return "导入资料到知识库。无参数时导入 import/ 目录下的本地文件。" +
-                "传入 URL 时抓取网页并导入。";
+                "传入 URL 时抓取网页并导入。支持 --wiki-allpages 批量导入 MediaWiki 页面。";
     }
 
     @Override
@@ -58,7 +58,10 @@ public class ImportCommand implements InteractionCommand {
                 "/import <URL> --no-crawl             — 只抓当前页不递归\n" +
                 "/import <URL> --max-pages N          — 最多抓取 N 页 (默认 50)\n" +
                 "/import <URL> --depth N              — 递归深度 (默认 2)\n" +
-                "/import <URL> --delay-ms N           — 请求间隔毫秒 (默认 1000)";
+                "/import <URL> --delay-ms N           — 请求间隔毫秒 (默认 1000)\n" +
+                "/import <URL> --wiki-allpages        — 使用 MediaWiki allpages API 批量导入\n" +
+                "/import <URL> --prefix <前缀>         — allpages 页面前缀过滤\n" +
+                "/import <URL> --output-subdir <目录>  — 指定输出子目录";
     }
 
     @Override
@@ -172,16 +175,40 @@ public class ImportCommand implements InteractionCommand {
                         return InteractionResult.fail("Invalid --delay-ms value: " + tokens[i]);
                     }
                     break;
+                case "--wiki-allpages":
+                    builder.wikiAllpages(true);
+                    break;
+                case "--prefix":
+                    if (i + 1 >= tokens.length) {
+                        return InteractionResult.fail("--prefix requires a value.");
+                    }
+                    i++;
+                    builder.wikiPrefix(stripQuotes(tokens[i]));
+                    break;
+                case "--output-subdir":
+                    if (i + 1 >= tokens.length) {
+                        return InteractionResult.fail("--output-subdir requires a value.");
+                    }
+                    i++;
+                    builder.outputSubdir(stripQuotes(tokens[i]));
+                    break;
                 default:
                     // 未知 flag 直接失败
                     return InteractionResult.fail("Unknown flag: " + arg +
-                            ". Supported: --fetch-only, --no-crawl, --max-pages, --depth, --delay-ms");
+                            ". Supported: --fetch-only, --no-crawl, --max-pages, --depth, --delay-ms," +
+                            " --wiki-allpages, --prefix, --output-subdir");
             }
         }
 
-        // --no-crawl 等价于 --max-pages 1 --depth 0
-        if (!builder.build().crawlEnabled()) {
+        // --no-crawl 等价于 --max-pages 1 --depth 0 (但不覆盖 wiki-allpages)
+        if (!builder.build().crawlEnabled() && !builder.build().wikiAllpages()) {
             builder.maxPages(1).maxDepth(0);
+        }
+
+        // --output-subdir 安全检查
+        if (builder.build().outputSubdir() != null && builder.build().outputSubdir().contains("..")) {
+            return InteractionResult.fail("--output-subdir contains illegal path traversal: " +
+                    builder.build().outputSubdir());
         }
 
         WebImportRequest request = builder.build();
@@ -196,6 +223,14 @@ public class ImportCommand implements InteractionCommand {
         // 格式化输出
         StringBuilder sb = new StringBuilder();
         sb.append("=== Web 导入结果 ===\n");
+        if (request.wikiAllpages()) {
+            sb.append("Mode: Wiki allpages (batch)\n");
+            sb.append("Prefix: ").append(
+                    request.wikiPrefix().isEmpty() ? "(all)" : request.wikiPrefix()).append("\n");
+            if (!request.outputSubdir().isEmpty()) {
+                sb.append("Output subdir: ").append(request.outputSubdir()).append("\n");
+            }
+        }
         sb.append("URL: ").append(result.url()).append("\n");
         sb.append("Host: ").append(result.host()).append("\n");
         sb.append("Crawler: ").append(result.crawlerName()).append("\n");
@@ -223,5 +258,20 @@ public class ImportCommand implements InteractionCommand {
 
         return InteractionResult.ok(result.summary(), sb.toString(),
                 result.writtenFiles().stream().map(Path::toString).toList());
+    }
+
+    /**
+     * 去除字符串两端的引号。用于处理 CLI 中带引号的参数（如 --prefix "" → 空字符串）。
+     */
+    private static String stripQuotes(String s) {
+        if (s == null || s.isEmpty()) return "";
+        if (s.length() >= 2) {
+            char first = s.charAt(0);
+            char last = s.charAt(s.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                return s.substring(1, s.length() - 1);
+            }
+        }
+        return s;
     }
 }

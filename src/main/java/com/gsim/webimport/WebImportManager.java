@@ -39,6 +39,14 @@ public class WebImportManager {
      * @return 导入结果
      */
     public WebImportResult execute(WebImportRequest request) {
+        // wiki-allpages 模式走独立路径
+        if (request.wikiAllpages()) {
+            return executeWikiAllPages(request);
+        }
+
+        return executeCrawl(request);
+    }
+    private WebImportResult executeCrawl(WebImportRequest request) {
         log.info("Starting web import for: {}", request.url());
 
         String normalizedUrl = urlNormalizer.normalize(request.url().toString());
@@ -135,5 +143,85 @@ public class WebImportManager {
                 successPages.size(), 0, failedPages.size(),
                 filesWritten, writtenFiles, errors,
                 request.fetchOnly(), crawlerName);
+    }
+
+    /**
+     * 执行 Wiki allpages 批量导入。
+     * 使用 MediaWiki API 的 list=allpages 获取页面列表，非 HTML 爬虫。
+     */
+    private WebImportResult executeWikiAllPages(WebImportRequest request) {
+        String urlStr = request.url().toString();
+        log.info("Starting wiki allpages import for: {}", urlStr);
+
+        String host = urlNormalizer.extractHost(urlStr);
+        if (host == null || host.isBlank()) {
+            return new WebImportResult(
+                    urlStr, "", 0, 0, 0, 0,
+                    List.of(), List.of("Unable to extract host from URL: " + urlStr),
+                    request.fetchOnly(), "none");
+        }
+
+        // 规范化 host: m.prts.wiki → prts.wiki
+        String fileHost = normalizeHost(host);
+        String apiUrl = resolveApiUrl(host);
+
+        log.info("Wiki allpages: host={}, fileHost={}, apiUrl={}, prefix={}, maxPages={}, subdir={}",
+                host, fileHost, apiUrl, request.wikiPrefix(), request.maxPages(), request.outputSubdir());
+
+        try {
+            fileWriter.ensureDir();
+        } catch (IOException e) {
+            return new WebImportResult(
+                    urlStr, fileHost, 0, 0, 0, 0,
+                    List.of(), List.of("Failed to create web import dir: " + e.getMessage()),
+                    request.fetchOnly(), "none");
+        }
+
+        String prefix = request.wikiPrefix() != null ? request.wikiPrefix() : "";
+        String subdir = request.outputSubdir() != null ? request.outputSubdir() : "";
+
+        MediaWikiApiClient apiClient = new MediaWikiApiClient(
+                apiUrl, request.timeoutSeconds(), request.userAgent());
+        RateLimiter rateLimiter = new RateLimiter(request.delayMillis());
+        UrlNormalizer normalizer = new UrlNormalizer();
+
+        // 构建 baseUrl 用于生成页面链接
+        String scheme = request.url().getScheme();
+        String baseUrl = scheme + "://" + host;
+
+        MediaWikiBatchImporter batchImporter = new MediaWikiBatchImporter(
+                apiClient, fileWriter, textExtractor, rateLimiter, fileHost, baseUrl);
+
+        MediaWikiBatchImporter.BatchImportResult batchResult =
+                batchImporter.importAllPages(prefix, request.maxPages(), subdir);
+
+        List<String> errors = new ArrayList<>(batchResult.errors());
+
+        return new WebImportResult(
+                urlStr, fileHost,
+                batchResult.pagesFetched(), 0, batchResult.failedTitles().size(),
+                batchResult.filesWritten(), batchResult.writtenFiles(), errors,
+                request.fetchOnly(), "mediawiki-batch-allpages");
+    }
+
+    /**
+     * 规范化 host 名用于文件路径：m.prts.wiki → prts.wiki
+     */
+    static String normalizeHost(String host) {
+        if (host == null) return "";
+        if (host.equals("m.prts.wiki")) return "prts.wiki";
+        return host;
+    }
+
+    /**
+     * 根据 host 解析 MediaWiki API URL。
+     * prts.wiki / m.prts.wiki 固定使用 https://prts.wiki/api.php
+     */
+    static String resolveApiUrl(String host) {
+        if (host == null) return "";
+        if (host.equals("m.prts.wiki") || host.equals("prts.wiki")) {
+            return "https://prts.wiki/api.php";
+        }
+        return "https://" + host + "/api.php";
     }
 }

@@ -117,7 +117,7 @@ class ImportCommandUrlTest {
     @DisplayName("有效的 http URL 应触发 web import")
     void testImport_HttpUrl() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --fetch-only --no-crawl"), session);
+                arg("https://www.baidu.com/test --fetch-only --no-crawl"), session);
         assertNotNull(result);
         assertTrue(result.displayText().contains("Web 导入")
                 || result.displayText().contains("Web import")
@@ -128,7 +128,7 @@ class ImportCommandUrlTest {
     @DisplayName("应正确解析 --fetch-only --no-crawl 标志")
     void testImport_FetchOnlyNoCrawl() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --fetch-only --no-crawl"), session);
+                arg("https://www.baidu.com/test --fetch-only --no-crawl"), session);
         assertNotNull(result);
         assertTrue(result.displayText().contains("fetch-only") || result.displayText().contains("Fetch-only"));
     }
@@ -137,7 +137,7 @@ class ImportCommandUrlTest {
     @DisplayName("应正确解析 --max-pages --depth 和 --delay-ms 参数")
     void testImport_NumericParams() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --max-pages 5 --depth 1 --delay-ms 500 --fetch-only"), session);
+                arg("https://www.baidu.com/test --max-pages 5 --depth 1 --delay-ms 500 --fetch-only"), session);
         assertNotNull(result);
     }
 
@@ -147,7 +147,7 @@ class ImportCommandUrlTest {
     @DisplayName("未知 flag 应返回错误")
     void testImport_UnknownFlag() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --unknown-flag"), session);
+                arg("https://www.baidu.com/test --unknown-flag"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("Unknown flag"));
     }
@@ -156,7 +156,7 @@ class ImportCommandUrlTest {
     @DisplayName("--max-pages 缺值应返回错误")
     void testImport_MaxPagesMissingValue() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --max-pages"), session);
+                arg("https://www.baidu.com/test --max-pages"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("--max-pages requires a value"));
     }
@@ -165,7 +165,7 @@ class ImportCommandUrlTest {
     @DisplayName("--depth 缺值应返回错误")
     void testImport_DepthMissingValue() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --depth"), session);
+                arg("https://www.baidu.com/test --depth"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("--depth requires a value"));
     }
@@ -174,7 +174,7 @@ class ImportCommandUrlTest {
     @DisplayName("--delay-ms 缺值应返回错误")
     void testImport_DelayMsMissingValue() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --delay-ms"), session);
+                arg("https://www.baidu.com/test --delay-ms"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("--delay-ms requires a value"));
     }
@@ -183,7 +183,7 @@ class ImportCommandUrlTest {
     @DisplayName("--max-pages 必须 > 0")
     void testImport_MaxPagesMustBePositive() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --max-pages 0"), session);
+                arg("https://www.baidu.com/test --max-pages 0"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("must be > 0"));
     }
@@ -192,7 +192,7 @@ class ImportCommandUrlTest {
     @DisplayName("--depth 必须 >= 0")
     void testImport_DepthMustBeNonNegative() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --depth -1"), session);
+                arg("https://www.baidu.com/test --depth -1"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("must be >= 0"));
     }
@@ -201,7 +201,7 @@ class ImportCommandUrlTest {
     @DisplayName("--delay-ms 必须 >= 0")
     void testImport_DelayMsMustBeNonNegative() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --delay-ms -100"), session);
+                arg("https://www.baidu.com/test --delay-ms -100"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("must be >= 0"));
     }
@@ -210,8 +210,64 @@ class ImportCommandUrlTest {
     @DisplayName("--max-pages 非数字应返回错误")
     void testImport_MaxPagesNotANumber() {
         InteractionResult result = importCommand.execute(
-                arg("https://192.0.2.1/test --max-pages abc"), session);
+                arg("https://www.baidu.com/test --max-pages abc"), session);
         assertFalse(result.success());
         assertTrue(result.displayText().contains("Invalid --max-pages value"));
+    }
+
+    // ---- wiki-allpages 测试 ----
+
+    @Test
+    @DisplayName("--wiki-allpages 标志应被解析")
+    void testImport_WikiAllpagesFlag() {
+        InteractionResult result = importCommand.execute(
+                arg("https://m.prts.wiki/w/首页 --wiki-allpages --fetch-only --max-pages 1"), session);
+        assertNotNull(result);
+        assertFalse(result.displayText().contains("Unknown flag"));
+    }
+
+    @Test
+    @DisplayName("--prefix 缺值应返回错误")
+    void testImport_PrefixMissingValue() {
+        InteractionResult result = importCommand.execute(
+                arg("https://www.baidu.com/test --wiki-allpages --prefix"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("--prefix requires a value"));
+    }
+
+    @Test
+    @DisplayName("--output-subdir 缺值应返回错误")
+    void testImport_OutputSubdirMissingValue() {
+        InteractionResult result = importCommand.execute(
+                arg("https://www.baidu.com/test --wiki-allpages --output-subdir"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("--output-subdir requires a value"));
+    }
+
+    @Test
+    @DisplayName("--output-subdir 包含路径穿越应返回错误")
+    void testImport_OutputSubdirPathTraversal() {
+        InteractionResult result = importCommand.execute(
+                arg("https://www.baidu.com/test --wiki-allpages --output-subdir ../etc"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("illegal path traversal"));
+    }
+
+    @Test
+    @DisplayName("--wiki-allpages 组合 --prefix --output-subdir --max-pages 应被正确解析")
+    void testImport_WikiAllpagesCombined() {
+        InteractionResult result = importCommand.execute(
+                arg("https://m.prts.wiki/w/首页 --wiki-allpages --prefix 干员 --output-subdir prts/test --max-pages 3 --fetch-only"), session);
+        assertNotNull(result);
+        assertFalse(result.displayText().contains("Unknown flag"));
+    }
+
+    @Test
+    @DisplayName("--wiki-allpages 加 --no-crawl 不应覆盖 maxPages")
+    void testImport_WikiAllpagesNoCrawlNotOverridden() {
+        InteractionResult result = importCommand.execute(
+                arg("https://m.prts.wiki/w/首页 --wiki-allpages --no-crawl --fetch-only --max-pages 10"), session);
+        assertNotNull(result);
+        assertFalse(result.displayText().contains("Unknown flag"));
     }
 }

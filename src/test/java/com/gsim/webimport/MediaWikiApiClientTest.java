@@ -136,4 +136,64 @@ class MediaWikiApiClientTest {
         assertTrue(pages.contains("Page B"));
         assertTrue(pages.contains("Page C"));
     }
+
+    @Test
+    @DisplayName("应通过 listAllPages 获取带前缀过滤和分页的页面列表")
+    void testListAllPages() throws Exception {
+        String json = """
+                {
+                    "continue": {
+                        "apcontinue": "Page D",
+                        "continue": "-||"
+                    },
+                    "query": {
+                        "allpages": [
+                            {"pageid": 1, "title": "Page A"},
+                            {"pageid": 2, "title": "Page B"}
+                        ]
+                    }
+                }""";
+
+        server.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setBody(json)
+                .addHeader("Content-Type", "application/json"));
+
+        MediaWikiApiClient.AllPagesResult result = apiClient.listAllPages("Page", 2, null);
+
+        assertEquals(2, result.titles().size());
+        assertTrue(result.titles().contains("Page A"));
+        assertEquals("Page D", result.continueToken());
+
+        // 验证请求 URL 包含正确参数
+        var request = server.takeRequest();
+        String path = request.getRequestUrl().toString();
+        assertTrue(path.contains("action=query"));
+        assertTrue(path.contains("list=allpages"));
+        assertTrue(path.contains("apprefix=Page"));
+        assertTrue(path.contains("aplimit=2"));
+    }
+
+    @Test
+    @DisplayName("listAllPages 应在无更多页时返回空 continueToken")
+    void testListAllPagesNoMore() throws Exception {
+        String json = """
+                {
+                    "query": {
+                        "allpages": [
+                            {"pageid": 1, "title": "Last Page"}
+                        ]
+                    }
+                }""";
+
+        server.enqueue(new MockResponse()
+                .setResponseCode(200)
+                .setBody(json)
+                .addHeader("Content-Type", "application/json"));
+
+        MediaWikiApiClient.AllPagesResult result = apiClient.listAllPages("", 10, null);
+
+        assertEquals(1, result.titles().size());
+        assertNull(result.continueToken());
+    }
 }

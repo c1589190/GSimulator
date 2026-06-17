@@ -66,8 +66,62 @@ public class MediaWikiApiClient {
     }
 
     /**
-     * 获取指定命名空间的所有页面列表。
+     * 获取指定命名空间的所有页面列表（带前缀过滤和分页）。
+     *
+     * @param prefix   apprefix 参数，空字符串表示不过滤
+     * @param limit    单次 API 调用返回的最大数量
+     * @param apfrom   分页起始标题，null 或空表示从头开始
+     * @return AllPagesResult 包含标题列表和继续标记
      */
+    public AllPagesResult listAllPages(String prefix, int limit, String apfrom) throws IOException {
+        StringBuilder urlBuilder = new StringBuilder(apiUrl)
+                .append("?action=query&list=allpages")
+                .append("&aplimit=").append(Math.min(limit, 500))
+                .append("&format=json");
+
+        if (prefix != null && !prefix.isEmpty()) {
+            urlBuilder.append("&apprefix=").append(URLEncoder.encode(prefix, StandardCharsets.UTF_8));
+        }
+        if (apfrom != null && !apfrom.isEmpty()) {
+            urlBuilder.append("&apfrom=").append(URLEncoder.encode(apfrom, StandardCharsets.UTF_8));
+        }
+
+        Request request = new Request.Builder()
+                .url(urlBuilder.toString())
+                .header("User-Agent", userAgent)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("HTTP " + response.code());
+            }
+            JsonNode root = mapper.readTree(response.body().string());
+
+            List<String> titles = new ArrayList<>();
+            JsonNode allpages = root.at("/query/allpages");
+            if (allpages.isArray()) {
+                for (JsonNode page : allpages) {
+                    if (page.has("title")) {
+                        titles.add(page.get("title").asText());
+                    }
+                }
+            }
+
+            String continueToken = null;
+            JsonNode continueNode = root.get("continue");
+            if (continueNode != null && continueNode.has("apcontinue")) {
+                continueToken = continueNode.get("apcontinue").asText();
+            }
+
+            return new AllPagesResult(titles, continueToken);
+        }
+    }
+
+    /**
+     * 获取指定命名空间的所有页面列表。
+     * @deprecated 使用 {@link #listAllPages(String, int, String)} 代替
+     */
+    @Deprecated
     public List<String> getAllPages(int namespace, int limit) throws IOException {
         String url = apiUrl + "?action=query&list=allpages" +
                 "&apnamespace=" + namespace +
@@ -148,5 +202,13 @@ public class MediaWikiApiClient {
             long pageId,
             String html,
             List<String> links
+    ) {}
+
+    /**
+     * allpages API 结果。
+     */
+    public record AllPagesResult(
+            List<String> titles,
+            String continueToken
     ) {}
 }

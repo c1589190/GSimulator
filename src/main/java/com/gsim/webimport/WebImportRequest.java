@@ -19,6 +19,9 @@ public class WebImportRequest {
     private final long maxBytesPerPage;
     private final String userAgent;
     private final boolean sameHostOnly;
+    private final boolean wikiAllpages;
+    private final String wikiPrefix;
+    private final String outputSubdir;
 
     private WebImportRequest(Builder builder) {
         this.url = Objects.requireNonNull(builder.url, "url must not be null");
@@ -31,6 +34,9 @@ public class WebImportRequest {
         this.maxBytesPerPage = builder.maxBytesPerPage;
         this.userAgent = builder.userAgent;
         this.sameHostOnly = builder.sameHostOnly;
+        this.wikiAllpages = builder.wikiAllpages;
+        this.wikiPrefix = builder.wikiPrefix;
+        this.outputSubdir = builder.outputSubdir;
     }
 
     public URI url() { return url; }
@@ -43,6 +49,9 @@ public class WebImportRequest {
     public long maxBytesPerPage() { return maxBytesPerPage; }
     public String userAgent() { return userAgent; }
     public boolean sameHostOnly() { return sameHostOnly; }
+    public boolean wikiAllpages() { return wikiAllpages; }
+    public String wikiPrefix() { return wikiPrefix; }
+    public String outputSubdir() { return outputSubdir; }
 
     public String host() {
         return url.getHost();
@@ -63,6 +72,9 @@ public class WebImportRequest {
         private long maxBytesPerPage = 5 * 1024 * 1024; // 5MB
         private String userAgent = "GSimulatorBot/0.1";
         private boolean sameHostOnly = true;
+        private boolean wikiAllpages = false;
+        private String wikiPrefix = "";
+        private String outputSubdir = "";
 
         public Builder(URI url) {
             this.url = url;
@@ -77,6 +89,9 @@ public class WebImportRequest {
         public Builder maxBytesPerPage(long v) { this.maxBytesPerPage = v; return this; }
         public Builder userAgent(String v) { this.userAgent = v; return this; }
         public Builder sameHostOnly(boolean v) { this.sameHostOnly = v; return this; }
+        public Builder wikiAllpages(boolean v) { this.wikiAllpages = v; return this; }
+        public Builder wikiPrefix(String v) { this.wikiPrefix = v; return this; }
+        public Builder outputSubdir(String v) { this.outputSubdir = v; return this; }
 
         public WebImportRequest build() {
             return new WebImportRequest(this);
