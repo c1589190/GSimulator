@@ -49,9 +49,13 @@ public class GSimulatorApplication {
         // /exit — 退出
         manager.registerCommand(new ExitCommand(adapter::shutdown));
 
+        // Data / Skill / Experience 系统（先初始化，PlayerCommand 依赖 DataManager）
+        Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
+        DataManager dataManager = new DataManager(dataRoot);
+
         // Phase 3: Campaign / Turn / PlayerAction
         manager.registerCommand(new NewTurnCommand());
-        manager.registerCommand(new PlayerCommand());
+        manager.registerCommand(new PlayerCommand(dataManager));
         manager.registerCommand(new ActionsCommand());
         manager.registerCommand(new ClearActionsCommand());
         manager.registerCommand(new SaveCommand());
@@ -64,10 +68,6 @@ public class GSimulatorApplication {
 
         // Tool 系统: /tool wiki_search
         manager.registerCommand(new ToolCommand(toolRegistry));
-
-        // Data / Skill / Experience 系统
-        Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
-        DataManager dataManager = new DataManager(dataRoot);
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
@@ -77,10 +77,13 @@ public class GSimulatorApplication {
         manager.registerCommand(new ExpCommand(expManager));
         manager.registerCommand(new ContextCommand(contextRenderer));
 
-        // Phase 7+: /run
+        // Phase 7+: /run (legacy), /sim, /nextturn, /node
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, ctx.getConfig().getLlmModel());
         manager.registerCommand(new RunCommand(orchestrator));
+        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator));
+        manager.registerCommand(new NextTurnCommand(dataManager));
+        manager.registerCommand(new NodeCommand(dataManager));
     }
 
     /**

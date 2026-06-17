@@ -262,4 +262,88 @@ public class OrchestratorAgent {
      * Run 的完整结果。
      */
     public record RunResult(String finalText, List<ToolCallRecord> toolCalls) {}
+
+    /**
+     * 消息追踪记录。
+     */
+    public record MessageTrace(String role, String type, String content) {}
+
+    /**
+     * 基于已渲染的上下文执行推演。
+     * @param contextMarkdown BranchContextRenderer 输出的完整 markdown
+     * @param simNote 本轮 /sim 的推演备注
+     */
+    public SimResult runWithRenderedContext(String contextMarkdown, String simNote) {
+        List<MessageTrace> trace = new ArrayList<>();
+        List<ToolCallRecord> toolCalls = new ArrayList<>();
+        List<LlmMessage> messages = new ArrayList<>();
+
+        messages.add(LlmMessage.system(contextMarkdown));
+
+        String userMsg = "请基于以上上下文进行推演。";
+        if (simNote != null && !simNote.isBlank()) {
+            userMsg += "\n\n推演备注: " + simNote;
+        }
+        messages.add(LlmMessage.user(userMsg));
+        trace.add(new MessageTrace("user", "sim_input", userMsg));
+
+        String finalText = null;
+        int toolRound = 0;
+
+        while (toolRound < MAX_TOOL_ROUNDS) {
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmResponse response = llmClient.chat(request);
+
+            if (!response.success()) {
+                String err = "LLM 调用失败: " + response.errorMessage();
+                trace.add(new MessageTrace("system", "error", err));
+                return new SimResult(err, toolCalls, trace);
+            }
+
+            String content = response.content();
+            messages.add(LlmMessage.assistant(content));
+
+            ParsedToolCall parsed = tryParseToolCall(content);
+            if (parsed != null) {
+                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                ToolResult result = toolRegistry.call(call);
+                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                StringBuilder toolResultStr = new StringBuilder();
+                toolResultStr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                if (result.success()) {
+                    for (ToolResult.Item item : result.items()) {
+                        toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                        toolResultStr.append("  ").append(item.snippet()).append("\n");
+                    }
+                } else {
+                    toolResultStr.append("错误: ").append(result.error()).append("\n");
+                }
+                trace.add(new MessageTrace("tool", "tool_result", toolResultStr.toString()));
+                messages.add(LlmMessage.user(toolResultStr.toString()));
+                toolRound++;
+                continue;
+            }
+
+            finalText = content;
+            trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            break;
+        }
+
+        if (finalText == null) {
+            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
+            LlmResponse finalResp = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            if (finalResp.success()) {
+                finalText = finalResp.content();
+                trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            } else {
+                finalText = "推演总结生成失败: " + finalResp.errorMessage();
+            }
+        }
+
+        return new SimResult(finalText, toolCalls, trace);
+    }
+
+    public record SimResult(String finalText, List<ToolCallRecord> toolCalls, List<MessageTrace> trace) {}
 }

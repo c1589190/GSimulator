@@ -296,7 +296,130 @@ public class DataManager {
     }
     public record TreeNode(String id, String name, List<TreeNode> children) {}
 
+    // ==================== sim / nextturn helpers ====================
+
+    /** 生成下一个 branch ID (b0001, b0002, ...) */
+    public String generateNextBranchId() {
+        int max = 0;
+        for (DataDocument d : documents.values()) {
+            if (!"branch".equals(d.type())) continue;
+            String bid = d.id().replace("branch.b", "").replaceAll("-.*", "");
+            try { int n = Integer.parseInt(bid); if (n > max) max = n; } catch (NumberFormatException ignored) {}
+        }
+        return "branch.b" + String.format("%04d", max + 1);
+    }
+
+    /** 创建下一回合节点，切换 active branch，清空 input。不调用 LLM。 */
+    public DataDocument createNextTurnBranch(String worldTime, String note) throws IOException {
+        String newId = generateNextBranchId();
+        String displayName = "时间节点 " + newId;
+        String parent = activeBranch;
+        DataDocument parentDoc = documents.get(parent);
+        int turn = 1;
+        if (parentDoc != null) {
+            String pt = parentDoc.frontMatter().getOrDefault("turn", "0");
+            try { turn = Integer.parseInt(pt) + 1; } catch (NumberFormatException ignored) {}
+        }
+        String nodeInput = (note != null && !note.isBlank()) ? note : "无。";
+
+        String content = buildBranchContent(newId, displayName, parent, turn,
+                worldTime != null ? worldTime : "",
+                nodeInput, "无。",
+                "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。");
+
+        writeFile(worldDir().resolve("branches/" + branchIdToFilename(newId)), content);
+        activeBranch = newId;
+        Files.writeString(worldDir().resolve("active-branch.txt"), newId, StandardCharsets.UTF_8);
+        clearInputSilent();
+        reload();
+        log.info("Created next-turn branch '{}' parent='{}' turn={}", newId, parent, turn);
+        return documents.get(newId);
+    }
+
+    /** 检查 branch 是否有推演结果。 */
+    public boolean hasSimulationResult(String branchId) {
+        DataDocument doc = documents.get(branchId);
+        if (doc == null) return false;
+        String sec = extractSection(doc.body(), "三、推演结果");
+        String body = sec.replace("## 三、推演结果", "").trim();
+        return !body.isEmpty() && !"无。".equals(body) && !"待推演。".equals(body);
+    }
+
+    /** 获取同级节点（parent 相同）。 */
+    public List<DataDocument> getSiblingBranches(String branchId) {
+        DataDocument doc = documents.get(branchId);
+        if (doc == null) return List.of();
+        String parent = doc.frontMatter().getOrDefault("parent", "none");
+        return documents.values().stream()
+                .filter(d -> "branch".equals(d.type()) && parent.equals(d.frontMatter().getOrDefault("parent", "none")))
+                .sorted(Comparator.comparing(DataDocument::id)).toList();
+    }
+
+    /** 获取子节点。 */
+    public List<DataDocument> getChildBranches(String branchId) {
+        return documents.values().stream()
+                .filter(d -> "branch".equals(d.type()) && branchId.equals(d.frontMatter().getOrDefault("parent", "")))
+                .sorted(Comparator.comparing(DataDocument::id)).toList();
+    }
+
+    /** 渲染带 active 标记的时间线树文本。 */
+    public String renderTimelineTreeWithActive() {
+        StringBuilder sb = new StringBuilder();
+        List<TreeNode> roots = getTimelineTree();
+        for (TreeNode n : roots) renderTreeNode(n, sb, 0);
+        return sb.toString();
+    }
+
+    private void renderTreeNode(TreeNode node, StringBuilder sb, int depth) {
+        if (depth > 0) sb.append("  ".repeat(depth - 1)).append("├─ ");
+        String marker = node.id().equals(activeBranch) ? " *" : "";
+        sb.append(node.id()).append(" — ").append(node.name()).append(marker).append("\n");
+        for (TreeNode child : node.children()) renderTreeNode(child, sb, depth + 1);
+    }
+
+    /** 覆盖写入 branch 的九个章节，保留 front matter / id / parent / turn / world_time。 */
+    public void overwriteBranchSections(String branchId, BranchUpdate update) throws IOException {
+        DataDocument doc = documents.get(branchId);
+        if (doc == null || !"branch".equals(doc.type()))
+            throw new IOException("Branch not found: " + branchId);
+
+        Map<String, String> fm = doc.frontMatter();
+        String newBody = buildBranchContent(
+                branchId, fm.getOrDefault("name", "时间节点"),
+                fm.getOrDefault("parent", "none"),
+                Integer.parseInt(fm.getOrDefault("turn", "0")),
+                fm.getOrDefault("world_time", ""),
+                update.nodeInput() != null ? update.nodeInput() : "无。",
+                update.llmContextLog() != null ? update.llmContextLog() : "### user\n\n无。\n",
+                update.simulationResult() != null ? update.simulationResult() : "待推演。",
+                update.worldDelta() != null ? update.worldDelta() : "无。",
+                update.entityDelta() != null ? update.entityDelta() : "无。",
+                update.ruleDelta() != null ? update.ruleDelta() : "无。",
+                update.interactionDelta() != null ? update.interactionDelta() : "无。",
+                update.skillDelta() != null ? update.skillDelta() : "无。",
+                update.nextRisks() != null ? update.nextRisks() : "待后续推演。");
+
+        writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), newBody);
+        reload();
+        log.info("Overwritten branch '{}'", branchId);
+    }
+
     // ==================== input ====================
+
+    /** 以玩家命令格式追加到 input.md */
+    public void appendPlayerInput(String playerName, String content) throws IOException {
+        appendInput("* " + playerName + "：" + content + "\n");
+    }
+
+    /** 获取 input.md 的 body 文本。 */
+    public String getInputBody() {
+        return extractBody(readFileContent(worldDir().resolve("input.md")));
+    }
+
+    private void clearInputSilent() throws IOException {
+        writeFile(worldDir().resolve("input.md"),
+                "id: input.current\ntype: input\nname: 当前输入\nupdated: 2026-06-18\n-------------------\n\n# 当前输入\n\n暂无待结算内容。\n");
+    }
 
     public void appendInput(String text) throws IOException {
         Path f = worldDir().resolve("input.md");
