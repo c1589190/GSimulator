@@ -91,26 +91,33 @@ public class DataManager {
 
         writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
                 ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
-                "世界初始化。", "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
+                "世界初始化。", "无。", "无。", "无。", "无。",
+                "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
 
         log.info("Initialized world '{}'", worldName);
     }
 
     private String buildBranchContent(String id, String name, String parent, int turn, String worldTime,
-                                       String input, String result, String worldDelta, String entityDelta,
+                                       String input, String llmUser, String llmAssistant, String llmToolCall, String llmToolResult,
+                                       String result, String worldDelta, String entityDelta,
                                        String ruleDelta, String interactionDelta, String skillDelta, String risks) {
         return "id: " + id + "\ntype: branch\nname: " + name + "\nparent: " + parent +
                 "\nturn: " + turn + "\nworld_time: " + worldTime +
-                "\nstatus: resolved\ntags: [时间节点, 推演记录]\nupdated: 2026-06-18\n-------------------\n\n" +
+                "\nstatus: resolved\ntags: [时间节点, 推演记录, 上下文节点]\nupdated: 2026-06-18\n-------------------\n\n" +
                 "# " + name + "\n\n" +
                 "## 一、本节点输入\n\n" + input + "\n\n" +
-                "## 二、推演结果\n\n" + result + "\n\n" +
-                "## 三、世界观/设定增量\n\n" + worldDelta + "\n\n" +
-                "## 四、实体状态增量\n\n" + entityDelta + "\n\n" +
-                "## 五、推演规则增量\n\n" + ruleDelta + "\n\n" +
-                "## 六、交互逻辑增量\n\n" + interactionDelta + "\n\n" +
-                "## 七、未总结 Skill 增量\n\n" + skillDelta + "\n\n" +
-                "## 八、下节点风险\n\n" + risks + "\n";
+                "## 二、LLM 上下文记录\n\n" +
+                "### user\n\n" + llmUser + "\n\n" +
+                "### assistant\n\n" + llmAssistant + "\n\n" +
+                "### tool_call\n\n" + llmToolCall + "\n\n" +
+                "### tool_result\n\n" + llmToolResult + "\n\n" +
+                "## 三、推演结果\n\n" + result + "\n\n" +
+                "## 四、世界观/设定增量\n\n" + worldDelta + "\n\n" +
+                "## 五、实体状态增量\n\n" + entityDelta + "\n\n" +
+                "## 六、推演规则增量\n\n" + ruleDelta + "\n\n" +
+                "## 七、交互逻辑增量\n\n" + interactionDelta + "\n\n" +
+                "## 八、未总结 Skill 增量\n\n" + skillDelta + "\n\n" +
+                "## 九、下节点风险\n\n" + risks + "\n";
     }
 
     private void autoLoad() throws IOException {
@@ -192,7 +199,8 @@ public class DataManager {
                 log.warn("Root branch file missing, auto-creating");
                 writeFile(worldDir().resolve("branches/" + branchIdToFilename(ROOT_BRANCH)),
                         buildBranchContent(ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
-                                "世界初始化。", "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
+                                "世界初始化。", "无。", "无。", "无。", "无。",
+                                "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
             }
         }
     }
@@ -222,10 +230,12 @@ public class DataManager {
         }
         String inputContent = readInputContent();
         String displayName = (name != null && !name.isBlank()) ? name : ("时间节点 " + branchId);
+        String nodeInput = inputContent.isBlank() ? "无。" : inputContent;
+        String llmUser = inputContent.isBlank() ? "无。" : inputContent;
 
         String content = buildBranchContent(branchId, displayName, parent, turn,
                 worldTime != null ? worldTime : "",
-                inputContent.isBlank() ? "无。" : inputContent,
+                nodeInput, llmUser, "无。", "无。", "无。",
                 "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。");
 
         writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), content);
@@ -262,9 +272,9 @@ public class DataManager {
         return sb.toString();
     }
 
-    /** 获取父链中所有 "七、未总结 Skill 增量" 的汇总。 */
+    /** 获取父链中所有 "八、未总结 Skill 增量" 的汇总。 */
     public String getBranchSkillDeltaContext() {
-        return extractBranchSectionChain(activeBranch, "七、未总结 Skill 增量");
+        return extractBranchSectionChain(activeBranch, "八、未总结 Skill 增量");
     }
 
     /** 时间线树。 */
@@ -342,11 +352,12 @@ public class DataManager {
             DataDocument b = chain.get(i);
             sb.append("### ").append(b.name()).append(" (").append(b.id()).append(")\n");
             sb.append(extractSection(b.body(), "一、本节点输入"));
-            sb.append(extractSection(b.body(), "二、推演结果"));
-            sb.append(extractSection(b.body(), "三、世界观/设定增量"));
-            sb.append(extractSection(b.body(), "四、实体状态增量"));
-            sb.append(extractSection(b.body(), "五、推演规则增量"));
-            sb.append(extractSection(b.body(), "六、交互逻辑增量"));
+            sb.append(extractSection(b.body(), "二、LLM 上下文记录"));
+            sb.append(extractSection(b.body(), "三、推演结果"));
+            sb.append(extractSection(b.body(), "四、世界观/设定增量"));
+            sb.append(extractSection(b.body(), "五、实体状态增量"));
+            sb.append(extractSection(b.body(), "六、推演规则增量"));
+            sb.append(extractSection(b.body(), "七、交互逻辑增量"));
         }
         return sb.toString();
     }
@@ -357,7 +368,7 @@ public class DataManager {
 
     /** 父链中的交互逻辑增量。 */
     public String getEffectiveInteractionContext() {
-        return extractBranchSectionChain(activeBranch, "六、交互逻辑增量");
+        return extractBranchSectionChain(activeBranch, "七、交互逻辑增量");
     }
 
     // ==================== search ====================

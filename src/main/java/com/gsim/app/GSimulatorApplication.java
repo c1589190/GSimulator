@@ -9,6 +9,7 @@ import com.gsim.importdata.ImportManager;
 import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
+import com.gsim.context.BranchContextRenderer;
 import com.gsim.data.DataManager;
 import com.gsim.experience.ExperienceManager;
 import com.gsim.skill.SkillManager;
@@ -70,9 +71,11 @@ public class GSimulatorApplication {
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
+        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot);
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
+        manager.registerCommand(new ContextCommand(contextRenderer));
 
         // Phase 7+: /run
         OrchestratorAgent orchestrator = new OrchestratorAgent(
