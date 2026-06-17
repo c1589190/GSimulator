@@ -65,7 +65,7 @@ public class DataCommand implements InteractionCommand {
             if ("create".equals(a)) {
                 String id = t[2];
                 String wt = t.length > 3 ? t[3] : "";
-                DataDocument b = dm.createBranch(id, id.replace("branch.", "节点: "), wt);
+                DataDocument b = dm.createBranch(id, null, wt);
                 return ok("Branch created: " + b.id() + "\nParent: " + b.frontMatter().get("parent") + "\nTurn: " + b.frontMatter().get("turn"));
             }
             if ("switch".equals(a)) { dm.switchBranch(t[2]); return ok("Switched to: " + t[2]); }

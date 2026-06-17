@@ -126,15 +126,10 @@ public class DataManager {
         Path ab = wd.resolve("active-branch.txt");
         if (Files.exists(ab)) {
             activeBranch = Files.readString(ab, StandardCharsets.UTF_8).trim();
-            // 回退检查：branch 文件必须存在
-            if (!Files.exists(wd.resolve("branches/" + branchIdToFilename(activeBranch)))) {
-                log.warn("Active branch '{}' not found, falling back to {}", activeBranch, ROOT_BRANCH);
-                activeBranch = ROOT_BRANCH;
-                Files.writeString(ab, ROOT_BRANCH, StandardCharsets.UTF_8);
-            }
         } else {
             activeBranch = ROOT_BRANCH;
         }
+        validateActiveBranch();
         reload();
     }
 
@@ -171,31 +166,53 @@ public class DataManager {
         Files.writeString(dataRoot.resolve("active-world.txt"), name, StandardCharsets.UTF_8);
         Path ab = wd.resolve("active-branch.txt");
         activeBranch = Files.exists(ab) ? Files.readString(ab, StandardCharsets.UTF_8).trim() : ROOT_BRANCH;
-        // 回退检查
-        if (!Files.exists(wd.resolve("branches/" + branchIdToFilename(activeBranch)))) {
-            log.warn("Branch '{}' not found in world '{}', falling back to {}", activeBranch, name, ROOT_BRANCH);
-            activeBranch = ROOT_BRANCH;
-            Files.writeString(ab, ROOT_BRANCH, StandardCharsets.UTF_8);
-        }
+        validateActiveBranch();
         reload();
     }
 
     // ==================== branch ====================
+
+    /** 规范化 branchId: b0001-contact → branch.b0001-contact */
+    public static String normalizeBranchId(String input) {
+        if (input == null || input.isBlank()) return ROOT_BRANCH;
+        String trimmed = input.trim();
+        if (trimmed.startsWith("branch.")) return trimmed;
+        return "branch." + trimmed;
+    }
+
+    /** 验证 active branch 是否存在，不存在则回退并自动创建。 */
+    private void validateActiveBranch() throws IOException {
+        Path bFile = worldDir().resolve("branches/" + branchIdToFilename(activeBranch));
+        if (!Files.exists(bFile)) {
+            log.warn("Active branch '{}' not found at {}, falling back to {}", activeBranch, bFile, ROOT_BRANCH);
+            activeBranch = ROOT_BRANCH;
+            Files.writeString(worldDir().resolve("active-branch.txt"), ROOT_BRANCH, StandardCharsets.UTF_8);
+            // 如果 b0000-start.md 也不存在则自动创建
+            if (!Files.exists(worldDir().resolve("branches/" + branchIdToFilename(ROOT_BRANCH)))) {
+                log.warn("Root branch file missing, auto-creating");
+                writeFile(worldDir().resolve("branches/" + branchIdToFilename(ROOT_BRANCH)),
+                        buildBranchContent(ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
+                                "世界初始化。", "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
+            }
+        }
+    }
 
     public List<DataDocument> listBranches() {
         return documents.values().stream().filter(d -> "branch".equals(d.type()))
                 .sorted(Comparator.comparing(DataDocument::id)).toList();
     }
 
-    public void switchBranch(String branchId) throws IOException {
+    public void switchBranch(String rawId) throws IOException {
+        String branchId = normalizeBranchId(rawId);
         if (documents.get(branchId) == null || !"branch".equals(documents.get(branchId).type()))
-            throw new IOException("Branch not found: " + branchId);
+            throw new IOException("Branch not found: " + branchId + " (normalized from: " + rawId + ")");
         activeBranch = branchId;
         Files.writeString(worldDir().resolve("active-branch.txt"), branchId, StandardCharsets.UTF_8);
         log.info("Switched to branch {}", branchId);
     }
 
-    public DataDocument createBranch(String branchId, String name, String worldTime) throws IOException {
+    public DataDocument createBranch(String rawId, String name, String worldTime) throws IOException {
+        String branchId = normalizeBranchId(rawId);
         String parent = activeBranch;
         DataDocument parentDoc = documents.get(parent);
         int turn = 1;
@@ -204,8 +221,9 @@ public class DataManager {
             try { turn = Integer.parseInt(pt) + 1; } catch (NumberFormatException ignored) {}
         }
         String inputContent = readInputContent();
+        String displayName = (name != null && !name.isBlank()) ? name : ("时间节点 " + branchId);
 
-        String content = buildBranchContent(branchId, name, parent, turn,
+        String content = buildBranchContent(branchId, displayName, parent, turn,
                 worldTime != null ? worldTime : "",
                 inputContent.isBlank() ? "无。" : inputContent,
                 "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。");
