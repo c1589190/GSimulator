@@ -3,6 +3,8 @@ package com.gsim.data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.gsim.resource.ResourceManager;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -42,27 +44,19 @@ public class DataManager {
 
         Path skillsDir = dataRoot.resolve("skills");
         Files.createDirectories(skillsDir);
-        writeFile(skillsDir.resolve("simulation-method.md"),
-                "id: skill.simulation-method\ntype: skill\nname: 推演方法\nscope: global\ntags: [推演, 方法论]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 推演方法\n\n## 适用范围\n架空历史文游推演。\n\n## 操作原则\n1. 基于已知事实推演，不凭空编造。\n2. 区分 facts / inferences / hypotheses。\n\n## 工具使用建议\n- 涉及世界观细节查 data。\n- 涉及PRTS设定查 wiki_search。\n\n## 输出要求\nMarkdown 格式，关键实体粗体。\n");
-        writeFile(skillsDir.resolve("tool-policy.md"),
-                "id: skill.tool-policy\ntype: skill\nname: 工具使用策略\nscope: global\ntags: [工具, 策略]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 工具使用策略\n\n## 适用范围\nAgent 调用工具时的决策。\n\n## 操作原则\n- 优先用 data_search 查世界数据。\n- 外部设定用 wiki_search。\n- 不确定时两者都查。\n- 最多 5 轮工具调用。\n");
-        writeFile(skillsDir.resolve("output-style.md"),
-                "id: skill.output-style\ntype: skill\nname: 输出风格\nscope: global\ntags: [输出, 风格]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 输出风格\n\n## 适用范围\n所有推演结果输出。\n\n## 操作原则\n- 使用 Markdown 格式。\n- 关键人名、地名、势力名粗体。\n- 区分事实、推断、假设。\n- 引用来源路径。\n");
-        writeFile(skillsDir.resolve("failure-lessons.md"),
-                "id: skill.failure-lessons\ntype: skill\nname: 失败教训\nscope: global\ntags: [失败, 教训]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 失败教训\n\n## 适用范围\n避免重复错误。\n\n## 常见问题\n暂无（待经验沉淀）。\n");
-        writeFile(skillsDir.resolve("generated-skill.md"),
-                "id: skill.generated\ntype: skill\nname: 自动生成技能\nscope: global\ntags: [自动生成]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 自动生成技能\n\n此文件由 /skill summarize 自动生成。\n");
+        try {
+            writeFile(skillsDir.resolve("simulation-method.md"), ResourceManager.readText("gsim/templates/simulation-method.md"));
+            writeFile(skillsDir.resolve("tool-policy.md"), ResourceManager.readText("gsim/templates/tool-policy-skill.md"));
+            writeFile(skillsDir.resolve("output-style.md"), ResourceManager.readText("gsim/templates/output-style-skill.md"));
+            writeFile(skillsDir.resolve("failure-lessons.md"), ResourceManager.readText("gsim/templates/failure-lessons-skill.md"));
+            writeFile(skillsDir.resolve("generated-skill.md"), ResourceManager.readText("gsim/templates/generated-skill.md"));
+        } catch (IOException e) { throw new UncheckedIOException(e); }
 
         Path expDir = dataRoot.resolve("experience");
         Files.createDirectories(expDir);
-        writeFile(expDir.resolve("e0001.md"),
-                "id: experience.e0001\ntype: experience\nname: 交互经验 0001\nsource: user-interaction\ntags: [经验, 模板]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 交互经验 0001\n\n## 场景\n初始化数据系统。\n\n## 发生了什么\n系统自动创建了默认世界和初始时间节点。\n\n## 用户反馈\n暂无（待交互后记录）。\n\n## 经验结论\n待补充。\n");
+        try {
+            writeFile(expDir.resolve("e0001.md"), ResourceManager.readText("gsim/templates/e0001-experience.md"));
+        } catch (IOException e) { throw new UncheckedIOException(e); }
 
         initWorld(DEFAULT_WORLD);
         this.activeWorld = DEFAULT_WORLD;
@@ -76,18 +70,15 @@ public class DataManager {
             Files.createDirectories(wd.resolve(d));
         Files.writeString(wd.resolve("active-branch.txt"), ROOT_BRANCH, StandardCharsets.UTF_8);
 
-        writeFile(wd.resolve("world.md"),
-                "id: world.base\ntype: always\nname: 世界观\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 世界观\n\n这是一个架空历史世界。\n\n## 地理\n待补充。\n\n## 势力\n待补充。\n");
-        writeFile(wd.resolve("entities.md"),
-                "id: entities.base\ntype: entity\nname: 实体资料\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 实体资料\n\n## 玩家\n暂无。\n\n## 人物\n暂无。\n\n## 势力\n暂无。\n");
-        writeFile(wd.resolve("rules.md"),
-                "id: rules.base\ntype: always\nname: 交互规则\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 交互规则\n\n## 行动规则\n玩家提交行动，由主持人审核。\n\n## 推演规则\n基于现实逻辑推演，考虑多方利益。\n");
-        writeFile(wd.resolve("input.md"),
-                "id: input.current\ntype: input\nname: 当前输入\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 当前输入\n\n暂无待结算内容。\n");
+        String today = "2026-06-18";
+        try {
+            writeFile(wd.resolve("world.md"), ResourceManager.renderTemplate("gsim/templates/world-template.md", "updated", today));
+            writeFile(wd.resolve("entities.md"), ResourceManager.renderTemplate("gsim/templates/entities-template.md", "updated", today));
+            writeFile(wd.resolve("rules.md"), ResourceManager.renderTemplate("gsim/templates/rules-template.md", "updated", today));
+            writeFile(wd.resolve("input.md"), ResourceManager.renderTemplate("gsim/templates/input-template.md", "updated", today));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
 
         writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
                 ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
@@ -101,20 +92,18 @@ public class DataManager {
                                        String input, String llmUser,
                                        String result, String worldDelta, String entityDelta,
                                        String ruleDelta, String interactionDelta, String skillDelta, String risks) {
-        return "id: " + id + "\ntype: branch\nname: " + name + "\nparent: " + parent +
-                "\nturn: " + turn + "\nworld_time: " + worldTime +
-                "\nstatus: resolved\ntags: [时间节点, 推演记录, 上下文节点]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# " + name + "\n\n" +
-                "## 一、本节点输入\n\n" + input + "\n\n" +
-                "## 二、LLM 上下文记录\n\n" +
-                "### user\n\n" + llmUser + "\n\n" +
-                "## 三、推演结果\n\n" + result + "\n\n" +
-                "## 四、世界观/设定增量\n\n" + worldDelta + "\n\n" +
-                "## 五、实体状态增量\n\n" + entityDelta + "\n\n" +
-                "## 六、推演规则增量\n\n" + ruleDelta + "\n\n" +
-                "## 七、交互逻辑增量\n\n" + interactionDelta + "\n\n" +
-                "## 八、未总结 Skill 增量\n\n" + skillDelta + "\n\n" +
-                "## 九、下节点风险\n\n" + risks + "\n";
+        try {
+            return ResourceManager.renderTemplate("gsim/templates/branch-template.md",
+                    "id", id, "name", name, "parent", parent,
+                    "turn", String.valueOf(turn), "world_time", worldTime != null ? worldTime : "",
+                    "input", input, "llm_user", llmUser,
+                    "result", result, "world_delta", worldDelta, "entity_delta", entityDelta,
+                    "rule_delta", ruleDelta, "interaction_delta", interactionDelta,
+                    "skill_delta", skillDelta, "risks", risks,
+                    "updated", "2026-06-18");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private void autoLoad() throws IOException {

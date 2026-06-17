@@ -2,6 +2,7 @@ package com.gsim.context;
 
 import com.gsim.data.DataDocument;
 import com.gsim.data.DataManager;
+import com.gsim.resource.ResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,21 +167,9 @@ public class BranchContextRenderer {
         if (Files.exists(f)) return true;
         try {
             Files.createDirectories(f.getParent());
-            Files.writeString(f, """
-                    id: skill.system
-                    type: skill
-                    name: System Prompt
-                    scope: global
-                    tags: ["system", "prompt"]
-                    updated: 2026-06-18
-                    -------------------
-
-                    你是 GSimulator 的推演 Agent。
-                    你必须依据当前世界数据、时间线分支、玩家输入、工具结果进行推演。
-                    你不能直接修改世界基础文件。
-                    你只能生成推演结果、branch 增量、工具调用请求和待审核修改。
-                    """, StandardCharsets.UTF_8);
-            log.info("Created System.md");
+            String content = ResourceManager.readText("gsim/templates/skill-system-template.md");
+            Files.writeString(f, content, StandardCharsets.UTF_8);
+            log.info("Created System.md from classpath template");
             return true;
         } catch (IOException e) {
             log.error("Failed to create System.md: {}", e.getMessage());
