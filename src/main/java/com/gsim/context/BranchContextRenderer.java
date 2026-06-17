@@ -86,36 +86,66 @@ public class BranchContextRenderer {
         return sb.toString();
     }
 
-    /** 从 branch 文件中提取 LLM 上下文记录消息。 */
+    /** 从 branch 文件中提取 LLM 上下文记录消息（支持多轮调用）。 */
     public List<RenderedMessage> extractBranchMessages(DataDocument branch) {
         List<RenderedMessage> msgs = new ArrayList<>();
         String body = branch.body();
         String bid = branch.id();
 
         // 本节点输入
-        String input = extractSubSection(body, "一、本节点输入");
+        String input = extractSection(body, "一、本节点输入");
         if (!input.isBlank()) {
-            msgs.add(new RenderedMessage("user", "branch_input", bid, input));
+            msgs.add(new RenderedMessage("user", "branch_input", bid, stripHeading(input, "一、本节点输入")));
         }
 
-        // LLM 上下文记录
+        // LLM 上下文记录 — 顺序解析所有 ### 子节
         String llmSection = extractSection(body, "二、LLM 上下文记录");
         if (!llmSection.isBlank()) {
-            String user = extractSubSection(llmSection, "### user");
-            String assistant = extractSubSection(llmSection, "### assistant");
-            String toolCall = extractSubSection(llmSection, "### tool_call");
-            String toolResult = extractSubSection(llmSection, "### tool_result");
-
-            if (!user.isBlank() && !"无。".equals(user.trim()))
-                msgs.add(new RenderedMessage("user", "branch_user", bid, user));
-            if (!assistant.isBlank() && !"无。".equals(assistant.trim()))
-                msgs.add(new RenderedMessage("assistant", "branch_assistant", bid, assistant));
-            if (!toolCall.isBlank() && !"无。".equals(toolCall.trim()))
-                msgs.add(new RenderedMessage("tool", "tool_call", bid, toolCall));
-            if (!toolResult.isBlank() && !"无。".equals(toolResult.trim()))
-                msgs.add(new RenderedMessage("tool", "tool_result", bid, toolResult));
+            List<SubSection> subs = extractAllSubSections(llmSection);
+            for (SubSection sub : subs) {
+                String content = sub.content.trim();
+                if (content.isEmpty() || "无。".equals(content)) continue;
+                switch (sub.heading) {
+                    case "### user" -> msgs.add(new RenderedMessage("user", "branch_user", bid, content));
+                    case "### assistant" -> msgs.add(new RenderedMessage("assistant", "branch_assistant", bid, content));
+                    case "### tool_call" -> msgs.add(new RenderedMessage("tool", "tool_call", bid, content));
+                    case "### tool_result" -> msgs.add(new RenderedMessage("tool", "tool_result", bid, content));
+                }
+            }
         }
         return msgs;
+    }
+
+    /** 解析 body 中所有 ### 子节（顺序保留）。 */
+    private List<SubSection> extractAllSubSections(String body) {
+        List<SubSection> result = new ArrayList<>();
+        String[] lines = body.split("\n");
+        String currentHeading = null;
+        StringBuilder currentContent = new StringBuilder();
+
+        for (String line : lines) {
+            if (line.startsWith("### ")) {
+                if (currentHeading != null) {
+                    result.add(new SubSection(currentHeading, currentContent.toString()));
+                }
+                currentHeading = line.trim();
+                currentContent = new StringBuilder();
+            } else if (currentHeading != null) {
+                currentContent.append(line).append("\n");
+            }
+        }
+        if (currentHeading != null) {
+            result.add(new SubSection(currentHeading, currentContent.toString()));
+        }
+        return result;
+    }
+
+    private record SubSection(String heading, String content) {}
+
+    private String stripHeading(String section, String heading) {
+        String prefix = "## " + heading;
+        int start = section.indexOf('\n');
+        return start >= 0 ? section.substring(start).trim() : section.replace(prefix, "").trim();
     }
 
     // ---- System.md ----

@@ -91,14 +91,14 @@ public class DataManager {
 
         writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
                 ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
-                "世界初始化。", "无。", "无。", "无。", "无。",
+                "世界初始化。", "无。",
                 "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
 
         log.info("Initialized world '{}'", worldName);
     }
 
     private String buildBranchContent(String id, String name, String parent, int turn, String worldTime,
-                                       String input, String llmUser, String llmAssistant, String llmToolCall, String llmToolResult,
+                                       String input, String llmUser,
                                        String result, String worldDelta, String entityDelta,
                                        String ruleDelta, String interactionDelta, String skillDelta, String risks) {
         return "id: " + id + "\ntype: branch\nname: " + name + "\nparent: " + parent +
@@ -108,9 +108,6 @@ public class DataManager {
                 "## 一、本节点输入\n\n" + input + "\n\n" +
                 "## 二、LLM 上下文记录\n\n" +
                 "### user\n\n" + llmUser + "\n\n" +
-                "### assistant\n\n" + llmAssistant + "\n\n" +
-                "### tool_call\n\n" + llmToolCall + "\n\n" +
-                "### tool_result\n\n" + llmToolResult + "\n\n" +
                 "## 三、推演结果\n\n" + result + "\n\n" +
                 "## 四、世界观/设定增量\n\n" + worldDelta + "\n\n" +
                 "## 五、实体状态增量\n\n" + entityDelta + "\n\n" +
@@ -199,7 +196,7 @@ public class DataManager {
                 log.warn("Root branch file missing, auto-creating");
                 writeFile(worldDir().resolve("branches/" + branchIdToFilename(ROOT_BRANCH)),
                         buildBranchContent(ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
-                                "世界初始化。", "无。", "无。", "无。", "无。",
+                                "世界初始化。", "无。",
                                 "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
             }
         }
@@ -235,7 +232,7 @@ public class DataManager {
 
         String content = buildBranchContent(branchId, displayName, parent, turn,
                 worldTime != null ? worldTime : "",
-                nodeInput, llmUser, "无。", "无。", "无。",
+                nodeInput, llmUser,
                 "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。");
 
         writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), content);
