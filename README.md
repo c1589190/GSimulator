@@ -117,6 +117,46 @@ src/main/java/com/gsim/
 └── util/                  # 工具类
 ```
 
+## 开发阶段
+
+### ✅ 当前已完成
+
+| Phase | 功能 | 状态 |
+|-------|------|------|
+| Phase 0 | 项目审计与计划 | ✅ |
+| Phase 1 | 基础项目骨架 (Maven, Java 21) | ✅ |
+| Phase 2 | 交互层 REPL (/help, /status, /exit) | ✅ |
+| Phase 3 | Campaign / Turn / PlayerAction | ✅ |
+| Phase 4 | PromptManager 与 LLM JSON 系统 | ✅ |
+| Phase 5 | ChromaDB 与 /searchdb | ✅ |
+| Phase 6 | /import (本地导入 + URL 网页导入) | ✅ |
+
+Phase 6 详情：
+- `/import`：扫描 `import/` 目录下的本地 txt/md/json 文件
+- `/import <URL>`：抓取网页 → 提取正文 → 写入 `import/web/` → 入库
+- 网页爬虫：支持普通网页 (OkHttp + Jsoup) 和 MediaWiki (API)
+- `--fetch-only` / `--no-crawl` / `--max-pages` / `--depth` / `--delay-ms` 参数
+- 自动测试不访问真实外网（MockWebServer + fixture HTML）
+- 可手动验收：`/import https://m.prts.wiki --max-pages 3 --depth 1 --delay-ms 1000 --fetch-only`
+
+### 🔧 开发中
+
+- ImportManager 入库仍是 **stub**，文件暂存到 `data/pending-imports/`
+- 下一阶段：LocalKnowledgeStore 替换 stub，实现真正的知识库写入
+
+### 📋 规划中
+
+| Phase | 功能 |
+|-------|------|
+| Phase 7 | Orchestrator 和 /run 骨架 |
+| Phase 8 | 玩家行动分析、时间线、世界状态 |
+| Phase 9 | ResearchAgent |
+| Phase 10 | WriterAgent 和最终出文 |
+| Phase 11 | 持久化、回放、Web UI 准备 |
+| Future | JS 渲染 (Playwright/Selenium) |
+| Future | robots.txt 解析与遵守 |
+| Future | 分布式爬取 |
+
 ## 许可证
 
 内部项目

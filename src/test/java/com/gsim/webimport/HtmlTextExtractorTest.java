@@ -150,4 +150,66 @@ class HtmlTextExtractorTest {
         assertTrue(result.contains("Section 1.1"));
         assertTrue(result.contains("Some text"));
     }
+
+    @Test
+    @DisplayName("应保留 hidden 属性元素中的文本")
+    void testExtractText_PreservesHiddenAttributeText() {
+        String html = """
+                <html><head><title>Hidden Test</title></head><body>
+                <div hidden>This content is hidden but should be extracted.</div>
+                <p>Visible content.</p>
+                </body></html>""";
+        String result = extractor.extractText(html, "https://example.com");
+        assertTrue(result.contains("This content is hidden but should be extracted"));
+        assertTrue(result.contains("Visible content"));
+    }
+
+    @Test
+    @DisplayName("应保留 display:none 元素中的文本")
+    void testExtractText_PreservesDisplayNoneText() {
+        String html = """
+                <html><head><title>Display None Test</title></head><body>
+                <div style="display:none">This is collapsed content.</div>
+                <div style="display: none">This is also collapsed.</div>
+                <p>Visible content.</p>
+                </body></html>""";
+        String result = extractor.extractText(html, "https://example.com");
+        assertTrue(result.contains("This is collapsed content"));
+        assertTrue(result.contains("This is also collapsed"));
+        assertTrue(result.contains("Visible content"));
+    }
+
+    @Test
+    @DisplayName("应仍然删除 script 和 style 标签")
+    void testExtractText_StillRemovesScriptAndStyle() {
+        String html = """
+                <html><head><title>Script Test</title></head><body>
+                <script>console.log('should be removed');</script>
+                <style>.test { color: red; }</style>
+                <p>This is visible content.</p>
+                </body></html>""";
+        String result = extractor.extractText(html, "https://example.com");
+        assertTrue(result.contains("This is visible content"));
+        assertFalse(result.contains("console.log"));
+        assertFalse(result.contains("color: red"));
+    }
+
+    @Test
+    @DisplayName("应仍然删除 nav/footer/header/aside")
+    void testExtractText_StillRemovesNavFooterHeaderAside() {
+        String html = """
+                <html><head><title>Nav Test</title></head><body>
+                <nav>Navigation menu</nav>
+                <header>Site header</header>
+                <aside>Sidebar content</aside>
+                <p>Main content here.</p>
+                <footer>Copyright 2024</footer>
+                </body></html>""";
+        String result = extractor.extractText(html, "https://example.com");
+        assertTrue(result.contains("Main content here"));
+        assertFalse(result.contains("Navigation menu"));
+        assertFalse(result.contains("Site header"));
+        assertFalse(result.contains("Sidebar content"));
+        assertFalse(result.contains("Copyright"));
+    }
 }

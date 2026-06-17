@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * MediaWikiSiteDetector 测试 — 使用 mock 响应数据，不访问外网。
- * 实际 HTTP 请求测试通过 MockWebServer 在 MediaWikiApiClientTest 中完成。
  */
 @DisplayName("MediaWikiSiteDetector")
 class MediaWikiSiteDetectorTest {
@@ -36,35 +35,102 @@ class MediaWikiSiteDetectorTest {
     @Test
     @DisplayName("MediaWiki 排除列表应正确过滤")
     void testShouldExclude() {
-        assertTrue(MediaWikiCrawler.shouldExclude("Special:Random"));
-        assertTrue(MediaWikiCrawler.shouldExclude("User:Admin"));
-        assertTrue(MediaWikiCrawler.shouldExclude("File:Image.png"));
-        assertTrue(MediaWikiCrawler.shouldExclude("Category:Items"));
-        assertTrue(MediaWikiCrawler.shouldExclude("Template:Infobox"));
-        assertTrue(MediaWikiCrawler.shouldExclude("Help:Contents"));
-        assertTrue(MediaWikiCrawler.shouldExclude("Talk:Discussion"));
-        assertTrue(MediaWikiCrawler.shouldExclude(""));
-        assertTrue(MediaWikiCrawler.shouldExclude(null));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("Special:Random"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("User:Admin"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("File:Image.png"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("Category:Items"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("Template:Infobox"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("Help:Contents"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle("Talk:Discussion"));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle(""));
+        assertTrue(MediaWikiCrawler.shouldExcludeTitle(null));
     }
 
     @Test
     @DisplayName("正常页面标题不应被排除")
     void testShouldNotExclude_NormalPages() {
-        assertFalse(MediaWikiCrawler.shouldExclude("明日方舟"));
-        assertFalse(MediaWikiCrawler.shouldExclude("Arknights"));
-        assertFalse(MediaWikiCrawler.shouldExclude("Operator_List"));
-        assertFalse(MediaWikiCrawler.shouldExclude("Main_Page"));
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle("明日方舟"));
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle("Arknights"));
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle("Operator_List"));
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle("Main_Page"));
     }
 
     @Test
-    @DisplayName("MediaWiki URL 提取标题")
-    void testExtractTitleFromUrl() {
+    @DisplayName("MediaWiki URL 提取标题 — /wiki/ 路径")
+    void testExtractTitleFromUrl_WikiPath() {
         MediaWikiCrawler crawler = new MediaWikiCrawler(null, null, "example.com", "https://example.com");
 
         assertEquals("Arknights", crawler.extractTitleFromUrl("https://example.com/wiki/Arknights"));
         assertEquals("Operator_List", crawler.extractTitleFromUrl("https://example.com/wiki/Operator_List"));
-        assertEquals("Test_Page", crawler.extractTitleFromUrl("https://example.com/index.php?title=Test_Page"));
         assertNull(crawler.extractTitleFromUrl("https://example.com/"));
+    }
+
+    @Test
+    @DisplayName("MediaWiki URL 解析 — title= 参数")
+    void testParsePageIdentifier_Title() {
+        MediaWikiCrawler crawler = new MediaWikiCrawler(null, null, "example.com", "https://example.com");
+
+        var ident = crawler.parsePageIdentifier("https://example.com/index.php?title=Test_Page");
+        assertNotNull(ident);
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.TITLE, ident.type());
+        assertEquals("Test_Page", ident.stringValue());
+    }
+
+    @Test
+    @DisplayName("MediaWiki URL 解析 — curid= 参数")
+    void testParsePageIdentifier_Curid() {
+        MediaWikiCrawler crawler = new MediaWikiCrawler(null, null, "example.com", "https://example.com");
+
+        var ident = crawler.parsePageIdentifier("https://example.com/index.php?curid=12345");
+        assertNotNull(ident);
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.CURID, ident.type());
+        assertEquals(12345, ident.numericValue());
+    }
+
+    @Test
+    @DisplayName("MediaWiki URL 解析 — pageid= 参数")
+    void testParsePageIdentifier_Pageid() {
+        MediaWikiCrawler crawler = new MediaWikiCrawler(null, null, "example.com", "https://example.com");
+
+        var ident = crawler.parsePageIdentifier("https://example.com/index.php?pageid=67890");
+        assertNotNull(ident);
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.PAGEID, ident.type());
+        assertEquals(67890, ident.numericValue());
+    }
+
+    @Test
+    @DisplayName("PageIdentifier.forCurid 应创建 CURID 类型")
+    void testPageIdentifier_ForCurid() {
+        var ident = MediaWikiCrawler.PageIdentifier.forCurid(42);
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.CURID, ident.type());
+        assertEquals(42, ident.numericValue());
+        assertEquals("42", ident.stringValue());
+    }
+
+    @Test
+    @DisplayName("PageIdentifier.forPageid 应创建 PAGEID 类型")
+    void testPageIdentifier_ForPageid() {
+        var ident = MediaWikiCrawler.PageIdentifier.forPageid(99);
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.PAGEID, ident.type());
+        assertEquals(99, ident.numericValue());
+    }
+
+    @Test
+    @DisplayName("PageIdentifier.forTitle 应创建 TITLE 类型")
+    void testPageIdentifier_ForTitle() {
+        var ident = MediaWikiCrawler.PageIdentifier.forTitle("Arknights");
+        assertEquals(MediaWikiCrawler.PageIdentifier.IdType.TITLE, ident.type());
+        assertEquals("Arknights", ident.stringValue());
+    }
+
+    @Test
+    @DisplayName("curid/pageid 类型不应被排除")
+    void testCuridPageidNotExcluded() {
+        var curidIdent = MediaWikiCrawler.PageIdentifier.forCurid(123);
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle(curidIdent.titleForExclusionCheck()));
+
+        var pageidIdent = MediaWikiCrawler.PageIdentifier.forPageid(456);
+        assertFalse(MediaWikiCrawler.shouldExcludeTitle(pageidIdent.titleForExclusionCheck()));
     }
 
     @Test

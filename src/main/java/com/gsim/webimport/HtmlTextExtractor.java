@@ -43,21 +43,19 @@ public class HtmlTextExtractor {
 
     /**
      * 从 HTML 中提取正文。
-     * 移除 script/style/nav/footer/header 等无关元素，
+     * 移除 script/style/nav/footer/header/aside/广告/评论等明显无关元素，
      * 保留 body 正文、列表、表格、blockquote、pre。
+     * 不删除 hidden/display:none 元素（保留折叠文本）。
      */
     public String extractText(String html, String url) {
         try {
             Document doc = Jsoup.parse(html, url);
 
-            // 移除无关元素
+            // 移除无关元素（广告/导航/评论/脚本/样式等）
+            // 注意：不删除 [hidden] 和 display:none 元素，保留折叠文本
             doc.select("script, style, nav, footer, header, aside, " +
                        ".sidebar, .nav, .menu, .advertisement, .ad, .banner, " +
                        ".comment, .comments, .footer, .header, noscript, iframe").remove();
-
-            // 移除隐藏元素
-            doc.select("[style*=\"display:none\"], [style*=\"display: none\"]").remove();
-            doc.select("[hidden]").remove();
 
             Element body = doc.body();
             if (body == null) {

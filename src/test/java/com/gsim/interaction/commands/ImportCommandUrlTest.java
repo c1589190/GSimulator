@@ -23,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * ImportCommand URL 测试 — 使用 FakeChromaClient，不访问外网。
+ *
+ * 注意：CommandParser 将 /import 之后的所有文本作为 args[0] 传入
+ * （与 /run /searchdb 相同），所以测试中的 args[0] 包含完整命令文本。
  */
 @DisplayName("ImportCommand (URL)")
 class ImportCommandUrlTest {
@@ -53,6 +56,12 @@ class ImportCommandUrlTest {
         ChromaClient chromaClient = new FakeChromaClient();
         ImportManager importManager = new ImportManager(config, chromaClient);
         importCommand = new ImportCommand(config, importManager);
+    }
+
+    // Helper: wrap command text as the single arg that CommandParser would produce
+    private static String[] arg(String commandText) {
+        if (commandText == null || commandText.isBlank()) return new String[]{""};
+        return new String[]{commandText};
     }
 
     @Test
@@ -107,14 +116,9 @@ class ImportCommandUrlTest {
     @Test
     @DisplayName("有效的 http URL 应触发 web import")
     void testImport_HttpUrl() {
-        // 不会真正连接，因为目标是不可达的 URL
-        // 但应该返回 web import 结果（失败页）
         InteractionResult result = importCommand.execute(
-                new String[]{"https://192.0.2.1/test", "--fetch-only", "--no-crawl"},
-                session);
-
+                arg("https://192.0.2.1/test --fetch-only --no-crawl"), session);
         assertNotNull(result);
-        // 应该尝试执行 web import
         assertTrue(result.displayText().contains("Web 导入") || result.displayText().contains("Web import") || !result.success());
     }
 
@@ -122,9 +126,7 @@ class ImportCommandUrlTest {
     @DisplayName("应正确解析 --fetch-only --no-crawl 标志")
     void testImport_FetchOnlyNoCrawl() {
         InteractionResult result = importCommand.execute(
-                new String[]{"https://192.0.2.1/test", "--fetch-only", "--no-crawl"},
-                session);
-
+                arg("https://192.0.2.1/test --fetch-only --no-crawl"), session);
         assertNotNull(result);
         assertTrue(result.displayText().contains("fetch-only") || result.displayText().contains("Fetch-only"));
     }
@@ -133,9 +135,81 @@ class ImportCommandUrlTest {
     @DisplayName("应正确解析 --max-pages --depth 和 --delay-ms 参数")
     void testImport_NumericParams() {
         InteractionResult result = importCommand.execute(
-                new String[]{"https://192.0.2.1/test", "--max-pages", "5", "--depth", "1", "--delay-ms", "500", "--fetch-only"},
-                session);
-
+                arg("https://192.0.2.1/test --max-pages 5 --depth 1 --delay-ms 500 --fetch-only"), session);
         assertNotNull(result);
+    }
+
+    // ---- 参数校验测试 ----
+
+    @Test
+    @DisplayName("未知 flag 应返回错误")
+    void testImport_UnknownFlag() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --unknown-flag"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("Unknown flag"));
+    }
+
+    @Test
+    @DisplayName("--max-pages 缺值应返回错误")
+    void testImport_MaxPagesMissingValue() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --max-pages"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("--max-pages requires a value"));
+    }
+
+    @Test
+    @DisplayName("--depth 缺值应返回错误")
+    void testImport_DepthMissingValue() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --depth"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("--depth requires a value"));
+    }
+
+    @Test
+    @DisplayName("--delay-ms 缺值应返回错误")
+    void testImport_DelayMsMissingValue() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --delay-ms"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("--delay-ms requires a value"));
+    }
+
+    @Test
+    @DisplayName("--max-pages 必须 > 0")
+    void testImport_MaxPagesMustBePositive() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --max-pages 0"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("must be > 0"));
+    }
+
+    @Test
+    @DisplayName("--depth 必须 >= 0")
+    void testImport_DepthMustBeNonNegative() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --depth -1"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("must be >= 0"));
+    }
+
+    @Test
+    @DisplayName("--delay-ms 必须 >= 0")
+    void testImport_DelayMsMustBeNonNegative() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --delay-ms -100"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("must be >= 0"));
+    }
+
+    @Test
+    @DisplayName("--max-pages 非数字应返回错误")
+    void testImport_MaxPagesNotANumber() {
+        InteractionResult result = importCommand.execute(
+                arg("https://192.0.2.1/test --max-pages abc"), session);
+        assertFalse(result.success());
+        assertTrue(result.displayText().contains("Invalid --max-pages value"));
     }
 }

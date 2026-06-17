@@ -63,10 +63,10 @@ public class MediaWikiCrawler {
 
             if (depth > maxDepth) continue;
 
-            // 提取 title 或 pageid
-            String title = extractTitleFromUrl(url);
-            if (title == null || shouldExclude(title)) {
-                log.debug("Skipping excluded page: {}", title);
+            // 解析 URL 中的页面标识符
+            PageIdentifier ident = parsePageIdentifier(url);
+            if (ident == null || shouldExcludeTitle(ident.titleForExclusionCheck())) {
+                log.debug("Skipping excluded page: {}", ident);
                 frontier.markVisited(url);
                 continue;
             }
@@ -74,11 +74,9 @@ public class MediaWikiCrawler {
             rateLimiter.acquire();
 
             try {
-                // 尝试通过 API 获取
-                CrawledPage page = fetchViaApi(title, url, depth);
+                CrawledPage page = fetchViaApi(ident, url, depth);
 
                 if (page == null) {
-                    // API 失败，fallback 到普通 HTML
                     page = fetchViaHtmlFallback(url, depth);
                 }
 
@@ -107,16 +105,32 @@ public class MediaWikiCrawler {
         return new CrawlResult(successPages, failedPages);
     }
 
-    private CrawledPage fetchViaApi(String title, String url, int depth) throws IOException {
-        MediaWikiApiClient.ApiPageResult apiResult = apiClient.getPageByTitle(title);
+    /**
+     * 根据页面标识符类型调用对应的 API 方法。
+     */
+    private CrawledPage fetchViaApi(PageIdentifier ident, String url, int depth) throws IOException {
+        MediaWikiApiClient.ApiPageResult apiResult;
+
+        switch (ident.type()) {
+            case CURID:
+                apiResult = apiClient.getPageByCurid(ident.numericValue());
+                break;
+            case PAGEID:
+                apiResult = apiClient.getPageByPageId(ident.numericValue());
+                break;
+            case TITLE:
+            default:
+                apiResult = apiClient.getPageByTitle(ident.stringValue());
+                break;
+        }
 
         String cleanedText = textExtractor.extractText(apiResult.html(), url);
-        String pageTitle = !apiResult.title().isBlank() ? apiResult.title() : title;
+        String pageTitle = !apiResult.title().isBlank() ? apiResult.title() : ident.stringValue();
 
         // 将 API 返回的链接转为完整 URL
         List<String> fullLinks = new ArrayList<>();
         for (String linkTitle : apiResult.links()) {
-            if (!shouldExclude(linkTitle)) {
+            if (!shouldExcludeTitle(linkTitle)) {
                 fullLinks.add(titleToUrl(linkTitle));
             }
         }
@@ -135,35 +149,55 @@ public class MediaWikiCrawler {
     }
 
     private CrawledPage fetchViaHtmlFallback(String url, int depth) {
-        // Fallback: 这个会在 WebImportManager 层面处理
         return CrawledPage.failed(url, "MediaWiki API fallback not available in this crawler");
     }
 
     /**
-     * 从 URL 中提取页面标题。
+     * 从 URL 中解析页面标识符（curid / pageid / title）。
      */
-    public String extractTitleFromUrl(String url) {
+    public PageIdentifier parsePageIdentifier(String url) {
         try {
             java.net.URI uri = new java.net.URI(url);
             String path = uri.getPath();
-            if (path == null) return null;
 
-            // 常见 MediaWiki URL 模式: /wiki/Page_Title, /index.php?title=Page_Title
-            if (path.startsWith("/wiki/") || path.startsWith("/zh/") || path.startsWith("/en/")) {
-                String[] parts = path.split("/");
-                if (parts.length >= 3) {
-                    return java.net.URLDecoder.decode(parts[parts.length - 1], java.nio.charset.StandardCharsets.UTF_8);
-                }
-            }
-
-            // 尝试从 query 参数中提取
+            // 先检查 query 参数（curid / pageid / title）
             String query = uri.getQuery();
             if (query != null) {
                 for (String param : query.split("&")) {
                     String[] kv = param.split("=", 2);
-                    if (kv.length == 2 && (kv[0].equals("title") || kv[0].equals("curid") || kv[0].equals("pageid"))) {
-                        return java.net.URLDecoder.decode(kv[1], java.nio.charset.StandardCharsets.UTF_8);
+                    if (kv.length != 2) continue;
+
+                    switch (kv[0]) {
+                        case "curid":
+                            try {
+                                long curid = Long.parseLong(kv[1]);
+                                return PageIdentifier.forCurid(curid);
+                            } catch (NumberFormatException e) {
+                                return null;
+                            }
+                        case "pageid":
+                            try {
+                                long pageid = Long.parseLong(kv[1]);
+                                return PageIdentifier.forPageid(pageid);
+                            } catch (NumberFormatException e) {
+                                return null;
+                            }
+                        case "title":
+                            String title = java.net.URLDecoder.decode(kv[1], java.nio.charset.StandardCharsets.UTF_8);
+                            if (!title.isBlank()) {
+                                return PageIdentifier.forTitle(title);
+                            }
+                            break;
                     }
+                }
+            }
+
+            // 然后从路径中提取 title
+            if (path != null && (path.startsWith("/wiki/") || path.startsWith("/zh/") || path.startsWith("/en/"))) {
+                String[] parts = path.split("/");
+                if (parts.length >= 3) {
+                    String title = java.net.URLDecoder.decode(parts[parts.length - 1], java.nio.charset.StandardCharsets.UTF_8);
+                    return PageIdentifier.forTitle(title);
                 }
             }
 
@@ -171,6 +205,16 @@ public class MediaWikiCrawler {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 从 URL 中提取原标题字符串（向后兼容旧的 extractTitleFromUrl）。
+     * @deprecated 使用 parsePageIdentifier() 代替
+     */
+    @Deprecated
+    public String extractTitleFromUrl(String url) {
+        PageIdentifier ident = parsePageIdentifier(url);
+        return ident != null ? ident.stringValue() : null;
     }
 
     /**
@@ -186,9 +230,9 @@ public class MediaWikiCrawler {
     }
 
     /**
-     * 判断页面是否应被排除。
+     * 判断页面标题是否应被排除。
      */
-    public static boolean shouldExclude(String title) {
+    public static boolean shouldExcludeTitle(String title) {
         if (title == null || title.isBlank()) return true;
 
         for (String prefix : EXCLUDED_PREFIXES) {
@@ -198,6 +242,43 @@ public class MediaWikiCrawler {
         if (EXCLUDED_PATTERN.matcher(title).matches()) return true;
 
         return false;
+    }
+
+    /**
+     * 判断页面是否应被排除（兼容旧 API）。
+     * @deprecated 使用 shouldExcludeTitle() 代替
+     */
+    @Deprecated
+    public static boolean shouldExclude(String title) {
+        return shouldExcludeTitle(title);
+    }
+
+    /**
+     * MediaWiki 页面标识符 — 统一表示 curid/pageid/title。
+     */
+    public record PageIdentifier(IdType type, long numericValue, String stringValue) {
+
+        public enum IdType { CURID, PAGEID, TITLE }
+
+        public static PageIdentifier forCurid(long curid) {
+            return new PageIdentifier(IdType.CURID, curid, String.valueOf(curid));
+        }
+
+        public static PageIdentifier forPageid(long pageid) {
+            return new PageIdentifier(IdType.PAGEID, pageid, String.valueOf(pageid));
+        }
+
+        public static PageIdentifier forTitle(String title) {
+            return new PageIdentifier(IdType.TITLE, -1, title);
+        }
+
+        /**
+         * 用于排除检查的标题字符串。
+         * curid/pageid 类型的无法从数字判断是否应排除，返回特殊值表示不排除。
+         */
+        public String titleForExclusionCheck() {
+            return type == IdType.TITLE ? stringValue : ".";
+        }
     }
 
     /**

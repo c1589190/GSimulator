@@ -141,6 +141,11 @@ WebImportManager ──> 调度网页采集
 ImportManager.importSpecificFiles() ──> 入库
 ```
 
+> ⚠️ **当前状态**：ImportManager 入库仍是 **stub**。
+> 网页抓取管道（URL → txt）已完整可用，但 `importSpecificFiles()` 和 `doImport()`
+> 目前返回占位结果，文件暂存到 `data/pending-imports/`。
+> 下一阶段将实现 LocalKnowledgeStore 替换 stub，完成真正的知识库写入。
+
 ### 网页抓取参数
 
 | 参数 | 默认值 | 说明 |

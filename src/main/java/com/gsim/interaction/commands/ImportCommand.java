@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * /import 命令 — 支持本地文件导入和 URL 网页导入。
@@ -129,35 +128,54 @@ public class ImportCommand implements InteractionCommand {
                     builder.crawlEnabled(false);
                     break;
                 case "--max-pages":
-                    if (i + 1 < tokens.length) {
-                        try {
-                            builder.maxPages(Integer.parseInt(tokens[++i]));
-                        } catch (NumberFormatException e) {
-                            return InteractionResult.fail("Invalid --max-pages value: " + tokens[i]);
+                    if (i + 1 >= tokens.length) {
+                        return InteractionResult.fail("--max-pages requires a value.");
+                    }
+                    i++;
+                    try {
+                        int v = Integer.parseInt(tokens[i]);
+                        if (v <= 0) {
+                            return InteractionResult.fail("--max-pages must be > 0, got: " + v);
                         }
+                        builder.maxPages(v);
+                    } catch (NumberFormatException e) {
+                        return InteractionResult.fail("Invalid --max-pages value: " + tokens[i]);
                     }
                     break;
                 case "--depth":
-                    if (i + 1 < tokens.length) {
-                        try {
-                            builder.maxDepth(Integer.parseInt(tokens[++i]));
-                        } catch (NumberFormatException e) {
-                            return InteractionResult.fail("Invalid --depth value: " + tokens[i]);
+                    if (i + 1 >= tokens.length) {
+                        return InteractionResult.fail("--depth requires a value.");
+                    }
+                    i++;
+                    try {
+                        int v = Integer.parseInt(tokens[i]);
+                        if (v < 0) {
+                            return InteractionResult.fail("--depth must be >= 0, got: " + v);
                         }
+                        builder.maxDepth(v);
+                    } catch (NumberFormatException e) {
+                        return InteractionResult.fail("Invalid --depth value: " + tokens[i]);
                     }
                     break;
                 case "--delay-ms":
-                    if (i + 1 < tokens.length) {
-                        try {
-                            builder.delayMillis(Long.parseLong(tokens[++i]));
-                        } catch (NumberFormatException e) {
-                            return InteractionResult.fail("Invalid --delay-ms value: " + tokens[i]);
+                    if (i + 1 >= tokens.length) {
+                        return InteractionResult.fail("--delay-ms requires a value.");
+                    }
+                    i++;
+                    try {
+                        long v = Long.parseLong(tokens[i]);
+                        if (v < 0) {
+                            return InteractionResult.fail("--delay-ms must be >= 0, got: " + v);
                         }
+                        builder.delayMillis(v);
+                    } catch (NumberFormatException e) {
+                        return InteractionResult.fail("Invalid --delay-ms value: " + tokens[i]);
                     }
                     break;
                 default:
-                    // 未知 flag，忽略
-                    log.warn("Unknown flag: {}", arg);
+                    // 未知 flag 直接失败
+                    return InteractionResult.fail("Unknown flag: " + arg +
+                            ". Supported: --fetch-only, --no-crawl, --max-pages, --depth, --delay-ms");
             }
         }
 
@@ -198,7 +216,7 @@ public class ImportCommand implements InteractionCommand {
 
         // 如果非 fetch-only 且有写入文件，继续本地入库
         if (!result.fetchOnly() && result.filesWritten() > 0) {
-            sb.append("\n>>> 开始入库...\n");
+            sb.append("\n>>> 开始入库 (ImportManager stub — 下一阶段实现 LocalKnowledgeStore)...\n");
             ImportResult importResult = importManager.importSpecificFiles(result.writtenFiles());
             sb.append(importResult.summary()).append("\n");
         }
