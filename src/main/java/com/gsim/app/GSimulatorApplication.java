@@ -10,6 +10,8 @@ import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
 import com.gsim.data.DataManager;
+import com.gsim.experience.ExperienceManager;
+import com.gsim.skill.SkillManager;
 import com.gsim.tool.ToolRegistry;
 
 import java.nio.file.Path;
@@ -62,10 +64,14 @@ public class GSimulatorApplication {
         // Tool 系统: /tool wiki_search
         manager.registerCommand(new ToolCommand(toolRegistry));
 
-        // Data 系统: /data
+        // Data / Skill / Experience 系统
         Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
         DataManager dataManager = new DataManager(dataRoot);
+        SkillManager skillManager = new SkillManager(dataRoot);
+        ExperienceManager expManager = new ExperienceManager(dataRoot);
         manager.registerCommand(new DataCommand(dataManager));
+        manager.registerCommand(new SkillCommand(skillManager));
+        manager.registerCommand(new ExpCommand(expManager));
 
         // Phase 7+: /run
         OrchestratorAgent orchestrator = new OrchestratorAgent(
