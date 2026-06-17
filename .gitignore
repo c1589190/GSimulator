@@ -1,39 +1,23 @@
-# Maven
 target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
+*.class
 *.jar
 
-# IDE
 .idea/
 *.iml
 .vscode/
-.project
-.classpath
-.settings/
-*.swp
-*.swo
-*~
 
-# OS
-.DS_Store
-Thumbs.db
+.env
+.env.*
+!.env.example
 
-# Data (runtime-generated, not source code)
 data/knowledge/
 data/campaigns/
-data/demo/
 data/logs/
 data/outputs/
 data/pending-imports/
 data/cache/
 data/web-cache/
 
-# Import directory — generated txt not committed
 import/*
 !import/.gitkeep
 !import/done/
@@ -43,10 +27,4 @@ import/*
 !import/web/
 !import/web/.gitkeep
 
-# Environment (contains secrets)
-.env
-.env.*
-!.env.example
-
-# Claude Code local settings
 .claude/settings.local.json
