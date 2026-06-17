@@ -7,6 +7,7 @@ import com.gsim.llm.LlmClient;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
 import com.gsim.llm.LlmResponse;
+import com.gsim.resource.PromptResourceManager;
 import com.gsim.resource.ResourceManager;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -14,6 +15,8 @@ import com.gsim.tool.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -125,10 +128,9 @@ public class OrchestratorAgent {
 
     private String buildSystemPrompt() {
         try {
-            return ResourceManager.readText("gsim/prompts/orchestrator-system.md");
-        } catch (Exception e) {
-            log.warn("Failed to load orchestrator system prompt from resources, using default");
-            return "你是一个架空历史推演助手。分析玩家行动并产出推演结果。";
+            return PromptResourceManager.getOrchestratorSystemPrompt();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Orchestrator system prompt not found on classpath", e);
         }
     }
 
