@@ -68,6 +68,7 @@ public class GSimulatorApplication {
         Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
         DataManager dataManager = new DataManager(dataRoot);
         SkillManager skillManager = new SkillManager(dataRoot);
+        skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));

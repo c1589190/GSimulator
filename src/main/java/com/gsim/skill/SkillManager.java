@@ -11,7 +11,11 @@ import java.util.*;
 import java.util.stream.Stream;
 
 /**
- * SkillManager — 管理 data/skills/ 下的 Agent 推演技能。
+ * SkillManager — 管理 data/skills/ 下的永久 Agent 推演技能。
+ *
+ * buildSkillContextForRun() 读取：
+ * 1. data/skills/*.md 永久 Skill
+ * 2. active branch 父链中所有 "七、未总结 Skill 增量"
  */
 public class SkillManager {
 
@@ -20,12 +24,16 @@ public class SkillManager {
     private final Path skillsDir;
     private final Path expDir;
     private final Map<String, SkillDoc> skills = new LinkedHashMap<>();
+    private DataManager dataManager; // optional, for branch skill delta
 
     public SkillManager(Path dataRoot) {
         this.skillsDir = dataRoot.resolve("skills");
         this.expDir = dataRoot.resolve("experience");
         reload();
     }
+
+    /** 注入 DataManager 引用（用于读取分支 Skill 增量）。 */
+    public void setDataManager(DataManager dm) { this.dataManager = dm; }
 
     public void initIfNeeded() throws IOException {
         if (!Files.isDirectory(skillsDir)) Files.createDirectories(skillsDir);
@@ -52,7 +60,6 @@ public class SkillManager {
     // ==================== access ====================
 
     public List<SkillDoc> listSkills() { return List.copyOf(skills.values()); }
-
     public SkillDoc readSkill(String id) { return skills.get(id); }
 
     public List<SkillDoc> searchSkills(String query, int limit) {
@@ -69,22 +76,39 @@ public class SkillManager {
         return results.size() > limit ? results.subList(0, limit) : results;
     }
 
-    /** 合成 Agent Skill 上下文。 */
-    public String getSkillContext() {
+    /** 仅返回永久 Skill 的上下文。 */
+    public String getPermanentSkillContext() {
         StringBuilder sb = new StringBuilder();
-        sb.append("# Agent 技能上下文\n\n");
+        sb.append("# 永久 Agent 技能\n\n");
         for (SkillDoc s : skills.values()) {
-            sb.append("## ").append(s.name()).append("\n");
-            sb.append(s.body()).append("\n\n");
+            sb.append("## ").append(s.name()).append("\n").append(s.body()).append("\n\n");
         }
         return sb.toString();
     }
 
+    /** 返回分支链中的 Skill 增量上下文。 */
+    public String getBranchSkillDeltaContext() {
+        if (dataManager == null) return "";
+        return dataManager.getBranchSkillDeltaContext();
+    }
+
+    /** 合成完整 Skill 上下文：永久 Skill + 分支链 Skill 增量。 */
+    public String getSkillContext() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getPermanentSkillContext());
+        String delta = getBranchSkillDeltaContext();
+        if (!delta.isBlank()) {
+            sb.append("# 分支未总结 Skill 增量\n\n").append(delta).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /** 为 /run 构建 Skill 上下文。主动读取 DataManager 的分支增量。 */
     public String buildSkillContextForRun() {
         return getSkillContext();
     }
 
-    /** 从 experience 汇总生成 skill 草稿。 */
+    /** 从 experience 汇总生成永久 Skill 草稿。不覆盖人工 skill。 */
     public String summarizeExperienceToSkill() throws IOException {
         StringBuilder sb = new StringBuilder();
         sb.append("id: skill.generated\ntype: skill\nname: 自动生成技能\nscope: global\ntags: [自动生成]\nupdated: 2026-06-18\n-------------------\n\n");
@@ -97,14 +121,12 @@ public class SkillManager {
                             try {
                                 String raw = Files.readString(f, StandardCharsets.UTF_8);
                                 String body = DataManager.extractBody(raw);
-                                // 提取关键段落
                                 for (String section : List.of("场景", "发生了什么", "经验结论")) {
                                     int start = body.indexOf("## " + section);
                                     if (start >= 0) {
                                         int end = body.indexOf("\n## ", start + 3 + section.length());
                                         if (end < 0) end = body.length();
-                                        String sec = body.substring(start, end).trim();
-                                        sb.append(sec).append("\n\n");
+                                        sb.append(body, start, end).append("\n\n");
                                     }
                                 }
                             } catch (IOException ignored) {}
@@ -115,7 +137,7 @@ public class SkillManager {
         Files.createDirectories(skillsDir);
         Files.writeString(skillsDir.resolve("generated-skill.md"), content, StandardCharsets.UTF_8);
         reload();
-        log.info("Generated skill summary to generated-skill.md");
+        log.info("Generated permanent skill draft to generated-skill.md");
         return content;
     }
 
@@ -123,22 +145,15 @@ public class SkillManager {
     public record SkillDoc(Map<String, String> fm, String body, String path) {
         public String id() { return fm.getOrDefault("id", ""); }
         public String name() { return fm.getOrDefault("name", ""); }
-        public String type() { return fm.getOrDefault("type", "skill"); }
+        public String type() { return "skill"; }
         public List<String> tags() {
             String raw = fm.getOrDefault("tags", "");
             if (raw.isBlank()) return List.of();
             String c = raw.trim(); if (c.startsWith("[")&&c.endsWith("]")) c=c.substring(1,c.length()-1);
             return List.of(c.split("\\s*,\\s*"));
         }
-        double searchScore(String lq) {
-            double s=0; if(name().toLowerCase().contains(lq))s+=5;
-            for(String t:tags())if(t.toLowerCase().contains(lq)){s+=3;break;}
-            s+=SkillManager.countMatches(body().toLowerCase(),lq); return s;
-        }
+        double searchScore(String lq) { double s=0; if(name().toLowerCase().contains(lq))s+=5; for(String t:tags())if(t.toLowerCase().contains(lq)){s+=3;break;} s+=SkillManager.countMatches(body().toLowerCase(),lq); return s; }
     }
 
-    static int countMatches(String t, String kw) {
-        if(kw.isEmpty())return 0;int c=0,i=0;
-        while((i=t.indexOf(kw,i))!=-1){c++;i+=kw.length();}return c;
-    }
+    static int countMatches(String t, String kw) { if(kw.isEmpty())return 0;int c=0,i=0; while((i=t.indexOf(kw,i))!=-1){c++;i+=kw.length();}return c; }
 }

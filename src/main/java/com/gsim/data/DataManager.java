@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -11,7 +12,7 @@ import java.util.stream.Stream;
 
 /**
  * DataManager — 世界数据管理器。
- * Branch 是时间节点文件（非文件夹）。当前世界状态 = base 文件 + active branch 父链增量。
+ * Branch 是时间节点文件，当前世界状态 = base 文件 + active branch 父链增量。
  */
 public class DataManager {
 
@@ -39,7 +40,6 @@ public class DataManager {
         Files.createDirectories(dataRoot);
         Files.writeString(dataRoot.resolve("active-world.txt"), DEFAULT_WORLD, StandardCharsets.UTF_8);
 
-        // skills
         Path skillsDir = dataRoot.resolve("skills");
         Files.createDirectories(skillsDir);
         writeFile(skillsDir.resolve("simulation-method.md"),
@@ -58,14 +58,12 @@ public class DataManager {
                 "id: skill.generated\ntype: skill\nname: 自动生成技能\nscope: global\ntags: [自动生成]\nupdated: 2026-06-18\n-------------------\n\n" +
                 "# 自动生成技能\n\n此文件由 /skill summarize 自动生成。\n");
 
-        // experience
         Path expDir = dataRoot.resolve("experience");
         Files.createDirectories(expDir);
         writeFile(expDir.resolve("e0001.md"),
                 "id: experience.e0001\ntype: experience\nname: 交互经验 0001\nsource: user-interaction\ntags: [经验, 模板]\nupdated: 2026-06-18\n-------------------\n\n" +
                 "# 交互经验 0001\n\n## 场景\n初始化数据系统。\n\n## 发生了什么\n系统自动创建了默认世界和初始时间节点。\n\n## 用户反馈\n暂无（待交互后记录）。\n\n## 经验结论\n待补充。\n");
 
-        // world
         initWorld(DEFAULT_WORLD);
         this.activeWorld = DEFAULT_WORLD;
         this.activeBranch = ROOT_BRANCH;
@@ -91,21 +89,52 @@ public class DataManager {
                 "id: input.current\ntype: input\nname: 当前输入\nupdated: 2026-06-18\n-------------------\n\n" +
                 "# 当前输入\n\n暂无待结算内容。\n");
 
-        // root branch
-        writeFile(wd.resolve("branches/b0000-start.md"),
-                "id: branch.b0000-start\ntype: branch\nname: 时间原点\nparent: none\nturn: 0\nworld_time: 时间原点\nstatus: resolved\ntags: [时间节点]\nupdated: 2026-06-18\n-------------------\n\n" +
-                "# 时间原点\n\n## 一、本节点输入\n世界初始化。\n\n## 二、推演结果\n无。\n\n## 三、世界观增量\n无。\n\n## 四、实体增量\n无。\n\n## 五、规则增量\n无。\n\n## 六、下节点风险\n待后续推演。\n");
+        writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
+                ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
+                "世界初始化。", "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
 
         log.info("Initialized world '{}'", worldName);
+    }
+
+    private String buildBranchContent(String id, String name, String parent, int turn, String worldTime,
+                                       String input, String result, String worldDelta, String entityDelta,
+                                       String ruleDelta, String interactionDelta, String skillDelta, String risks) {
+        return "id: " + id + "\ntype: branch\nname: " + name + "\nparent: " + parent +
+                "\nturn: " + turn + "\nworld_time: " + worldTime +
+                "\nstatus: resolved\ntags: [时间节点, 推演记录]\nupdated: 2026-06-18\n-------------------\n\n" +
+                "# " + name + "\n\n" +
+                "## 一、本节点输入\n\n" + input + "\n\n" +
+                "## 二、推演结果\n\n" + result + "\n\n" +
+                "## 三、世界观/设定增量\n\n" + worldDelta + "\n\n" +
+                "## 四、实体状态增量\n\n" + entityDelta + "\n\n" +
+                "## 五、推演规则增量\n\n" + ruleDelta + "\n\n" +
+                "## 六、交互逻辑增量\n\n" + interactionDelta + "\n\n" +
+                "## 七、未总结 Skill 增量\n\n" + skillDelta + "\n\n" +
+                "## 八、下节点风险\n\n" + risks + "\n";
     }
 
     private void autoLoad() throws IOException {
         Path aw = dataRoot.resolve("active-world.txt");
         if (Files.exists(aw)) activeWorld = Files.readString(aw, StandardCharsets.UTF_8).trim();
         Path wd = dataRoot.resolve("worlds").resolve(activeWorld);
-        if (!Files.isDirectory(wd)) { activeWorld = DEFAULT_WORLD; if (!Files.isDirectory(dataRoot.resolve("worlds").resolve(DEFAULT_WORLD))) initWorld(DEFAULT_WORLD); }
+        if (!Files.isDirectory(wd)) {
+            activeWorld = DEFAULT_WORLD;
+            if (!Files.isDirectory(dataRoot.resolve("worlds").resolve(DEFAULT_WORLD))) initWorld(DEFAULT_WORLD);
+            Files.writeString(aw, DEFAULT_WORLD, StandardCharsets.UTF_8);
+            wd = dataRoot.resolve("worlds").resolve(DEFAULT_WORLD);
+        }
         Path ab = wd.resolve("active-branch.txt");
-        if (Files.exists(ab)) activeBranch = Files.readString(ab, StandardCharsets.UTF_8).trim();
+        if (Files.exists(ab)) {
+            activeBranch = Files.readString(ab, StandardCharsets.UTF_8).trim();
+            // 回退检查：branch 文件必须存在
+            if (!Files.exists(wd.resolve("branches/" + branchIdToFilename(activeBranch)))) {
+                log.warn("Active branch '{}' not found, falling back to {}", activeBranch, ROOT_BRANCH);
+                activeBranch = ROOT_BRANCH;
+                Files.writeString(ab, ROOT_BRANCH, StandardCharsets.UTF_8);
+            }
+        } else {
+            activeBranch = ROOT_BRANCH;
+        }
         reload();
     }
 
@@ -142,6 +171,12 @@ public class DataManager {
         Files.writeString(dataRoot.resolve("active-world.txt"), name, StandardCharsets.UTF_8);
         Path ab = wd.resolve("active-branch.txt");
         activeBranch = Files.exists(ab) ? Files.readString(ab, StandardCharsets.UTF_8).trim() : ROOT_BRANCH;
+        // 回退检查
+        if (!Files.exists(wd.resolve("branches/" + branchIdToFilename(activeBranch)))) {
+            log.warn("Branch '{}' not found in world '{}', falling back to {}", activeBranch, name, ROOT_BRANCH);
+            activeBranch = ROOT_BRANCH;
+            Files.writeString(ab, ROOT_BRANCH, StandardCharsets.UTF_8);
+        }
         reload();
     }
 
@@ -168,35 +203,17 @@ public class DataManager {
             String pt = parentDoc.frontMatter().getOrDefault("turn", "0");
             try { turn = Integer.parseInt(pt) + 1; } catch (NumberFormatException ignored) {}
         }
-
-        // 收集 input.md 的内容作为本节点输入
         String inputContent = readInputContent();
 
-        String content = "id: " + branchId + "\n" +
-                "type: branch\n" +
-                "name: " + name + "\n" +
-                "parent: " + parent + "\n" +
-                "turn: " + turn + "\n" +
-                "world_time: " + (worldTime != null ? worldTime : "") + "\n" +
-                "status: resolved\n" +
-                "tags: [时间节点, 推演记录]\n" +
-                "updated: 2026-06-18\n" +
-                "-------------------\n\n" +
-                "# " + name + "\n\n" +
-                "## 一、本节点输入\n\n" + (inputContent.isBlank() ? "无。" : inputContent) + "\n\n" +
-                "## 二、推演结果\n\n待推演。\n\n" +
-                "## 三、世界观增量\n\n无。\n\n" +
-                "## 四、实体增量\n\n无。\n\n" +
-                "## 五、规则增量\n\n无。\n\n" +
-                "## 六、下节点风险\n\n待后续推演。\n";
+        String content = buildBranchContent(branchId, name, parent, turn,
+                worldTime != null ? worldTime : "",
+                inputContent.isBlank() ? "无。" : inputContent,
+                "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。");
 
         writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), content);
         activeBranch = branchId;
         Files.writeString(worldDir().resolve("active-branch.txt"), branchId, StandardCharsets.UTF_8);
-
-        // 清空 input
         clearInput();
-
         reload();
         log.info("Created branch '{}' parent='{}' turn={}", branchId, parent, turn);
         return documents.get(branchId);
@@ -215,7 +232,24 @@ public class DataManager {
         return chain;
     }
 
-    /** 返回时间线树结构。 */
+    /** 从指定 branch 的父链中提取所有匹配 heading 的章节内容。 */
+    public String extractBranchSectionChain(String branchId, String heading) {
+        List<DataDocument> chain = getBranchChain(branchId);
+        StringBuilder sb = new StringBuilder();
+        for (int i = chain.size() - 1; i >= 0; i--) {
+            DataDocument b = chain.get(i);
+            String sec = extractSection(b.body(), heading);
+            if (!sec.isBlank()) sb.append(sec).append("\n");
+        }
+        return sb.toString();
+    }
+
+    /** 获取父链中所有 "七、未总结 Skill 增量" 的汇总。 */
+    public String getBranchSkillDeltaContext() {
+        return extractBranchSectionChain(activeBranch, "七、未总结 Skill 增量");
+    }
+
+    /** 时间线树。 */
     public List<TreeNode> getTimelineTree() {
         Map<String, List<String>> children = new LinkedHashMap<>();
         Map<String, String> names = new LinkedHashMap<>();
@@ -226,22 +260,15 @@ public class DataManager {
             names.put(doc.id(), doc.name());
         }
         List<TreeNode> roots = new ArrayList<>();
-        if (children.containsKey("none")) {
-            for (String rootId : children.get("none")) {
-                roots.add(buildTree(rootId, children, names));
-            }
-        }
+        if (children.containsKey("none")) for (String rid : children.get("none")) roots.add(buildTree(rid, children, names));
         return roots;
     }
 
     private TreeNode buildTree(String id, Map<String, List<String>> children, Map<String, String> names) {
         List<TreeNode> kids = new ArrayList<>();
-        if (children.containsKey(id)) {
-            for (String cid : children.get(id)) kids.add(buildTree(cid, children, names));
-        }
+        if (children.containsKey(id)) for (String cid : children.get(id)) kids.add(buildTree(cid, children, names));
         return new TreeNode(id, names.getOrDefault(id, id), kids);
     }
-
     public record TreeNode(String id, String name, List<TreeNode> children) {}
 
     // ==================== input ====================
@@ -264,58 +291,44 @@ public class DataManager {
     private String readInputContent() throws IOException {
         Path f = worldDir().resolve("input.md");
         if (!Files.exists(f)) return "";
-        String raw = Files.readString(f, StandardCharsets.UTF_8);
-        return extractBody(raw);
+        return extractBody(Files.readString(f, StandardCharsets.UTF_8));
     }
 
     // ==================== access ====================
 
     public int docCount() { return documents.size(); }
     public DataDocument readById(String id) { return documents.get(id); }
-
-    public List<DataDocument> listAll() {
-        return documents.values().stream()
-                .sorted(Comparator.comparing(d -> d.rawPath())).toList();
-    }
-
-    public List<DataDocument> listByType(String type) {
-        return documents.values().stream().filter(d -> type.equals(d.type())).toList();
-    }
+    public List<DataDocument> listAll() { return documents.values().stream().sorted(Comparator.comparing(DataDocument::rawPath)).toList(); }
+    public List<DataDocument> listByType(String type) { return documents.values().stream().filter(d -> type.equals(d.type())).toList(); }
 
     // ==================== effective context ====================
 
-    /** 合成当前有效上下文：base 文件 + input + active branch 父链增量。 */
     public String getEffectiveContext() {
         StringBuilder sb = new StringBuilder();
-        sb.append(getEffectiveWorldContext());
-        sb.append("\n");
-        sb.append(getEffectiveEntityContext());
-        sb.append("\n");
-        sb.append(getEffectiveRuleContext());
-        sb.append("\n");
-        sb.append(readFileContent(worldDir().resolve("input.md")));
-        sb.append("\n");
+        sb.append(getEffectiveWorldContext()).append("\n");
+        sb.append(getEffectiveEntityContext()).append("\n");
+        sb.append(getEffectiveRuleContext()).append("\n");
+        sb.append(readFileContent(worldDir().resolve("input.md"))).append("\n");
 
         DataDocument ab = documents.get(activeBranch);
         if (ab != null) {
             sb.append("## 当前时间节点\n");
-            sb.append("ID: ").append(ab.id()).append("\n");
-            sb.append("名称: ").append(ab.name()).append("\n");
+            sb.append("ID: ").append(ab.id()).append("\n名称: ").append(ab.name()).append("\n");
             sb.append("世界时间: ").append(ab.frontMatter().getOrDefault("world_time", "")).append("\n");
             sb.append("Turn: ").append(ab.frontMatter().getOrDefault("turn", "0")).append("\n\n");
         }
 
-        List<DataDocument> chain = getBranchChain(activeBranch);
         sb.append("## 时间线增量\n\n");
+        List<DataDocument> chain = getBranchChain(activeBranch);
         for (int i = chain.size() - 1; i >= 0; i--) {
             DataDocument b = chain.get(i);
             sb.append("### ").append(b.name()).append(" (").append(b.id()).append(")\n");
             sb.append(extractSection(b.body(), "一、本节点输入"));
             sb.append(extractSection(b.body(), "二、推演结果"));
-            sb.append(extractSection(b.body(), "三、世界观增量"));
-            sb.append(extractSection(b.body(), "四、实体增量"));
-            sb.append(extractSection(b.body(), "五、规则增量"));
-            sb.append(extractSection(b.body(), "六、下节点风险"));
+            sb.append(extractSection(b.body(), "三、世界观/设定增量"));
+            sb.append(extractSection(b.body(), "四、实体状态增量"));
+            sb.append(extractSection(b.body(), "五、推演规则增量"));
+            sb.append(extractSection(b.body(), "六、交互逻辑增量"));
         }
         return sb.toString();
     }
@@ -323,6 +336,11 @@ public class DataManager {
     public String getEffectiveWorldContext() { return readFileContent(worldDir().resolve("world.md")); }
     public String getEffectiveEntityContext() { return readFileContent(worldDir().resolve("entities.md")); }
     public String getEffectiveRuleContext() { return readFileContent(worldDir().resolve("rules.md")); }
+
+    /** 父链中的交互逻辑增量。 */
+    public String getEffectiveInteractionContext() {
+        return extractBranchSectionChain(activeBranch, "六、交互逻辑增量");
+    }
 
     // ==================== search ====================
 
@@ -348,19 +366,15 @@ public class DataManager {
         documents.clear();
         Path wd = worldDir();
         if (!Files.isDirectory(wd)) return;
-        // base files
         for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md")) {
             Path f = wd.resolve(fn);
             if (Files.exists(f)) loadDoc(f, fn);
         }
-        // branches
         Path bd = wd.resolve("branches");
         if (Files.isDirectory(bd)) {
             try (Stream<Path> s = Files.walk(bd)) {
-                s.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".md")).forEach(f -> {
-                    String rel = wd.relativize(f).toString();
-                    loadDoc(f, rel);
-                });
+                s.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".md"))
+                        .forEach(f -> { String rel = wd.relativize(f).toString(); loadDoc(f, rel); });
             }
         }
         log.info("Loaded {} docs from world='{}' branch='{}'", documents.size(), activeWorld, activeBranch);
@@ -369,7 +383,7 @@ public class DataManager {
     private void loadDoc(Path file, String relPath) {
         try {
             String raw = Files.readString(file, StandardCharsets.UTF_8);
-            DataManager.ParseResult pr = DataManager.parseFrontMatter(raw);
+            ParseResult pr = parseFrontMatter(raw);
             DataDocument doc = pr.frontMatter.isEmpty()
                     ? DataDocument.withoutFrontMatter(pr.body, relPath)
                     : new DataDocument(pr.frontMatter, pr.body, relPath);
@@ -393,11 +407,10 @@ public class DataManager {
         int sep = raw.indexOf("-------------------");
         if (sep < 0) { sep = raw.indexOf("\n---\n"); if (sep < 0) sep = raw.indexOf("\n---"); }
         if (sep >= 0) {
-            int start = raw.indexOf('\n', sep);
-            if (start < 0) start = sep;
+            int start = raw.indexOf('\n', sep); if (start < 0) start = sep;
             String body = raw.substring(start).trim();
-            if (body.startsWith("---")) { int nl = body.indexOf('\n'); body = nl >= 0 ? body.substring(nl + 1).trim() : ""; }
-            else if (body.startsWith("--")) { int nl = body.indexOf('\n'); body = nl >= 0 ? body.substring(nl + 1).trim() : ""; }
+            if (body.startsWith("---")) { int nl = body.indexOf('\n'); body = nl >= 0 ? body.substring(nl+1).trim() : ""; }
+            else if (body.startsWith("--")) { int nl = body.indexOf('\n'); body = nl >= 0 ? body.substring(nl+1).trim() : ""; }
             return body;
         }
         return raw;
@@ -437,14 +450,6 @@ public class DataManager {
     }
     public record ParseResult(Map<String, String> frontMatter, String body) {}
 
-    private int countMatches(String t, String kw) {
-        if (kw.isEmpty()) return 0; int c=0,i=0;
-        while ((i=t.indexOf(kw,i))!=-1){c++;i+=kw.length();} return c;
-    }
-    private String buildSnippet(String b, String lk, int max) {
-        if (b.isEmpty()||lk.isEmpty()) return b.length()>max?b.substring(0,max)+"...":b;
-        int p=b.toLowerCase().indexOf(lk); if(p<0) return b.length()>max?b.substring(0,max)+"...":b;
-        int s=Math.max(0,p-max/3), e=Math.min(b.length(),p+max*2/3);
-        return (s>0?"...":"")+b.substring(s,e)+(e<b.length()?"...":"");
-    }
+    private int countMatches(String t, String kw) { if(kw.isEmpty())return 0;int c=0,i=0; while((i=t.indexOf(kw,i))!=-1){c++;i+=kw.length();}return c; }
+    private String buildSnippet(String b, String lk, int max) { if(b.isEmpty()||lk.isEmpty())return b.length()>max?b.substring(0,max)+"...":b; int p=b.toLowerCase().indexOf(lk);if(p<0)return b.length()>max?b.substring(0,max)+"...":b; int s=Math.max(0,p-max/3),e=Math.min(b.length(),p+max*2/3); return (s>0?"...":"")+b.substring(s,e)+(e<b.length()?"...":""); }
 }
