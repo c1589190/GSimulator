@@ -122,3 +122,9 @@ mvn test
 - **Phase 8**: 玩家行动分析、时间线、世界状态
 - **Phase 9**: ResearchAgent
 - **Phase 10**: WriterAgent 和最终出文
+
+## 开发提醒
+
+- **提交前必须确认**: 手动验收后会产生测试残留文件（data/worlds/default/input.md、data/worlds/default/branches/b0001-contact.md 等），提交前务必 `git checkout` 恢复或 `rm` 清理，只保留初始化模板文件。
+- **分支**: 当前在 `phase-web-import` 分支开发。提交命令: `git push origin phase-web-import`。
+- **运行前删除 data/**: 首次或测试启动前 `rm -rf data/` 以验证自动初始化。
