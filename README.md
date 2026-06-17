@@ -1,0 +1,115 @@
+# GSimulator
+
+一个基于 Java 21 的多 Agent 推演工作流引擎，服务于文游 / 架空历史 / 玩家行动推演场景。
+
+## 功能概述
+
+- **CLI REPL 交互式命令行**：启动后直接进入交互模式
+- **玩家行动管理**：支持多名玩家同时递交行动
+- **回合制推演**：主持人收集行动后，一键执行完整推演流程
+- **知识库集成**：支持 ChromaDB 语义检索世界设定、规则、历史事件
+- **多 Agent 协作**：Orchestrator 协调多个专业 LLM Agent 完成分析、推演、出文
+- **联网研究**：必要时自动搜索和抓取外部资料
+- **资料导入**：一键将 txt/md/json 资料导入知识库
+- **完整审计**：每回合生成 Markdown 结果和 JSON TaskLog
+
+## 快速开始
+
+### 环境要求
+
+- Java 21+
+- Maven 3.8+
+
+### 构建
+
+```bash
+mvn package
+```
+
+### 运行
+
+```bash
+java -jar target/GSimulator.jar
+```
+
+### 配置
+
+复制 `.env.example` 为 `.env`，填入实际的 LLM API 配置：
+
+```bash
+cp .env.example .env
+```
+
+然后通过环境变量加载（或在启动前 export）。
+
+## CLI 命令列表
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 显示所有命令说明 |
+| `/status` | 显示当前状态 |
+| `/newturn` | 创建新回合 |
+| `/player <玩家名> <行动内容>` | 登记玩家行动 |
+| `/run [强制要求]` | 结算当前回合 |
+| `/import` | 从 import/ 导入资料到知识库 |
+| `/searchdb <查询内容>` | 语义查询知识库 |
+| `/actions` | 显示当前回合玩家行动 |
+| `/clearactions` | 清空当前回合未结算行动 |
+| `/save` | 手动保存状态 |
+| `/load <campaignId>` | 加载指定战役 |
+| `/turn <turnId>` | 切换到指定回合 |
+| `/exit` | 退出 |
+
+## 示例流程
+
+```bash
+$ java -jar target/GSimulator.jar
+
+GSimulator started.
+Current campaign: default-campaign
+Current turn: turn-001
+
+gsim> /player 张三 向北方边境派出三个侦察连，要求地方商会提供粮食
+已记录玩家行动：张三 / turn-001
+
+gsim> /player 李四 宣布封锁港口，禁止敌对势力商船进入
+已记录玩家行动：李四 / turn-001
+
+gsim> /run 本回合请重点考虑补给、地方商会态度、港口封锁的影响
+开始结算 turn-001...
+
+========== GSimulator 回合结算 ==========
+...
+
+gsim> /newturn
+已创建新回合: turn-002
+
+gsim> /exit
+再见
+```
+
+## 项目结构
+
+```
+src/main/java/com/gsim/
+├── Main.java              # 程序入口
+├── app/                   # 应用启动和配置
+├── interaction/           # 交互层（CLI REPL）
+├── campaign/              # 战役/回合/玩家行动
+├── agent/                 # LLM Agent
+├── chroma/                # ChromaDB 客户端
+├── llm/                   # LLM 客户端封装
+├── prompt/                # Prompt 管理
+├── crawler/               # 联网爬虫
+├── importdata/            # 资料导入
+├── task/                  # 任务上下文和日志
+├── timeline/              # 时间线
+├── world/                 # 世界状态
+├── storage/               # 持久化
+├── output/                # 输出格式化
+└── util/                  # 工具类
+```
+
+## 许可证
+
+内部项目
