@@ -329,4 +329,67 @@ public class OrchestratorAgent {
     }
 
     public record SimResult(String finalText, List<ToolCallRecord> toolCalls, List<MessageTrace> trace) {}
+
+    // ---- chat mode ----
+
+    /** 对话模式：不覆盖任何章节，只返回 LLM 回复。 */
+    public ChatResult chatWithRenderedContext(String contextMarkdown, String userText) {
+        List<MessageTrace> trace = new ArrayList<>();
+        List<ToolCallRecord> toolCalls = new ArrayList<>();
+        List<LlmMessage> messages = new ArrayList<>();
+
+        messages.add(LlmMessage.system(contextMarkdown));
+        messages.add(LlmMessage.user(userText));
+        trace.add(new MessageTrace("user", "chat_user", userText));
+
+        String finalText = null;
+        int toolRound = 0;
+
+        while (toolRound < MAX_TOOL_ROUNDS) {
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmResponse response = llmClient.chat(request);
+
+            if (!response.success()) {
+                return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
+            }
+
+            String content = response.content();
+            messages.add(LlmMessage.assistant(content));
+
+            ParsedToolCall parsed = tryParseToolCall(content);
+            if (parsed != null) {
+                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                ToolResult result = toolRegistry.call(call);
+                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                StringBuilder tr = new StringBuilder();
+                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                if (result.success()) {
+                    for (ToolResult.Item item : result.items())
+                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                } else tr.append("错误: ").append(result.error());
+                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
+                messages.add(LlmMessage.user(tr.toString()));
+                toolRound++;
+                continue;
+            }
+
+            finalText = content;
+            trace.add(new MessageTrace("assistant", "chat_response", finalText));
+            break;
+        }
+
+        if (finalText == null) {
+            messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
+            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            if (fr.success()) { finalText = fr.content(); trace.add(new MessageTrace("assistant", "chat_response", finalText)); }
+            else return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
+        }
+
+        return new ChatResult(true, finalText, toolCalls, trace, null);
+    }
+
+    public record ChatResult(boolean success, String finalText, List<ToolCallRecord> toolCalls,
+                              List<MessageTrace> trace, String errorMessage) {}
 }

@@ -139,6 +139,7 @@ public class DataManager {
 
     public String getActiveWorld() { return activeWorld; }
     public String getActiveBranch() { return activeBranch; }
+    public Path getDataRoot() { return dataRoot; }
 
     public List<String> listWorlds() {
         Path d = dataRoot.resolve("worlds");

@@ -9,6 +9,7 @@ import com.gsim.importdata.ImportManager;
 import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
+import com.gsim.chat.NodeAgentChatService;
 import com.gsim.context.BranchContextRenderer;
 import com.gsim.data.DataManager;
 import com.gsim.experience.ExperienceManager;
@@ -84,6 +85,12 @@ public class GSimulatorApplication {
         manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator));
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
+
+        // Chat 系统
+        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);
+        ChatCommand chatCommand = new ChatCommand(chatService);
+        manager.registerCommand(chatCommand);
+        adapter.setChatService(chatService, chatCommand);
     }
 
     /**
