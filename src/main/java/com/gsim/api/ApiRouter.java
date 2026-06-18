@@ -13,11 +13,16 @@ public class ApiRouter {
     private final HttpServer server;
     private final ApplicationContext ctx;
     private final EventBus eventBus;
+    private final SessionManager sessionManager;
+    private final TaskManager taskManager;
 
-    public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus) {
+    public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
+                     SessionManager sessionManager, TaskManager taskManager) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
+        this.sessionManager = sessionManager;
+        this.taskManager = taskManager;
     }
 
     /**
@@ -27,9 +32,13 @@ public class ApiRouter {
         // 状态
         server.createContext("/api/status", new StatusApiHandler(ctx));
 
-        // 命令
-        server.createContext("/api/command", new CommandApiHandler(ctx, eventBus));
-        server.createContext("/api/command/stream", new StreamCommandHandler(ctx, eventBus));
+        // 命令（旧接口，保留兼容）
+        server.createContext("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
+        server.createContext("/api/command/stream",
+                new StreamCommandHandler(ctx, eventBus, sessionManager, taskManager));
+
+        // 任务 API（新接口，推荐使用）
+        server.createContext("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
 
         // Campaign / Turn / Action
         server.createContext("/api/campaigns", new CampaignsApiHandler(ctx, eventBus));

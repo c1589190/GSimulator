@@ -115,8 +115,13 @@ llm_delta, llm_reasoning_delta, llm_done, import_progress, search_progress, resu
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/status | 应用状态 |
-| POST | /api/command | 执行命令 |
-| POST | /api/command/stream | SSE 流式命令 |
+| POST | /api/tasks | 创建任务（推荐） |
+| GET | /api/tasks | 任务列表 |
+| GET | /api/tasks/{id} | 任务状态 |
+| GET | /api/tasks/{id}/events | SSE 任务事件流 |
+| POST | /api/tasks/{id}/cancel | 取消任务 |
+| POST | /api/command | 执行命令（旧） |
+| POST | /api/command/stream | SSE 流式命令（旧） |
 | GET/POST | /api/campaigns | Campaign 管理 |
 | GET/POST | /api/campaigns/{id}/turns | Turn 管理 |
 | GET/POST/DELETE | /api/campaigns/{id}/turns/{tid}/actions | PlayerAction CRUD |

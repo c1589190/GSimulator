@@ -107,8 +107,12 @@ class ApiManagerStatusTest {
         int code = conn.getResponseCode();
         String body = readBody(conn);
         Map<?, ?> result = JsonUtils.fromJson(body, Map.class);
-        // 验证有错误信息
-        assertNotNull(result.get("message"));
+        // 验证有错误信息 (新格式: error.message)
+        Object error = result.get("error");
+        assertNotNull(error);
+        if (error instanceof Map<?, ?> errMap) {
+            assertNotNull(errMap.get("message"));
+        }
     }
 
     @Test

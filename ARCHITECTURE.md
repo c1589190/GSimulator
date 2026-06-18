@@ -214,10 +214,23 @@ ApiManager ──> HttpServer
 ### 事件系统
 
 CLI 和 HTTP 共用 EventBus：
-- `EventBus` 发布 `GSimEvent`
+- `EventBus` 发布 `GSimEvent`，先通过 `accepts()` 过滤再 `accept()`
+- `EventSink` 接口新增 `accepts(GSimEvent)` 方法，默认接受所有事件
 - `ConsoleEventSink` 订阅 EventBus（CLI 模式）
-- `SseEventSink` 按需订阅 EventBus（每条 SSE 连接）
+- `FilteredEventSink` 按 sessionId/taskId 过滤订阅（每条 SSE 连接）
 - CLI 和 HTTP 必须复用 `InteractionManager` 和服务层
+
+### Session 管理
+
+- `SessionManager` 管理 `sessionId → InteractionSession` 映射
+- API 请求不再全部共享同一个 session
+- 每个 session 拥有独立的 `InteractionContext`，共享底层 services
+
+### Task 管理
+
+- `TaskManager` 创建和管理长任务生命周期（PENDING → RUNNING → DONE/FAILED/CANCELLED）
+- 任务在虚拟线程中执行，通过 EventBus 发布事件
+- `POST /api/tasks` 创建任务，`GET /api/tasks/{id}/events` 提供 taskId 级别 SSE 订阅
 
 ### SSE 流式事件
 

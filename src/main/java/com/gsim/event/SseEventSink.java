@@ -76,6 +76,6 @@ public class SseEventSink implements EventSink {
         }
         payload.put("type", event.type());
         payload.putAll(event.data());
-        return JsonUtils.toJson(payload);
+        return JsonUtils.toJsonCompact(payload);
     }
 }

@@ -57,7 +57,7 @@ public class SseWriter {
      * 写一个 SSE 事件（data 为 Map，自动序列化为 JSON）。
      */
     public void writeEvent(String eventType, Map<String, Object> data) throws IOException {
-        writeEvent(eventType, JsonUtils.toJson(data));
+        writeEvent(eventType, JsonUtils.toJsonCompact(data));
     }
 
     /**

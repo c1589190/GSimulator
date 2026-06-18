@@ -11,6 +11,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *
  * <p>CLI 和 HTTP SSE 都通过 EventBus 消费事件。
  * 每个 ApplicationContext 持有一个 EventBus 实例。
+ *
+ * <p>publish() 会先调用 sink.accepts() 过滤，
+ * 避免全局广播到所有连接。
  */
 public class EventBus {
 
@@ -35,13 +38,16 @@ public class EventBus {
     }
 
     /**
-     * 发布事件到所有订阅者。
+     * 发布事件到匹配的订阅者。
+     * 先通过 accepts() 过滤，再调用 accept()。
      * 每个 sink 的异常被隔离，不会影响其他 sink。
      */
     public void publish(GSimEvent event) {
         for (EventSink sink : sinks) {
             try {
-                sink.accept(event);
+                if (sink.accepts(event)) {
+                    sink.accept(event);
+                }
             } catch (Exception e) {
                 log.warn("EventSink {} failed to handle event {}: {}",
                         sink.getClass().getSimpleName(), event.type(), e.getMessage());

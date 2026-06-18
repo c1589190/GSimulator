@@ -83,8 +83,13 @@ java -jar target/GSimulator.jar --cli --http  # CLI + HTTP API
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/status | 应用状态 |
-| POST | /api/command | 执行 CLI 命令 |
-| POST | /api/command/stream | SSE 流式命令 |
+| POST | /api/tasks | 创建任务（推荐） |
+| GET | /api/tasks | 任务列表 |
+| GET | /api/tasks/{id} | 任务状态 |
+| GET | /api/tasks/{id}/events | SSE 任务事件流 |
+| POST | /api/tasks/{id}/cancel | 取消任务 |
+| POST | /api/command | 执行 CLI 命令（旧） |
+| POST | /api/command/stream | SSE 流式命令（旧） |
 | GET/POST | /api/campaigns | Campaign 列表/创建 |
 | GET | /api/campaigns/{id} | Campaign 详情 |
 | POST | /api/campaigns/{id}/load | 加载 Campaign |
@@ -103,13 +108,33 @@ java -jar target/GSimulator.jar --cli --http  # CLI + HTTP API
 
 ```
 event: {type}
-data: {"sessionId":"...","type":"...","..."}
+data: {"sessionId":"...","taskId":"...","type":"...","..."}
 
 ```
 
 支持的事件类型：command_started, command_done, command_error, log, run_stage,
 import_progress, search_progress, tool_started, tool_done, tool_error,
 llm_started, llm_delta, llm_reasoning_delta, llm_done, result, done
+
+### 事件过滤
+
+- GSimEvent 包含 sessionId、taskId、type、time、data
+- EventSink 通过 `accepts(GSimEvent)` 实现过滤（默认接受所有事件）
+- SseEventSink / FilteredEventSink 可按 sessionId + taskId 过滤
+- SSE 订阅某个 taskId 时只收到该 task 的事件
+- 无 taskId 的事件广播给 sessionId 匹配的 sink
+
+### 推荐用法
+
+```bash
+# 创建任务
+curl -X POST http://127.0.0.1:8710/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"default","command":"/status"}'
+
+# 订阅任务 SSE 事件流（GET，适合浏览器 EventSource）
+curl -N http://127.0.0.1:8710/api/tasks/{taskId}/events
+```
 
 ## LLM 流式接口
 
@@ -122,10 +147,23 @@ LlmClient 新增 `stream()` 方法：
 ## 事件系统
 
 CLI 和 HTTP 共用 EventBus：
-- EventBus 发布 GSimEvent
+- EventBus 发布 GSimEvent，先通过 `accepts()` 过滤再 `accept()`
 - ConsoleEventSink 订阅 EventBus（CLI 模式）
-- SseEventSink 按需订阅 EventBus（SSE 连接）
+- FilteredEventSink 按需订阅 EventBus（SSE 连接，按 sessionId/taskId 过滤）
 - CLI 和 HTTP 共用 InteractionManager 业务逻辑
+
+### Session 管理
+
+- SessionManager 管理 `sessionId → InteractionSession` 映射
+- API 请求不再全部共享同一个 session
+- 每个 session 拥有独立的 InteractionContext，共享底层 services
+
+### Task 管理
+
+- TaskManager 创建和管理长任务（PENDING → RUNNING → DONE/FAILED/CANCELLED）
+- 任务在虚拟线程中执行，通过 EventBus 发布事件
+- 支持任务查询、列表、取消
+- GET /api/tasks/{taskId}/events 提供 taskId 级别 SSE 订阅
 
 ## ChromaDB 配置
 

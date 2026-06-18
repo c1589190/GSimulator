@@ -29,6 +29,8 @@ public class ApiManager {
     private final ApiConfig apiConfig;
     private final ApplicationContext ctx;
     private final EventBus eventBus;
+    private final SessionManager sessionManager;
+    private final TaskManager taskManager;
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
@@ -37,6 +39,8 @@ public class ApiManager {
         this.apiConfig = apiConfig;
         this.ctx = ctx;
         this.eventBus = eventBus;
+        this.sessionManager = new SessionManager(ctx);
+        this.taskManager = new TaskManager(ctx, sessionManager, eventBus);
     }
 
     /**
@@ -52,7 +56,7 @@ public class ApiManager {
         server = HttpServer.create(address, 0);  // 0 = default backlog
 
         // 注册所有路由
-        ApiRouter router = new ApiRouter(server, ctx, eventBus);
+        ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)
@@ -62,12 +66,17 @@ public class ApiManager {
         server.start();
         log.info("HTTP API server started on {}:{}", apiConfig.getHost(), apiConfig.getPort());
         System.out.println("🌐 HTTP API: " + apiConfig.getBaseUrl());
-        System.out.println("   GET  /api/status          — 应用状态");
-        System.out.println("   POST /api/command          — 执行命令");
-        System.out.println("   POST /api/command/stream   — SSE 流式命令");
-        System.out.println("   GET  /api/campaigns        — Campaign 管理");
-        System.out.println("   POST /api/import/url       — URL 导入");
-        System.out.println("   GET  /api/searchdb         — 搜索知识库");
+        System.out.println("   GET  /api/status              — 应用状态");
+        System.out.println("   POST /api/tasks               — 创建任务（推荐）");
+        System.out.println("   GET  /api/tasks               — 任务列表");
+        System.out.println("   GET  /api/tasks/{id}          — 任务状态");
+        System.out.println("   GET  /api/tasks/{id}/events   — SSE 任务事件流");
+        System.out.println("   POST /api/tasks/{id}/cancel   — 取消任务");
+        System.out.println("   POST /api/command             — 执行命令（旧）");
+        System.out.println("   POST /api/command/stream      — SSE 流式命令（旧）");
+        System.out.println("   GET  /api/campaigns           — Campaign 管理");
+        System.out.println("   POST /api/import/url          — URL 导入");
+        System.out.println("   GET  /api/searchdb            — 搜索知识库");
     }
 
     /**
@@ -98,5 +107,13 @@ public class ApiManager {
 
     public int getPort() {
         return server != null ? server.getAddress().getPort() : apiConfig.getPort();
+    }
+
+    public SessionManager getSessionManager() {
+        return sessionManager;
+    }
+
+    public TaskManager getTaskManager() {
+        return taskManager;
     }
 }
