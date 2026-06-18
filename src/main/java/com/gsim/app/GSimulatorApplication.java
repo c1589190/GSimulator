@@ -32,6 +32,8 @@ import java.nio.file.Path;
  */
 public class GSimulatorApplication {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GSimulatorApplication.class);
+
     private final ApplicationContext ctx;
     private final ConsoleInteractionAdapter adapter;
     private final AppConfig config;
@@ -71,7 +73,7 @@ public class GSimulatorApplication {
         // /exit — 退出
         manager.registerCommand(new ExitCommand(adapter::shutdown));
 
-        // Data / Skill / Experience 系统（先初始化，PlayerCommand 依赖 DataManager）
+        // Data / Skill / Experience 系统
         Path dataRoot = config.getDataDir();
         DataManager dataManager = new DataManager(dataRoot);
 
@@ -81,19 +83,15 @@ public class GSimulatorApplication {
         // PlayerProfileManager — 玩家档案管理
         PlayerProfileManager profileManager = new PlayerProfileManager(dataManager);
 
-        // 注册 PlayerProfile Tools（Agent 可调用管理玩家档案）
+        // 注册 PlayerProfile Tools
         toolRegistry.register(new PlayerProfileListTool(profileManager));
         toolRegistry.register(new PlayerProfileGetTool(profileManager));
         toolRegistry.register(new PlayerProfileUpdateTool(profileManager));
         toolRegistry.register(new PlayerProfileNoteTool(profileManager));
 
-        // BranchMessageStore — 统一的消息块存储
+        // BranchMessageStore / BranchAnalyzer
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
-
-        // BranchAnalyzer — 节点态势分析引擎
         BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dataManager, messageStore, profileManager);
-
-        // 注册 BranchAnalysisTool（Agent 可调用分析节点态势）
         toolRegistry.register(new BranchAnalysisTool(branchAnalyzer));
 
         // Phase 3: Campaign / Turn / PlayerAction
@@ -106,80 +104,102 @@ public class GSimulatorApplication {
         manager.registerCommand(new LoadCommand());
         manager.registerCommand(new TurnCommand());
 
-        // Phase 6: /import (local + URL)
-        // NOTE: Import pipeline not yet connected to SQLite KnowledgeStore.
-        // ImportManager.doImport() returns IMPORT_PIPELINE_NOT_IMPLEMENTED.
+        // Phase 6: /import
         ImportManager importManager = new ImportManager(config, null);
         manager.registerCommand(new ImportCommand(config, importManager));
 
-        // Tool 系统: /tool wiki_search
+        // Tool 系统
         manager.registerCommand(new ToolCommand(toolRegistry));
+
+        SkillManager skillManager = new SkillManager(dataRoot);
+        skillManager.setDataManager(dataManager);
+        ExperienceManager expManager = new ExperienceManager(dataRoot);
+
+        // 注入 DataManager
+        ctx.setDataManager(dataManager);
+
+        // Context Session + Knowledge — 如果已有 active root，初始化
+        BranchContextRenderer contextRenderer;
+        com.gsim.context.session.ContextSessionManager ctxSessionManager;
+        OrchestratorAgent orchestrator;
+        NodeAgentChatService chatService;
+        ChatCommand chatCommand;
+
+        if (!dataManager.needsRootBootstrap()) {
+            contextRenderer = buildContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+            ctxSessionManager = buildContextSessionSystem(contextRenderer, dataManager, dataRoot);
+            ctx.setBranchContextRenderer(contextRenderer);
+            ctx.setContextSessionManager(ctxSessionManager);
+            ctx.resolveKnowledgeForActiveRoot();
+        } else {
+            // 空 data — 创建占位 renderer 和 session manager（bootstrap 后会重建）
+            contextRenderer = buildContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+            ctxSessionManager = null;
+            ctx.setBranchContextRenderer(contextRenderer);
+            ctx.setContextSessionManager(null);
+        }
 
         // Knowledge / Embedding 管理命令
         manager.registerCommand(new KnowledgeCommand(ctx.getKnowledgeStore()));
         manager.registerCommand(new EmbeddingCommand(ctx.getEmbeddingProfileManager()));
 
-        SkillManager skillManager = new SkillManager(dataRoot);
-        skillManager.setDataManager(dataManager);
-        ExperienceManager expManager = new ExperienceManager(dataRoot);
-        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
-
-        // Context Session 系统
-        Path worldDir = dataRoot.resolve("worlds").resolve(dataManager.getActiveWorld());
-        var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
-        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
-        var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dataManager, summaryStore);
-        var sessionStore = new com.gsim.context.session.ContextSessionStore(worldDir);
-        var pinManager = new com.gsim.context.memory.PinnedConstraintManager(pinStore);
-        var summaryManager = new com.gsim.context.summary.NodeSummaryManager(summaryStore, dataManager, messageStore);
-
-        // 用新依赖重建 renderer
-        contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer,
-                pathRenderer, summaryStore, pinStore);
-
-        var ctxSessionManager = new com.gsim.context.session.ContextSessionManager(
-                sessionStore, contextRenderer, dataManager, worldDir);
-
-        // 注入到 ApplicationContext
-        ctx.setDataManager(dataManager);
-        ctx.setBranchContextRenderer(contextRenderer);
-        ctx.setContextSessionManager(ctxSessionManager);
-
-        // 注册 Memory Tools
-        toolRegistry.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
-        toolRegistry.register(new com.gsim.context.memory.BranchNodeGetTool(dataManager, messageStore));
-        toolRegistry.register(new com.gsim.context.memory.BranchNodeSearchTool(dataManager, summaryStore));
-        toolRegistry.register(new com.gsim.context.memory.BranchLogFilterTool(dataManager));
-        toolRegistry.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
-        toolRegistry.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
+        // 注册 Memory Tools（如果 summary/pin store 可用）
+        registerMemoryTools(toolRegistry, dataManager, dataRoot, messageStore, branchAnalyzer);
 
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
-        manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
+        if (ctxSessionManager != null) {
+            manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
+        }
 
-        // Phase 7+: Orchestrator + 统一 Agent 入口
-        OrchestratorAgent orchestrator = new OrchestratorAgent(
+        // Orchestrator + Chat
+        orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
-
-        // Chat 系统（统一入口，必须先于 /sim /run wrapper 创建）
-        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator, ctxSessionManager);
-        ChatCommand chatCommand = new ChatCommand(chatService);
+        chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator,
+                ctxSessionManager, dataRoot, ctx);
+        chatCommand = new ChatCommand(chatService);
         manager.registerCommand(chatCommand);
 
-        // /sim /run — 废弃 wrapper，转发到统一 Agent 入口
+        // /sim /run — deprecated wrappers
         manager.registerCommand(new SimCommand(chatService));
         manager.registerCommand(new RunCommand(chatService));
 
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
         manager.registerCommand(new BranchCommand(branchAnalyzer));
-        // 使用 PinCommand 独立实例（不直接依赖 pinManager 构造器参数位置）
-        manager.registerCommand(new PinCommand(pinManager, dataManager));
 
-        // Messages 命令
+        // Pin + Messages
+        var pinManager = buildPinManager(dataManager, dataRoot);
+        manager.registerCommand(new PinCommand(pinManager, dataManager));
         MessagesCommand messagesCommand = new MessagesCommand(messageStore, dataManager);
         manager.registerCommand(messagesCommand);
+
+        // /root 命令 — 根管理（需要 onRootChanged 回调）
+        manager.registerCommand(new RootCommand(dataManager, ctx.getScopedStoreFactory(), newRootId -> {
+            try {
+                // 重建 ContextSession 系统
+                var newRenderer = buildContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+                var newCtxSessionMgr = buildContextSessionSystem(newRenderer, dataManager, dataRoot);
+                ctx.setBranchContextRenderer(newRenderer);
+                ctx.setContextSessionManager(newCtxSessionMgr);
+                ctx.resolveKnowledgeForActiveRoot();
+                // 更新 chat service
+                chatService.onRootChanged(newRenderer, newCtxSessionMgr, dataRoot, ctx);
+                log.info("Root switched to '{}', context session and knowledge store re-initialized", newRootId);
+            } catch (Exception e) {
+                log.error("Failed to switch root to '{}': {}", newRootId, e.getMessage());
+            }
+        }));
+
+        // 如果 data 为空，提示用户
+        if (dataManager.needsRootBootstrap()) {
+            System.out.println();
+            System.out.println("当前没有 root。");
+            System.out.println("你可以直接输入第一条世界观描述，系统将创建第一个 root。");
+            System.out.println("或使用 /root create <rootId> <初始设定>。");
+            System.out.println();
+        }
 
         adapter.setChatService(chatService, chatCommand, messagesCommand);
     }
@@ -259,4 +279,61 @@ public class GSimulatorApplication {
     public ApplicationContext getContext() {
         return ctx;
     }
+
+    // ---- Helper builders ----
+
+    private BranchContextRenderer buildContextRenderer(DataManager dm, Path dataRoot,
+                                                        BranchMessageStore messageStore,
+                                                        BranchAnalyzer branchAnalyzer) {
+        Path worldDir;
+        if (!dm.needsRootBootstrap()) {
+            worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
+        } else {
+            worldDir = dataRoot.resolve("worlds").resolve("__pending__");
+        }
+        var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
+        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
+        var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dm, summaryStore);
+        return new BranchContextRenderer(dm, dataRoot, messageStore, branchAnalyzer,
+                pathRenderer, summaryStore, pinStore);
+    }
+
+    private com.gsim.context.session.ContextSessionManager buildContextSessionSystem(
+            BranchContextRenderer renderer, DataManager dm, Path dataRoot) {
+        Path worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
+        var sessionStore = new com.gsim.context.session.ContextSessionStore(worldDir);
+        return new com.gsim.context.session.ContextSessionManager(sessionStore, renderer, dm, worldDir);
+    }
+
+    private com.gsim.context.memory.PinnedConstraintManager buildPinManager(DataManager dm, Path dataRoot) {
+        Path worldDir;
+        if (!dm.needsRootBootstrap()) {
+            worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
+        } else {
+            worldDir = dataRoot.resolve("worlds").resolve("__pending__");
+        }
+        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
+        return new com.gsim.context.memory.PinnedConstraintManager(pinStore);
+    }
+
+    private void registerMemoryTools(ToolRegistry toolRegistry, DataManager dm, Path dataRoot,
+                                      BranchMessageStore messageStore, BranchAnalyzer branchAnalyzer) {
+        Path worldDir;
+        if (!dm.needsRootBootstrap()) {
+            worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
+        } else {
+            return; // 没有 root 就不注册 memory tools
+        }
+        var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
+        var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dm, summaryStore);
+        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
+        var pinManager = new com.gsim.context.memory.PinnedConstraintManager(pinStore);
+        toolRegistry.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeGetTool(dm, messageStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeSearchTool(dm, summaryStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchLogFilterTool(dm));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
+    }
+
 }

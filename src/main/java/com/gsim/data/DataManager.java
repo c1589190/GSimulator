@@ -33,10 +33,128 @@ public class DataManager {
     public DataManager(Path dataRoot) {
         this.dataRoot = dataRoot.toAbsolutePath();
         try {
-            if (!Files.isDirectory(dataRoot)) initDefault();
-            else autoLoad();
+            if (!Files.isDirectory(dataRoot) || !hasAnyRoot()) {
+                // 空 data 或无 root — 自动创建 default world 以保持向后兼容
+                // 生产代码应在 GSimulatorApplication 中先检查 needsRootBootstrap()
+                // 并通过 /root create 或 bootstrapFromEmpty 显式创建
+                if (!Files.isDirectory(dataRoot)) initDefault();
+                else bootstrapInternal(DEFAULT_WORLD);
+            } else {
+                autoLoad();
+            }
         } catch (IOException e) { log.error("DataManager init failed: {}", e.getMessage()); }
     }
+
+    /** 是否需要 root bootstrap（无 active root 可用）。 */
+    public boolean needsRootBootstrap() {
+        return activeWorld == null || !hasAnyRoot();
+    }
+
+    /** 是否有有效 root。*/
+    private boolean hasAnyRoot() {
+        Path worldsDir = dataRoot.resolve("worlds");
+        if (!Files.isDirectory(worldsDir)) return false;
+        try (var s = Files.list(worldsDir)) {
+            return s.filter(Files::isDirectory)
+                    .anyMatch(d -> Files.exists(d.resolve("world.md"))
+                            || Files.exists(d.resolve("branches").resolve("b0000-start.md")));
+        } catch (IOException e) { return false; }
+    }
+
+    /** 列出所有 root ID。 */
+    public List<String> listRootIds() {
+        List<String> ids = new ArrayList<>();
+        Path worldsDir = dataRoot.resolve("worlds");
+        if (!Files.isDirectory(worldsDir)) return ids;
+        try (var s = Files.list(worldsDir)) {
+            s.filter(Files::isDirectory)
+                    .filter(d -> Files.exists(d.resolve("world.md"))
+                            || Files.exists(d.resolve("branches").resolve("b0000-start.md")))
+                    .map(p -> p.getFileName().toString())
+                    .sorted()
+                    .forEach(ids::add);
+        } catch (IOException e) { /* ignore */ }
+        return ids;
+    }
+
+    /** 获取 active root 的知识库 db 路径。 */
+    public Path getActiveKnowledgeDbPath() {
+        if (activeWorld == null) return null;
+        return worldDir().resolve("knowledge").resolve("gsim.db");
+    }
+
+    /**
+     * 从空 data bootstrap 创建初始 root。
+     * 只在 dataRoot 严格为空时调用。
+     */
+    public void bootstrapFromEmpty(String rootId, String worldContentMd) throws IOException {
+        if (hasAnyRoot()) {
+            throw new IOException("Cannot bootstrap: data already has roots. Use /root create instead.");
+        }
+        // 确保 dataRoot 存在
+        if (!Files.isDirectory(dataRoot)) {
+            Files.createDirectories(dataRoot);
+        }
+        // 创建 skills 和 experience（从 initDefault 中提取）
+        Path skillsDir = dataRoot.resolve("skills");
+        if (!Files.isDirectory(skillsDir)) {
+            Files.createDirectories(skillsDir);
+            writeFile(skillsDir.resolve("simulation-method.md"), ResourceManager.readText("gsim/templates/simulation-method.md"));
+            writeFile(skillsDir.resolve("tool-policy.md"), ResourceManager.readText("gsim/templates/tool-policy-skill.md"));
+            writeFile(skillsDir.resolve("output-style.md"), ResourceManager.readText("gsim/templates/output-style-skill.md"));
+            writeFile(skillsDir.resolve("failure-lessons.md"), ResourceManager.readText("gsim/templates/failure-lessons-skill.md"));
+            writeFile(skillsDir.resolve("generated-skill.md"), ResourceManager.readText("gsim/templates/generated-skill.md"));
+        }
+        Path expDir = dataRoot.resolve("experience");
+        if (!Files.isDirectory(expDir)) {
+            Files.createDirectories(expDir);
+            writeFile(expDir.resolve("e0001.md"), ResourceManager.readText("gsim/templates/e0001-experience.md"));
+        }
+        // 创建 root
+        initWorld(rootId, worldContentMd);
+        this.activeWorld = rootId;
+        this.activeBranch = ROOT_BRANCH;
+        Files.writeString(dataRoot.resolve("active-world.txt"), rootId, StandardCharsets.UTF_8);
+        reload();
+        log.info("Bootstrapped root '{}' from empty data", rootId);
+    }
+
+    /**
+     * 显式创建 root（用户 /root create）。
+     */
+    public void createRoot(String rootId, String worldContentMd) throws IOException {
+        if (!rootId.matches("[a-zA-Z0-9._-]+")) {
+            throw new IOException("Invalid rootId: '" + rootId + "'. Must match [a-zA-Z0-9._-]+");
+        }
+        Path rootDir = dataRoot.resolve("worlds").resolve(rootId);
+        if (Files.isDirectory(rootDir)) {
+            throw new IOException("Root already exists: " + rootId);
+        }
+        initWorld(rootId, worldContentMd);
+        log.info("Created root '{}'", rootId);
+    }
+
+    /**
+     * 删除 root（用户 /root delete）。
+     */
+    public void deleteRoot(String rootId) throws IOException {
+        if (rootId.equals(activeWorld)) {
+            throw new IOException("Cannot delete active root. Switch to another root first.");
+        }
+        Path rootDir = dataRoot.resolve("worlds").resolve(rootId);
+        if (!Files.isDirectory(rootDir)) {
+            throw new IOException("Root not found: " + rootId);
+        }
+        // 递归删除
+        try (var s = Files.walk(rootDir)) {
+            s.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> { try { Files.delete(p); } catch (IOException e) { log.warn("Failed to delete: {}", p); } });
+        }
+        log.info("Deleted root '{}'", rootId);
+    }
+
+    /** 获取 active root ID（同 activeWorld）。 */
+    public String getActiveRootId() { return activeWorld; }
 
     // ==================== init ====================
 
@@ -68,6 +186,10 @@ public class DataManager {
     }
 
     private void initWorld(String worldName) throws IOException {
+        initWorld(worldName, null);
+    }
+
+    private void initWorld(String worldName, String worldContentMd) throws IOException {
         Path wd = dataRoot.resolve("worlds").resolve(worldName);
         for (String d : List.of("branches", "patches/pending", "patches/accepted", "patches/rejected"))
             Files.createDirectories(wd.resolve(d));
@@ -75,7 +197,19 @@ public class DataManager {
 
         String today = "2026-06-18";
         try {
-            writeFile(wd.resolve("world.md"), ResourceManager.renderTemplate("gsim/templates/world-template.md", "updated", today));
+            if (worldContentMd != null && !worldContentMd.isBlank()) {
+                // 使用用户提供的世界观内容
+                String worldMd = "id: world.base\n"
+                        + "type: world\n"
+                        + "name: " + worldName + "\n"
+                        + "tags: [世界观, 初始设定]\n"
+                        + "updated: " + today + "\n"
+                        + "-------------------\n\n"
+                        + worldContentMd + "\n";
+                writeFile(wd.resolve("world.md"), worldMd);
+            } else {
+                writeFile(wd.resolve("world.md"), ResourceManager.renderTemplate("gsim/templates/world-template.md", "updated", today));
+            }
             writeFile(wd.resolve("entities.md"), ResourceManager.renderTemplate("gsim/templates/entities-template.md", "updated", today));
             writeFile(wd.resolve("rules.md"), ResourceManager.renderTemplate("gsim/templates/rules-template.md", "updated", today));
             writeFile(wd.resolve("input.md"), ResourceManager.renderTemplate("gsim/templates/input-template.md", "updated", today));
@@ -84,10 +218,15 @@ public class DataManager {
             throw new UncheckedIOException(e);
         }
 
+        // 根节点输入：使用用户提供的世界观内容（如果有），否则使用默认文本
+        String branchInput = (worldContentMd != null && !worldContentMd.isBlank())
+                ? "世界初始化。\n\n" + worldContentMd
+                : "世界初始化。";
+
         writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
                 ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
-                "世界初始化。", "无。",
-                "无。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
+                branchInput, "无。",
+                "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
 
         log.info("Initialized world '{}'", worldName);
     }
@@ -112,13 +251,35 @@ public class DataManager {
 
     private void autoLoad() throws IOException {
         Path aw = dataRoot.resolve("active-world.txt");
-        if (Files.exists(aw)) activeWorld = Files.readString(aw, StandardCharsets.UTF_8).trim();
+        if (Files.exists(aw)) {
+            activeWorld = Files.readString(aw, StandardCharsets.UTF_8).trim();
+        } else {
+            // 没有 active-world.txt：尝试列出已有 root，取第一个
+            List<String> roots = listRootIds();
+            if (!roots.isEmpty()) {
+                activeWorld = roots.get(0);
+                Files.writeString(aw, activeWorld, StandardCharsets.UTF_8);
+                log.info("No active-world.txt, auto-selected first root: {}", activeWorld);
+            } else {
+                // 没有 root — 等待 bootstrap
+                log.info("No roots found, waiting for bootstrap");
+                return;
+            }
+        }
         Path wd = dataRoot.resolve("worlds").resolve(activeWorld);
         if (!Files.isDirectory(wd)) {
-            activeWorld = DEFAULT_WORLD;
-            if (!Files.isDirectory(dataRoot.resolve("worlds").resolve(DEFAULT_WORLD))) initWorld(DEFAULT_WORLD);
-            Files.writeString(aw, DEFAULT_WORLD, StandardCharsets.UTF_8);
-            wd = dataRoot.resolve("worlds").resolve(DEFAULT_WORLD);
+            // active root 目录不存在：尝试 fallback 到其他已有 root
+            List<String> roots = listRootIds();
+            roots.remove(activeWorld);
+            if (!roots.isEmpty()) {
+                activeWorld = roots.get(0);
+                Files.writeString(aw, activeWorld, StandardCharsets.UTF_8);
+                wd = dataRoot.resolve("worlds").resolve(activeWorld);
+                log.warn("Active world '{}' not found, fell back to '{}'", activeWorld, roots.get(0));
+            } else {
+                log.warn("Active world '{}' directory missing and no other roots found", activeWorld);
+                return;
+            }
         }
         Path ab = wd.resolve("active-branch.txt");
         if (Files.exists(ab)) {
@@ -127,18 +288,53 @@ public class DataManager {
             activeBranch = ROOT_BRANCH;
         }
         validateActiveBranch();
-        ensurePlayersFile(); // 旧 world 缺 players.md 时自动补建
+        ensurePlayersFile();
         reload();
     }
 
+    /** @deprecated 使用 bootstrapFromEmpty 或 createRoot + switchWorld 替代。保留测试兼容。 */
+    @Deprecated
     public void init() throws IOException {
-        if (!Files.isDirectory(dataRoot)) { initDefault(); return; }
-        Path wd = dataRoot.resolve("worlds").resolve("default");
-        if (!Files.isDirectory(wd)) initWorld("default");
-        this.activeWorld = "default"; this.activeBranch = ROOT_BRANCH;
-        Files.writeString(dataRoot.resolve("active-world.txt"), "default", StandardCharsets.UTF_8);
-        ensurePlayersFile();
+        if (!Files.isDirectory(dataRoot)) {
+            // 空 data：为测试兼容创建 default root
+            Files.createDirectories(dataRoot);
+            bootstrapInternal("default");
+            return;
+        }
+        if (needsRootBootstrap()) {
+            // dataRoot 存在但没有世界：为测试兼容创建 default root
+            bootstrapInternal("default");
+            return;
+        }
+        autoLoad();
+    }
+
+    /** 内部 bootstrap（无需 worldContent），用于向后兼容。 */
+    private void bootstrapInternal(String rootId) throws IOException {
+        if (!Files.isDirectory(dataRoot)) {
+            Files.createDirectories(dataRoot);
+        }
+        // 创建 skills + experience 目录
+        Path skillsDir = dataRoot.resolve("skills");
+        if (!Files.isDirectory(skillsDir)) {
+            Files.createDirectories(skillsDir);
+            writeFile(skillsDir.resolve("simulation-method.md"), ResourceManager.readText("gsim/templates/simulation-method.md"));
+            writeFile(skillsDir.resolve("tool-policy.md"), ResourceManager.readText("gsim/templates/tool-policy-skill.md"));
+            writeFile(skillsDir.resolve("output-style.md"), ResourceManager.readText("gsim/templates/output-style-skill.md"));
+            writeFile(skillsDir.resolve("failure-lessons.md"), ResourceManager.readText("gsim/templates/failure-lessons-skill.md"));
+            writeFile(skillsDir.resolve("generated-skill.md"), ResourceManager.readText("gsim/templates/generated-skill.md"));
+        }
+        Path expDir = dataRoot.resolve("experience");
+        if (!Files.isDirectory(expDir)) {
+            Files.createDirectories(expDir);
+            writeFile(expDir.resolve("e0001.md"), ResourceManager.readText("gsim/templates/e0001-experience.md"));
+        }
+        initWorld(rootId);
+        this.activeWorld = rootId;
+        this.activeBranch = ROOT_BRANCH;
+        Files.writeString(dataRoot.resolve("active-world.txt"), rootId, StandardCharsets.UTF_8);
         reload();
+        log.info("Bootstrapped root '{}' (internal compat)", rootId);
     }
 
     // ==================== world ====================

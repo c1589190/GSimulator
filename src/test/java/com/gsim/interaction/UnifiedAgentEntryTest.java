@@ -65,7 +65,8 @@ class UnifiedAgentEntryTest {
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 fakeLlm, new ToolRegistry(), "test-model");
 
-        chatService = new NodeAgentChatService(dm, renderer, orchestrator, ctxSessionManager);
+        chatService = new NodeAgentChatService(dm, renderer, orchestrator, ctxSessionManager,
+                dm.getDataRoot(), null);
     }
 
     @Test

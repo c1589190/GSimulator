@@ -26,9 +26,9 @@ public class KnowledgeToolFactory {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeToolFactory.class);
 
-    private final KnowledgeStore store;
-    private final KnowledgeSearchService searchService;
-    private final EmbeddingProfileManager profileManager;
+    private KnowledgeStore store;
+    private KnowledgeSearchService searchService;
+    private EmbeddingProfileManager profileManager;
     private final Chunker chunker;
 
     public KnowledgeToolFactory(KnowledgeStore store, KnowledgeSearchService searchService,
@@ -37,6 +37,17 @@ public class KnowledgeToolFactory {
         this.searchService = searchService;
         this.profileManager = profileManager;
         this.chunker = new Chunker();
+    }
+
+    /**
+     * 重新绑定到新的 root-scoped store / searchService / profileManager。
+     * 用于切换 root 时动态切换 knowledge 后端。
+     */
+    public void rebind(KnowledgeStore newStore, KnowledgeSearchService newSearchService,
+                       EmbeddingProfileManager newProfileManager) {
+        this.store = newStore;
+        this.searchService = newSearchService;
+        this.profileManager = newProfileManager;
     }
 
     /** 返回所有 8 个 knowledge tools。 */
