@@ -63,6 +63,13 @@ public class BranchContextRenderer {
             messages.add(new RenderedMessage("system", "effective_data", "", worldCtx));
         }
 
+        // 3.5. Players: 玩家档案
+        dm.ensurePlayersFile();
+        String playersCtx = dm.readPlayers();
+        if (!playersCtx.isBlank()) {
+            messages.add(new RenderedMessage("system", "players", "", playersCtx));
+        }
+
         // 4. User: input.md
         String input = readInputContent();
         String inputText = input.isBlank() ? "暂无待结算内容。" : input;

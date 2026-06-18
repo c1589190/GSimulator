@@ -14,8 +14,13 @@ import com.gsim.chat.NodeAgentChatService;
 import com.gsim.context.BranchContextRenderer;
 import com.gsim.data.DataManager;
 import com.gsim.experience.ExperienceManager;
+import com.gsim.player.PlayerProfileManager;
 import com.gsim.skill.SkillManager;
 import com.gsim.tool.PlayerInputTool;
+import com.gsim.tool.PlayerProfileGetTool;
+import com.gsim.tool.PlayerProfileListTool;
+import com.gsim.tool.PlayerProfileNoteTool;
+import com.gsim.tool.PlayerProfileUpdateTool;
 import com.gsim.tool.ToolRegistry;
 
 import java.nio.file.Path;
@@ -64,12 +69,22 @@ public class GSimulatorApplication {
         // 注册 PlayerInputTool（Agent 可调用写入 input.md）
         toolRegistry.register(new PlayerInputTool(dataManager));
 
+        // PlayerProfileManager — 玩家档案管理
+        PlayerProfileManager profileManager = new PlayerProfileManager(dataManager);
+
+        // 注册 PlayerProfile Tools（Agent 可调用管理玩家档案）
+        toolRegistry.register(new PlayerProfileListTool(profileManager));
+        toolRegistry.register(new PlayerProfileGetTool(profileManager));
+        toolRegistry.register(new PlayerProfileUpdateTool(profileManager));
+        toolRegistry.register(new PlayerProfileNoteTool(profileManager));
+
         // BranchMessageStore — 统一的消息块存储
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
 
         // Phase 3: Campaign / Turn / PlayerAction
         manager.registerCommand(new NewTurnCommand());
         manager.registerCommand(new PlayerCommand(dataManager));
+        manager.registerCommand(new PlayersCommand(profileManager));
         manager.registerCommand(new ActionsCommand());
         manager.registerCommand(new ClearActionsCommand());
         manager.registerCommand(new SaveCommand());

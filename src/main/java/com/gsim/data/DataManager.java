@@ -76,6 +76,7 @@ public class DataManager {
             writeFile(wd.resolve("entities.md"), ResourceManager.renderTemplate("gsim/templates/entities-template.md", "updated", today));
             writeFile(wd.resolve("rules.md"), ResourceManager.renderTemplate("gsim/templates/rules-template.md", "updated", today));
             writeFile(wd.resolve("input.md"), ResourceManager.renderTemplate("gsim/templates/input-template.md", "updated", today));
+            writeFile(wd.resolve("players.md"), ResourceManager.readText("gsim/templates/players-template.md"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -123,6 +124,7 @@ public class DataManager {
             activeBranch = ROOT_BRANCH;
         }
         validateActiveBranch();
+        ensurePlayersFile(); // 旧 world 缺 players.md 时自动补建
         reload();
     }
 
@@ -132,6 +134,7 @@ public class DataManager {
         if (!Files.isDirectory(wd)) initWorld("default");
         this.activeWorld = "default"; this.activeBranch = ROOT_BRANCH;
         Files.writeString(dataRoot.resolve("active-world.txt"), "default", StandardCharsets.UTF_8);
+        ensurePlayersFile();
         reload();
     }
 
@@ -162,6 +165,41 @@ public class DataManager {
         activeBranch = Files.exists(ab) ? Files.readString(ab, StandardCharsets.UTF_8).trim() : ROOT_BRANCH;
         validateActiveBranch();
         reload();
+    }
+
+    // ==================== players.md ====================
+
+    /** 获取 players.md 路径。 */
+    public Path getPlayersPath() {
+        return worldDir().resolve("players.md");
+    }
+
+    /** 读取 players.md 内容。 */
+    public String readPlayers() {
+        return readFileContent(getPlayersPath());
+    }
+
+    /** 写入 players.md。 */
+    public void writePlayers(String content) {
+        try {
+            writeFile(getPlayersPath(), content);
+            reload();
+        } catch (IOException e) {
+            log.error("Failed to write players.md: {}", e.getMessage());
+        }
+    }
+
+    /** 确保 players.md 存在，不存在则从模板创建。 */
+    public void ensurePlayersFile() {
+        Path p = getPlayersPath();
+        if (!Files.exists(p)) {
+            try {
+                writeFile(p, ResourceManager.readText("gsim/templates/players-template.md"));
+                log.info("Auto-created players.md for world '{}'", activeWorld);
+            } catch (IOException e) {
+                log.error("Failed to create players.md: {}", e.getMessage());
+            }
+        }
     }
 
     // ==================== branch ====================
@@ -505,7 +543,7 @@ public class DataManager {
         documents.clear();
         Path wd = worldDir();
         if (!Files.isDirectory(wd)) return;
-        for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md")) {
+        for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md", "players.md")) {
             Path f = wd.resolve(fn);
             if (Files.exists(f)) loadDoc(f, fn);
         }
