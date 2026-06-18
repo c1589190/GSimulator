@@ -4,7 +4,7 @@
 
 GSimulator 是一个基于 Java 21 + Maven 的多 Agent 推演工作流引擎，服务于"文游 / 架空历史 / 玩家行动推演"场景。它不是普通聊天机器人，而是一个可审计、可回放、可扩展的回合制推演系统。
 
-第一版为 CLI REPL 模式，后续将扩展 Web UI。
+第一版为 CLI REPL 模式，支持 HTTP API + SSE 流式事件输出，后续将扩展 Web UI。
 
 ## 架构原则
 
@@ -22,11 +22,15 @@ GSimulator 是一个基于 Java 21 + Maven 的多 Agent 推演工作流引擎，
 ```
 com.gsim
 ├── app/            — 应用启动、上下文、配置
+├── api/            — HTTP API 层（ApiManager、路由、SSE）
+│   ├── handlers/   — API handler（status、command、campaigns 等）
+│   └── dto/        — API 请求/响应 DTO
+├── event/          — 统一事件系统（EventBus、EventSink、SSE/Console）
 ├── interaction/    — 交互层（CLI REPL、命令解析、结果格式化）
 ├── campaign/       — 战役/回合/玩家行动 CRUD
 ├── agent/          — Orchestrator 和各专业 Agent
 ├── chroma/         — ChromaDB REST 客户端和知识路由
-├── llm/            — LLM 客户端统一封装
+├── llm/            — LLM 客户端统一封装（含流式接口）
 ├── prompt/         — Prompt 模板管理和渲染
 ├── crawler/        — 联网搜索和网页抓取
 ├── importdata/     — 资料导入管道
@@ -59,6 +63,107 @@ mvn test
 - `LLM_API_KEY` — API 密钥
 - `LLM_MODEL` — 模型名称（默认 deepseek-v4-pro）
 - `LLM_TEMPERATURE` — 温度参数（默认 0.3）
+
+## HTTP API 配置
+
+通过环境变量设置：
+- `API_HOST` — 监听地址（默认 127.0.0.1）
+- `API_PORT` — 监听端口（默认 8710）
+- `API_ENABLED` — 是否启用（默认 false）
+
+启动方式：
+```bash
+java -jar target/GSimulator.jar               # 仅 CLI（默认）
+java -jar target/GSimulator.jar --http        # 仅 HTTP API
+java -jar target/GSimulator.jar --cli --http  # CLI + HTTP API
+```
+
+## HTTP API 列表
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/status | 应用状态 |
+| POST | /api/tasks | 创建任务（推荐） |
+| GET | /api/tasks | 任务列表 |
+| GET | /api/tasks/{id} | 任务状态 |
+| GET | /api/tasks/{id}/events | SSE 任务事件流 |
+| POST | /api/tasks/{id}/cancel | 取消任务 |
+| POST | /api/command | 执行 CLI 命令（旧） |
+| POST | /api/command/stream | SSE 流式命令（旧） |
+| GET/POST | /api/campaigns | Campaign 列表/创建 |
+| GET | /api/campaigns/{id} | Campaign 详情 |
+| POST | /api/campaigns/{id}/load | 加载 Campaign |
+| GET/POST | /api/campaigns/{id}/turns | Turn 列表/创建 |
+| GET | /api/campaigns/{id}/turns/{turnId} | Turn 详情 |
+| POST | /api/campaigns/{id}/turns/{turnId}/activate | 激活 Turn |
+| GET/POST/DELETE | /api/campaigns/{id}/turns/{turnId}/actions | PlayerAction CRUD |
+| POST | /api/import/local | 本地导入 |
+| POST | /api/import/url | URL 导入 |
+| GET/POST | /api/searchdb | 搜索知识库（预留） |
+| GET | /api/logs[/{taskId}] | 日志列表/详情 |
+| GET | /api/outputs[/{taskId}] | 输出文件列表/详情 |
+| GET/POST | /api/branches | 分支管理（预留） |
+
+## SSE 流式事件格式
+
+```
+event: {type}
+data: {"sessionId":"...","taskId":"...","type":"...","..."}
+
+```
+
+支持的事件类型：command_started, command_done, command_error, log, run_stage,
+import_progress, search_progress, tool_started, tool_done, tool_error,
+llm_started, llm_delta, llm_reasoning_delta, llm_done, result, done
+
+### 事件过滤
+
+- GSimEvent 包含 sessionId、taskId、type、time、data
+- EventSink 通过 `accepts(GSimEvent)` 实现过滤（默认接受所有事件）
+- SseEventSink / FilteredEventSink 可按 sessionId + taskId 过滤
+- SSE 订阅某个 taskId 时只收到该 task 的事件
+- 无 taskId 的事件广播给 sessionId 匹配的 sink
+
+### 推荐用法
+
+```bash
+# 创建任务
+curl -X POST http://127.0.0.1:8710/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"default","command":"/status"}'
+
+# 订阅任务 SSE 事件流（GET，适合浏览器 EventSource）
+curl -N http://127.0.0.1:8710/api/tasks/{taskId}/events
+```
+
+## LLM 流式接口
+
+LlmClient 新增 `stream()` 方法：
+- 上游返回 `delta.content` → llm_delta 事件
+- 上游返回 `delta.reasoning_content` → llm_reasoning_delta 事件
+- 不伪造 reasoning — 只有上游确实返回 reasoning_content 时才转发
+- 默认降级到非流式 chat() 实现
+
+## 事件系统
+
+CLI 和 HTTP 共用 EventBus：
+- EventBus 发布 GSimEvent，先通过 `accepts()` 过滤再 `accept()`
+- ConsoleEventSink 订阅 EventBus（CLI 模式）
+- FilteredEventSink 按需订阅 EventBus（SSE 连接，按 sessionId/taskId 过滤）
+- CLI 和 HTTP 共用 InteractionManager 业务逻辑
+
+### Session 管理
+
+- SessionManager 管理 `sessionId → InteractionSession` 映射
+- API 请求不再全部共享同一个 session
+- 每个 session 拥有独立的 InteractionContext，共享底层 services
+
+### Task 管理
+
+- TaskManager 创建和管理长任务（PENDING → RUNNING → DONE/FAILED/CANCELLED）
+- 任务在虚拟线程中执行，通过 EventBus 发布事件
+- 支持任务查询、列表、取消
+- GET /api/tasks/{taskId}/events 提供 taskId 级别 SSE 订阅
 
 ## ChromaDB 配置
 

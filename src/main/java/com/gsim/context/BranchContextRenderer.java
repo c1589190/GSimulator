@@ -5,9 +5,17 @@ import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessage;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.chat.ToolPollutionFilter;
+import com.gsim.context.memory.PinnedConstraint;
+import com.gsim.context.memory.PinnedConstraintStore;
+import com.gsim.context.session.BaseContextSnapshot;
+import com.gsim.context.session.SessionMessage;
+import com.gsim.context.session.SessionMessageStore;
+import com.gsim.context.summary.BranchPathSummaryRenderer;
+import com.gsim.context.summary.NodeSummaryStore;
 import com.gsim.data.DataDocument;
 import com.gsim.data.DataManager;
 import com.gsim.resource.ResourceManager;
+import com.gsim.util.IdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,49 +23,242 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
+import java.util.*;
 
 /**
- * BranchContextRenderer — 渲染当前 active branch 的完整 LLM 上下文。
+ * BranchContextRenderer — 渲染上下文。
  *
- * 渲染顺序：
- * 1. system：System.md
- * 2. history：active branch 父链中每个 branch 的 LLM 上下文记录
- * 3. data：当前有效世界上下文摘要
- * 4. user：当前 input.md 内容
+ * <p>新架构（推荐）：
+ * <ul>
+ *   <li>{@link #renderBaseContext(Path)} — 只渲染概要链 + pins + 当前节点概要</li>
+ *   <li>{@link #renderSessionContext(String, String)} — base snapshot + session messages</li>
+ *   <li>{@link #renderBranchSummaryPath()} — 只渲染节点概要链</li>
+ * </ul>
+ *
+ * <p>旧架构（调试保留）：
+ * <ul>
+ *   <li>{@link #renderFullDebugContext()} — 完整上下文（含父链 messages）</li>
+ *   <li>{@link #renderFullDebugContextAsMarkdown()} — Markdown 格式</li>
+ * </ul>
  */
 public class BranchContextRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(BranchContextRenderer.class);
     private static final String SYSTEM_SKILL_ID = "skill.system";
+    static final String MEMORY_TOOLS_HELP = """
+            ## Available Memory Tools
+            - branch_path — 查看当前分支概要链
+            - branch_node_get — 读取节点内容（summary/messages/output/tool_logs/full）
+            - branch_node_search — 搜索节点概要和消息
+            - branch_log_filter — 按字段读取节点日志
+            - branch_pin_get — 读取硬约束
+            - branch_pin_add — 添加硬约束
+
+            ## Current Operating Rule
+            默认只根据本上下文和当前会话消息工作。若需要旧节点完整内容，主动调用 memory tools 查询。""";
 
     private final DataManager dm;
     private final Path dataRoot;
     private final BranchMessageStore messageStore;
     private final BranchAnalyzer branchAnalyzer;
+    private final BranchPathSummaryRenderer pathSummaryRenderer;
+    private final NodeSummaryStore nodeSummaryStore;
+    private final PinnedConstraintStore pinStore;
 
     public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore,
                                   BranchAnalyzer branchAnalyzer) {
+        this(dm, dataRoot, messageStore, branchAnalyzer, null, null, null);
+    }
+
+    public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore,
+                                  BranchAnalyzer branchAnalyzer,
+                                  BranchPathSummaryRenderer pathSummaryRenderer,
+                                  NodeSummaryStore nodeSummaryStore,
+                                  PinnedConstraintStore pinStore) {
         this.dm = dm;
         this.dataRoot = dataRoot;
         this.messageStore = messageStore;
         this.branchAnalyzer = branchAnalyzer;
+        this.pathSummaryRenderer = pathSummaryRenderer;
+        this.nodeSummaryStore = nodeSummaryStore;
+        this.pinStore = pinStore;
     }
 
-    /** 渲染当前 active branch 完整上下文。
-     *
-     * 顺序：
-     * 1. System.md
-     * 2. 当前节点态势摘要
-     * 3. branch 父链 message blocks
-     * 4. world.md
-     * 5. entities.md
-     * 6. players.md
-     * 7. rules.md
-     * 8. input.md
+
+    /**
+     * @deprecated 使用 {@link #renderFullDebugContext()} 替代。
+     *             完整上下文不应再作为默认 Agent 输入。
      */
+    @Deprecated
     public RenderedContext render() {
+        return renderFullDebugContext();
+    }
+
+    /**
+     * @deprecated 使用 {@link #renderFullDebugContextAsMarkdown()} 替代。
+     */
+    @Deprecated
+    public String renderAsMarkdown() {
+        return renderFullDebugContextAsMarkdown();
+    }
+
+    // ====== 新架构：BaseContext + Session ======
+
+    /**
+     * 渲染 BaseContextSnapshot markdown。
+     * 只包含：概要链 + 硬约束 + 当前节点概要 + memory tools 说明。
+     * 不包含完整父链 messages。
+     */
+    public BaseContextSnapshot renderBaseContext(Path contextDir) {
+        String branchId = dm.getActiveBranch();
+        String startNodeId = branchId;
+        List<String> includedNodeIds = new ArrayList<>();
+        List<String> includedPinIds = new ArrayList<>();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# GSimulator Base Context\n\n");
+
+        // 1. Active Branch 信息
+        sb.append("## Active Branch\n");
+        sb.append("branch: ").append(branchId).append("\n");
+        sb.append("start node: ").append(startNodeId).append("\n\n");
+
+        // 2. Pinned Constraints
+        List<PinnedConstraint> pins = pinStore != null
+                ? pinStore.findByBranch(branchId) : List.of();
+        // 也查找父链的 pins
+        if (pinStore != null) {
+            List<DataDocument> chain = dm.getBranchChain(branchId);
+            Set<String> branchIds = new HashSet<>();
+            if (chain != null) {
+                for (DataDocument doc : chain) {
+                    branchIds.add(doc.id());
+                }
+            }
+            branchIds.add(branchId);
+            List<PinnedConstraint> allPins = pinStore.findByBranches(branchIds);
+            // 去重
+            Set<String> seen = new HashSet<>();
+            pins = new ArrayList<>();
+            for (PinnedConstraint p : allPins) {
+                if (seen.add(p.id())) pins.add(p);
+            }
+        }
+
+        sb.append("## Pinned Constraints\n");
+        if (pins.isEmpty()) {
+            sb.append("_（暂无硬约束）_\n");
+        } else {
+            for (PinnedConstraint pin : pins) {
+                sb.append("- ").append(pin.text()).append("\n");
+                includedPinIds.add(pin.id());
+            }
+        }
+        sb.append("\n");
+
+        // 3. Branch Evolution Summary（概要链）
+        if (pathSummaryRenderer != null) {
+            String pathSummary = pathSummaryRenderer.renderPath(branchId,
+                    new BranchPathSummaryRenderer.BranchPathRenderOptions());
+            sb.append(pathSummary).append("\n\n");
+
+            // 收集节点 ID
+            List<DataDocument> chain = dm.getBranchChain(branchId);
+            if (chain != null) {
+                for (DataDocument doc : chain) {
+                    includedNodeIds.add(doc.id());
+                }
+            }
+            includedNodeIds.add(branchId);
+        } else {
+            sb.append("## Branch Evolution Summary\n\n");
+            sb.append("_（概要渲染器未初始化）_\n\n");
+        }
+
+        // 4. 当前节点态势摘要
+        String situation = buildSituationSummary();
+        if (!situation.isBlank()) {
+            sb.append("## Current Node Situation\n\n");
+            sb.append(situation).append("\n\n");
+        }
+
+        // 5. Memory Tools 说明
+        sb.append(MEMORY_TOOLS_HELP).append("\n");
+
+        String markdown = sb.toString().trim();
+        String snapshotId = IdGenerator.generate("bc");
+
+        // 持久化到文件
+        if (contextDir != null) {
+            try {
+                Path baseContextsDir = contextDir.resolve("base_contexts");
+                Files.createDirectories(baseContextsDir);
+                Path file = baseContextsDir.resolve(snapshotId + ".md");
+                Files.writeString(file, markdown, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                log.warn("Failed to save BaseContextSnapshot: {}", e.getMessage());
+            }
+        }
+
+        return new BaseContextSnapshot(
+                snapshotId, branchId, startNodeId, Instant.now(),
+                markdown, markdown.length(), includedNodeIds, includedPinIds
+        );
+    }
+
+    /**
+     * 渲染会话上下文：BaseContext + session messages + user input。
+     *
+     * @param baseContextMarkdown BaseContextSnapshot markdown
+     * @param sessionMessages     当前 ContextSession 内的消息列表（由调用者传入）
+     * @param currentUserInput    当前用户输入
+     */
+    public String renderSessionContext(String baseContextMarkdown,
+                                        List<SessionMessage> sessionMessages,
+                                        String currentUserInput) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(baseContextMarkdown).append("\n\n");
+
+        // Session messages（由调用者传入）
+        if (sessionMessages != null && !sessionMessages.isEmpty()) {
+            sb.append("## Session Messages\n\n");
+            for (SessionMessage msg : sessionMessages) {
+                sb.append("[").append(msg.role()).append("] ");
+                String c = msg.content();
+                if (c.length() > 2000) {
+                    c = c.substring(0, 1997) + "...";
+                }
+                sb.append(c).append("\n\n");
+            }
+        }
+
+        // Current user input
+        if (currentUserInput != null && !currentUserInput.isBlank()) {
+            sb.append("## Current Input\n\n");
+            sb.append(currentUserInput).append("\n");
+        }
+
+        return sb.toString().trim();
+    }
+
+    /**
+     * 只渲染节点概要链（不含 messages / world data）。
+     */
+    public String renderBranchSummaryPath() {
+        if (pathSummaryRenderer != null) {
+            return pathSummaryRenderer.renderActivePath();
+        }
+        return "_（概要渲染器未初始化）_\n";
+    }
+
+    // ====== 旧架构：调试用完整上下文 ======
+
+    /**
+     * 渲染完整调试上下文（含父链 messages / world / entities / players / rules / input）。
+     * 不应用于默认 Agent 输入。
+     */
+    public RenderedContext renderFullDebugContext() {
         List<RenderedMessage> messages = new ArrayList<>();
         boolean sysExists = ensureSystemPrompt();
 
@@ -73,7 +274,6 @@ public class BranchContextRenderer {
 
         // 3. History: active branch 父链中每个 branch 的 LLM 上下文记录
         List<DataDocument> chain = dm.getBranchChain(dm.getActiveBranch());
-        // 从根到叶（时间顺序）
         for (int i = chain.size() - 1; i >= 0; i--) {
             DataDocument b = chain.get(i);
             messages.addAll(extractBranchMessages(b));
@@ -113,11 +313,14 @@ public class BranchContextRenderer {
                 chain.size(), sysExists, messages);
     }
 
-    /** 渲染为 Markdown 文本（用于 /context render 显示或 save）。 */
-    public String renderAsMarkdown() {
-        RenderedContext ctx = render();
+    /**
+     * 渲染完整调试上下文为 Markdown。
+     * 不应用于默认 Agent 输入。
+     */
+    public String renderFullDebugContextAsMarkdown() {
+        RenderedContext ctx = renderFullDebugContext();
         StringBuilder sb = new StringBuilder();
-        sb.append("# Rendered Context\n");
+        sb.append("# Rendered Context (DEBUG FULL)\n");
         sb.append("World: ").append(ctx.activeWorld()).append("\n");
         sb.append("Branch: ").append(ctx.activeBranch()).append("\n");
         sb.append("Chain length: ").append(ctx.chainLength()).append("\n");

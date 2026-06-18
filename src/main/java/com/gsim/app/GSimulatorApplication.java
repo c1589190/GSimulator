@@ -36,9 +36,17 @@ public class GSimulatorApplication {
     private final ApplicationContext ctx;
     private final ConsoleInteractionAdapter adapter;
     private final AppConfig config;
+    private final boolean cliMode;
+    private final boolean httpMode;
 
     public GSimulatorApplication(AppConfig config) {
+        this(config, true, false);
+    }
+
+    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode) {
         this.config = config;
+        this.cliMode = cliMode;
+        this.httpMode = httpMode;
         this.ctx = new ApplicationContext(config);
         InteractionManager manager = ctx.getInteractionManager();
 
@@ -105,28 +113,68 @@ public class GSimulatorApplication {
 
         // Tool 系统: /tool wiki_search
         manager.registerCommand(new ToolCommand(toolRegistry));
+
+        // Knowledge / Embedding 管理命令
+        manager.registerCommand(new KnowledgeCommand(ctx.getKnowledgeStore()));
+        manager.registerCommand(new EmbeddingCommand(ctx.getEmbeddingProfileManager()));
+
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
         BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+
+        // Context Session 系统
+        Path worldDir = dataRoot.resolve("worlds").resolve(dataManager.getActiveWorld());
+        var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
+        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
+        var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dataManager, summaryStore);
+        var sessionStore = new com.gsim.context.session.ContextSessionStore(worldDir);
+        var pinManager = new com.gsim.context.memory.PinnedConstraintManager(pinStore);
+        var summaryManager = new com.gsim.context.summary.NodeSummaryManager(summaryStore, dataManager, messageStore);
+
+        // 用新依赖重建 renderer
+        contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer,
+                pathRenderer, summaryStore, pinStore);
+
+        var ctxSessionManager = new com.gsim.context.session.ContextSessionManager(
+                sessionStore, contextRenderer, dataManager, worldDir);
+
+        // 注入到 ApplicationContext
+        ctx.setDataManager(dataManager);
+        ctx.setBranchContextRenderer(contextRenderer);
+        ctx.setContextSessionManager(ctxSessionManager);
+
+        // 注册 Memory Tools
+        toolRegistry.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeGetTool(dataManager, messageStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeSearchTool(dataManager, summaryStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchLogFilterTool(dataManager));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
+
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
-        manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot));
+        manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
 
-        // Phase 7+: /run (legacy), /sim, /nextturn, /node
+        // Phase 7+: Orchestrator + 统一 Agent 入口
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
-        manager.registerCommand(new RunCommand(orchestrator));
-        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore, branchAnalyzer));
+
+        // Chat 系统（统一入口，必须先于 /sim /run wrapper 创建）
+        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator, ctxSessionManager);
+        ChatCommand chatCommand = new ChatCommand(chatService);
+        manager.registerCommand(chatCommand);
+
+        // /sim /run — 废弃 wrapper，转发到统一 Agent 入口
+        manager.registerCommand(new SimCommand(chatService));
+        manager.registerCommand(new RunCommand(chatService));
+
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
         manager.registerCommand(new BranchCommand(branchAnalyzer));
-
-        // Chat 系统
-        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);
-        ChatCommand chatCommand = new ChatCommand(chatService);
-        manager.registerCommand(chatCommand);
+        // 使用 PinCommand 独立实例（不直接依赖 pinManager 构造器参数位置）
+        manager.registerCommand(new PinCommand(pinManager, dataManager));
 
         // Messages 命令
         MessagesCommand messagesCommand = new MessagesCommand(messageStore, dataManager);
@@ -145,20 +193,46 @@ public class GSimulatorApplication {
         // 自动创建默认 campaign 和 turn
         initDefaultState();
 
-        // 如果 LLM 未配置，打印提示
-        if (!config.isLlmConfigured()) {
-            System.out.println();
-            System.out.println("⚠️  LLM 未配置。以下功能不可用:");
-            System.out.println("   /chat — Agent 对话");
-            System.out.println("   /sim  — 推演结算");
-            System.out.println("   /run  — 旧版推演");
-            System.out.println();
-            System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
-            System.out.println();
+        // 强制启用 API（如果 --http 指定了）
+        if (httpMode) {
+            ctx.getApiManager().forceEnable();
         }
 
-        // 启动 REPL
-        adapter.start();
+        // HTTP 模式：启动 API 服务器
+        if (httpMode || config.isApiEnabled()) {
+            ctx.getApiManager().start();
+        }
+
+        // CLI 模式：启动 REPL
+        if (cliMode) {
+            // 如果 LLM 未配置，打印提示
+            if (!config.isLlmConfigured()) {
+                System.out.println();
+                System.out.println("⚠️  LLM 未配置。以下功能不可用:");
+                System.out.println("   /chat — Agent 对话");
+                System.out.println("   /sim  — 推演结算");
+                System.out.println("   /run  — 旧版推演");
+                System.out.println();
+                System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
+                System.out.println();
+            }
+
+            // 启动 REPL
+            adapter.start();
+        } else if (httpMode) {
+            // 仅 HTTP 模式：保持服务器运行
+            System.out.println();
+            System.out.println("GSimulator HTTP API 模式运行中。按 Ctrl+C 退出。");
+            System.out.println("API 地址: http://" + config.getApiHost() + ":" + config.getApiPort());
+            Thread.currentThread().join();
+        }
+    }
+
+    /**
+     * 停止应用。
+     */
+    public void stop() {
+        ctx.shutdown();
     }
 
     private void initDefaultState() {

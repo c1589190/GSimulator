@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.campaign.PlayerAction;
 import com.gsim.chat.ToolPollutionFilter;
+import com.gsim.context.session.SessionMessage;
 import com.gsim.llm.LlmClient;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
@@ -135,6 +136,39 @@ public class OrchestratorAgent {
         }
     }
 
+    /**
+     * 构建完整 system prompt：orchestrator-system.md + ToolRegistry 工具目录 + BaseContext。
+     * 用于 ContextSession 和 RenderedContext 路径。
+     */
+    private String buildFullSystemPrompt(String contextMarkdown) {
+        StringBuilder sb = new StringBuilder();
+        // 1. orchestrator-system.md（身份、工具调用规则、详细工具说明）
+        sb.append(buildSystemPrompt());
+        sb.append("\n\n---\n\n");
+        // 2. ToolRegistry 生成的工具目录（确保与已注册工具一致）
+        sb.append(generateToolCatalog());
+        sb.append("\n\n---\n\n");
+        // 3. BaseContextSnapshot 或渲染上下文
+        sb.append(contextMarkdown);
+        return sb.toString();
+    }
+
+    /**
+     * 从 ToolRegistry 生成当前可用工具目录。
+     * 包含所有已注册工具的 name 和 description。
+     */
+    private String generateToolCatalog() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## 已注册工具 (Registered Tools)\n\n");
+        for (var entry : toolRegistry.all().entrySet()) {
+            sb.append("- **").append(entry.getKey()).append("**: ")
+                    .append(entry.getValue().description()).append("\n");
+        }
+        sb.append("\n调用格式：{\"tool\":\"<工具名>\",\"args\":{\"<参数名>\":\"<参数值>\"}}。");
+        sb.append("工具执行后系统会返回结果，你再自然语言总结。\n");
+        return sb.toString();
+    }
+
     private String buildUserPrompt(List<PlayerAction> playerActions, String instruction, String turnInfo) {
         StringBuilder sb = new StringBuilder();
         sb.append("## 回合信息\n");
@@ -262,7 +296,7 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        messages.add(LlmMessage.system(contextMarkdown));
+        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
 
         String userMsg = "请基于以上上下文进行推演。";
         if (simNote != null && !simNote.isBlank()) {
@@ -351,7 +385,7 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        messages.add(LlmMessage.system(contextMarkdown));
+        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
         messages.add(LlmMessage.user(userText));
         trace.add(new MessageTrace("user", "chat_user", userText));
 
@@ -419,4 +453,214 @@ public class OrchestratorAgent {
 
     public record ChatResult(boolean success, String finalText, List<ToolCallRecord> toolCalls,
                               List<MessageTrace> trace, String errorMessage) {}
+
+    // ====== ContextSession 模式（新路径） ======
+
+    /**
+     * 基于 ContextSession 的对话模式。
+     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(input)
+     */
+    public ChatResult chatWithContextSession(String baseContextMarkdown,
+                                              List<SessionMessage> sessionMessages,
+                                              String userText) {
+        List<MessageTrace> trace = new ArrayList<>();
+        List<ToolCallRecord> toolCalls = new ArrayList<>();
+        List<LlmMessage> messages = new ArrayList<>();
+
+        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
+        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
+
+        // 2. history: 当前 ContextSession 内 SessionMessage
+        for (SessionMessage sm : sessionMessages) {
+            String content = sm.content();
+            if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+            switch (sm.role()) {
+                case "user" -> messages.add(LlmMessage.user(content));
+                case "assistant" -> messages.add(LlmMessage.assistant(content));
+                case "tool" -> messages.add(LlmMessage.user("[工具结果] " + content));
+                default -> messages.add(LlmMessage.user(content));
+            }
+        }
+
+        // 3. user: 当前输入
+        messages.add(LlmMessage.user(userText));
+        trace.add(new MessageTrace("user", "chat_user", userText));
+
+        return runToolLoop(messages, trace, toolCalls, false);
+    }
+
+    /**
+     * 基于 ContextSession 的推演模式。
+     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(sim prompt)
+     */
+    public SimResult runWithContextSession(String baseContextMarkdown,
+                                            List<SessionMessage> sessionMessages,
+                                            String simNote) {
+        List<MessageTrace> trace = new ArrayList<>();
+        List<ToolCallRecord> toolCalls = new ArrayList<>();
+        List<LlmMessage> messages = new ArrayList<>();
+
+        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
+        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
+
+        // 2. history: 当前 ContextSession 内 SessionMessage
+        for (SessionMessage sm : sessionMessages) {
+            String content = sm.content();
+            if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+            switch (sm.role()) {
+                case "user" -> messages.add(LlmMessage.user(content));
+                case "assistant" -> messages.add(LlmMessage.assistant(content));
+                case "tool" -> messages.add(LlmMessage.user("[工具结果] " + content));
+                default -> messages.add(LlmMessage.user(content));
+            }
+        }
+
+        // 3. user: 推演提示
+        String userMsg = "请基于以上上下文进行推演。";
+        if (simNote != null && !simNote.isBlank()) {
+            userMsg += "\n\n推演备注: " + simNote;
+        }
+        messages.add(LlmMessage.user(userMsg));
+        trace.add(new MessageTrace("user", "sim_input", userMsg));
+
+        SimResult result = runSimToolLoop(messages, trace, toolCalls);
+        return result;
+    }
+
+    /** 公共 tool-loop（chat 模式）。 */
+    private ChatResult runToolLoop(List<LlmMessage> messages,
+                                    List<MessageTrace> trace,
+                                    List<ToolCallRecord> toolCalls,
+                                    boolean isSim) {
+        String finalText = null;
+        int toolRound = 0;
+
+        while (toolRound < MAX_TOOL_ROUNDS) {
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmResponse response = llmClient.chat(request);
+
+            if (!response.success()) {
+                return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
+            }
+
+            String content = response.content();
+            messages.add(LlmMessage.assistant(content));
+
+            ParsedToolCall parsed = tryParseToolCall(content);
+            if (parsed != null) {
+                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                ToolResult result = toolRegistry.call(call);
+                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                StringBuilder tr = new StringBuilder();
+                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                if (result.success()) {
+                    for (ToolResult.Item item : result.items()) {
+                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                        String snippet = item.snippet();
+                        if (snippet != null && snippet.length() > 200) {
+                            snippet = snippet.substring(0, 200) + "...";
+                        }
+                        tr.append("  ").append(snippet).append("\n");
+                    }
+                } else tr.append("错误: ").append(result.error());
+                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
+                messages.add(LlmMessage.user(tr.toString()));
+                toolRound++;
+                continue;
+            }
+
+            finalText = content;
+            if (ToolPollutionFilter.isPolluted(finalText)) {
+                trace.add(new MessageTrace("assistant", "chat_response",
+                        "[filtered, length=" + finalText.length() + "]"));
+            } else {
+                trace.add(new MessageTrace("assistant", "chat_response", finalText));
+            }
+            break;
+        }
+
+        if (finalText == null) {
+            messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
+            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            if (fr.success()) {
+                finalText = fr.content();
+                trace.add(new MessageTrace("assistant", "chat_response", finalText));
+            } else {
+                return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
+            }
+        }
+
+        return new ChatResult(true, finalText, toolCalls, trace, null);
+    }
+
+    /** 公共 tool-loop（sim 模式）。 */
+    private SimResult runSimToolLoop(List<LlmMessage> messages,
+                                      List<MessageTrace> trace,
+                                      List<ToolCallRecord> toolCalls) {
+        String finalText = null;
+        int toolRound = 0;
+
+        while (toolRound < MAX_TOOL_ROUNDS) {
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmResponse response = llmClient.chat(request);
+
+            if (!response.success()) {
+                String err = "LLM 调用失败: " + response.errorMessage();
+                trace.add(new MessageTrace("system", "error", err));
+                return new SimResult(err, toolCalls, trace);
+            }
+
+            String content = response.content();
+            messages.add(LlmMessage.assistant(content));
+
+            ParsedToolCall parsed = tryParseToolCall(content);
+            if (parsed != null) {
+                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                ToolResult result = toolRegistry.call(call);
+                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                StringBuilder tr = new StringBuilder();
+                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                if (result.success()) {
+                    for (ToolResult.Item item : result.items()) {
+                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                        String snippet = item.snippet();
+                        if (snippet != null && snippet.length() > 200) {
+                            snippet = snippet.substring(0, 200) + "...";
+                        }
+                        tr.append("  ").append(snippet).append("\n");
+                    }
+                } else tr.append("错误: ").append(result.error());
+                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
+                messages.add(LlmMessage.user(tr.toString()));
+                toolRound++;
+                continue;
+            }
+
+            finalText = content;
+            if (ToolPollutionFilter.isPolluted(finalText)) {
+                trace.add(new MessageTrace("assistant", "sim_output",
+                        "[filtered, length=" + finalText.length() + "]"));
+            } else {
+                trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            }
+            break;
+        }
+
+        if (finalText == null) {
+            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
+            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            if (fr.success()) {
+                finalText = fr.content();
+                trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            } else {
+                finalText = "推演总结生成失败: " + fr.errorMessage();
+            }
+        }
+
+        return new SimResult(finalText, toolCalls, trace);
+    }
 }

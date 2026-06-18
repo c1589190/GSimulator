@@ -76,4 +76,21 @@ public final class IdGenerator {
     public static String evidenceId() {
         return generate("evid");
     }
+
+    // ---- Knowledge Store IDs ----
+
+    /** 生成 knowledge document ID */
+    public static String knowledgeDocId() {
+        return generate("kdoc");
+    }
+
+    /** 生成 knowledge chunk ID */
+    public static String knowledgeChunkId() {
+        return generate("kchu");
+    }
+
+    /** 生成 embedding profile ID */
+    public static String embeddingProfileId() {
+        return generate("epro");
+    }
 }

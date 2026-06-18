@@ -239,6 +239,14 @@ public class ConfigWizard {
                 w.write("web_research.enabled=false\n");
                 w.write("web_research.timeout_seconds=30\n");
                 w.write("web_research.user_agent=GSimulator/0.1.0\n");
+                w.write("\n");
+                w.write("# --- Embedding Configuration ---\n");
+                w.write("embedding.provider=external\n");
+                w.write("embedding.base_url=" + baseUrl + "\n");
+                w.write("embedding.api_key=" + apiKey + "\n");
+                w.write("embedding.model=" + model + "\n");
+                w.write("embedding.dimensions=1024\n");
+                w.write("embedding.model_dir=data/models/local-small\n");
             }
         } catch (IOException e) {
             System.err.println("写入配置文件失败: " + e.getMessage());

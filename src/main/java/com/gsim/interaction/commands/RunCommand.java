@@ -1,103 +1,57 @@
 package com.gsim.interaction.commands;
 
-import com.gsim.agent.OrchestratorAgent;
-import com.gsim.campaign.PlayerAction;
-import com.gsim.campaign.PlayerActionService;
+import com.gsim.chat.NodeAgentChatService;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionResult;
 import com.gsim.interaction.InteractionSession;
-import com.gsim.tool.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-
 /**
- * /run 命令 — 结算当前回合，驱动 OrchestratorAgent 进行推演。
+ * /run — 已废弃。
  *
- * 用法：
- *   /run                                   — 使用默认配置结算
- *   /run 本回合允许使用 wiki_search 工具    — 附带主持人指令
+ * <p>不再执行旧的回合行动结算逻辑。
+ * 所有内容转发到统一 Agent 入口（NodeAgentChatService）。
  */
 public class RunCommand implements InteractionCommand {
-
     private static final Logger log = LoggerFactory.getLogger(RunCommand.class);
 
-    private final OrchestratorAgent orchestrator;
+    private final NodeAgentChatService chatService;
 
-    public RunCommand(OrchestratorAgent orchestrator) {
-        this.orchestrator = orchestrator;
+    public RunCommand(NodeAgentChatService chatService) {
+        this.chatService = chatService;
     }
 
-    @Override
-    public String name() {
-        return "run";
+    @Override public String name() { return "run"; }
+
+    @Override public String description() {
+        return "[已废弃] 请直接用自然语言描述本回合要推演什么";
     }
 
-    @Override
-    public String description() {
-        return "结算当前回合，驱动 LLM 推演引擎";
+    @Override public String usage() {
+        return "/run <内容> — 已废弃，请直接输入自然语言。例如：请根据当前玩家行动结算本回合，重点考虑补给和军警反应。";
     }
 
-    @Override
-    public String usage() {
-        return "/run [指令]   — 结算当前回合，可附带主持人指令";
-    }
+    @Override public InteractionResult execute(String[] args, InteractionSession session) {
+        String full = String.join(" ", args).trim();
 
-    @Override
-    public InteractionResult execute(String[] args, InteractionSession session) {
-        String instruction = extractInstruction(args);
-        List<PlayerAction> actions = session.getPlayerActionService().getActions();
-
-        if (actions.isEmpty()) {
-            log.info("No player actions for this turn");
+        if (full.isEmpty()) {
+            return InteractionResult.fail(
+                    "/run 已废弃。请直接用自然语言描述本回合要推演什么。\n"
+                            + "例如：请根据当前玩家行动结算本回合，重点考虑补给、军警反应和感染者态度。");
         }
 
-        String campaignId = session.getContext().getCurrentCampaignId();
-        String turnId = session.getContext().getCurrentTurnId();
-        String turnInfo = "Campaign: " + campaignId + "\nTurn: " + turnId;
+        // 转发到统一 Agent 入口，附加提示
+        String enriched = full + "\n\n[系统提示: 用户使用了已废弃的 /run。"
+                + "请把后续内容视为自然语言本回合推演/结算请求。"
+                + "如果需要读取玩家行动，请使用 player_input 或现有行动列表。]";
 
-        log.info("Running orchestration for turn {} with {} actions", turnId, actions.size());
-
-        OrchestratorAgent.RunResult result = orchestrator.run(actions, instruction, turnInfo);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== 推演结果 ===\n");
-        sb.append("Turn: ").append(turnId).append("\n");
-        sb.append("玩家行动数: ").append(actions.size()).append("\n");
-        sb.append("工具调用次数: ").append(result.toolCalls().size()).append("\n\n");
-
-        // 工具调用记录
-        if (!result.toolCalls().isEmpty()) {
-            sb.append("--- 工具调用记录 ---\n");
-            for (int i = 0; i < result.toolCalls().size(); i++) {
-                OrchestratorAgent.ToolCallRecord tc = result.toolCalls().get(i);
-                sb.append("[").append(i + 1).append("] ").append(tc.tool())
-                        .append(": ").append(tc.args()).append("\n");
-                ToolResult tr = tc.result();
-                if (tr.success()) {
-                    sb.append("    ✓ ").append(tr.items().size()).append(" 条结果\n");
-                    for (ToolResult.Item item : tr.items()) {
-                        sb.append("      - ").append(item.path()).append("\n");
-                    }
-                } else {
-                    sb.append("    ✗ ").append(tr.error()).append("\n");
-                }
-            }
-            sb.append("\n");
+        try {
+            String reply = chatService.chat(enriched);
+            return InteractionResult.ok("run → chat", reply);
+        } catch (Exception e) {
+            log.error("/run forward failed: {}", e.getMessage(), e);
+            return InteractionResult.fail("Agent forward failed: " + e.getMessage());
         }
-
-        sb.append("--- 推演正文 ---\n");
-        sb.append(result.finalText());
-
-        return InteractionResult.ok("run completed for turn " + turnId, sb.toString());
-    }
-
-    private String extractInstruction(String[] args) {
-        if (args == null || args.length == 0) return "";
-        // args[0] 是 CommandParser 传入的完整参数字符串
-        String full = args[0];
-        if (full == null || full.isBlank()) return "";
-        return full.trim();
     }
 }
