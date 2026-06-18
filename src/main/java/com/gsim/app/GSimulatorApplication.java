@@ -156,7 +156,7 @@ public class GSimulatorApplication {
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
         manager.registerCommand(new RunCommand(orchestrator));
-        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore, branchAnalyzer));
+        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore, branchAnalyzer, ctxSessionManager, summaryManager));
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
         manager.registerCommand(new BranchCommand(branchAnalyzer));
@@ -164,7 +164,7 @@ public class GSimulatorApplication {
         manager.registerCommand(new PinCommand(pinManager, dataManager));
 
         // Chat 系统
-        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);
+        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator, ctxSessionManager);
         ChatCommand chatCommand = new ChatCommand(chatService);
         manager.registerCommand(chatCommand);
 

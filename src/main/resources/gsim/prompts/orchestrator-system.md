@@ -53,8 +53,16 @@
 
 ### Memory Tools（按需查阅旧节点）
 
-当前上下文可能只包含节点概要链 + 硬约束（BaseContextSnapshot），不包含完整消息历史。
-若上下文信息不足，可主动调用以下工具查询旧节点完整内容：
+默认上下文 = BaseContextSnapshot（节点概要链 + 硬约束 + 当前节点态势）+ 当前 ContextSession 消息。
+旧节点完整内容默认不在上下文里。若需要：
+- 查旧节点概要/消息/输出/工具日志 → branch_node_get
+- 搜索节点和消息 → branch_node_search
+- 按字段过滤节点日志 → branch_log_filter
+- 查看/添加硬约束 → branch_pin_get / branch_pin_add
+
+不要因为上下文缺完整历史就抱怨，先用工具查。
+区分已知事实、节点概要、工具查到的旧记录、推演假设。
+不要强制输出复杂 JSON 表格。
 
 - branch_path: 查看当前分支节点概要链。
   args: limit (可选，默认 20)
