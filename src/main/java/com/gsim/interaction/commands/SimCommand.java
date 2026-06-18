@@ -1,6 +1,8 @@
 package com.gsim.interaction.commands;
 
 import com.gsim.agent.OrchestratorAgent;
+import com.gsim.branch.BranchAnalysis;
+import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessage;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.chat.ToolPollutionFilter;
@@ -25,13 +27,15 @@ public class SimCommand implements InteractionCommand {
     private final BranchContextRenderer renderer;
     private final OrchestratorAgent orchestrator;
     private final BranchMessageStore messageStore;
+    private final BranchAnalyzer branchAnalyzer;
 
     public SimCommand(DataManager dm, BranchContextRenderer renderer, OrchestratorAgent orchestrator,
-                      BranchMessageStore messageStore) {
+                      BranchMessageStore messageStore, BranchAnalyzer branchAnalyzer) {
         this.dm = dm;
         this.renderer = renderer;
         this.orchestrator = orchestrator;
         this.messageStore = messageStore;
+        this.branchAnalyzer = branchAnalyzer;
     }
 
     @Override public String name() { return "sim"; }
@@ -53,6 +57,28 @@ public class SimCommand implements InteractionCommand {
             String branchId = dm.getActiveBranch();
             String inputText = dm.getInputBody();
             if (!simNote.isBlank()) inputText += "\n\n/sim 备注: " + simNote;
+
+            // 0. 老节点检查
+            StringBuilder warning = new StringBuilder();
+            BranchAnalysis analysis = branchAnalyzer.analyze(branchId, "compact");
+            if (analysis.oldNode()) {
+                warning.append("⚠️  警告：当前节点是旧节点 (状态: ")
+                        .append(analysis.nodeAgeStatus()).append(")\n");
+                if (analysis.resolved()) warning.append("  - status=resolved\n");
+                if (analysis.hasSimulationResult()) warning.append("  - 已有推演结果\n");
+                if (analysis.simResponseCount() > 0) warning.append("  - 已有 sim_response 消息\n");
+                if (analysis.childBranchCount() > 0)
+                    warning.append("  - 已有 ").append(analysis.childBranchCount()).append(" 个子分支，不会删除已有子分支\n");
+                if (analysis.chatUserCount() >= 2 && analysis.chatResponseCount() >= 2)
+                    warning.append("  - 有多轮对话历史\n");
+                warning.append("\n/sim 将覆盖当前节点推演结果，但不会删除已有子分支。\n\n");
+            }
+
+            // 在 sim_user 输入中附带节点态势摘要
+            String compactSummary = BranchAnalyzer.renderCompactMarkdown(analysis);
+            String enrichedInput = (inputText.isBlank() ? "" : inputText)
+                    + "\n\n<!-- 本次推演发生时的节点态势 -->\n"
+                    + compactSummary;
 
             // 1. 渲染上下文并调用 LLM
             String contextMd = renderer.renderAsMarkdown();
@@ -90,9 +116,10 @@ public class SimCommand implements InteractionCommand {
             dm.overwriteBranchSections(branchId, update);
 
             // 6. 在章节覆盖后追加 message blocks（sim_user / tool_call / tool_result / sim_response）
-            writeSimMessageBlocks(branchId, sr, inputText);
+            writeSimMessageBlocks(branchId, sr, enrichedInput);
 
             StringBuilder sb = new StringBuilder();
+            if (!warning.isEmpty()) sb.append(warning).append("\n");
             sb.append("=== 推演完成 ===\n");
             sb.append("Branch: ").append(branchId).append("\n");
             sb.append("工具调用: ").append(sr.toolCalls().size()).append(" 次\n\n");

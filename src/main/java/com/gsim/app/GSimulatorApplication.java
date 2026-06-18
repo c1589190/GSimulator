@@ -1,6 +1,8 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
+import com.gsim.branch.BranchAnalysisTool;
+import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.interaction.InteractionCommand;
@@ -81,6 +83,12 @@ public class GSimulatorApplication {
         // BranchMessageStore — 统一的消息块存储
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
 
+        // BranchAnalyzer — 节点态势分析引擎
+        BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dataManager, messageStore, profileManager);
+
+        // 注册 BranchAnalysisTool（Agent 可调用分析节点态势）
+        toolRegistry.register(new BranchAnalysisTool(branchAnalyzer));
+
         // Phase 3: Campaign / Turn / PlayerAction
         manager.registerCommand(new NewTurnCommand());
         manager.registerCommand(new PlayerCommand(dataManager));
@@ -100,7 +108,7 @@ public class GSimulatorApplication {
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
-        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore);
+        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
@@ -110,9 +118,10 @@ public class GSimulatorApplication {
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
         manager.registerCommand(new RunCommand(orchestrator));
-        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore));
+        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore, branchAnalyzer));
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
+        manager.registerCommand(new BranchCommand(branchAnalyzer));
 
         // Chat 系统
         NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);

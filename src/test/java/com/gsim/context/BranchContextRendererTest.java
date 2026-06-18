@@ -1,7 +1,9 @@
 package com.gsim.context;
 
+import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.data.DataManager;
+import com.gsim.player.PlayerProfileManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,11 +19,14 @@ class BranchContextRendererTest {
     private DataManager dm;
     private BranchContextRenderer renderer;
     private BranchMessageStore messageStore;
+    private BranchAnalyzer branchAnalyzer;
 
     @BeforeEach void setUp() {
         dm = new DataManager(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
+        PlayerProfileManager pm = new PlayerProfileManager(dm);
+        branchAnalyzer = new BranchAnalyzer(dm, messageStore, pm);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore, branchAnalyzer);
     }
 
     @Test @DisplayName("System.md auto-created")
@@ -36,8 +41,24 @@ class BranchContextRendererTest {
         assertTrue(ctx.systemPromptExists());
         assertFalse(ctx.messages().isEmpty());
         assertTrue(ctx.messages().stream().anyMatch(m -> "system_prompt".equals(m.type())));
-        assertTrue(ctx.messages().stream().anyMatch(m -> "effective_data".equals(m.type())));
+        assertTrue(ctx.messages().stream().anyMatch(m -> "effective_world".equals(m.type())));
         assertTrue(ctx.messages().stream().anyMatch(m -> "current_input".equals(m.type())));
+        // 态势摘要应存在
+        assertTrue(ctx.messages().stream().anyMatch(m -> "node_situation".equals(m.type())));
+    }
+
+    @Test @DisplayName("node situation summary includes key fields")
+    void testNodeSituationSummary() {
+        RenderedContext ctx = renderer.render();
+        var sitMsg = ctx.messages().stream()
+                .filter(m -> "node_situation".equals(m.type()))
+                .findFirst();
+        assertTrue(sitMsg.isPresent());
+        String content = sitMsg.get().content();
+        assertTrue(content.contains("当前节点态势摘要"), "应包含态势摘要标题");
+        assertTrue(content.contains("branch.b0000-start"), "应包含节点ID");
+        assertTrue(content.contains("实体:"), "应包含实体统计");
+        assertTrue(content.contains("玩家:"), "应包含玩家统计");
     }
 
     @Test @DisplayName("branch messages extracted from LLM context record")
@@ -129,7 +150,9 @@ class BranchContextRendererTest {
         // 重新加载
         dm = new com.gsim.data.DataManager(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
+        PlayerProfileManager pm2 = new PlayerProfileManager(dm);
+        branchAnalyzer = new BranchAnalyzer(dm, messageStore, pm2);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore, branchAnalyzer);
 
         RenderedContext ctx = renderer.render();
         // 应该包含 [skipped] 标记
@@ -212,7 +235,9 @@ class BranchContextRendererTest {
 
         dm = new com.gsim.data.DataManager(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
+        PlayerProfileManager pm3 = new PlayerProfileManager(dm);
+        branchAnalyzer = new BranchAnalyzer(dm, messageStore, pm3);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore, branchAnalyzer);
 
         String md = renderer.renderAsMarkdown();
         assertFalse(md.contains("Run tests with the given coverage strategy"),

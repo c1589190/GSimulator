@@ -256,7 +256,7 @@ public class DataManager {
         String inputContent = readInputContent();
         String displayName = (name != null && !name.isBlank()) ? name : ("时间节点 " + branchId);
         String nodeInput = inputContent.isBlank() ? "无。" : inputContent;
-        String llmUser = inputContent.isBlank() ? "无。" : inputContent;
+        String llmUser = "无。";
 
         String content = buildBranchContent(branchId, displayName, parent, turn,
                 worldTime != null ? worldTime : "",

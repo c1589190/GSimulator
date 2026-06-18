@@ -1,5 +1,7 @@
 package com.gsim.context;
 
+import com.gsim.branch.BranchAnalysis;
+import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessage;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.chat.ToolPollutionFilter;
@@ -33,14 +35,28 @@ public class BranchContextRenderer {
     private final DataManager dm;
     private final Path dataRoot;
     private final BranchMessageStore messageStore;
+    private final BranchAnalyzer branchAnalyzer;
 
-    public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore) {
+    public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore,
+                                  BranchAnalyzer branchAnalyzer) {
         this.dm = dm;
         this.dataRoot = dataRoot;
         this.messageStore = messageStore;
+        this.branchAnalyzer = branchAnalyzer;
     }
 
-    /** 渲染当前 active branch 完整上下文。 */
+    /** 渲染当前 active branch 完整上下文。
+     *
+     * 顺序：
+     * 1. System.md
+     * 2. 当前节点态势摘要
+     * 3. branch 父链 message blocks
+     * 4. world.md
+     * 5. entities.md
+     * 6. players.md
+     * 7. rules.md
+     * 8. input.md
+     */
     public RenderedContext render() {
         List<RenderedMessage> messages = new ArrayList<>();
         boolean sysExists = ensureSystemPrompt();
@@ -49,7 +65,13 @@ public class BranchContextRenderer {
         String systemContent = getSystemPrompt();
         messages.add(new RenderedMessage("system", "system_prompt", "", systemContent));
 
-        // 2. History: active branch 父链中每个 branch 的 LLM 上下文记录
+        // 2. 当前节点态势摘要
+        String situationSummary = buildSituationSummary();
+        if (!situationSummary.isBlank()) {
+            messages.add(new RenderedMessage("system", "node_situation", "", situationSummary));
+        }
+
+        // 3. History: active branch 父链中每个 branch 的 LLM 上下文记录
         List<DataDocument> chain = dm.getBranchChain(dm.getActiveBranch());
         // 从根到叶（时间顺序）
         for (int i = chain.size() - 1; i >= 0; i--) {
@@ -57,20 +79,32 @@ public class BranchContextRenderer {
             messages.addAll(extractBranchMessages(b));
         }
 
-        // 3. Data: 世界上下文摘要
+        // 4. Data: 世界观
         String worldCtx = dm.getEffectiveWorldContext();
         if (!worldCtx.isBlank()) {
-            messages.add(new RenderedMessage("system", "effective_data", "", worldCtx));
+            messages.add(new RenderedMessage("system", "effective_world", "", worldCtx));
         }
 
-        // 3.5. Players: 玩家档案
+        // 5. 实体资料
+        String entitiesCtx = dm.getEffectiveEntityContext();
+        if (!entitiesCtx.isBlank()) {
+            messages.add(new RenderedMessage("system", "effective_entities", "", entitiesCtx));
+        }
+
+        // 6. Players: 玩家档案
         dm.ensurePlayersFile();
         String playersCtx = dm.readPlayers();
         if (!playersCtx.isBlank()) {
             messages.add(new RenderedMessage("system", "players", "", playersCtx));
         }
 
-        // 4. User: input.md
+        // 7. 推演规则
+        String rulesCtx = dm.getEffectiveRuleContext();
+        if (!rulesCtx.isBlank()) {
+            messages.add(new RenderedMessage("system", "effective_rules", "", rulesCtx));
+        }
+
+        // 8. User: input.md
         String input = readInputContent();
         String inputText = input.isBlank() ? "暂无待结算内容。" : input;
         messages.add(new RenderedMessage("user", "current_input", "", inputText));
@@ -292,6 +326,17 @@ public class BranchContextRenderer {
         if (end < 0) end = section.indexOf("\n## ", contentStart + 1);
         if (end < 0) end = section.length();
         return section.substring(contentStart, end).trim();
+    }
+
+    /** 构建当前节点态势摘要。分析失败时不中断渲染，返回 warning。 */
+    private String buildSituationSummary() {
+        try {
+            BranchAnalysis analysis = branchAnalyzer.analyze(null, "compact");
+            return BranchAnalyzer.renderCompactMarkdown(analysis);
+        } catch (Exception e) {
+            log.warn("Failed to build node situation summary: {}", e.getMessage());
+            return "## 当前节点态势分析失败\n\n分析异常: " + e.getMessage() + "\n";
+        }
     }
 
     /** 保存渲染结果到 rendered-context.md。 */
