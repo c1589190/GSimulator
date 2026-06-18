@@ -37,6 +37,17 @@ public class AppConfig {
     private final int apiPort;
     private final boolean apiEnabled;
 
+    // Embedding 配置
+    private final String embeddingProvider;
+    private final String embeddingBaseUrl;
+    private final String embeddingApiKey;
+    private final String embeddingModel;
+    private final int embeddingDimensions;
+    private final String embeddingModelDir;
+
+    // Knowledge 配置
+    private final Path knowledgeDbPath;
+
     private final Path configPath;
     private final String sourceSummary;
 
@@ -70,6 +81,18 @@ public class AppConfig {
         this.apiPort = parseInt(result.get("api.port"), 8710);
         this.apiEnabled = parseBoolean(result.get("api.enabled"), false);
 
+        // Embedding 配置
+        this.embeddingProvider = isBlank(result.get("embedding.provider")) ? "" : result.get("embedding.provider");
+        this.embeddingBaseUrl = result.get("embedding.base_url");
+        this.embeddingApiKey = result.get("embedding.api_key");
+        this.embeddingModel = result.get("embedding.model");
+        this.embeddingDimensions = parseInt(result.get("embedding.dimensions"), 0);
+        this.embeddingModelDir = result.get("embedding.model_dir");
+
+        // Knowledge DB
+        Path knowledgeDir = baseDir.resolve("data").resolve("knowledge");
+        this.knowledgeDbPath = knowledgeDir.resolve("gsim.db").toAbsolutePath();
+
         this.configPath = result.configPath();
         this.sourceSummary = result.sourceSummary();
 
@@ -102,6 +125,20 @@ public class AppConfig {
     public String getApiHost() { return apiHost; }
     public int getApiPort() { return apiPort; }
     public boolean isApiEnabled() { return apiEnabled; }
+
+    public String getEmbeddingProvider() { return embeddingProvider; }
+    public String getEmbeddingBaseUrl() { return embeddingBaseUrl; }
+    public String getEmbeddingApiKey() { return embeddingApiKey; }
+    public String getEmbeddingModel() { return embeddingModel; }
+    public int getEmbeddingDimensions() { return embeddingDimensions; }
+    public String getEmbeddingModelDir() { return embeddingModelDir; }
+    public Path getKnowledgeDbPath() { return knowledgeDbPath; }
+
+    /** 是否配置了 embedding provider。 */
+    public boolean isEmbeddingConfigured() {
+        return !isBlank(embeddingProvider)
+                && ("external".equals(embeddingProvider) || "local-small".equals(embeddingProvider));
+    }
 
     // ---- 新增方法 ----
 

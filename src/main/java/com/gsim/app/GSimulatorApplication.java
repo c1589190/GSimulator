@@ -113,6 +113,11 @@ public class GSimulatorApplication {
 
         // Tool 系统: /tool wiki_search
         manager.registerCommand(new ToolCommand(toolRegistry));
+
+        // Knowledge / Embedding 管理命令
+        manager.registerCommand(new KnowledgeCommand(ctx.getKnowledgeStore()));
+        manager.registerCommand(new EmbeddingCommand(ctx.getEmbeddingProfileManager()));
+
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);

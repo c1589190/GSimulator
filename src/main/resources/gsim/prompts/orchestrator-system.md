@@ -17,6 +17,46 @@
 - wiki_search: 搜索本地 PRTS Wiki 文本文件，返回页面标题、文件路径、内容片段。
   args: query (必填，搜索关键词), limit (可选，默认 5，最大 10)
 
+### Knowledge Tools（自主维护知识库）
+
+你可以自主维护知识库。当你发现有值得长期保存的设定、资料、摘要、证据片段，可用 knowledge_upsert。
+当你需要查语义资料，用 knowledge_search。
+如果 knowledge_search 提示没有 embedding profile 或没有 embeddings，用 keyword_search。
+当你发现资料过时或错误，可用 knowledge_update / knowledge_delete。
+不同 embedding profile 不能混用；不要要求系统自动全库重嵌入。
+除非用户明确要求，不要大量写入低价值闲聊。
+保存资料时要写清 title、collection、sourceType、sourceUri。
+
+- keyword_search: 关键词检索知识库，永远可用（FTS5 + LIKE 混合）。
+  args: query (必填), collection (可选，默认 default), topK (可选，默认 5，最大 20)
+
+- knowledge_search: 语义检索知识库，需要 active embedding profile。
+  如果没有 embedding profile 或没有 embeddings，返回结构化错误（NO_ACTIVE_EMBEDDING_PROFILE / NO_EMBEDDINGS_FOR_PROFILE）。
+  args: query (必填), collection (可选，默认 default), topK (可选，默认 5，最大 20)
+
+- knowledge_get_chunk: 获取指定 chunk 完整文本和元数据。
+  args: chunkId (必填)
+
+- knowledge_get_document: 获取指定文档元数据和正文（正文过长则截断）。
+  args: docId (必填)
+
+- knowledge_upsert: 保存新资料到知识库。
+  用于保存长期有价值的设定、资料、摘要、证据片段。
+  args: title (必填), content (必填), collection (可选，默认 default),
+        sourceType (可选: web|manual_note|branch_output|agent_note),
+        sourceUri (可选), metadata (可选 JSON 对象)
+
+- knowledge_update: 更新已有文档，删除旧 chunks/embeddings 并重建。
+  args: docId (必填), title (必填), content (必填), collection (可选),
+        sourceType (可选), sourceUri (可选)
+
+- knowledge_delete: 删除文档及其所有 chunks/embeddings。
+  args: docId (必填)
+
+- knowledge_embed_missing: 为缺少 embedding 的 chunks 批量生成向量。
+  不会自动全库重嵌入。只在 Agent 或用户显式触发时执行。
+  args: collection (可选，默认 default), profileId (可选，默认 active)
+
 - player_input: 将玩家行动或推演备注写入当前 world 的 input.md。
   调用格式：
   ```json
