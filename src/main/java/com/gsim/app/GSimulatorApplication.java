@@ -117,6 +117,36 @@ public class GSimulatorApplication {
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
         BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+
+        // Context Session 系统
+        Path worldDir = dataRoot.resolve("worlds").resolve(dataManager.getActiveWorld());
+        var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
+        var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
+        var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dataManager, summaryStore);
+        var sessionStore = new com.gsim.context.session.ContextSessionStore(worldDir);
+        var pinManager = new com.gsim.context.memory.PinnedConstraintManager(pinStore);
+        var summaryManager = new com.gsim.context.summary.NodeSummaryManager(summaryStore, dataManager, messageStore);
+
+        // 用新依赖重建 renderer
+        contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer,
+                pathRenderer, summaryStore, pinStore);
+
+        var ctxSessionManager = new com.gsim.context.session.ContextSessionManager(
+                sessionStore, contextRenderer, dataManager, worldDir);
+
+        // 注入到 ApplicationContext
+        ctx.setDataManager(dataManager);
+        ctx.setBranchContextRenderer(contextRenderer);
+        ctx.setContextSessionManager(ctxSessionManager);
+
+        // 注册 Memory Tools
+        toolRegistry.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeGetTool(dataManager, messageStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchNodeSearchTool(dataManager, summaryStore));
+        toolRegistry.register(new com.gsim.context.memory.BranchLogFilterTool(dataManager));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
+        toolRegistry.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
+
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
@@ -130,6 +160,8 @@ public class GSimulatorApplication {
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
         manager.registerCommand(new BranchCommand(branchAnalyzer));
+        // 使用 PinCommand 独立实例（不直接依赖 pinManager 构造器参数位置）
+        manager.registerCommand(new PinCommand(pinManager, dataManager));
 
         // Chat 系统
         NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);

@@ -2,9 +2,13 @@ package com.gsim.app;
 
 import com.gsim.api.ApiConfig;
 import com.gsim.api.ApiManager;
+import com.gsim.api.SessionManager;
 import com.gsim.campaign.CampaignService;
 import com.gsim.campaign.TurnService;
 import com.gsim.campaign.PlayerActionService;
+import com.gsim.context.BranchContextRenderer;
+import com.gsim.context.session.ContextSessionManager;
+import com.gsim.data.DataManager;
 import com.gsim.event.EventBus;
 import com.gsim.event.ConsoleEventSink;
 import com.gsim.interaction.InteractionContext;
@@ -42,6 +46,11 @@ public class ApplicationContext {
     private final EventBus eventBus;
     private final ConsoleEventSink consoleEventSink;
     private final ApiManager apiManager;
+
+    // 上下文系统（Phase Context Session）
+    private DataManager dataManager;
+    private BranchContextRenderer branchContextRenderer;
+    private ContextSessionManager contextSessionManager;
 
     public ApplicationContext(AppConfig config) {
         this.config = config;
@@ -151,6 +160,21 @@ public class ApplicationContext {
 
     public ApiManager getApiManager() {
         return apiManager;
+    }
+
+    // ---- Context Session 系统 ----
+
+    public DataManager getDataManager() { return dataManager; }
+    public void setDataManager(DataManager dm) { this.dataManager = dm; }
+
+    public BranchContextRenderer getBranchContextRenderer() { return branchContextRenderer; }
+    public void setBranchContextRenderer(BranchContextRenderer r) { this.branchContextRenderer = r; }
+
+    public ContextSessionManager getContextSessionManager() { return contextSessionManager; }
+    public void setContextSessionManager(ContextSessionManager m) { this.contextSessionManager = m; }
+
+    public SessionManager getSessionManager() {
+        return apiManager != null ? apiManager.getSessionManager() : null;
     }
 
     /**

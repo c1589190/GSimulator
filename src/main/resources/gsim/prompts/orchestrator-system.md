@@ -51,6 +51,34 @@
   可选参数: branchId（不传则分析当前 active branch）, detailLevel（compact/full，默认 compact）
   返回: 节点年龄状态、实体/玩家/规则统计、消息统计、子分支列表、旧节点检测、下一步建议。
 
+### Memory Tools（按需查阅旧节点）
+
+默认上下文是 BaseContextSnapshot（节点概要链 + 硬约束），不包含完整历史。
+若需要旧节点完整内容，主动调用以下工具：
+
+- branch_path: 查看当前分支节点概要链。
+  args: limit (可选，默认 20)
+
+- branch_node_get: 读取指定节点内容。
+  args: nodeId (必填), mode (summary|messages|output|tool_logs|full)
+
+- branch_node_search: 搜索节点概要和消息。
+  args: query (必填), topK (可选，默认 5)
+
+- branch_log_filter: 按字段读取节点日志。
+  args: nodeId (必填), fields (逗号分隔: user_input,agent_output,tool_calls,tool_results)
+
+- branch_pin_get: 读取当前硬约束。
+  args: branchId (可选，默认 current)
+
+- branch_pin_add: 添加硬约束。只在发现用户明确硬约束/规则变更时使用。
+  args: text (必填), sourceNodeId (可选)
+
+重要原则：
+1. 先读 BaseContext。需要细节就查节点，不要抱怨上下文缺失。
+2. 推演时区分事实（facts）、推断（inferences）、假设（hypotheses）。
+3. 只在发现用户明确硬约束时建议 pin。
+
 ## 玩家档案规则
 
 - /sim 时如果需要读取玩家档案，可以使用 player_profile_get 或 player_profile_list。

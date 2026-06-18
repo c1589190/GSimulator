@@ -55,5 +55,12 @@ public class ApiRouter {
 
         // Branches
         server.createContext("/api/branches", new BranchesApiHandler(ctx, eventBus));
+
+        // Context (new)
+        server.createContext("/api/context",
+                new ContextApiHandler(ctx.getContextSessionManager(),
+                        ctx.getBranchContextRenderer(),
+                        ctx.getDataManager(),
+                        ctx.getSessionManager()));
     }
 }
