@@ -13,7 +13,6 @@ import com.gsim.interaction.InteractionSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +39,13 @@ public class SimCommand implements InteractionCommand {
     @Override public String usage() { return "/sim <推演备注>"; }
 
     @Override public InteractionResult execute(String[] args, InteractionSession session) {
+        // 检查 LLM 是否可用
+        if (session.getLlmClient() == null || !session.getLlmClient().isAvailable()) {
+            return InteractionResult.fail(
+                    "LLM is not configured.\n"
+                            + "Run /config init to set up your LLM, or /config status to see current config.");
+        }
+
         String full = String.join(" ", args).trim();
         String simNote = full.isBlank() ? "" : full;
 

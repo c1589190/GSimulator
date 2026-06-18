@@ -6,9 +6,18 @@ target/
 *.iml
 .vscode/
 
+# Configuration files (may contain secrets)
+gsim.properties
+*.local.properties
+*.key
+
 .env
 .env.*
 !.env.example
+
+# Data directories
+data/
+logs/
 
 data/knowledge/
 data/campaigns/

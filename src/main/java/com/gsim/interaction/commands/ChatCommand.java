@@ -21,6 +21,13 @@ public class ChatCommand implements InteractionCommand {
     @Override public String usage() { return "/chat <内容>  — 或直接输入非 / 开头的文本"; }
 
     @Override public InteractionResult execute(String[] args, InteractionSession session) {
+        // 检查 LLM 是否可用
+        if (session.getLlmClient() == null || !session.getLlmClient().isAvailable()) {
+            return InteractionResult.fail(
+                    "LLM is not configured.\n"
+                            + "Run /config init to set up your LLM, or /config status to see current config.");
+        }
+
         String full = String.join(" ", args).trim();
         if (full.isEmpty()) return InteractionResult.fail("Usage: /chat <内容>");
         try {

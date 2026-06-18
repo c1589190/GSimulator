@@ -30,22 +30,34 @@ public class OpenAiLlmClient implements LlmClient {
     private final String apiKey;
     private final String model;
     private final double temperature;
+    private final boolean configured;
 
     public OpenAiLlmClient(String baseUrl, String apiKey, String model, double temperature, int timeoutSeconds) {
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.baseUrl = baseUrl != null && baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.apiKey = apiKey;
         this.model = model;
         this.temperature = temperature;
         this.mapper = new ObjectMapper();
+
+        // 验证配置完整性
+        this.configured = baseUrl != null && !baseUrl.isBlank()
+                && apiKey != null && !apiKey.isBlank() && !"no-api-key".equals(apiKey)
+                && model != null && !model.isBlank();
+
+        int effectiveTimeout = timeoutSeconds > 0 ? timeoutSeconds : 10;
         this.http = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofSeconds(timeoutSeconds))
-                .readTimeout(Duration.ofSeconds(timeoutSeconds))
-                .writeTimeout(Duration.ofSeconds(timeoutSeconds))
+                .connectTimeout(Duration.ofSeconds(effectiveTimeout))
+                .readTimeout(Duration.ofSeconds(effectiveTimeout))
+                .writeTimeout(Duration.ofSeconds(effectiveTimeout))
                 .build();
     }
 
     @Override
     public LlmResponse chat(LlmRequest request) {
+        if (!configured) {
+            return LlmResponse.failure("LLM is not configured. Run /config init to set up your LLM.");
+        }
+
         try {
             String reqBody = buildRequestBody(request);
             log.debug("LLM request: {} chars to {}", reqBody.length(), baseUrl);
@@ -92,7 +104,7 @@ public class OpenAiLlmClient implements LlmClient {
 
     @Override
     public boolean isAvailable() {
-        return true;
+        return configured;
     }
 
     private String buildRequestBody(LlmRequest req) throws IOException {

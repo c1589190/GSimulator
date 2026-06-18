@@ -1,11 +1,17 @@
 package com.gsim.app;
 
+import com.gsim.config.ConfigLoader;
+import com.gsim.config.ConfigSource;
+
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 
 /**
- * 应用配置，所有环境变量读取统一走此类。
- * 不在业务代码中直接调用 System.getenv()。
+ * 应用配置，所有配置读取统一走此类。
+ * 从 ConfigLoader.Result 初始化，支持多源优先级链。
  */
 public class AppConfig {
 
@@ -27,88 +33,133 @@ public class AppConfig {
     private final Path outputDir;
     private final Path logDir;
 
-    public AppConfig() {
-        this.llmBaseUrl = envOrDefault("LLM_BASE_URL", "http://localhost:8080/v1");
-        this.llmApiKey = envOrDefault("LLM_API_KEY", "no-api-key");
-        this.llmModel = envOrDefault("LLM_MODEL", "deepseek-v4-pro");
-        this.llmTemperature = Double.parseDouble(envOrDefault("LLM_TEMPERATURE", "0.3"));
-        this.llmTimeoutSeconds = Integer.parseInt(envOrDefault("LLM_TIMEOUT_SECONDS", "120"));
+    private final Path configPath;
+    private final String sourceSummary;
 
-        this.chromaBaseUrl = envOrDefault("CHROMA_BASE_URL", "http://localhost:8000");
-        this.chromaEnabled = Boolean.parseBoolean(envOrDefault("CHROMA_ENABLED", "false"));
+    private final boolean llmConfigured;
 
-        this.webResearchEnabled = Boolean.parseBoolean(envOrDefault("WEB_RESEARCH_ENABLED", "false"));
-        this.webResearchTimeoutSeconds = Integer.parseInt(envOrDefault("WEB_RESEARCH_TIMEOUT_SECONDS", "30"));
-        this.webResearchUserAgent = envOrDefault("WEB_RESEARCH_USER_AGENT", "GSimulator/0.1.0 (research-bot)");
+    /**
+     * 从 ConfigLoader 结果构造。
+     */
+    public AppConfig(ConfigLoader.ConfigResult result) {
+        this.llmBaseUrl = result.get("llm.base_url");
+        this.llmApiKey = result.get("llm.api_key");
+        this.llmModel = result.get("llm.model");
+        this.llmTemperature = parseDouble(result.get("llm.temperature"), 0.3);
+        this.llmTimeoutSeconds = parseInt(result.get("llm.timeout_seconds"), 120);
 
-        this.dataDir = Paths.get(envOrDefault("GSIM_DATA_DIR", "data")).toAbsolutePath();
-        this.importDir = Paths.get(envOrDefault("GSIM_IMPORT_DIR", "import")).toAbsolutePath();
-        this.outputDir = Paths.get(envOrDefault("GSIM_OUTPUT_DIR", "data/outputs")).toAbsolutePath();
-        this.logDir = Paths.get(envOrDefault("GSIM_LOG_DIR", "data/logs")).toAbsolutePath();
+        this.chromaBaseUrl = result.get("chroma.base_url");
+        this.chromaEnabled = parseBoolean(result.get("chroma.enabled"), false);
+
+        this.webResearchEnabled = parseBoolean(result.get("web_research.enabled"), false);
+        this.webResearchTimeoutSeconds = parseInt(result.get("web_research.timeout_seconds"), 30);
+        this.webResearchUserAgent = result.get("web_research.user_agent");
+
+        // 路径：基于配置文件所在目录解析相对路径
+        Path baseDir = result.configPath() != null ? result.configPath().getParent() : Path.of("").toAbsolutePath();
+        this.dataDir = resolvePath(result.get("data.dir"), baseDir, "data");
+        this.importDir = resolvePath(result.get("import.dir"), baseDir, "import");
+        this.outputDir = resolvePath(result.get("output.dir"), baseDir, "data/outputs");
+        this.logDir = resolvePath(result.get("log.dir"), baseDir, "data/logs");
+
+        this.configPath = result.configPath();
+        this.sourceSummary = result.sourceSummary();
+
+        // LLM 配置判定
+        this.llmConfigured = !isBlank(llmBaseUrl)
+                && !isBlank(llmApiKey) && !"no-api-key".equals(llmApiKey)
+                && !isBlank(llmModel);
     }
 
     // ---- Getters ----
 
-    public String getLlmBaseUrl() {
-        return llmBaseUrl;
+    public String getLlmBaseUrl() { return llmBaseUrl; }
+    public String getLlmApiKey() { return llmApiKey; }
+    public String getLlmModel() { return llmModel; }
+    public double getLlmTemperature() { return llmTemperature; }
+    public int getLlmTimeoutSeconds() { return llmTimeoutSeconds; }
+
+    public String getChromaBaseUrl() { return chromaBaseUrl; }
+    public boolean isChromaEnabled() { return chromaEnabled; }
+
+    public boolean isWebResearchEnabled() { return webResearchEnabled; }
+    public int getWebResearchTimeoutSeconds() { return webResearchTimeoutSeconds; }
+    public String getWebResearchUserAgent() { return webResearchUserAgent; }
+
+    public Path getDataDir() { return dataDir; }
+    public Path getImportDir() { return importDir; }
+    public Path getOutputDir() { return outputDir; }
+    public Path getLogDir() { return logDir; }
+
+    // ---- 新增方法 ----
+
+    /** 判定 LLM 是否已完整配置。 */
+    public boolean isLlmConfigured() {
+        return llmConfigured;
     }
 
-    public String getLlmApiKey() {
-        return llmApiKey;
+    /** 获取当前生效的配置文件路径。 */
+    public Path getConfigPath() {
+        return configPath;
     }
 
-    public String getLlmModel() {
-        return llmModel;
+    /** 获取配置来源摘要。 */
+    public String getConfigSourceSummary() {
+        return sourceSummary;
     }
 
-    public double getLlmTemperature() {
-        return llmTemperature;
-    }
-
-    public int getLlmTimeoutSeconds() {
-        return llmTimeoutSeconds;
-    }
-
-    public String getChromaBaseUrl() {
-        return chromaBaseUrl;
-    }
-
-    public boolean isChromaEnabled() {
-        return chromaEnabled;
-    }
-
-    public boolean isWebResearchEnabled() {
-        return webResearchEnabled;
-    }
-
-    public int getWebResearchTimeoutSeconds() {
-        return webResearchTimeoutSeconds;
-    }
-
-    public String getWebResearchUserAgent() {
-        return webResearchUserAgent;
-    }
-
-    public Path getDataDir() {
-        return dataDir;
-    }
-
-    public Path getImportDir() {
-        return importDir;
-    }
-
-    public Path getOutputDir() {
-        return outputDir;
-    }
-
-    public Path getLogDir() {
-        return logDir;
+    /** 脱敏显示 API Key。 */
+    public String maskedApiKey() {
+        return maskValue(llmApiKey);
     }
 
     // ---- helpers ----
 
-    private static String envOrDefault(String key, String defaultValue) {
-        String value = System.getenv(key);
-        return (value != null && !value.isBlank()) ? value : defaultValue;
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static double parseDouble(String s, double def) {
+        try { return isBlank(s) ? def : Double.parseDouble(s); }
+        catch (NumberFormatException e) { return def; }
+    }
+
+    private static int parseInt(String s, int def) {
+        try { return isBlank(s) ? def : Integer.parseInt(s); }
+        catch (NumberFormatException e) { return def; }
+    }
+
+    private static boolean parseBoolean(String s, boolean def) {
+        if (isBlank(s)) return def;
+        return "true".equalsIgnoreCase(s) || "yes".equalsIgnoreCase(s) || "1".equals(s);
+    }
+
+    /**
+     * 解析路径。相对路径基于 baseDir 解析。
+     */
+    private static Path resolvePath(String raw, Path baseDir, String fallback) {
+        Path p = isBlank(raw) ? Path.of(fallback) : Path.of(raw);
+        if (!p.isAbsolute()) {
+            p = baseDir.resolve(p).normalize();
+        }
+        return p.toAbsolutePath();
+    }
+
+    /**
+     * 测试用工厂方法 — 从环境变量和系统属性加载配置。
+     * 保持与旧版 AppConfig() 兼容，供测试使用。
+     */
+    public static AppConfig forTesting() {
+        ConfigLoader loader = new ConfigLoader(new String[0]);
+        return new AppConfig(loader.load());
+    }
+
+    /**
+     * 脱敏：显示前2和后2字符，如 "sk...xx"。
+     */
+    public static String maskValue(String value) {
+        if (value == null || value.isBlank()) return "(未设置)";
+        if (value.length() <= 5) return "<configured>";
+        return value.substring(0, 2) + "..." + value.substring(value.length() - 2);
     }
 }

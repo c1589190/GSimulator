@@ -35,8 +35,8 @@ public class ApplicationContext {
     private final InteractionSession interactionSession;
     private final InteractionManager interactionManager;
 
-    public ApplicationContext() {
-        this.config = new AppConfig();
+    public ApplicationContext(AppConfig config) {
+        this.config = config;
         this.dataPaths = new DataPaths(config);
         this.timeProvider = new TimeProvider();
 
@@ -45,11 +45,15 @@ public class ApplicationContext {
         this.turnService = new TurnService(dataPaths, timeProvider);
         this.playerActionService = new PlayerActionService(dataPaths, timeProvider);
 
-        // LLM
-        this.llmClient = new OpenAiLlmClient(
-                config.getLlmBaseUrl(), config.getLlmApiKey(),
-                config.getLlmModel(), config.getLlmTemperature(),
-                config.getLlmTimeoutSeconds());
+        // LLM — 只有配置完整时才创建真正的客户端
+        if (config.isLlmConfigured()) {
+            this.llmClient = new OpenAiLlmClient(
+                    config.getLlmBaseUrl(), config.getLlmApiKey(),
+                    config.getLlmModel(), config.getLlmTemperature(),
+                    config.getLlmTimeoutSeconds());
+        } else {
+            this.llmClient = null;
+        }
 
         // Tool 系统
         this.toolRegistry = new ToolRegistry();

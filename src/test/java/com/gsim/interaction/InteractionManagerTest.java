@@ -36,7 +36,7 @@ class InteractionManagerTest {
         System.setProperty("GSIM_DATA_DIR", tempDir.resolve("data").toString());
         System.setProperty("GSIM_IMPORT_DIR", tempDir.resolve("import").toString());
 
-        AppConfig config = new AppConfig();
+        AppConfig config = AppConfig.forTesting();
         DataPaths dataPaths = new DataPaths(config);
         dataPaths.initialize();
 

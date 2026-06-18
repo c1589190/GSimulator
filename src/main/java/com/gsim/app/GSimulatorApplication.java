@@ -28,9 +28,11 @@ public class GSimulatorApplication {
 
     private final ApplicationContext ctx;
     private final ConsoleInteractionAdapter adapter;
+    private final AppConfig config;
 
-    public GSimulatorApplication() {
-        this.ctx = new ApplicationContext();
+    public GSimulatorApplication(AppConfig config) {
+        this.config = config;
+        this.ctx = new ApplicationContext(config);
         InteractionManager manager = ctx.getInteractionManager();
 
         // 创建 CLI 适配器（必须在注册命令前，因为 ExitCommand 需要 adapter 引用）
@@ -46,6 +48,9 @@ public class GSimulatorApplication {
         // /help — 显示所有命令
         manager.registerCommand(new HelpCommand(manager::getCommands));
 
+        // /config — 配置管理
+        manager.registerCommand(new ConfigCommand());
+
         // /status — 显示状态
         manager.registerCommand(new StatusCommand());
 
@@ -53,7 +58,7 @@ public class GSimulatorApplication {
         manager.registerCommand(new ExitCommand(adapter::shutdown));
 
         // Data / Skill / Experience 系统（先初始化，PlayerCommand 依赖 DataManager）
-        Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
+        Path dataRoot = config.getDataDir();
         DataManager dataManager = new DataManager(dataRoot);
 
         // 注册 PlayerInputTool（Agent 可调用写入 input.md）
@@ -72,8 +77,8 @@ public class GSimulatorApplication {
         manager.registerCommand(new TurnCommand());
 
         // Phase 6: /import (local + URL)
-        ImportManager importManager = new ImportManager(ctx.getConfig(), new FakeChromaClient());
-        manager.registerCommand(new ImportCommand(ctx.getConfig(), importManager));
+        ImportManager importManager = new ImportManager(config, new FakeChromaClient());
+        manager.registerCommand(new ImportCommand(config, importManager));
 
         // Tool 系统: /tool wiki_search
         manager.registerCommand(new ToolCommand(toolRegistry));
@@ -88,7 +93,7 @@ public class GSimulatorApplication {
 
         // Phase 7+: /run (legacy), /sim, /nextturn, /node
         OrchestratorAgent orchestrator = new OrchestratorAgent(
-                ctx.getLlmClient(), toolRegistry, ctx.getConfig().getLlmModel());
+                ctx.getLlmClient(), toolRegistry, config.getLlmModel());
         manager.registerCommand(new RunCommand(orchestrator));
         manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore));
         manager.registerCommand(new NextTurnCommand(dataManager));
@@ -115,6 +120,18 @@ public class GSimulatorApplication {
 
         // 自动创建默认 campaign 和 turn
         initDefaultState();
+
+        // 如果 LLM 未配置，打印提示
+        if (!config.isLlmConfigured()) {
+            System.out.println();
+            System.out.println("⚠️  LLM 未配置。以下功能不可用:");
+            System.out.println("   /chat — Agent 对话");
+            System.out.println("   /sim  — 推演结算");
+            System.out.println("   /run  — 旧版推演");
+            System.out.println();
+            System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
+            System.out.println();
+        }
 
         // 启动 REPL
         adapter.start();

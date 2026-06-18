@@ -77,7 +77,13 @@ public class StatusCommand implements InteractionCommand {
                         ? "已启用 (" + config.getChromaBaseUrl() + ")"
                         : "未启用")
                 .append("\n");
-        sb.append("LLM:           ").append("已配置 (" + config.getLlmModel() + ")").append("\n");
+        sb.append("LLM:           ");
+        if (config.isLlmConfigured()) {
+            sb.append("已配置 (").append(config.getLlmModel()).append(")");
+        } else {
+            sb.append("未配置 (执行 /config init)");
+        }
+        sb.append("\n");
         sb.append("WebResearch:   ").append(config.isWebResearchEnabled() ? "已启用" : "未启用").append("\n\n");
 
         // Session
