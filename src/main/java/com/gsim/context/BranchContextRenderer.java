@@ -65,7 +65,6 @@ public class BranchContextRenderer {
     private final BranchPathSummaryRenderer pathSummaryRenderer;
     private final NodeSummaryStore nodeSummaryStore;
     private final PinnedConstraintStore pinStore;
-    private SessionMessageStore sessionMessageStore;
 
     public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore,
                                   BranchAnalyzer branchAnalyzer) {
@@ -86,9 +85,6 @@ public class BranchContextRenderer {
         this.pinStore = pinStore;
     }
 
-    public void setSessionMessageStore(SessionMessageStore store) {
-        this.sessionMessageStore = store;
-    }
 
     /**
      * @deprecated 使用 {@link #renderFullDebugContext()} 替代。
@@ -213,25 +209,27 @@ public class BranchContextRenderer {
 
     /**
      * 渲染会话上下文：BaseContext + session messages + user input。
+     *
+     * @param baseContextMarkdown BaseContextSnapshot markdown
+     * @param sessionMessages     当前 ContextSession 内的消息列表（由调用者传入）
+     * @param currentUserInput    当前用户输入
      */
-    public String renderSessionContext(String baseContextMarkdown, String contextSessionId, String currentUserInput) {
+    public String renderSessionContext(String baseContextMarkdown,
+                                        List<SessionMessage> sessionMessages,
+                                        String currentUserInput) {
         StringBuilder sb = new StringBuilder();
         sb.append(baseContextMarkdown).append("\n\n");
 
-        // Session messages
-        if (sessionMessageStore != null && contextSessionId != null) {
-            List<SessionMessage> msgs = sessionMessageStore.getAll();
-            if (!msgs.isEmpty()) {
-                sb.append("## Session Messages\n\n");
-                for (SessionMessage msg : msgs) {
-                    sb.append("[").append(msg.role()).append("] ");
-                    String content = msg.content();
-                    // 截断过长消息
-                    if (content.length() > 2000) {
-                        content = content.substring(0, 1997) + "...";
-                    }
-                    sb.append(content).append("\n\n");
+        // Session messages（由调用者传入）
+        if (sessionMessages != null && !sessionMessages.isEmpty()) {
+            sb.append("## Session Messages\n\n");
+            for (SessionMessage msg : sessionMessages) {
+                sb.append("[").append(msg.role()).append("] ");
+                String c = msg.content();
+                if (c.length() > 2000) {
+                    c = c.substring(0, 1997) + "...";
                 }
+                sb.append(c).append("\n\n");
             }
         }
 

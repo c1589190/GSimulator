@@ -16,10 +16,10 @@ import java.util.*;
  *
  * <p>职责：
  * <ul>
- *   <li>第一次 chat/sim/run 自动创建 ContextSession</li>
+ *   <li>按 apiSessionId 隔离不同客户端/连接的 ContextSession</li>
+ *   <li>第一次请求时自动创建 ContextSession</li>
  *   <li>同 session 后续轮次不重新渲染 BaseContext</li>
  *   <li>reset 关闭旧 session，创建新 session</li>
- *   <li>active branch 改变时创建新 session</li>
  * </ul>
  */
 public class ContextSessionManager {
@@ -46,51 +46,49 @@ public class ContextSessionManager {
     }
 
     /**
-     * 获取或创建活跃 session。
-     * apiSessionId 通常是 InteractionSession 的 sessionId。
+     * 获取或创建活跃 session（按 apiSessionId 隔离）。
      */
     public ContextSession getOrCreateActiveSession(String apiSessionId, String branchId) {
+        String apiId = normalizeApiSessionId(apiSessionId);
         if (branchId == null || branchId.isBlank()) {
             branchId = dataManager.getActiveBranch();
         }
 
-        // 查找已有活跃 session
-        Optional<ContextSession> existing = sessionStore.findActive();
+        // 按 apiSessionId 查找活跃 session
+        Optional<ContextSession> existing = sessionStore.findActiveByApiSessionId(apiId);
         if (existing.isPresent()) {
             ContextSession s = existing.get();
-            // 检查 branch 是否一致
             if (!s.branchId().equals(branchId)) {
                 log.info("Branch changed from {} to {}, creating new session", s.branchId(), branchId);
                 closeSession(s.sessionId(), "branch changed");
             } else {
-                // 更新最后活跃时间
                 ContextSession touched = s.touch();
                 rewrite(s, touched);
                 return touched;
             }
         }
 
-        // 创建新 session
-        return createSession(apiSessionId, branchId, branchId);
+        return createSession(apiId, branchId, branchId);
     }
 
     /**
      * 创建新 ContextSession，渲染 BaseContextSnapshot。
      */
     public ContextSession createSession(String apiSessionId, String branchId, String startNodeId) {
-        String sessionId = apiSessionId + "-ctx-" + IdGenerator.generate("cs");
+        String apiId = normalizeApiSessionId(apiSessionId);
+        String sessionId = apiId + "-ctx-" + IdGenerator.generate("cs");
 
-        // 渲染 BaseContext
+        // 渲染 BaseContext（仅创建时渲染一次）
         BaseContextSnapshot snapshot = renderer.renderBaseContext(contextDir);
 
         ContextSession session = new ContextSession(
-                sessionId, branchId, startNodeId, snapshot.id(),
+                apiId, sessionId, branchId, startNodeId, snapshot.id(),
                 Instant.now(), Instant.now(), ContextSessionStatus.ACTIVE, null
         );
 
         sessionStore.save(session);
-        log.info("ContextSession created: {} (branch: {}, base: {})",
-                sessionId, branchId, snapshot.id());
+        log.info("ContextSession created: {} (apiSession: {}, branch: {}, base: {})",
+                sessionId, apiId, branchId, snapshot.id());
 
         return session;
     }
@@ -99,17 +97,16 @@ public class ContextSessionManager {
      * 重置会话 — 关闭旧 session，创建新 session。
      */
     public ContextSession resetSession(String apiSessionId, String reason) {
-        Optional<ContextSession> existing = sessionStore.findActive();
-        String oldSummary = null;
+        String apiId = normalizeApiSessionId(apiSessionId);
 
+        Optional<ContextSession> existing = sessionStore.findActiveByApiSessionId(apiId);
         if (existing.isPresent()) {
             ContextSession old = existing.get();
-            oldSummary = reason != null ? reason : "Manual reset";
-            closeSession(old.sessionId(), oldSummary);
+            closeSession(old.sessionId(), reason != null ? reason : "Manual reset");
         }
 
         String branchId = dataManager.getActiveBranch();
-        return createSession(apiSessionId, branchId, branchId);
+        return createSession(apiId, branchId, branchId);
     }
 
     /**
@@ -128,14 +125,9 @@ public class ContextSessionManager {
             if (all.get(i).sessionId().equals(contextSessionId)) {
                 all.set(i, closed);
             }
-            // 关闭其他 ACTIVE 状态
-            if (all.get(i).isActive() && !all.get(i).sessionId().equals(contextSessionId)) {
-                all.set(i, all.get(i).withStatus(ContextSessionStatus.CLOSED));
-            }
         }
         sessionStore.rewriteAll(all);
 
-        // 清理 message store
         messageStores.remove(contextSessionId);
 
         log.info("ContextSession closed: {}", contextSessionId);
@@ -143,30 +135,46 @@ public class ContextSessionManager {
     }
 
     /**
-     * 获取活跃 session。
+     * 按 apiSessionId 获取活跃 session。
      */
     public Optional<ContextSession> getActiveSession(String apiSessionId) {
-        return sessionStore.findActive();
+        return sessionStore.findActiveByApiSessionId(normalizeApiSessionId(apiSessionId));
     }
 
     /**
-     * 渲染给 LLM 的完整上下文。
+     * 渲染给 LLM 的完整上下文（baseContext + session messages）。
+     * 不重新生成 BaseContext — 只读取 session.baseContextId 对应的 .md 文件。
      */
     public String renderForLlm(String apiSessionId, String currentUserInput) {
-        Optional<ContextSession> active = sessionStore.findActive();
+        String apiId = normalizeApiSessionId(apiSessionId);
+        Optional<ContextSession> active = sessionStore.findActiveByApiSessionId(apiId);
+
         if (active.isEmpty()) {
-            // 自动创建
-            ContextSession session = getOrCreateActiveSession(apiSessionId, dataManager.getActiveBranch());
-            BaseContextSnapshot snapshot = renderer.renderBaseContext(contextDir);
-            return renderer.renderSessionContext(snapshot.markdown(), session.sessionId(), currentUserInput);
+            // 自动创建 session
+            ContextSession session = getOrCreateActiveSession(apiId, dataManager.getActiveBranch());
+            String baseMarkdown = loadBaseContextMarkdown(session.baseContextId());
+            List<SessionMessage> msgs = getSessionMessages(session.sessionId());
+            return renderer.renderSessionContext(baseMarkdown, msgs, currentUserInput);
         }
 
         ContextSession session = active.get();
-        // 获取已保存的 BaseContext
-        BaseContextSnapshot snapshot = loadBaseContext(session.baseContextId());
+        // 只读取已保存的 BaseContext markdown，不重新渲染
+        String baseMarkdown = loadBaseContextMarkdown(session.baseContextId());
+        List<SessionMessage> msgs = getSessionMessages(session.sessionId());
+        return renderer.renderSessionContext(baseMarkdown, msgs, currentUserInput);
+    }
 
-        String baseMarkdown = snapshot != null ? snapshot.markdown() : renderer.renderBaseContext(contextDir).markdown();
-        return renderer.renderSessionContext(baseMarkdown, session.sessionId(), currentUserInput);
+    /**
+     * 获取 BaseContext markdown（不生成新快照）。
+     */
+    public String getBaseContextMarkdown(String apiSessionId) {
+        Optional<ContextSession> active = sessionStore.findActiveByApiSessionId(
+                normalizeApiSessionId(apiSessionId));
+        if (active.isPresent()) {
+            return loadBaseContextMarkdown(active.get().baseContextId());
+        }
+        // 无活跃 session 时返回 null
+        return null;
     }
 
     /**
@@ -184,7 +192,6 @@ public class ContextSessionManager {
     public List<SessionMessage> getSessionMessages(String contextSessionId) {
         SessionMessageStore store = messageStores.get(contextSessionId);
         if (store != null) return store.getAll();
-        // 尝试从磁盘加载
         store = new SessionMessageStore(worldDir, contextSessionId);
         messageStores.put(contextSessionId, store);
         return store.getAll();
@@ -197,8 +204,8 @@ public class ContextSessionManager {
         List<SessionMessage> msgs = getSessionMessages(contextSessionId);
         Optional<ContextSession> session = sessionStore.findById(contextSessionId);
 
-        StringBuilder summary = new StringBuilder();
-        summary.append("Conversation with ").append(msgs.size()).append(" messages.");
+        StringBuilder sb = new StringBuilder();
+        sb.append("Conversation with ").append(msgs.size()).append(" messages.");
 
         List<String> userMsgs = msgs.stream()
                 .filter(m -> "user".equals(m.role()))
@@ -206,36 +213,38 @@ public class ContextSessionManager {
                 .toList();
 
         if (!userMsgs.isEmpty()) {
-            summary.append(" User topics: ");
+            sb.append(" User topics: ");
             for (int i = 0; i < Math.min(3, userMsgs.size()); i++) {
-                String truncated = userMsgs.get(i);
-                if (truncated.length() > 80) truncated = truncated.substring(0, 77) + "...";
-                summary.append(truncated).append("; ");
+                String t = userMsgs.get(i);
+                if (t.length() > 80) t = t.substring(0, 77) + "...";
+                sb.append(t).append("; ");
             }
         }
 
         return new ContextSessionSummary(
                 contextSessionId,
                 session.map(ContextSession::branchId).orElse(""),
-                summary.toString().trim(),
+                sb.toString().trim(),
                 List.of(),
                 List.of(),
                 Instant.now()
         );
     }
 
-    private BaseContextSnapshot loadBaseContext(String baseContextId) {
-        if (baseContextId == null) return null;
+    private String loadBaseContextMarkdown(String baseContextId) {
+        if (baseContextId == null) return "";
         Path file = contextDir.resolve("base_contexts").resolve(baseContextId + ".md");
         try {
-            String markdown = java.nio.file.Files.readString(file);
-            return new BaseContextSnapshot(
-                    baseContextId, "", "", Instant.now(),
-                    markdown, markdown.length(), List.of(), List.of()
-            );
+            return java.nio.file.Files.readString(file);
         } catch (Exception e) {
-            return null;
+            log.warn("Failed to load BaseContext {}: {}", baseContextId, e.getMessage());
+            // 重新渲染作为回退
+            return renderer.renderBaseContext(contextDir).markdown();
         }
+    }
+
+    private String normalizeApiSessionId(String apiSessionId) {
+        return (apiSessionId == null || apiSessionId.isBlank()) ? "default" : apiSessionId;
     }
 
     private void rewrite(ContextSession old, ContextSession updated) {

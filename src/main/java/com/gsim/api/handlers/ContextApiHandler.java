@@ -6,7 +6,7 @@ import com.gsim.api.JsonBodyParser;
 import com.gsim.context.BranchContextRenderer;
 import com.gsim.context.session.ContextSession;
 import com.gsim.context.session.ContextSessionManager;
-import com.gsim.context.summary.ContextSessionSummary;
+import com.gsim.context.session.SessionMessage;
 import com.gsim.data.DataManager;
 import com.gsim.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
@@ -17,6 +17,17 @@ import java.util.*;
 
 /**
  * /api/context — 上下文会话管理 API。
+ *
+ * <p>端点：
+ * <ul>
+ *   <li>GET  /api/context/session    — 当前 ContextSession 状态</li>
+ *   <li>POST /api/context/reset      — 重置 ContextSession</li>
+ *   <li>POST /api/context/close      — 关闭 ContextSession</li>
+ *   <li>GET  /api/context/base       — BaseContextSnapshot markdown（不含 session messages）</li>
+ *   <li>GET  /api/context/rendered   — baseContext + session messages（LLM 输入）</li>
+ *   <li>GET  /api/context/messages   — 当前 ContextSession 的消息列表</li>
+ *   <li>GET  /api/context/debug-full — 完整 debug 上下文</li>
+ * </ul>
  */
 public class ContextApiHandler implements HttpHandler {
 
@@ -42,13 +53,14 @@ public class ContextApiHandler implements HttpHandler {
 
         try {
             if (segments.length == 0) {
-                handleRoot(exchange, method);
+                handleGetSession(exchange);
             } else {
                 switch (segments[0]) {
                     case "session" -> handleGetSession(exchange);
                     case "reset" -> handleReset(exchange, method);
                     case "close" -> handleClose(exchange, method);
                     case "base" -> handleGetBase(exchange);
+                    case "rendered" -> handleGetRendered(exchange);
                     case "messages" -> handleGetMessages(exchange);
                     case "debug-full" -> handleDebugFull(exchange);
                     default -> BaseApiHandler.sendNotFound(exchange, "Unknown context sub-resource: " + segments[0]);
@@ -57,10 +69,6 @@ public class ContextApiHandler implements HttpHandler {
         } catch (Exception e) {
             BaseApiHandler.sendError(exchange, 500, "Internal error: " + e.getMessage());
         }
-    }
-
-    private void handleRoot(HttpExchange exchange, String method) throws IOException {
-        handleGetSession(exchange);
     }
 
     private void handleGetSession(HttpExchange exchange) throws IOException {
@@ -124,23 +132,26 @@ public class ContextApiHandler implements HttpHandler {
         BaseApiHandler.sendJson(exchange, 200, ApiResponse.ok("Context closed", Map.of()));
     }
 
+    /**
+     * GET /api/context/base — 只返回 BaseContextSnapshot markdown，不含 session messages。
+     */
     private void handleGetBase(HttpExchange exchange) throws IOException {
-        String debugFull = exchange.getRequestURI().getQuery();
-        boolean debug = "full=true".equals(debugFull);
-
+        Optional<ContextSession> active = ctxSessionManager.getActiveSession("default");
         String markdown;
-        if (debug) {
-            markdown = renderer.renderFullDebugContextAsMarkdown();
-        } else {
-            Optional<ContextSession> active = ctxSessionManager.getActiveSession("default");
-            if (active.isPresent()) {
-                markdown = ctxSessionManager.renderForLlm("default", "");
-            } else {
-                // 返回 BaseContext 渲染（但不创建 session）
+
+        if (active.isPresent()) {
+            markdown = ctxSessionManager.getBaseContextMarkdown("default");
+            if (markdown == null) {
+                // 回退：重新渲染（session 存在但 .md 文件丢失）
                 var contextDir = dataManager.getDataRoot().resolve("worlds")
                         .resolve(dataManager.getActiveWorld()).resolve("context");
                 markdown = renderer.renderBaseContext(contextDir).markdown();
             }
+        } else {
+            // 无活跃 session：渲染但不创建 session
+            var contextDir = dataManager.getDataRoot().resolve("worlds")
+                    .resolve(dataManager.getActiveWorld()).resolve("context");
+            markdown = renderer.renderBaseContext(contextDir).markdown();
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -148,6 +159,28 @@ public class ContextApiHandler implements HttpHandler {
         data.put("approxChars", markdown.length());
 
         BaseApiHandler.sendJson(exchange, 200, ApiResponse.ok("Base context", data));
+    }
+
+    /**
+     * GET /api/context/rendered — baseContext + session messages（LLM 输入）。
+     */
+    private void handleGetRendered(HttpExchange exchange) throws IOException {
+        Optional<ContextSession> active = ctxSessionManager.getActiveSession("default");
+
+        String markdown;
+        if (active.isPresent()) {
+            markdown = ctxSessionManager.renderForLlm("default", "");
+        } else {
+            // 自动创建 session 并渲染
+            ctxSessionManager.getOrCreateActiveSession("default", dataManager.getActiveBranch());
+            markdown = ctxSessionManager.renderForLlm("default", "");
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("markdown", markdown);
+        data.put("approxChars", markdown.length());
+
+        BaseApiHandler.sendJson(exchange, 200, ApiResponse.ok("Rendered context for LLM", data));
     }
 
     private void handleGetMessages(HttpExchange exchange) throws IOException {

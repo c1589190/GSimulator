@@ -150,7 +150,7 @@ public class GSimulatorApplication {
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
-        manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot));
+        manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
 
         // Phase 7+: /run (legacy), /sim, /nextturn, /node
         OrchestratorAgent orchestrator = new OrchestratorAgent(

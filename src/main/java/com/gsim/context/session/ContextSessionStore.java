@@ -75,11 +75,23 @@ public class ContextSessionStore {
     }
 
     /**
-     * 查找活跃 session。
+     * @deprecated 使用 {@link #findActiveByApiSessionId(String)} 替代。
+     *             全局 findActive 无法区分不同 API session。
      */
+    @Deprecated
     public Optional<ContextSession> findActive() {
         return loadAll().stream()
                 .filter(ContextSession::isActive)
+                .findFirst();
+    }
+
+    /**
+     * 按 apiSessionId 查找活跃 session。
+     */
+    public Optional<ContextSession> findActiveByApiSessionId(String apiSessionId) {
+        String id = (apiSessionId == null || apiSessionId.isBlank()) ? "default" : apiSessionId;
+        return loadAll().stream()
+                .filter(s -> s.isActive() && s.apiSessionId().equals(id))
                 .findFirst();
     }
 
@@ -89,6 +101,16 @@ public class ContextSessionStore {
     public Optional<ContextSession> findActiveByBranch(String branchId) {
         return loadAll().stream()
                 .filter(s -> s.isActive() && s.branchId().equals(branchId))
+                .findFirst();
+    }
+
+    /**
+     * 查找指定 apiSessionId 和 branchId 的活跃 session。
+     */
+    public Optional<ContextSession> findActiveByApiSessionAndBranch(String apiSessionId, String branchId) {
+        String id = (apiSessionId == null || apiSessionId.isBlank()) ? "default" : apiSessionId;
+        return loadAll().stream()
+                .filter(s -> s.isActive() && s.apiSessionId().equals(id) && s.branchId().equals(branchId))
                 .findFirst();
     }
 
