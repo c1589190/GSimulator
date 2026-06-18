@@ -1,6 +1,5 @@
 package com.gsim.knowledge.embed;
 
-import com.gsim.util.IdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +34,10 @@ public class LocalSmallEmbeddingModel implements EmbeddingModel {
         boolean available = checkModelFiles();
         String status = available ? "active" : "unavailable";
 
+        // 用 fingerprint 生成确定性 profileId，重启不变
+        String profileId = "emb_" + fingerprint;
         this.profile = new EmbeddingProfile(
-                IdGenerator.embeddingProfileId(),
+                profileId,
                 "local-small", "local-small", modelName, dimensions,
                 "cosine", 1, fingerprint, status, Instant.now().toString());
     }

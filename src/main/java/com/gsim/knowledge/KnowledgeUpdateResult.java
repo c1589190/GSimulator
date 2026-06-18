@@ -22,6 +22,13 @@ public record KnowledgeUpdateResult(
                 newChunksCreated, 0, null, "KEYWORD_ONLY", "");
     }
 
+    public static KnowledgeUpdateResult keywordOnly(String docId, int oldChunksDeleted,
+                                                     int oldEmbeddingsDeleted,
+                                                     int newChunksCreated) {
+        return new KnowledgeUpdateResult(true, docId, oldChunksDeleted, oldEmbeddingsDeleted,
+                newChunksCreated, 0, null, "KEYWORD_ONLY", "");
+    }
+
     public static KnowledgeUpdateResult withEmbeddings(String docId, int oldChunksDeleted,
                                                         int oldEmbeddingsDeleted,
                                                         int newChunksCreated,

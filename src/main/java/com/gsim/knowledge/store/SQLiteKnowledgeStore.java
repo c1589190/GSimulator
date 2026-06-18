@@ -164,9 +164,9 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
 
             conn.setAutoCommit(false);
             try {
-                // 1. 删除旧 chunks / fts / embeddings
-                int oldChunks = deleteChunksForDoc(conn, docId);
+                // 1. 删除旧 embeddings → chunks / fts（必须先删 embeddings，因为 deleteEmbeddingsForDoc 依赖 chunks 表 JOIN 查找 chunk_id）
                 int oldEmbeddings = deleteEmbeddingsForDoc(conn, docId);
+                int oldChunks = deleteChunksForDoc(conn, docId);
 
                 // 2. 更新 document
                 String docSql = """
@@ -225,7 +225,7 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                 }
 
                 conn.commit();
-                return KnowledgeUpdateResult.keywordOnly(docId, oldChunks, chunks.size());
+                return KnowledgeUpdateResult.keywordOnly(docId, oldChunks, oldEmbeddings, chunks.size());
 
             } catch (SQLException e) {
                 conn.rollback();
@@ -516,6 +516,33 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
             }
         } catch (SQLException e) {
             log.error("findChunksMissingEmbedding failed: {}", e.getMessage());
+        }
+        return chunkIds;
+    }
+
+    @Override
+    public List<String> findChunksMissingEmbeddingForDoc(String docId, String profileId) {
+        List<String> chunkIds = new ArrayList<>();
+        try {
+            Connection conn = getConnection();
+            String sql = """
+                    SELECT c.chunk_id FROM chunks c
+                    WHERE c.doc_id = ?
+                      AND c.chunk_id NOT IN (
+                        SELECT ce.chunk_id FROM chunk_embeddings ce WHERE ce.profile_id = ?
+                      )
+                    """;
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, docId);
+                ps.setString(2, profileId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        chunkIds.add(rs.getString("chunk_id"));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            log.error("findChunksMissingEmbeddingForDoc failed: {}", e.getMessage());
         }
         return chunkIds;
     }

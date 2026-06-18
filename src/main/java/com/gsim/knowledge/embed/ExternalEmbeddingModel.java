@@ -2,7 +2,6 @@ package com.gsim.knowledge.embed;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.util.IdGenerator;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,25 +28,60 @@ public class ExternalEmbeddingModel implements EmbeddingModel {
     private final int dimensions;
     private final EmbeddingProfile profile;
     private final OkHttpClient httpClient;
+    private final String embeddingsUrl;
 
     public ExternalEmbeddingModel(String baseUrl, String apiKey, String modelName,
                                    int dimensions, int timeoutSeconds) {
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.baseUrl = normalizeBaseUrl(baseUrl);
         this.apiKey = apiKey;
         this.modelName = modelName;
         this.dimensions = dimensions;
 
         String fingerprint = EmbeddingProfileManager.computeFingerprint(
                 "external", modelName, dimensions, baseUrl);
+        // 用 fingerprint 生成确定性 profileId，重启不变
+        String profileId = "emb_" + fingerprint;
         this.profile = new EmbeddingProfile(
-                IdGenerator.embeddingProfileId(),
+                profileId,
                 "external", "openai-compatible", modelName, dimensions,
                 "cosine", 1, fingerprint, "active", Instant.now().toString());
+
+        this.embeddingsUrl = buildEmbeddingsUrl(this.baseUrl);
 
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .readTimeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
+    }
+
+    /**
+     * Normalize base URL: strip trailing slash but preserve path structure.
+     */
+    static String normalizeBaseUrl(String raw) {
+        if (raw == null || raw.isBlank()) return "";
+        String url = raw.trim();
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+        return url;
+    }
+
+    /**
+     * Build the full /v1/embeddings URL from the normalized base URL.
+     *
+     * Rules:
+     *   if baseUrl ends with /v1/embeddings → use as-is
+     *   if baseUrl ends with /v1 → append /embeddings
+     *   otherwise → append /v1/embeddings
+     */
+    static String buildEmbeddingsUrl(String normalizedBaseUrl) {
+        if (normalizedBaseUrl.endsWith("/v1/embeddings")) {
+            return normalizedBaseUrl;
+        }
+        if (normalizedBaseUrl.endsWith("/v1")) {
+            return normalizedBaseUrl + "/embeddings";
+        }
+        return normalizedBaseUrl + "/v1/embeddings";
     }
 
     @Override
@@ -65,7 +99,7 @@ public class ExternalEmbeddingModel implements EmbeddingModel {
 
         try {
             String requestJson = buildRequestJson(texts);
-            String url = baseUrl + "/v1/embeddings";
+            String url = embeddingsUrl;
 
             RequestBody body = RequestBody.create(requestJson, JSON);
             Request request = new Request.Builder()

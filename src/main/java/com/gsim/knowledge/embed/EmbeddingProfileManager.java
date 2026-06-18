@@ -2,7 +2,6 @@ package com.gsim.knowledge.embed;
 
 import com.gsim.knowledge.KnowledgeSettings;
 import com.gsim.knowledge.store.KnowledgeStore;
-import com.gsim.util.IdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

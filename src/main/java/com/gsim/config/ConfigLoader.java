@@ -233,6 +233,12 @@ public class ConfigLoader {
             case "API_HOST" -> "api.host";
             case "API_PORT" -> "api.port";
             case "API_ENABLED" -> "api.enabled";
+            case "EMBEDDING_PROVIDER" -> "embedding.provider";
+            case "EMBEDDING_BASE_URL" -> "embedding.base_url";
+            case "EMBEDDING_API_KEY" -> "embedding.api_key";
+            case "EMBEDDING_MODEL" -> "embedding.model";
+            case "EMBEDDING_DIMENSIONS" -> "embedding.dimensions";
+            case "EMBEDDING_MODEL_DIR" -> "embedding.model_dir";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -262,6 +268,13 @@ public class ConfigLoader {
         defaults.put("api.host", "127.0.0.1");
         defaults.put("api.port", "8710");
         defaults.put("api.enabled", "false");
+
+        defaults.put("embedding.provider", "");
+        defaults.put("embedding.base_url", "");
+        defaults.put("embedding.api_key", "");
+        defaults.put("embedding.model", "");
+        defaults.put("embedding.dimensions", "");
+        defaults.put("embedding.model_dir", "data/models/local-small");
 
         return defaults;
     }

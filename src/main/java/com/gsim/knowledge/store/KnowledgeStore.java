@@ -37,8 +37,11 @@ public interface KnowledgeStore {
     /** 批量写入 chunk embeddings。 */
     int writeEmbeddings(List<ChunkEmbeddingRow> rows);
 
-    /** 查找缺少指定 profile embedding 的 chunk。 */
+    /** 查找缺少指定 profile embedding 的 chunk（全局，全 collection 扫描）。 */
     List<String> findChunksMissingEmbedding(String collection, String profileId);
+
+    /** 查找指定文档缺少 embedding 的 chunk（仅限当前 doc，不扫全库）。 */
+    List<String> findChunksMissingEmbeddingForDoc(String docId, String profileId);
 
     /** 获取 store 状态摘要。 */
     KnowledgeStoreStatus status();

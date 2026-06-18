@@ -173,21 +173,21 @@ public class KnowledgeToolFactory {
                 return ToolResult.fail(name(), result.error());
             }
 
-            // 如果有 active profile，自动生成 embeddings
+            // 如果有 active profile，只为本次 upsert 的 doc 自动生成 embeddings
             Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
             if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
                 EmbeddingModel model = profileManager.getEmbeddingModel();
                 if (model != null && model.isAvailable()) {
                     try {
-                        List<String> chunkIds = store.findChunksMissingEmbedding(
-                                collection, activeProfile.get().profileId());
-                        embedChunks(chunkIds, model, activeProfile.get());
+                        List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
+                                result.docId(), activeProfile.get().profileId());
+                        int embedded = embedChunks(chunkIds, model, activeProfile.get());
                         // 重新检查状态
                         return ToolResult.ok(name(), List.of(
                                 new ToolResult.Item(title, result.docId(),
                                         "status=OK docId=" + result.docId()
                                         + " chunks=" + result.chunksCreated()
-                                        + " embeddings=" + chunkIds.size()
+                                        + " embeddings=" + embedded
                                         + " profile=" + activeProfile.get().profileId(), 1.0)));
                     } catch (Exception e) {
                         log.warn("Auto-embedding failed during upsert: {}", e.getMessage());
@@ -227,14 +227,14 @@ public class KnowledgeToolFactory {
                 return ToolResult.fail(name(), "[" + result.status() + "] " + result.error());
             }
 
-            // 如果有 active profile，自动重嵌入
+            // 如果有 active profile，只为本次 update 的 doc 自动重嵌入
             Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
             if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
                 EmbeddingModel model = profileManager.getEmbeddingModel();
                 if (model != null && model.isAvailable()) {
                     try {
-                        List<String> chunkIds = store.findChunksMissingEmbedding(
-                                collection, activeProfile.get().profileId());
+                        List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
+                                docId, activeProfile.get().profileId());
                         embedChunks(chunkIds, model, activeProfile.get());
                     } catch (Exception e) {
                         log.warn("Auto-embedding failed during update: {}", e.getMessage());
