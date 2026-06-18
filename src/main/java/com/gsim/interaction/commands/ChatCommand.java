@@ -17,8 +17,10 @@ public class ChatCommand implements InteractionCommand {
     public ChatCommand(NodeAgentChatService chatService) { this.chatService = chatService; }
 
     @Override public String name() { return "chat"; }
-    @Override public String description() { return "与当前节点 Agent 对话"; }
-    @Override public String usage() { return "/chat <内容>  — 或直接输入非 / 开头的文本"; }
+    @Override public String description() {
+        return "统一 Agent 入口 — 对话、推演、资料查询（/sim 和 /run 已废弃）";
+    }
+    @Override public String usage() { return "/chat <内容> 或直接输入自然语言"; }
 
     @Override public InteractionResult execute(String[] args, InteractionSession session) {
         // 检查 LLM 是否可用

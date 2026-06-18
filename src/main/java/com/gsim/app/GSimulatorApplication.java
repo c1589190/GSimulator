@@ -152,21 +152,24 @@ public class GSimulatorApplication {
         manager.registerCommand(new ExpCommand(expManager));
         manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
 
-        // Phase 7+: /run (legacy), /sim, /nextturn, /node
+        // Phase 7+: Orchestrator + 统一 Agent 入口
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
-        manager.registerCommand(new RunCommand(orchestrator));
-        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore, branchAnalyzer, ctxSessionManager, summaryManager));
+
+        // Chat 系统（统一入口，必须先于 /sim /run wrapper 创建）
+        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator, ctxSessionManager);
+        ChatCommand chatCommand = new ChatCommand(chatService);
+        manager.registerCommand(chatCommand);
+
+        // /sim /run — 废弃 wrapper，转发到统一 Agent 入口
+        manager.registerCommand(new SimCommand(chatService));
+        manager.registerCommand(new RunCommand(chatService));
+
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
         manager.registerCommand(new BranchCommand(branchAnalyzer));
         // 使用 PinCommand 独立实例（不直接依赖 pinManager 构造器参数位置）
         manager.registerCommand(new PinCommand(pinManager, dataManager));
-
-        // Chat 系统
-        NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator, ctxSessionManager);
-        ChatCommand chatCommand = new ChatCommand(chatService);
-        manager.registerCommand(chatCommand);
 
         // Messages 命令
         MessagesCommand messagesCommand = new MessagesCommand(messageStore, dataManager);
