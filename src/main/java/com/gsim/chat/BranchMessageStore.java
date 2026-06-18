@@ -43,13 +43,24 @@ public class BranchMessageStore {
         return msgs;
     }
 
-    /** 向当前 branch 文件追加一条 message block。 */
+    /** 向当前 branch 文件追加一条 message block。写入前进行污染过滤。 */
     public void appendMessage(String branchId, BranchMessage msg) throws IOException {
         Path f = branchFile(branchId);
         if (!Files.exists(f)) throw new IOException("Branch file not found: " + f);
-        String block = msg.toBlock() + "\n";
+
+        // 写入前过滤：检查内容是否包含工具定义污染
+        BranchMessage writable = msg;
+        if (ToolPollutionFilter.isPolluted(msg.content())) {
+            log.warn("Filtered polluted message {} (type={}, len={}) in branch {}",
+                    msg.id(), msg.type(), msg.content().length(), branchId);
+            writable = BranchMessage.create(msg.id(), "system", "system_note",
+                    String.format("工具定义污染已被过滤，原消息类型: %s, 原消息长度: %d",
+                            msg.type(), msg.content().length()));
+        }
+
+        String block = writable.toBlock() + "\n";
         Files.writeString(f, block, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
-        log.debug("Appended message {} to {}", msg.id(), branchId);
+        log.debug("Appended message {} to {}", writable.id(), branchId);
     }
 
     /** 生成下一个消息 id。 */

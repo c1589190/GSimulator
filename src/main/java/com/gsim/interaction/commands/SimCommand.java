@@ -2,6 +2,7 @@ package com.gsim.interaction.commands;
 
 import com.gsim.agent.OrchestratorAgent;
 import com.gsim.context.BranchContextRenderer;
+import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.data.BranchUpdate;
 import com.gsim.data.DataManager;
 import com.gsim.interaction.InteractionCommand;
@@ -42,14 +43,26 @@ public class SimCommand implements InteractionCommand {
                 return InteractionResult.fail(sr.finalText());
             }
 
-            // 解析 LLM 输出为章节
-            Map<String, String> sections = parseSections(sr.finalText());
+            // 对推演结果文本进行去重和污染过滤
+            String cleanResult = ToolPollutionFilter.deduplicateToolDefinitions(sr.finalText());
 
-            // 构建 LLM 上下文日志
+            // 解析 LLM 输出为章节
+            Map<String, String> sections = parseSections(cleanResult);
+
+            // 构建 LLM 上下文日志（过滤工具定义污染）
             StringBuilder llmLog = new StringBuilder();
             for (OrchestratorAgent.MessageTrace t : sr.trace()) {
                 String role = t.type().replace("sim_input", "user").replace("sim_output", "assistant");
-                llmLog.append("### ").append(role).append("\n\n").append(t.content()).append("\n\n");
+                // 对 trace 内容进行污染过滤
+                String sanitized = ToolPollutionFilter.sanitize(t.content());
+                if (sanitized.isBlank()) {
+                    // 全部被过滤，写入简短 system_note
+                    llmLog.append("### system_note\n\n")
+                            .append("工具定义污染已被过滤，原消息类型: ")
+                            .append(t.type()).append("\n\n");
+                } else {
+                    llmLog.append("### ").append(role).append("\n\n").append(sanitized).append("\n\n");
+                }
             }
 
             String inputText = dm.getInputBody();
@@ -58,7 +71,7 @@ public class SimCommand implements InteractionCommand {
             BranchUpdate update = new BranchUpdate(
                     inputText.isBlank() ? "无。" : inputText,
                     llmLog.toString(),
-                    sections.getOrDefault("result", sr.finalText()),
+                    sections.getOrDefault("result", cleanResult),
                     sections.getOrDefault("world", "无。"),
                     sections.getOrDefault("entity", "无。"),
                     sections.getOrDefault("rule", "无。"),

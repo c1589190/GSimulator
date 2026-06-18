@@ -1,5 +1,6 @@
 package com.gsim.context;
 
+import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.data.DataDocument;
 import com.gsim.data.DataManager;
 import com.gsim.resource.ResourceManager;
@@ -87,7 +88,8 @@ public class BranchContextRenderer {
         return sb.toString();
     }
 
-    /** 从 branch 文件中提取 LLM 上下文记录消息（支持多轮调用）。 */
+    /** 从 branch 文件中提取 LLM 上下文记录消息（支持多轮调用）。
+     *  自动过滤工具定义污染消息。 */
     public List<RenderedMessage> extractBranchMessages(DataDocument branch) {
         List<RenderedMessage> msgs = new ArrayList<>();
         String body = branch.body();
@@ -96,21 +98,46 @@ public class BranchContextRenderer {
         // 本节点输入
         String input = extractSection(body, "一、本节点输入");
         if (!input.isBlank()) {
-            msgs.add(new RenderedMessage("user", "branch_input", bid, stripHeading(input, "一、本节点输入")));
+            String content = stripHeading(input, "一、本节点输入");
+            if (!ToolPollutionFilter.isPolluted(content)) {
+                msgs.add(new RenderedMessage("user", "branch_input", bid, content));
+            } else {
+                msgs.add(new RenderedMessage("system", "system_note", bid,
+                        "[skipped polluted tool definition message — branch_input]"));
+            }
         }
 
         // LLM 上下文记录 — 顺序解析所有 ### 子节
         String llmSection = extractSection(body, "二、LLM 上下文记录");
         if (!llmSection.isBlank()) {
             List<SubSection> subs = extractAllSubSections(llmSection);
+            // 去重：跟踪已见过的内容哈希，防止重复工具定义
+            java.util.Set<Integer> seenHashes = new java.util.HashSet<>();
             for (SubSection sub : subs) {
                 String content = sub.content.trim();
                 if (content.isEmpty() || "无。".equals(content)) continue;
+
+                // 污染检测：跳过已知工具定义污染
+                if (ToolPollutionFilter.isPolluted(content)) {
+                    msgs.add(new RenderedMessage("system", "system_note", bid,
+                            "[skipped polluted tool definition message — " + sub.heading + "]"));
+                    continue;
+                }
+
+                // 去重：相同内容不重复渲染
+                int hash = content.hashCode();
+                if (!seenHashes.add(hash)) {
+                    msgs.add(new RenderedMessage("system", "system_note", bid,
+                            "[deduplicated — same content as earlier message]"));
+                    continue;
+                }
+
                 switch (sub.heading) {
                     case "### user" -> msgs.add(new RenderedMessage("user", "branch_user", bid, content));
                     case "### assistant" -> msgs.add(new RenderedMessage("assistant", "branch_assistant", bid, content));
                     case "### tool_call" -> msgs.add(new RenderedMessage("tool", "tool_call", bid, content));
                     case "### tool_result" -> msgs.add(new RenderedMessage("tool", "tool_result", bid, content));
+                    case "### system_note" -> msgs.add(new RenderedMessage("system", "system_note", bid, content));
                 }
             }
         }

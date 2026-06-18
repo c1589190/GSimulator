@@ -3,6 +3,7 @@ package com.gsim.agent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.campaign.PlayerAction;
+import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.llm.LlmClient;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
@@ -298,7 +299,12 @@ public class OrchestratorAgent {
                 if (result.success()) {
                     for (ToolResult.Item item : result.items()) {
                         toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                        toolResultStr.append("  ").append(item.snippet()).append("\n");
+                        // 只保留前 200 字符的片段摘要，防止完整内容污染上下文
+                        String snippet = item.snippet();
+                        if (snippet != null && snippet.length() > 200) {
+                            snippet = snippet.substring(0, 200) + "...";
+                        }
+                        toolResultStr.append("  ").append(snippet).append("\n");
                     }
                 } else {
                     toolResultStr.append("错误: ").append(result.error()).append("\n");
@@ -310,7 +316,14 @@ public class OrchestratorAgent {
             }
 
             finalText = content;
-            trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            // 过滤：如果 assistant 输出疑似工具定义污染，记录摘要而非全文
+            if (ToolPollutionFilter.isPolluted(finalText)) {
+                trace.add(new MessageTrace("assistant", "sim_output",
+                        "[filtered — assistant output contained tool definition pollution, length="
+                                + finalText.length() + "]"));
+            } else {
+                trace.add(new MessageTrace("assistant", "sim_output", finalText));
+            }
             break;
         }
 
@@ -366,8 +379,15 @@ public class OrchestratorAgent {
                 StringBuilder tr = new StringBuilder();
                 tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
                 if (result.success()) {
-                    for (ToolResult.Item item : result.items())
+                    for (ToolResult.Item item : result.items()) {
                         tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                        // 只保留前 200 字符的片段摘要
+                        String snippet = item.snippet();
+                        if (snippet != null && snippet.length() > 200) {
+                            snippet = snippet.substring(0, 200) + "...";
+                        }
+                        tr.append("  ").append(snippet).append("\n");
+                    }
                 } else tr.append("错误: ").append(result.error());
                 trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
                 messages.add(LlmMessage.user(tr.toString()));
@@ -376,7 +396,14 @@ public class OrchestratorAgent {
             }
 
             finalText = content;
-            trace.add(new MessageTrace("assistant", "chat_response", finalText));
+            // 过滤：如果 assistant 输出疑似工具定义污染，记录摘要而非全文
+            if (ToolPollutionFilter.isPolluted(finalText)) {
+                trace.add(new MessageTrace("assistant", "chat_response",
+                        "[filtered — assistant output contained tool definition pollution, length="
+                                + finalText.length() + "]"));
+            } else {
+                trace.add(new MessageTrace("assistant", "chat_response", finalText));
+            }
             break;
         }
 

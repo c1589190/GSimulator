@@ -64,4 +64,154 @@ class BranchContextRendererTest {
         assertTrue(md.contains("Rendered Context"));
         assertTrue(md.contains("branch.b0000-start"));
     }
+
+    @Test @DisplayName("污染消息渲染时被跳过")
+    void testPollutedMessageSkipped() throws Exception {
+        // 创建一个包含污染内容的 branch 文件，其 parent 是 b0000-start
+        String pollutedBranchContent = """
+                id: branch.b0001-polluted
+                type: branch
+                name: 污染测试
+                parent: branch.b0000-start
+                turn: 1
+                world_time: T1
+                status: resolved
+                tags: [时间节点]
+                updated: 2026-06-18
+                -------------------
+
+                # 污染测试
+
+                ## 一、本节点输入
+                测试输入。
+
+                ## 二、LLM 上下文记录
+
+                ### assistant
+
+                * test: Run tests with the given coverage strategy. Use when asked to run tests, check coverage, or verify test results.
+
+                ## 三、推演结果
+                无。
+
+                ## 四、世界观/设定增量
+                无。
+
+                ## 五、实体状态增量
+                无。
+
+                ## 六、推演规则增量
+                无。
+
+                ## 七、交互逻辑增量
+                无。
+
+                ## 八、未总结 Skill 增量
+                无。
+
+                ## 九、下节点风险
+                待后续推演。
+                """;
+
+        java.nio.file.Path bf = tempDir.resolve("worlds").resolve("default").resolve("branches")
+                .resolve("b0001-polluted.md");
+        java.nio.file.Files.createDirectories(bf.getParent());
+        java.nio.file.Files.writeString(bf, pollutedBranchContent, java.nio.charset.StandardCharsets.UTF_8);
+
+        // 切换 active branch 到污染 branch
+        java.nio.file.Files.writeString(
+                tempDir.resolve("worlds").resolve("default").resolve("active-branch.txt"),
+                "branch.b0001-polluted", java.nio.charset.StandardCharsets.UTF_8);
+
+        // 重新加载
+        dm = new com.gsim.data.DataManager(tempDir);
+        renderer = new BranchContextRenderer(dm, tempDir);
+
+        RenderedContext ctx = renderer.render();
+        // 应该包含 [skipped] 标记
+        boolean hasSkipped = ctx.messages().stream()
+                .anyMatch(m -> m.content().contains("[skipped polluted tool definition message"));
+        assertTrue(hasSkipped, "污染消息应该被跳过并标记");
+
+        // 不应该包含原始污染文本
+        boolean hasPollution = ctx.messages().stream()
+                .anyMatch(m -> m.content().contains("Run tests with the given coverage strategy"));
+        assertFalse(hasPollution, "渲染结果不应包含原始污染文本");
+    }
+
+    @Test @DisplayName("System.md 在渲染结果中只出现一次")
+    void testSystemPromptAppearsOnce() {
+        RenderedContext ctx = renderer.render();
+        long systemCount = ctx.messages().stream()
+                .filter(m -> "system_prompt".equals(m.type()))
+                .count();
+        assertEquals(1, systemCount, "System.md 应该只出现一次");
+    }
+
+    @Test @DisplayName("renderAsMarkdown 不包含污染文本")
+    void testRenderAsMarkdown_NoPollution() throws Exception {
+        // 创建包含污染的 branch 文件
+        String pollutedBranchContent = """
+                id: branch.b0001-clean-test
+                type: branch
+                name: 清洁测试
+                parent: branch.b0000-start
+                turn: 1
+                world_time: T1
+                status: resolved
+                tags: [时间节点]
+                updated: 2026-06-18
+                -------------------
+
+                # 清洁测试
+
+                ## 一、本节点输入
+                测试输入。
+
+                ## 二、LLM 上下文记录
+
+                ### assistant
+
+                * test: Run tests with the given coverage strategy. Use when asked to run tests, check coverage, or verify test results.
+
+                ## 三、推演结果
+                无。
+
+                ## 四、世界观/设定增量
+                无。
+
+                ## 五、实体状态增量
+                无。
+
+                ## 六、推演规则增量
+                无。
+
+                ## 七、交互逻辑增量
+                无。
+
+                ## 八、未总结 Skill 增量
+                无。
+
+                ## 九、下节点风险
+                待后续推演。
+                """;
+
+        java.nio.file.Path bf = tempDir.resolve("worlds").resolve("default").resolve("branches")
+                .resolve("b0001-clean-test.md");
+        java.nio.file.Files.createDirectories(bf.getParent());
+        java.nio.file.Files.writeString(bf, pollutedBranchContent, java.nio.charset.StandardCharsets.UTF_8);
+
+        // 切换 active branch
+        java.nio.file.Files.writeString(
+                tempDir.resolve("worlds").resolve("default").resolve("active-branch.txt"),
+                "branch.b0001-clean-test", java.nio.charset.StandardCharsets.UTF_8);
+
+        dm = new com.gsim.data.DataManager(tempDir);
+        renderer = new BranchContextRenderer(dm, tempDir);
+
+        String md = renderer.renderAsMarkdown();
+        assertFalse(md.contains("Run tests with the given coverage strategy"),
+                "renderAsMarkdown 不应包含污染文本");
+        assertTrue(md.contains("[skipped"), "应该包含跳过标记");
+    }
 }
