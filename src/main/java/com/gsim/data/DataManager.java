@@ -10,11 +10,13 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 /**
  * DataManager — 世界数据管理器。
  * Branch 是时间节点文件，当前世界状态 = base 文件 + active branch 父链增量。
+ * 线程安全：使用 ReentrantReadWriteLock 保护 documents map。
  */
 public class DataManager {
 
@@ -24,6 +26,7 @@ public class DataManager {
 
     private final Path dataRoot;
     private final Map<String, DataDocument> documents = new LinkedHashMap<>();
+    private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
     private String activeWorld = DEFAULT_WORLD;
     private String activeBranch = ROOT_BRANCH;
 
@@ -231,8 +234,11 @@ public class DataManager {
     }
 
     public List<DataDocument> listBranches() {
-        return documents.values().stream().filter(d -> "branch".equals(d.type()))
-                .sorted(Comparator.comparing(DataDocument::id)).toList();
+        rwLock.readLock().lock();
+        try {
+            return documents.values().stream().filter(d -> "branch".equals(d.type()))
+                    .sorted(Comparator.comparing(DataDocument::id)).toList();
+        } finally { rwLock.readLock().unlock(); }
     }
 
     public void switchBranch(String rawId) throws IOException {
@@ -273,16 +279,19 @@ public class DataManager {
     }
 
     public List<DataDocument> getBranchChain(String branchId) {
-        List<DataDocument> chain = new ArrayList<>();
-        String current = branchId;
-        Set<String> seen = new HashSet<>();
-        while (current != null && !current.equals("none") && seen.add(current)) {
-            DataDocument doc = documents.get(current);
-            if (doc == null || !"branch".equals(doc.type())) break;
-            chain.add(doc);
-            current = doc.frontMatter().getOrDefault("parent", "none");
-        }
-        return chain;
+        rwLock.readLock().lock();
+        try {
+            List<DataDocument> chain = new ArrayList<>();
+            String current = branchId;
+            Set<String> seen = new HashSet<>();
+            while (current != null && !current.equals("none") && seen.add(current)) {
+                DataDocument doc = documents.get(current);
+                if (doc == null || !"branch".equals(doc.type())) break;
+                chain.add(doc);
+                current = doc.frontMatter().getOrDefault("parent", "none");
+            }
+            return chain;
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 从指定 branch 的父链中提取所有匹配 heading 的章节内容。 */
@@ -299,22 +308,28 @@ public class DataManager {
 
     /** 获取父链中所有 "八、未总结 Skill 增量" 的汇总。 */
     public String getBranchSkillDeltaContext() {
-        return extractBranchSectionChain(activeBranch, "八、未总结 Skill 增量");
+        rwLock.readLock().lock();
+        try {
+            return extractBranchSectionChain(activeBranch, "八、未总结 Skill 增量");
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 时间线树。 */
     public List<TreeNode> getTimelineTree() {
-        Map<String, List<String>> children = new LinkedHashMap<>();
-        Map<String, String> names = new LinkedHashMap<>();
-        for (DataDocument doc : documents.values()) {
-            if (!"branch".equals(doc.type())) continue;
-            String parent = doc.frontMatter().getOrDefault("parent", "none");
-            children.computeIfAbsent(parent, k -> new ArrayList<>()).add(doc.id());
-            names.put(doc.id(), doc.name());
-        }
-        List<TreeNode> roots = new ArrayList<>();
-        if (children.containsKey("none")) for (String rid : children.get("none")) roots.add(buildTree(rid, children, names));
-        return roots;
+        rwLock.readLock().lock();
+        try {
+            Map<String, List<String>> children = new LinkedHashMap<>();
+            Map<String, String> names = new LinkedHashMap<>();
+            for (DataDocument doc : documents.values()) {
+                if (!"branch".equals(doc.type())) continue;
+                String parent = doc.frontMatter().getOrDefault("parent", "none");
+                children.computeIfAbsent(parent, k -> new ArrayList<>()).add(doc.id());
+                names.put(doc.id(), doc.name());
+            }
+            List<TreeNode> roots = new ArrayList<>();
+            if (children.containsKey("none")) for (String rid : children.get("none")) roots.add(buildTree(rid, children, names));
+            return roots;
+        } finally { rwLock.readLock().unlock(); }
     }
 
     private TreeNode buildTree(String id, Map<String, List<String>> children, Map<String, String> names) {
@@ -328,13 +343,16 @@ public class DataManager {
 
     /** 生成下一个 branch ID (b0001, b0002, ...) */
     public String generateNextBranchId() {
-        int max = 0;
-        for (DataDocument d : documents.values()) {
-            if (!"branch".equals(d.type())) continue;
-            String bid = d.id().replace("branch.b", "").replaceAll("-.*", "");
-            try { int n = Integer.parseInt(bid); if (n > max) max = n; } catch (NumberFormatException ignored) {}
-        }
-        return "branch.b" + String.format("%04d", max + 1);
+        rwLock.readLock().lock();
+        try {
+            int max = 0;
+            for (DataDocument d : documents.values()) {
+                if (!"branch".equals(d.type())) continue;
+                String bid = d.id().replace("branch.b", "").replaceAll("-.*", "");
+                try { int n = Integer.parseInt(bid); if (n > max) max = n; } catch (NumberFormatException ignored) {}
+            }
+            return "branch.b" + String.format("%04d", max + 1);
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 创建下一回合节点，切换 active branch，清空 input。不调用 LLM。 */
@@ -366,28 +384,37 @@ public class DataManager {
 
     /** 检查 branch 是否有推演结果。 */
     public boolean hasSimulationResult(String branchId) {
-        DataDocument doc = documents.get(branchId);
-        if (doc == null) return false;
-        String sec = extractSection(doc.body(), "三、推演结果");
-        String body = sec.replace("## 三、推演结果", "").trim();
-        return !body.isEmpty() && !"无。".equals(body) && !"待推演。".equals(body);
+        rwLock.readLock().lock();
+        try {
+            DataDocument doc = documents.get(branchId);
+            if (doc == null) return false;
+            String sec = extractSection(doc.body(), "三、推演结果");
+            String body = sec.replace("## 三、推演结果", "").trim();
+            return !body.isEmpty() && !"无。".equals(body) && !"待推演。".equals(body);
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 获取同级节点（parent 相同）。 */
     public List<DataDocument> getSiblingBranches(String branchId) {
-        DataDocument doc = documents.get(branchId);
-        if (doc == null) return List.of();
-        String parent = doc.frontMatter().getOrDefault("parent", "none");
-        return documents.values().stream()
-                .filter(d -> "branch".equals(d.type()) && parent.equals(d.frontMatter().getOrDefault("parent", "none")))
-                .sorted(Comparator.comparing(DataDocument::id)).toList();
+        rwLock.readLock().lock();
+        try {
+            DataDocument doc = documents.get(branchId);
+            if (doc == null) return List.of();
+            String parent = doc.frontMatter().getOrDefault("parent", "none");
+            return documents.values().stream()
+                    .filter(d -> "branch".equals(d.type()) && parent.equals(d.frontMatter().getOrDefault("parent", "none")))
+                    .sorted(Comparator.comparing(DataDocument::id)).toList();
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 获取子节点。 */
     public List<DataDocument> getChildBranches(String branchId) {
-        return documents.values().stream()
-                .filter(d -> "branch".equals(d.type()) && branchId.equals(d.frontMatter().getOrDefault("parent", "")))
-                .sorted(Comparator.comparing(DataDocument::id)).toList();
+        rwLock.readLock().lock();
+        try {
+            return documents.values().stream()
+                    .filter(d -> "branch".equals(d.type()) && branchId.equals(d.frontMatter().getOrDefault("parent", "")))
+                    .sorted(Comparator.comparing(DataDocument::id)).toList();
+        } finally { rwLock.readLock().unlock(); }
     }
 
     /** 渲染带 active 标记的时间线树文本。 */
@@ -472,42 +499,57 @@ public class DataManager {
 
     // ==================== access ====================
 
-    public int docCount() { return documents.size(); }
-    public DataDocument readById(String id) { return documents.get(id); }
-    public List<DataDocument> listAll() { return documents.values().stream().sorted(Comparator.comparing(DataDocument::rawPath)).toList(); }
-    public List<DataDocument> listByType(String type) { return documents.values().stream().filter(d -> type.equals(d.type())).toList(); }
+    public int docCount() {
+        rwLock.readLock().lock();
+        try { return documents.size(); } finally { rwLock.readLock().unlock(); }
+    }
+    public DataDocument readById(String id) {
+        rwLock.readLock().lock();
+        try { return documents.get(id); } finally { rwLock.readLock().unlock(); }
+    }
+    public List<DataDocument> listAll() {
+        rwLock.readLock().lock();
+        try { return documents.values().stream().sorted(Comparator.comparing(DataDocument::rawPath)).toList(); } finally { rwLock.readLock().unlock(); }
+    }
+    public List<DataDocument> listByType(String type) {
+        rwLock.readLock().lock();
+        try { return documents.values().stream().filter(d -> type.equals(d.type())).toList(); } finally { rwLock.readLock().unlock(); }
+    }
 
     // ==================== effective context ====================
 
     public String getEffectiveContext() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(getEffectiveWorldContext()).append("\n");
-        sb.append(getEffectiveEntityContext()).append("\n");
-        sb.append(getEffectiveRuleContext()).append("\n");
-        sb.append(readFileContent(worldDir().resolve("input.md"))).append("\n");
+        rwLock.readLock().lock();
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append(getEffectiveWorldContext()).append("\n");
+            sb.append(getEffectiveEntityContext()).append("\n");
+            sb.append(getEffectiveRuleContext()).append("\n");
+            sb.append(readFileContent(worldDir().resolve("input.md"))).append("\n");
 
-        DataDocument ab = documents.get(activeBranch);
-        if (ab != null) {
-            sb.append("## 当前时间节点\n");
-            sb.append("ID: ").append(ab.id()).append("\n名称: ").append(ab.name()).append("\n");
-            sb.append("世界时间: ").append(ab.frontMatter().getOrDefault("world_time", "")).append("\n");
-            sb.append("Turn: ").append(ab.frontMatter().getOrDefault("turn", "0")).append("\n\n");
-        }
+            DataDocument ab = documents.get(activeBranch);
+            if (ab != null) {
+                sb.append("## 当前时间节点\n");
+                sb.append("ID: ").append(ab.id()).append("\n名称: ").append(ab.name()).append("\n");
+                sb.append("世界时间: ").append(ab.frontMatter().getOrDefault("world_time", "")).append("\n");
+                sb.append("Turn: ").append(ab.frontMatter().getOrDefault("turn", "0")).append("\n\n");
+            }
 
-        sb.append("## 时间线增量\n\n");
-        List<DataDocument> chain = getBranchChain(activeBranch);
-        for (int i = chain.size() - 1; i >= 0; i--) {
-            DataDocument b = chain.get(i);
-            sb.append("### ").append(b.name()).append(" (").append(b.id()).append(")\n");
-            sb.append(extractSection(b.body(), "一、本节点输入"));
-            sb.append(extractSection(b.body(), "二、LLM 上下文记录"));
-            sb.append(extractSection(b.body(), "三、推演结果"));
-            sb.append(extractSection(b.body(), "四、世界观/设定增量"));
-            sb.append(extractSection(b.body(), "五、实体状态增量"));
-            sb.append(extractSection(b.body(), "六、推演规则增量"));
-            sb.append(extractSection(b.body(), "七、交互逻辑增量"));
-        }
-        return sb.toString();
+            sb.append("## 时间线增量\n\n");
+            List<DataDocument> chain = getBranchChain(activeBranch);
+            for (int i = chain.size() - 1; i >= 0; i--) {
+                DataDocument b = chain.get(i);
+                sb.append("### ").append(b.name()).append(" (").append(b.id()).append(")\n");
+                sb.append(extractSection(b.body(), "一、本节点输入"));
+                sb.append(extractSection(b.body(), "二、LLM 上下文记录"));
+                sb.append(extractSection(b.body(), "三、推演结果"));
+                sb.append(extractSection(b.body(), "四、世界观/设定增量"));
+                sb.append(extractSection(b.body(), "五、实体状态增量"));
+                sb.append(extractSection(b.body(), "六、推演规则增量"));
+                sb.append(extractSection(b.body(), "七、交互逻辑增量"));
+            }
+            return sb.toString();
+        } finally { rwLock.readLock().unlock(); }
     }
 
     public String getEffectiveWorldContext() { return readFileContent(worldDir().resolve("world.md")); }
@@ -516,45 +558,56 @@ public class DataManager {
 
     /** 父链中的交互逻辑增量。 */
     public String getEffectiveInteractionContext() {
-        return extractBranchSectionChain(activeBranch, "七、交互逻辑增量");
+        rwLock.readLock().lock();
+        try {
+            return extractBranchSectionChain(activeBranch, "七、交互逻辑增量");
+        } finally { rwLock.readLock().unlock(); }
     }
 
     // ==================== search ====================
 
     public List<DataSearchResult> search(String keyword, int maxResults) {
-        String lower = keyword.toLowerCase();
-        List<DataSearchResult> results = new ArrayList<>();
-        for (DataDocument doc : documents.values()) {
-            double score = 0;
-            if (doc.name().toLowerCase().contains(lower)) score += 5;
-            for (String a : doc.aliases()) if (a.toLowerCase().contains(lower)) { score += 4; break; }
-            for (String t : doc.tags()) if (t.toLowerCase().contains(lower)) { score += 3; break; }
-            score += countMatches(doc.body().toLowerCase(), lower);
-            if (score > 0) results.add(new DataSearchResult(doc.id(), doc.type(), doc.role(), doc.name(),
-                    doc.rawPath(), buildSnippet(doc.body(), lower, 300), score));
-        }
-        results.sort(Comparator.comparingDouble(DataSearchResult::score).reversed());
-        return results.size() > maxResults ? results.subList(0, maxResults) : results;
+        rwLock.readLock().lock();
+        try {
+            String lower = keyword.toLowerCase();
+            List<DataSearchResult> results = new ArrayList<>();
+            for (DataDocument doc : documents.values()) {
+                double score = 0;
+                if (doc.name().toLowerCase().contains(lower)) score += 5;
+                for (String a : doc.aliases()) if (a.toLowerCase().contains(lower)) { score += 4; break; }
+                for (String t : doc.tags()) if (t.toLowerCase().contains(lower)) { score += 3; break; }
+                score += countMatches(doc.body().toLowerCase(), lower);
+                if (score > 0) results.add(new DataSearchResult(doc.id(), doc.type(), doc.role(), doc.name(),
+                        doc.rawPath(), buildSnippet(doc.body(), lower, 300), score));
+            }
+            results.sort(Comparator.comparingDouble(DataSearchResult::score).reversed());
+            return results.size() > maxResults ? results.subList(0, maxResults) : results;
+        } finally { rwLock.readLock().unlock(); }
     }
 
     // ==================== reload / internal ====================
 
     public void reload() throws IOException {
-        documents.clear();
-        Path wd = worldDir();
-        if (!Files.isDirectory(wd)) return;
-        for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md", "players.md")) {
-            Path f = wd.resolve(fn);
-            if (Files.exists(f)) loadDoc(f, fn);
-        }
-        Path bd = wd.resolve("branches");
-        if (Files.isDirectory(bd)) {
-            try (Stream<Path> s = Files.walk(bd)) {
-                s.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".md"))
-                        .forEach(f -> { String rel = wd.relativize(f).toString(); loadDoc(f, rel); });
+        rwLock.writeLock().lock();
+        try {
+            documents.clear();
+            Path wd = worldDir();
+            if (!Files.isDirectory(wd)) return;
+            for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md", "players.md")) {
+                Path f = wd.resolve(fn);
+                if (Files.exists(f)) loadDoc(f, fn);
             }
+            Path bd = wd.resolve("branches");
+            if (Files.isDirectory(bd)) {
+                try (Stream<Path> s = Files.walk(bd)) {
+                    s.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".md"))
+                            .forEach(f -> { String rel = wd.relativize(f).toString(); loadDoc(f, rel); });
+                }
+            }
+            log.info("Loaded {} docs from world='{}' branch='{}'", documents.size(), activeWorld, activeBranch);
+        } finally {
+            rwLock.writeLock().unlock();
         }
-        log.info("Loaded {} docs from world='{}' branch='{}'", documents.size(), activeWorld, activeBranch);
     }
 
     private void loadDoc(Path file, String relPath) {

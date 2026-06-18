@@ -34,6 +34,12 @@ public class ImportManager {
      * 执行导入 — 扫描 import/ 目录并导入文件。
      */
     public ImportResult doImport() {
+        if (chromaClient == null) {
+            log.warn("Import pipeline not connected — no vector store backend available.");
+            return new ImportResult(0, 0, 0, List.of(), List.of(), "none",
+                    "IMPORT_PIPELINE_NOT_IMPLEMENTED: 导入管线尚未接入 SQLite KnowledgeStore。"
+                    + "请使用 /knowledge 和 knowledge_upsert 工具管理知识库。");
+        }
         if (!chromaClient.isAvailable()) {
             log.warn("ChromaDB is not available. Files saved to data/pending-imports/");
             return new ImportResult(0, 0, 0, List.of(), List.of(), "none",
@@ -58,11 +64,11 @@ public class ImportManager {
                     "No files to import.");
         }
 
-        if (!chromaClient.isAvailable()) {
-            log.warn("ChromaDB is not available. {} files saved to data/pending-imports/", files.size());
+        if (chromaClient == null || !chromaClient.isAvailable()) {
+            log.warn("Import pipeline not connected — {} files not imported.", files.size());
             return new ImportResult(files.size(), 0, files.size(),
                     List.of(), files.stream().map(Path::toString).toList(),
-                    "none", "ChromaDB unavailable. Files saved to data/pending-imports/");
+                    "none", "IMPORT_PIPELINE_NOT_IMPLEMENTED: 导入管线尚未接入 SQLite KnowledgeStore。");
         }
 
         // Phase 6 stub — 暂时返回占位结果

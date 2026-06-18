@@ -189,6 +189,8 @@ public class KnowledgeToolFactory {
                                         + " chunks=" + result.chunksCreated()
                                         + " embeddings=" + embedded
                                         + " profile=" + activeProfile.get().profileId(), 1.0)));
+                    } catch (com.gsim.knowledge.store.KnowledgeStoreException e) {
+                        return ToolResult.fail(name(), "KNOWLEDGE_STORE_WRITE_FAILED: " + e.getMessage());
                     } catch (Exception e) {
                         log.warn("Auto-embedding failed during upsert: {}", e.getMessage());
                     }
@@ -297,11 +299,15 @@ public class KnowledgeToolFactory {
                                 "所有 chunks 已有 profile " + profile.profileId() + " 的 embeddings", 1.0)));
             }
 
-            int embedded = embedChunks(missing, model, profile);
-            return ToolResult.ok(name(), List.of(
-                    new ToolResult.Item("embed_missing", collection,
-                            "embedded=" + embedded + " missing=" + missing.size()
-                            + " profile=" + profile.profileId(), 1.0)));
+            try {
+                int embedded = embedChunks(missing, model, profile);
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("embed_missing", collection,
+                                "embedded=" + embedded + " missing=" + missing.size()
+                                + " profile=" + profile.profileId(), 1.0)));
+            } catch (com.gsim.knowledge.store.KnowledgeStoreException e) {
+                return ToolResult.fail(name(), "KNOWLEDGE_STORE_WRITE_FAILED: " + e.getMessage());
+            }
         }
     }
 
@@ -335,6 +341,9 @@ public class KnowledgeToolFactory {
                         blob, contentHashes.get(i), now));
             }
             return store.writeEmbeddings(rows);
+        } catch (com.gsim.knowledge.store.KnowledgeStoreException e) {
+            log.error("embedChunks failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("embedChunks failed: {}", e.getMessage());
             return 0;

@@ -269,9 +269,21 @@ public class ApplicationContext {
     }
 
     /**
-     * 关闭事件系统。
+     * 关闭所有资源：LLM client、embedding model、knowledge store、event bus、API server。
      */
     public void shutdown() {
+        // 关闭 LLM client
+        if (llmClient instanceof OpenAiLlmClient openAi) {
+            openAi.close();
+        }
+        // 关闭 embedding model
+        if (embeddingProfileManager != null && embeddingProfileManager.getEmbeddingModel() != null) {
+            var model = embeddingProfileManager.getEmbeddingModel();
+            if (model instanceof ExternalEmbeddingModel ext) {
+                ext.close();
+            }
+        }
+        // 关闭 knowledge store
         if (knowledgeStore != null) {
             knowledgeStore.close();
         }

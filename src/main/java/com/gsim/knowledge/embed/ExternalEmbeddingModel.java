@@ -144,6 +144,16 @@ public class ExternalEmbeddingModel implements EmbeddingModel {
         }
     }
 
+    /**
+     * 关闭 OkHttpClient，释放连接池和线程资源。
+     */
+    public void close() {
+        if (httpClient != null) {
+            httpClient.dispatcher().executorService().shutdown();
+            httpClient.connectionPool().evictAll();
+        }
+    }
+
     private List<EmbeddingVector> parseResponse(String respBody) {
         try {
             JsonNode root = mapper.readTree(respBody);

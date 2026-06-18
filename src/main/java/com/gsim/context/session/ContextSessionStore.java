@@ -14,12 +14,14 @@ import java.util.*;
  * ContextSession JSONL 持久化存储。
  *
  * <p>文件路径: data/worlds/{world}/context/sessions.jsonl
+ * <p>线程安全：所有文件写入操作由 per-file lock 保护。
  */
 public class ContextSessionStore {
 
     private static final Logger log = LoggerFactory.getLogger(ContextSessionStore.class);
 
     private final Path sessionsFile;
+    private final Object lock = new Object();
 
     public ContextSessionStore(Path worldDir) {
         Path contextDir = worldDir.resolve("context");
@@ -28,16 +30,19 @@ public class ContextSessionStore {
 
     /**
      * 保存一个 session（追加一行 JSON）。
+     * 线程安全：synchronized 保证原子追加。
      */
     public void save(ContextSession session) {
-        try {
-            Files.createDirectories(sessionsFile.getParent());
-            String line = JsonUtils.toJsonCompact(session) + "\n";
-            Files.writeString(sessionsFile, line, StandardCharsets.UTF_8,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            log.error("Failed to save session {}: {}", session.sessionId(), e.getMessage());
+        synchronized (lock) {
+            try {
+                Files.createDirectories(sessionsFile.getParent());
+                String line = JsonUtils.toJsonCompact(session) + "\n";
+                Files.writeString(sessionsFile, line, StandardCharsets.UTF_8,
+                        java.nio.file.StandardOpenOption.CREATE,
+                        java.nio.file.StandardOpenOption.APPEND);
+            } catch (IOException e) {
+                log.error("Failed to save session {}: {}", session.sessionId(), e.getMessage());
+            }
         }
     }
 
@@ -48,19 +53,21 @@ public class ContextSessionStore {
         List<ContextSession> sessions = new ArrayList<>();
         if (!Files.exists(sessionsFile)) return sessions;
 
-        try {
-            List<String> lines = Files.readAllLines(sessionsFile, StandardCharsets.UTF_8);
-            for (String line : lines) {
-                if (line.isBlank()) continue;
-                try {
-                    ContextSession s = JsonUtils.fromJson(line, ContextSession.class);
-                    sessions.add(s);
-                } catch (Exception e) {
-                    log.warn("Failed to parse session line: {}", e.getMessage());
+        synchronized (lock) {
+            try {
+                List<String> lines = Files.readAllLines(sessionsFile, StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    if (line.isBlank()) continue;
+                    try {
+                        ContextSession s = JsonUtils.fromJson(line, ContextSession.class);
+                        sessions.add(s);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse session line: {}", e.getMessage());
+                    }
                 }
+            } catch (IOException e) {
+                log.error("Failed to read sessions: {}", e.getMessage());
             }
-        } catch (IOException e) {
-            log.error("Failed to read sessions: {}", e.getMessage());
         }
         return sessions;
     }
@@ -116,17 +123,20 @@ public class ContextSessionStore {
 
     /**
      * 全量重写 sessions 文件（用于更新状态）。
+     * 线程安全：synchronized 保证原子写入。
      */
     public void rewriteAll(List<ContextSession> sessions) {
-        try {
-            Files.createDirectories(sessionsFile.getParent());
-            StringBuilder sb = new StringBuilder();
-            for (ContextSession s : sessions) {
-                sb.append(JsonUtils.toJsonCompact(s)).append("\n");
+        synchronized (lock) {
+            try {
+                Files.createDirectories(sessionsFile.getParent());
+                StringBuilder sb = new StringBuilder();
+                for (ContextSession s : sessions) {
+                    sb.append(JsonUtils.toJsonCompact(s)).append("\n");
+                }
+                Files.writeString(sessionsFile, sb.toString(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                log.error("Failed to rewrite sessions: {}", e.getMessage());
             }
-            Files.writeString(sessionsFile, sb.toString(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to rewrite sessions: {}", e.getMessage());
         }
     }
 

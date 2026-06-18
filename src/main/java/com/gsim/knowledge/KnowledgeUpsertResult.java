@@ -26,4 +26,8 @@ public record KnowledgeUpsertResult(
     public static KnowledgeUpsertResult fail(String error) {
         return new KnowledgeUpsertResult(false, null, 0, 0, null, "FAILED", error);
     }
+
+    public static KnowledgeUpsertResult deduplicated(String docId) {
+        return new KnowledgeUpsertResult(true, docId, 0, 0, null, "DEDUPLICATED_EXISTING", "");
+    }
 }

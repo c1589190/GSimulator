@@ -8,7 +8,6 @@ import com.gsim.event.EventBus;
 import com.gsim.event.GSimEvent;
 import com.gsim.importdata.ImportManager;
 import com.gsim.importdata.ImportResult;
-import com.gsim.chroma.FakeChromaClient;
 import com.gsim.webimport.WebImportManager;
 import com.gsim.webimport.WebImportRequest;
 import com.gsim.webimport.WebImportResult;
@@ -66,7 +65,9 @@ public class ImportApiHandler implements HttpHandler {
                 Map.of("message", "Starting local import...")));
 
         var config = ctx.getConfig();
-        ImportManager importManager = new ImportManager(config, new FakeChromaClient());
+        // NOTE: Import pipeline not yet connected to SQLite KnowledgeStore.
+        // Passing null chromaClient — ImportManager.doImport() returns IMPORT_PIPELINE_NOT_IMPLEMENTED.
+        ImportManager importManager = new ImportManager(config, null);
         ImportResult result = importManager.doImport();
 
         Map<String, Object> data = new LinkedHashMap<>();

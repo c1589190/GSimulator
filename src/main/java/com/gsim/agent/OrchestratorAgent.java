@@ -240,7 +240,7 @@ public class OrchestratorAgent {
 
             return new ParsedToolCall(tool, args);
         } catch (Exception e) {
-            log.debug("Failed to parse tool call from: {}...", trimmed.substring(0, Math.min(80, trimmed.length())));
+            log.warn("Failed to parse tool call from: {}...", trimmed.substring(0, Math.min(80, trimmed.length())));
             return null;
         }
     }

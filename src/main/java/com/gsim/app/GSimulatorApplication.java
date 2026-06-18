@@ -9,7 +9,6 @@ import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.commands.*;
 import com.gsim.importdata.ImportManager;
-import com.gsim.chroma.FakeChromaClient;
 import com.gsim.campaign.Campaign;
 import com.gsim.campaign.Turn;
 import com.gsim.chat.NodeAgentChatService;
@@ -108,7 +107,9 @@ public class GSimulatorApplication {
         manager.registerCommand(new TurnCommand());
 
         // Phase 6: /import (local + URL)
-        ImportManager importManager = new ImportManager(config, new FakeChromaClient());
+        // NOTE: Import pipeline not yet connected to SQLite KnowledgeStore.
+        // ImportManager.doImport() returns IMPORT_PIPELINE_NOT_IMPLEMENTED.
+        ImportManager importManager = new ImportManager(config, null);
         manager.registerCommand(new ImportCommand(config, importManager));
 
         // Tool 系统: /tool wiki_search

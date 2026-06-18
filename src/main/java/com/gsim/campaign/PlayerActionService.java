@@ -13,9 +13,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * PlayerAction 管理服务。
+ * 线程安全：使用 ReentrantReadWriteLock 保护内部 actions 列表。
  */
 public class PlayerActionService {
 
@@ -24,6 +26,7 @@ public class PlayerActionService {
     private final DataPaths dataPaths;
     private final TimeProvider timeProvider;
     private final List<PlayerAction> actions = new ArrayList<>();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     public PlayerActionService(DataPaths dataPaths, TimeProvider timeProvider) {
         this.dataPaths = dataPaths;
@@ -36,23 +39,38 @@ public class PlayerActionService {
     public PlayerAction addAction(String campaignId, String turnId, String playerName, String content) {
         String id = IdGenerator.playerActionId();
         PlayerAction action = PlayerAction.create(id, campaignId, turnId, playerName, content, timeProvider.now());
-        actions.add(action);
-        saveActions(campaignId, turnId);
+        lock.writeLock().lock();
+        try {
+            actions.add(action);
+            saveActionsLocked(campaignId, turnId);
+        } finally {
+            lock.writeLock().unlock();
+        }
         return action;
     }
 
     /**
-     * 获取当前所有行动。
+     * 获取当前所有行动（defensive copy）。
      */
     public List<PlayerAction> getActions() {
-        return Collections.unmodifiableList(actions);
+        lock.readLock().lock();
+        try {
+            return List.copyOf(actions);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
      * 获取当前行动数量。
      */
     public int getActionCount() {
-        return actions.size();
+        lock.readLock().lock();
+        try {
+            return actions.size();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
@@ -66,9 +84,14 @@ public class PlayerActionService {
         try {
             String json = Files.readString(file);
             PlayerAction[] loaded = JsonUtils.fromJson(json, PlayerAction[].class);
-            actions.clear();
-            if (loaded != null) {
-                Collections.addAll(actions, loaded);
+            lock.writeLock().lock();
+            try {
+                actions.clear();
+                if (loaded != null) {
+                    Collections.addAll(actions, loaded);
+                }
+            } finally {
+                lock.writeLock().unlock();
             }
             return getActions();
         } catch (IOException e) {
@@ -81,17 +104,37 @@ public class PlayerActionService {
      * 清空当前行动（不删除磁盘文件，下次保存时覆盖）。
      */
     public void clearActions() {
-        actions.clear();
+        lock.writeLock().lock();
+        try {
+            actions.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
      * 是否有未结算的行动。
      */
     public boolean hasActions() {
-        return !actions.isEmpty();
+        lock.readLock().lock();
+        try {
+            return !actions.isEmpty();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private void saveActions(String campaignId, String turnId) {
+        lock.readLock().lock();
+        try {
+            saveActionsLocked(campaignId, turnId);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /** 必须在已持有 writeLock 或 readLock 时调用（调用者负责加锁）。 */
+    private void saveActionsLocked(String campaignId, String turnId) {
         try {
             Path dir = dataPaths.turnDir(campaignId, turnId);
             Files.createDirectories(dir);

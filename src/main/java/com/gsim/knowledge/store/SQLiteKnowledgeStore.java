@@ -61,14 +61,29 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
 
     @Override
     public KnowledgeUpsertResult upsert(KnowledgeDocumentInput input) {
-        String docId = IdGenerator.knowledgeDocId();
-        String now = Instant.now().toString();
         String contentHash = Chunker.sha256(input.content());
         String metadataJson = input.metadata() != null && !input.metadata().isEmpty()
                 ? JsonUtils.toJson(input.metadata()) : "";
 
         try {
             Connection conn = getConnection();
+
+            // 0. Dedup: 检查是否已存在相同文档
+            Optional<String> existingDocId = findExistingDoc(conn, input, contentHash);
+            if (existingDocId.isPresent()) {
+                // 更新 updated_at，返回已有 docId
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE documents SET updated_at = ? WHERE doc_id = ?")) {
+                    ps.setString(1, Instant.now().toString());
+                    ps.setString(2, existingDocId.get());
+                    ps.executeUpdate();
+                }
+                return KnowledgeUpsertResult.deduplicated(existingDocId.get());
+            }
+
+            String docId = IdGenerator.knowledgeDocId();
+            String now = Instant.now().toString();
+
             conn.setAutoCommit(false);
             try {
                 // 1. 写 documents
@@ -344,7 +359,7 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
         try {
             Connection conn = getConnection();
 
-            // 1. FTS5 MATCH
+            // 1. FTS5 MATCH — 如果 FTS 查询出错（如特殊字符导致语法错误），回退到纯 LIKE
             String ftsSql = """
                     SELECT c.chunk_id, c.doc_id, c.title, c.text, c.collection,
                            d.source_uri, fts.rank
@@ -355,6 +370,7 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                     ORDER BY rank
                     LIMIT ?
                     """;
+            boolean ftsFailed = false;
             try (PreparedStatement ps = conn.prepareStatement(ftsSql)) {
                 ps.setString(1, escapeFts5(query));
                 ps.setString(2, collection);
@@ -373,11 +389,15 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                                 col, snippet, 0.0, -rank, -rank, null, "keyword"));
                     }
                 }
+            } catch (SQLException ftsError) {
+                log.warn("FTS5 MATCH failed (will fall back to LIKE): {}", ftsError.getMessage());
+                ftsFailed = true;
+                results.clear();
             }
 
-            // 2. LIKE fallback — 如果 FTS 结果不足，用 LIKE 补充
-            if (results.size() < topK) {
-                int remaining = topK - results.size();
+            // 2. LIKE fallback — 如果 FTS 结果不足，或 FTS 失败
+            if (ftsFailed || results.size() < topK) {
+                int remaining = ftsFailed ? topK : topK - results.size();
                 String likeSql = """
                         SELECT c.chunk_id, c.doc_id, c.title, c.text, c.collection,
                                d.source_uri
@@ -421,11 +441,54 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
         return results;
     }
 
+    /**
+     * 查找是否已存在相同文档，用于 dedup。
+     * 规则：collection + source_type + source_uri + content_hash 相同视为重复。
+     * 如果 source_uri 为空，使用 collection + title + content_hash。
+     */
+    private Optional<String> findExistingDoc(Connection conn, KnowledgeDocumentInput input, String contentHash) throws SQLException {
+        String sql;
+        if (input.sourceUri() != null && !input.sourceUri().isBlank()) {
+            sql = "SELECT doc_id FROM documents WHERE collection = ? AND source_type = ? AND source_uri = ? AND content_hash = ? LIMIT 1";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, input.collection());
+                ps.setString(2, input.sourceType());
+                ps.setString(3, input.sourceUri());
+                ps.setString(4, contentHash);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return Optional.of(rs.getString("doc_id"));
+                }
+            }
+        } else {
+            sql = "SELECT doc_id FROM documents WHERE collection = ? AND title = ? AND content_hash = ? LIMIT 1";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, input.collection());
+                ps.setString(2, input.title());
+                ps.setString(3, contentHash);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return Optional.of(rs.getString("doc_id"));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     /** 对 FTS5 查询字符串做基本转义 */
     private String escapeFts5(String query) {
-        // FTS5 用双引号包裹精确短语，否则作为独立 token
-        // 简单处理：去掉 FTS5 特殊字符
-        return query.replaceAll("[\"*]", " ").trim();
+        if (query == null || query.isBlank()) return query;
+        // 移除或替换 FTS5 特殊字符：双引号、通配符、布尔操作符前缀、列限定符、括号等
+        // 保留有意义的词边界但消除可能破坏查询的字符
+        String escaped = query
+                .replaceAll("\"", " ")     // 双引号 — 会引起 FTS5 phrase query，不安全
+                .replaceAll("\\*", " ")    // 前缀通配符
+                .replaceAll("[()]", " ")   // 括号 — 分组表达式
+                .replaceAll(":", " ")      // 列限定符
+                .replaceAll("[\\^~]", " ") // NEAR / 列权重前缀
+                .replaceAll("\\+", " ")    // 必须匹配
+                .replaceAll("\\-", " ")    // 必须不匹配
+                .trim();
+        // 把多个空格压缩成一个
+        return escaped.replaceAll("\\s+", " ");
     }
 
     @Override
@@ -489,7 +552,7 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
             return count;
         } catch (SQLException e) {
             log.error("writeEmbeddings failed: {}", e.getMessage());
-            return 0;
+            throw new KnowledgeStoreException("Failed to write embeddings: " + e.getMessage(), e);
         }
     }
 

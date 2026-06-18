@@ -16,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * ContextSession 消息存储 — 内存 + JSONL 持久化。
  *
  * <p>文件路径: data/worlds/{world}/context/session_messages/{contextSessionId}.jsonl
+ * <p>线程安全：文件追加操作由 per-store lock 保护。
  */
 public class SessionMessageStore {
 
@@ -24,6 +25,7 @@ public class SessionMessageStore {
     private final Path messagesDir;
     private final String contextSessionId;
     private final List<SessionMessage> messages = new CopyOnWriteArrayList<>();
+    private final Object fileLock = new Object();
 
     public SessionMessageStore(Path worldDir, String contextSessionId) {
         this.messagesDir = worldDir.resolve("context").resolve("session_messages");
@@ -37,17 +39,20 @@ public class SessionMessageStore {
 
     /**
      * 追加一条消息。
+     * 线程安全：文件追加由 synchronized 保护。
      */
     public void append(SessionMessage message) {
         messages.add(message);
-        try {
-            Files.createDirectories(messagesDir);
-            String line = JsonUtils.toJsonCompact(message) + "\n";
-            Files.writeString(messagesFile(), line, StandardCharsets.UTF_8,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            log.error("Failed to persist message {}: {}", message.id(), e.getMessage());
+        synchronized (fileLock) {
+            try {
+                Files.createDirectories(messagesDir);
+                String line = JsonUtils.toJsonCompact(message) + "\n";
+                Files.writeString(messagesFile(), line, StandardCharsets.UTF_8,
+                        java.nio.file.StandardOpenOption.CREATE,
+                        java.nio.file.StandardOpenOption.APPEND);
+            } catch (IOException e) {
+                log.error("Failed to persist message {}: {}", message.id(), e.getMessage());
+            }
         }
     }
 
@@ -85,19 +90,21 @@ public class SessionMessageStore {
         Path file = messagesFile();
         if (!Files.exists(file)) return;
 
-        try {
-            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-            for (String line : lines) {
-                if (line.isBlank()) continue;
-                try {
-                    SessionMessage msg = JsonUtils.fromJson(line, SessionMessage.class);
-                    messages.add(msg);
-                } catch (Exception e) {
-                    log.warn("Failed to parse session message: {}", e.getMessage());
+        synchronized (fileLock) {
+            try {
+                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    if (line.isBlank()) continue;
+                    try {
+                        SessionMessage msg = JsonUtils.fromJson(line, SessionMessage.class);
+                        messages.add(msg);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse session message: {}", e.getMessage());
+                    }
                 }
+            } catch (IOException e) {
+                log.error("Failed to load session messages: {}", e.getMessage());
             }
-        } catch (IOException e) {
-            log.error("Failed to load session messages: {}", e.getMessage());
         }
     }
 }

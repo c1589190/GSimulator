@@ -107,6 +107,16 @@ public class OpenAiLlmClient implements LlmClient {
         return configured;
     }
 
+    /**
+     * 关闭 OkHttpClient，释放连接池和线程资源。
+     */
+    public void close() {
+        if (http != null) {
+            http.dispatcher().executorService().shutdown();
+            http.connectionPool().evictAll();
+        }
+    }
+
     private String buildRequestBody(LlmRequest req) throws IOException {
         ObjectNode root = mapper.createObjectNode();
         root.put("model", req.model() != null ? req.model() : model);
