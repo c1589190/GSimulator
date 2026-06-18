@@ -33,6 +33,10 @@ public class AppConfig {
     private final Path outputDir;
     private final Path logDir;
 
+    private final String apiHost;
+    private final int apiPort;
+    private final boolean apiEnabled;
+
     private final Path configPath;
     private final String sourceSummary;
 
@@ -62,6 +66,10 @@ public class AppConfig {
         this.outputDir = resolvePath(result.get("output.dir"), baseDir, "data/outputs");
         this.logDir = resolvePath(result.get("log.dir"), baseDir, "data/logs");
 
+        this.apiHost = isBlank(result.get("api.host")) ? "127.0.0.1" : result.get("api.host");
+        this.apiPort = parseInt(result.get("api.port"), 8710);
+        this.apiEnabled = parseBoolean(result.get("api.enabled"), false);
+
         this.configPath = result.configPath();
         this.sourceSummary = result.sourceSummary();
 
@@ -90,6 +98,10 @@ public class AppConfig {
     public Path getImportDir() { return importDir; }
     public Path getOutputDir() { return outputDir; }
     public Path getLogDir() { return logDir; }
+
+    public String getApiHost() { return apiHost; }
+    public int getApiPort() { return apiPort; }
+    public boolean isApiEnabled() { return apiEnabled; }
 
     // ---- 新增方法 ----
 

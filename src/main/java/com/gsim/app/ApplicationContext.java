@@ -1,8 +1,12 @@
 package com.gsim.app;
 
+import com.gsim.api.ApiConfig;
+import com.gsim.api.ApiManager;
 import com.gsim.campaign.CampaignService;
 import com.gsim.campaign.TurnService;
 import com.gsim.campaign.PlayerActionService;
+import com.gsim.event.EventBus;
+import com.gsim.event.ConsoleEventSink;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.InteractionSession;
@@ -34,6 +38,10 @@ public class ApplicationContext {
     private final InteractionContext interactionContext;
     private final InteractionSession interactionSession;
     private final InteractionManager interactionManager;
+
+    private final EventBus eventBus;
+    private final ConsoleEventSink consoleEventSink;
+    private final ApiManager apiManager;
 
     public ApplicationContext(AppConfig config) {
         this.config = config;
@@ -68,6 +76,16 @@ public class ApplicationContext {
                 campaignService, turnService, playerActionService,
                 toolRegistry, llmClient);
         this.interactionManager = new InteractionManager();
+
+        // 事件系统
+        this.eventBus = new EventBus();
+        this.consoleEventSink = new ConsoleEventSink();
+        this.eventBus.subscribe(consoleEventSink);
+
+        // HTTP API
+        ApiConfig apiConfig = new ApiConfig(
+                config.getApiHost(), config.getApiPort(), config.isApiEnabled());
+        this.apiManager = new ApiManager(apiConfig, this, eventBus);
     }
 
     /**
@@ -121,5 +139,25 @@ public class ApplicationContext {
 
     public InteractionManager getInteractionManager() {
         return interactionManager;
+    }
+
+    public EventBus getEventBus() {
+        return eventBus;
+    }
+
+    public ConsoleEventSink getConsoleEventSink() {
+        return consoleEventSink;
+    }
+
+    public ApiManager getApiManager() {
+        return apiManager;
+    }
+
+    /**
+     * 关闭事件系统。
+     */
+    public void shutdown() {
+        eventBus.shutdown();
+        apiManager.stop();
     }
 }

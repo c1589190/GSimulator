@@ -64,8 +64,16 @@ public class Main {
                 }
             }
 
-            // 3. 启动应用
-            GSimulatorApplication app = new GSimulatorApplication(config);
+            // 3. 确定运行模式
+            // 默认：如果没指定 --http，只启动 CLI
+            // --http：只启动 HTTP API
+            // --cli --http：同时启动 CLI 和 HTTP API
+            // --cli：只启动 CLI（显式指定）
+            boolean httpMode = cliArgs.http();
+            boolean cliMode = cliArgs.cli() || !httpMode;  // 默认 CLI
+
+            // 4. 启动应用
+            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode);
             app.start();
 
         } catch (Exception e) {
@@ -85,19 +93,18 @@ public class Main {
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");
+        System.out.println("  --http             启动 HTTP API 服务器 (默认 127.0.0.1:8710)");
+        System.out.println("  --cli              启动 CLI REPL (默认，与 --http 同时使用可共存)");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
-        System.out.println("首次运行:");
-        System.out.println("  直接运行 java -jar GSimulator.jar，程序将引导你创建配置文件。");
+        System.out.println("示例:");
+        System.out.println("  java -jar GSimulator.jar                  # 仅 CLI");
+        System.out.println("  java -jar GSimulator.jar --http           # 仅 HTTP API");
+        System.out.println("  java -jar GSimulator.jar --cli --http     # CLI + HTTP API");
         System.out.println();
-        System.out.println("配置文件优先级:");
-        System.out.println("  1. --config <path>");
-        System.out.println("  2. GSIM_CONFIG 环境变量");
-        System.out.println("  3. ./gsim.properties");
-        System.out.println("  4. ./.env");
-        System.out.println("  5. ~/.gsimulator/config.properties");
-        System.out.println("  6. ~/.gsimulator/.env");
-        System.out.println("  7. 系统环境变量 (LLM_BASE_URL, LLM_API_KEY 等)");
-        System.out.println("  8. 内置默认值");
+        System.out.println("API 配置环境变量:");
+        System.out.println("  API_HOST=127.0.0.1");
+        System.out.println("  API_PORT=8710");
+        System.out.println("  API_ENABLED=true");
     }
 }

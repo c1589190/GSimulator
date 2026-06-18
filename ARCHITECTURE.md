@@ -4,15 +4,20 @@
 
 ```
 ┌──────────────────────────────────┐
-│        Presentation Layer        │  CLI REPL / Future Web UI
+│        Presentation Layer        │  CLI REPL / HTTP API / Future Web UI
 ├──────────────────────────────────┤
 │      InteractionManager          │  命令解析、路由、结果格式化
+│                                  │  (CLI 和 HTTP 共用)
+├──────────────────────────────────┤
+│         EventBus                 │  GSimEvent 发布/订阅
+│         ├── ConsoleEventSink     │  CLI 流式显示
+│         └── SseEventSink         │  HTTP SSE 流式输出
 ├──────────────────────────────────┤
 │      Application Services        │  Campaign, Turn, PlayerAction
 ├──────────────────────────────────┤
 │         Agent Layer              │  Orchestrator + 专业 Agents
 ├──────────────────────────────────┤
-│      Infrastructure Layer        │  LLM Client, ChromaDB, Storage
+│      Infrastructure Layer        │  LLM Client (含流式), ChromaDB, Storage
 └──────────────────────────────────┘
 ```
 
@@ -187,16 +192,66 @@ Tags: web,{host}
 - mvn test 必须离线可跑
 - 手动验收可小规模访问真实站点
 
+## HTTP API 架构
+
+HTTP API 使用 JDK 内置 `com.sun.net.httpserver.HttpServer`，不引入 Spring Boot。
+
+### 组件
+
+```
+ApiManager ──> HttpServer
+  └── ApiRouter ──> 注册所有路由
+        ├── StatusApiHandler        GET  /api/status
+        ├── CommandApiHandler       POST /api/command
+        ├── StreamCommandHandler    POST /api/command/stream (SSE)
+        ├── CampaignsApiHandler     /api/campaigns/**
+        ├── ImportApiHandler        /api/import/**
+        ├── SearchDbApiHandler      /api/searchdb
+        ├── LogsOutputsApiHandler   /api/logs/**, /api/outputs/**
+        └── BranchesApiHandler      /api/branches/** (预留)
+```
+
+### 事件系统
+
+CLI 和 HTTP 共用 EventBus：
+- `EventBus` 发布 `GSimEvent`
+- `ConsoleEventSink` 订阅 EventBus（CLI 模式）
+- `SseEventSink` 按需订阅 EventBus（每条 SSE 连接）
+- CLI 和 HTTP 必须复用 `InteractionManager` 和服务层
+
+### SSE 流式事件
+
+```
+event: command_started
+data: {"sessionId":"...","command":"...","taskId":"..."}
+
+event: run_stage
+data: {"stage":"analyze_actions","message":"正在分析玩家行动"}
+
+event: llm_delta
+data: {"text":"..."}
+
+event: llm_reasoning_delta
+data: {"text":"..."}
+
+event: result
+data: {"outputFile":"...","displayText":"..."}
+
+event: done
+data: {}
+```
+
+### LLM 流式接口
+
+- `LlmClient.stream(LlmRequest, LlmStreamListener)` — 流式聊天
+- 默认降级到非流式 `chat()`
+- `delta.content` → `llm_delta` 事件
+- `delta.reasoning_content` → `llm_reasoning_delta` 事件
+- 不伪造 reasoning — 只有上游返回字段时才转发
+
 ## Future Web UI Extension
 
-WebInteractionAdapter 预留给未来 Web UI 使用。设计要点：
-
-1. InteractionManager 的输出已是 `InteractionResult`，可直接转为 HTTP JSON 响应
-2. 命令类不依赖终端，可被 Web 路由复用
-3. ConsoleOutputFormatter 只用于 CLI，Web 使用 JSON
-4. 会话状态可序列化，支持多会话管理
-
-Web UI 只需：
-- 实现 `WebInteractionAdapter`（HTTP Server 层）
-- 实现会话持久化
-- 前端通过 API consume `InteractionResult`
+HTTP API 已就绪。Web UI 只需：
+- 前端通过 API consume JSON 和 SSE 流
+- 实现 Web UI 渲染
+- 会话持久化（可选）

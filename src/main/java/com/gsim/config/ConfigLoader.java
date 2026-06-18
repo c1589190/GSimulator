@@ -42,6 +42,8 @@ public class ConfigLoader {
         boolean doctor = false;
         boolean noWizard = false;
         boolean help = false;
+        boolean http = false;
+        boolean cli = false;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -60,14 +62,21 @@ public class ConfigLoader {
                 case "--help":
                     help = true;
                     break;
+                case "--http":
+                    http = true;
+                    break;
+                case "--cli":
+                    cli = true;
+                    break;
                 // ignore unknown args
             }
         }
 
-        return new CliArgs(configPath, initConfig, doctor, noWizard, help);
+        return new CliArgs(configPath, initConfig, doctor, noWizard, help, http, cli);
     }
 
-    public record CliArgs(String configPath, boolean initConfig, boolean doctor, boolean noWizard, boolean help) {}
+    public record CliArgs(String configPath, boolean initConfig, boolean doctor,
+                          boolean noWizard, boolean help, boolean http, boolean cli) {}
 
     public CliArgs getCliArgs() {
         return cliArgs;
@@ -221,6 +230,9 @@ public class ConfigLoader {
             case "WEB_RESEARCH_ENABLED" -> "web_research.enabled";
             case "WEB_RESEARCH_TIMEOUT_SECONDS" -> "web_research.timeout_seconds";
             case "WEB_RESEARCH_USER_AGENT" -> "web_research.user_agent";
+            case "API_HOST" -> "api.host";
+            case "API_PORT" -> "api.port";
+            case "API_ENABLED" -> "api.enabled";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -246,6 +258,10 @@ public class ConfigLoader {
         defaults.put("web_research.enabled", "false");
         defaults.put("web_research.timeout_seconds", "30");
         defaults.put("web_research.user_agent", "GSimulator/0.1.0 (research-bot)");
+
+        defaults.put("api.host", "127.0.0.1");
+        defaults.put("api.port", "8710");
+        defaults.put("api.enabled", "false");
 
         return defaults;
     }

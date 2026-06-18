@@ -2,7 +2,7 @@
 
 一个基于 Java 21 + Maven 的多 Agent 推演工作流引擎，服务于文游 / 架空历史 / 玩家行动推演场景。
 
-第一版为 CLI REPL 模式，后续将扩展 Web UI。
+第一版提供 CLI REPL 模式和 HTTP API + SSE 流式事件输出，后续将扩展 Web UI。
 
 ## 快速开始
 
@@ -82,17 +82,66 @@ gsim> /exit
 再见
 ```
 
+## HTTP API
+
+```bash
+# 仅 HTTP API
+java -jar target/GSimulator.jar --http
+
+# CLI + HTTP API
+java -jar target/GSimulator.jar --cli --http
+
+# 查看状态
+curl http://127.0.0.1:8710/api/status
+
+# 执行命令
+curl -X POST http://127.0.0.1:8710/api/command \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"default","command":"/player 张三 向北方派出侦察队"}'
+
+# SSE 流式命令
+curl -N -X POST http://127.0.0.1:8710/api/command/stream \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"default","command":"/status"}'
+```
+
+### SSE 事件类型
+
+command_started, command_done, command_error, run_stage, tool_started, tool_done,
+llm_delta, llm_reasoning_delta, llm_done, import_progress, search_progress, result, done
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/status | 应用状态 |
+| POST | /api/command | 执行命令 |
+| POST | /api/command/stream | SSE 流式命令 |
+| GET/POST | /api/campaigns | Campaign 管理 |
+| GET/POST | /api/campaigns/{id}/turns | Turn 管理 |
+| GET/POST/DELETE | /api/campaigns/{id}/turns/{tid}/actions | PlayerAction CRUD |
+| POST | /api/import/local | 本地导入 |
+| POST | /api/import/url | URL 导入 |
+| GET/POST | /api/searchdb | 知识库搜索（预留） |
+| GET | /api/logs[/{taskId}] | 日志 |
+| GET | /api/outputs[/{taskId}] | 输出文件 |
+| GET/POST | /api/branches | 分支管理（预留） |
+
 ## 项目结构
 
 ```
 src/main/java/com/gsim/
 ├── Main.java              # 程序入口
 ├── app/                   # 应用启动和配置
+├── api/                   # HTTP API 层
+│   ├── handlers/          # API handler 实现
+│   └── dto/               # API DTO
+├── event/                 # 统一事件系统（EventBus、SSE/Console sink）
 ├── interaction/           # 交互层（CLI REPL）
 ├── campaign/              # 战役/回合/玩家行动
 ├── agent/                 # LLM Agent (stub)
 ├── chroma/                # ChromaDB 客户端 (stub)
-├── llm/                   # LLM 客户端封装 (stub)
+├── llm/                   # LLM 客户端封装（含流式接口）
 ├── prompt/                # Prompt 管理 (stub)
 ├── crawler/               # 联网爬虫接口
 ├── importdata/            # 资料导入管道 (stub)

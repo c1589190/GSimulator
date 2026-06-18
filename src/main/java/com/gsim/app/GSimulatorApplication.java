@@ -36,9 +36,17 @@ public class GSimulatorApplication {
     private final ApplicationContext ctx;
     private final ConsoleInteractionAdapter adapter;
     private final AppConfig config;
+    private final boolean cliMode;
+    private final boolean httpMode;
 
     public GSimulatorApplication(AppConfig config) {
+        this(config, true, false);
+    }
+
+    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode) {
         this.config = config;
+        this.cliMode = cliMode;
+        this.httpMode = httpMode;
         this.ctx = new ApplicationContext(config);
         InteractionManager manager = ctx.getInteractionManager();
 
@@ -145,20 +153,46 @@ public class GSimulatorApplication {
         // 自动创建默认 campaign 和 turn
         initDefaultState();
 
-        // 如果 LLM 未配置，打印提示
-        if (!config.isLlmConfigured()) {
-            System.out.println();
-            System.out.println("⚠️  LLM 未配置。以下功能不可用:");
-            System.out.println("   /chat — Agent 对话");
-            System.out.println("   /sim  — 推演结算");
-            System.out.println("   /run  — 旧版推演");
-            System.out.println();
-            System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
-            System.out.println();
+        // 强制启用 API（如果 --http 指定了）
+        if (httpMode) {
+            ctx.getApiManager().forceEnable();
         }
 
-        // 启动 REPL
-        adapter.start();
+        // HTTP 模式：启动 API 服务器
+        if (httpMode || config.isApiEnabled()) {
+            ctx.getApiManager().start();
+        }
+
+        // CLI 模式：启动 REPL
+        if (cliMode) {
+            // 如果 LLM 未配置，打印提示
+            if (!config.isLlmConfigured()) {
+                System.out.println();
+                System.out.println("⚠️  LLM 未配置。以下功能不可用:");
+                System.out.println("   /chat — Agent 对话");
+                System.out.println("   /sim  — 推演结算");
+                System.out.println("   /run  — 旧版推演");
+                System.out.println();
+                System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
+                System.out.println();
+            }
+
+            // 启动 REPL
+            adapter.start();
+        } else if (httpMode) {
+            // 仅 HTTP 模式：保持服务器运行
+            System.out.println();
+            System.out.println("GSimulator HTTP API 模式运行中。按 Ctrl+C 退出。");
+            System.out.println("API 地址: http://" + config.getApiHost() + ":" + config.getApiPort());
+            Thread.currentThread().join();
+        }
+    }
+
+    /**
+     * 停止应用。
+     */
+    public void stop() {
+        ctx.shutdown();
     }
 
     private void initDefaultState() {
