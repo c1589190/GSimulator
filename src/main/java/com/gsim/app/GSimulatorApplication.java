@@ -1,6 +1,7 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
+import com.gsim.chat.BranchMessageStore;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionManager;
@@ -14,6 +15,7 @@ import com.gsim.context.BranchContextRenderer;
 import com.gsim.data.DataManager;
 import com.gsim.experience.ExperienceManager;
 import com.gsim.skill.SkillManager;
+import com.gsim.tool.PlayerInputTool;
 import com.gsim.tool.ToolRegistry;
 
 import java.nio.file.Path;
@@ -54,6 +56,12 @@ public class GSimulatorApplication {
         Path dataRoot = Path.of(System.getProperty("GSIM_DATA_DIR", "data"));
         DataManager dataManager = new DataManager(dataRoot);
 
+        // 注册 PlayerInputTool（Agent 可调用写入 input.md）
+        toolRegistry.register(new PlayerInputTool(dataManager));
+
+        // BranchMessageStore — 统一的消息块存储
+        BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
+
         // Phase 3: Campaign / Turn / PlayerAction
         manager.registerCommand(new NewTurnCommand());
         manager.registerCommand(new PlayerCommand(dataManager));
@@ -72,7 +80,7 @@ public class GSimulatorApplication {
         SkillManager skillManager = new SkillManager(dataRoot);
         skillManager.setDataManager(dataManager);
         ExperienceManager expManager = new ExperienceManager(dataRoot);
-        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot);
+        BranchContextRenderer contextRenderer = new BranchContextRenderer(dataManager, dataRoot, messageStore);
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
         manager.registerCommand(new ExpCommand(expManager));
@@ -82,7 +90,7 @@ public class GSimulatorApplication {
         OrchestratorAgent orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, ctx.getConfig().getLlmModel());
         manager.registerCommand(new RunCommand(orchestrator));
-        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator));
+        manager.registerCommand(new SimCommand(dataManager, contextRenderer, orchestrator, messageStore));
         manager.registerCommand(new NextTurnCommand(dataManager));
         manager.registerCommand(new NodeCommand(dataManager));
 
@@ -90,7 +98,12 @@ public class GSimulatorApplication {
         NodeAgentChatService chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator);
         ChatCommand chatCommand = new ChatCommand(chatService);
         manager.registerCommand(chatCommand);
-        adapter.setChatService(chatService, chatCommand);
+
+        // Messages 命令
+        MessagesCommand messagesCommand = new MessagesCommand(messageStore, dataManager);
+        manager.registerCommand(messagesCommand);
+
+        adapter.setChatService(chatService, chatCommand, messagesCommand);
     }
 
     /**

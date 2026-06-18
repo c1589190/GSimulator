@@ -1,5 +1,7 @@
 package com.gsim.context;
 
+import com.gsim.chat.BranchMessage;
+import com.gsim.chat.BranchMessageStore;
 import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.data.DataDocument;
 import com.gsim.data.DataManager;
@@ -30,10 +32,12 @@ public class BranchContextRenderer {
 
     private final DataManager dm;
     private final Path dataRoot;
+    private final BranchMessageStore messageStore;
 
-    public BranchContextRenderer(DataManager dm, Path dataRoot) {
+    public BranchContextRenderer(DataManager dm, Path dataRoot, BranchMessageStore messageStore) {
         this.dm = dm;
         this.dataRoot = dataRoot;
+        this.messageStore = messageStore;
     }
 
     /** 渲染当前 active branch 完整上下文。 */
@@ -88,15 +92,16 @@ public class BranchContextRenderer {
         return sb.toString();
     }
 
-    /** 从 branch 文件中提取 LLM 上下文记录消息（支持多轮调用）。
+    /** 从 branch 文件中提取 LLM 上下文记录消息。
+     *  优先使用 BranchMessageStore 读取 message blocks，
+     *  旧 ### user / ### assistant 格式仅作为 fallback。
      *  自动过滤工具定义污染消息。 */
     public List<RenderedMessage> extractBranchMessages(DataDocument branch) {
         List<RenderedMessage> msgs = new ArrayList<>();
-        String body = branch.body();
         String bid = branch.id();
 
         // 本节点输入
-        String input = extractSection(body, "一、本节点输入");
+        String input = extractSection(branch.body(), "一、本节点输入");
         if (!input.isBlank()) {
             String content = stripHeading(input, "一、本节点输入");
             if (!ToolPollutionFilter.isPolluted(content)) {
@@ -107,24 +112,30 @@ public class BranchContextRenderer {
             }
         }
 
-        // LLM 上下文记录 — 顺序解析所有 ### 子节
-        String llmSection = extractSection(body, "二、LLM 上下文记录");
-        if (!llmSection.isBlank()) {
-            List<SubSection> subs = extractAllSubSections(llmSection);
-            // 去重：跟踪已见过的内容哈希，防止重复工具定义
+        // 优先使用 BranchMessageStore 读取 message blocks
+        List<BranchMessage> blocks;
+        try {
+            blocks = messageStore.listMessages(bid);
+        } catch (IOException e) {
+            log.warn("Failed to read message blocks for {}: {}", bid, e.getMessage());
+            blocks = List.of();
+        }
+
+        if (!blocks.isEmpty()) {
+            // 使用 message blocks（新格式）
             java.util.Set<Integer> seenHashes = new java.util.HashSet<>();
-            for (SubSection sub : subs) {
-                String content = sub.content.trim();
+            for (BranchMessage m : blocks) {
+                String content = m.content();
                 if (content.isEmpty() || "无。".equals(content)) continue;
 
-                // 污染检测：跳过已知工具定义污染
+                // 污染检测
                 if (ToolPollutionFilter.isPolluted(content)) {
                     msgs.add(new RenderedMessage("system", "system_note", bid,
-                            "[skipped polluted tool definition message — " + sub.heading + "]"));
+                            "[skipped polluted tool definition message — " + m.type() + "]"));
                     continue;
                 }
 
-                // 去重：相同内容不重复渲染
+                // 去重
                 int hash = content.hashCode();
                 if (!seenHashes.add(hash)) {
                     msgs.add(new RenderedMessage("system", "system_note", bid,
@@ -132,16 +143,54 @@ public class BranchContextRenderer {
                     continue;
                 }
 
-                switch (sub.heading) {
-                    case "### user" -> msgs.add(new RenderedMessage("user", "branch_user", bid, content));
-                    case "### assistant" -> msgs.add(new RenderedMessage("assistant", "branch_assistant", bid, content));
-                    case "### tool_call" -> msgs.add(new RenderedMessage("tool", "tool_call", bid, content));
-                    case "### tool_result" -> msgs.add(new RenderedMessage("tool", "tool_result", bid, content));
-                    case "### system_note" -> msgs.add(new RenderedMessage("system", "system_note", bid, content));
-                }
+                // 映射 role/type 到 RenderedMessage
+                String role = m.role();
+                String type = m.type();
+                String toolName = m.toolName();
+                msgs.add(new RenderedMessage(role, type, bid, content));
+            }
+        } else {
+            // Fallback: 旧 ### user / ### assistant 格式
+            extractLegacyBranchMessages(branch, msgs);
+        }
+
+        return msgs;
+    }
+
+    /** Fallback: 从旧 ### user / ### assistant 格式解析消息。 */
+    private void extractLegacyBranchMessages(DataDocument branch, List<RenderedMessage> msgs) {
+        String body = branch.body();
+        String bid = branch.id();
+        String llmSection = extractSection(body, "二、LLM 上下文记录");
+        if (llmSection.isBlank()) return;
+
+        List<SubSection> subs = extractAllSubSections(llmSection);
+        java.util.Set<Integer> seenHashes = new java.util.HashSet<>();
+        for (SubSection sub : subs) {
+            String content = sub.content.trim();
+            if (content.isEmpty() || "无。".equals(content)) continue;
+
+            if (ToolPollutionFilter.isPolluted(content)) {
+                msgs.add(new RenderedMessage("system", "system_note", bid,
+                        "[skipped polluted tool definition message — " + sub.heading + "]"));
+                continue;
+            }
+
+            int hash = content.hashCode();
+            if (!seenHashes.add(hash)) {
+                msgs.add(new RenderedMessage("system", "system_note", bid,
+                        "[deduplicated — same content as earlier message]"));
+                continue;
+            }
+
+            switch (sub.heading) {
+                case "### user" -> msgs.add(new RenderedMessage("user", "branch_user", bid, content));
+                case "### assistant" -> msgs.add(new RenderedMessage("assistant", "branch_assistant", bid, content));
+                case "### tool_call" -> msgs.add(new RenderedMessage("tool", "tool_call", bid, content));
+                case "### tool_result" -> msgs.add(new RenderedMessage("tool", "tool_result", bid, content));
+                case "### system_note" -> msgs.add(new RenderedMessage("system", "system_note", bid, content));
             }
         }
-        return msgs;
     }
 
     /** 解析 body 中所有 ### 子节（顺序保留）。 */

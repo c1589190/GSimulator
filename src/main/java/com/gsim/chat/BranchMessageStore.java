@@ -63,6 +63,18 @@ public class BranchMessageStore {
         log.debug("Appended message {} to {}", writable.id(), branchId);
     }
 
+    /** 批量追加多条 message blocks。 */
+    public void appendMessages(String branchId, List<BranchMessage> msgs) throws IOException {
+        for (BranchMessage msg : msgs) {
+            appendMessage(branchId, msg);
+        }
+    }
+
+    /** 渲染单条 message 为 block 文本（静态方法，供外部使用）。 */
+    public static String renderMessageBlock(BranchMessage msg) {
+        return msg.toBlock();
+    }
+
     /** 生成下一个消息 id。 */
     public String nextMessageId(String branchId) throws IOException {
         List<BranchMessage> msgs = listMessages(branchId);

@@ -1,5 +1,6 @@
 package com.gsim.context;
 
+import com.gsim.chat.BranchMessageStore;
 import com.gsim.data.DataManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,10 +16,12 @@ class BranchContextRendererTest {
     @TempDir Path tempDir;
     private DataManager dm;
     private BranchContextRenderer renderer;
+    private BranchMessageStore messageStore;
 
     @BeforeEach void setUp() {
         dm = new DataManager(tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir);
+        messageStore = new BranchMessageStore(dm, tempDir);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
     }
 
     @Test @DisplayName("System.md auto-created")
@@ -125,7 +128,8 @@ class BranchContextRendererTest {
 
         // 重新加载
         dm = new com.gsim.data.DataManager(tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir);
+        messageStore = new BranchMessageStore(dm, tempDir);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
 
         RenderedContext ctx = renderer.render();
         // 应该包含 [skipped] 标记
@@ -207,7 +211,8 @@ class BranchContextRendererTest {
                 "branch.b0001-clean-test", java.nio.charset.StandardCharsets.UTF_8);
 
         dm = new com.gsim.data.DataManager(tempDir);
-        renderer = new BranchContextRenderer(dm, tempDir);
+        messageStore = new BranchMessageStore(dm, tempDir);
+        renderer = new BranchContextRenderer(dm, tempDir, messageStore);
 
         String md = renderer.renderAsMarkdown();
         assertFalse(md.contains("Run tests with the given coverage strategy"),

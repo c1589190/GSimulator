@@ -2,6 +2,7 @@ package com.gsim.interaction;
 
 import com.gsim.chat.NodeAgentChatService;
 import com.gsim.interaction.commands.ChatCommand;
+import com.gsim.interaction.commands.MessagesCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +29,7 @@ public class ConsoleInteractionAdapter {
 
     private NodeAgentChatService chatService;
     private ChatCommand chatCommand;
+    private MessagesCommand messagesCommand;
 
     public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session) {
         this.manager = manager;
@@ -37,9 +39,11 @@ public class ConsoleInteractionAdapter {
     }
 
     /** 注入对话服务（在注册命令后调用）。 */
-    public void setChatService(NodeAgentChatService chatService, ChatCommand chatCommand) {
+    public void setChatService(NodeAgentChatService chatService, ChatCommand chatCommand,
+                               MessagesCommand messagesCommand) {
         this.chatService = chatService;
         this.chatCommand = chatCommand;
+        this.messagesCommand = messagesCommand;
     }
 
     public void start() {
@@ -54,11 +58,10 @@ public class ConsoleInteractionAdapter {
                 if (line == null) { shutdown(); break; }
                 if (line.isBlank()) continue;
 
-                // /messages 特殊处理
-                if (line.trim().startsWith("/messages") && chatCommand != null) {
+                // /messages — 优先使用正式 MessagesCommand
+                if (line.trim().startsWith("/messages") && messagesCommand != null) {
                     String afterCmd = line.trim().substring("/messages".length()).trim();
-                    InteractionResult r = chatCommand.handleMessages(
-                            new String[]{afterCmd.isEmpty() ? "" : afterCmd});
+                    InteractionResult r = messagesCommand.handleRaw(afterCmd);
                     displayResult(r);
                     continue;
                 }
