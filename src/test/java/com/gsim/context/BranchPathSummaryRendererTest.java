@@ -30,7 +30,7 @@ class BranchPathSummaryRendererTest {
         Path dataRoot = tempDir.resolve("data");
         java.nio.file.Files.createDirectories(dataRoot);
 
-        dataManager = new DataManager(dataRoot);
+        dataManager = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
         // initDefault called automatically by constructor
 
         Path worldDir = dataRoot.resolve("worlds").resolve("default");

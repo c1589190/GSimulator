@@ -14,7 +14,7 @@ class DataManagerTest {
     @TempDir Path tempDir;
     private DataManager dm;
 
-    @BeforeEach void setUp() { dm = new DataManager(tempDir); }
+    @BeforeEach void setUp() throws Exception { dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir); }
 
     @Test @DisplayName("auto init creates structure")
     void testAutoInit() {
@@ -100,7 +100,7 @@ class DataManagerTest {
     @Test @DisplayName("persistence across instances")
     void testPersistence() throws Exception {
         dm.createBranch("branch.b0001-test", "T", "T1");
-        DataManager dm2 = new DataManager(tempDir);
+        DataManager dm2 = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         assertEquals("branch.b0001-test", dm2.getActiveBranch());
         assertNotNull(dm2.readById("branch.b0001-test"));
     }

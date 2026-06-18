@@ -25,7 +25,7 @@ class PlayerProfileManagerTest {
     @BeforeEach
     void setUp() throws Exception {
         Path dataDir = tempDir.resolve("data");
-        dm = new DataManager(dataDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(dataDir);
         pm = new PlayerProfileManager(dm);
     }
 

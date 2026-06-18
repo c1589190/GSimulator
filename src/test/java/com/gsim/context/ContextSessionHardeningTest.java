@@ -38,7 +38,7 @@ class ContextSessionHardeningTest {
         Path dataRoot = tempDir.resolve("data");
         java.nio.file.Files.createDirectories(dataRoot);
 
-        dataManager = new DataManager(dataRoot);
+        dataManager = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
 
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
         BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dataManager, messageStore, null);

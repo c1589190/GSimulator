@@ -46,7 +46,7 @@ class UnifiedAgentEntryTest {
         Path dataRoot = tempDir.resolve("data");
         java.nio.file.Files.createDirectories(dataRoot);
 
-        DataManager dm = new DataManager(dataRoot);
+        DataManager dm = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
         BranchMessageStore messageStore = new BranchMessageStore(dm, dataRoot);
         BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dm, messageStore, null);
 

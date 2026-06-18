@@ -31,7 +31,7 @@ class RootCommandTest {
     @BeforeEach
     void setUp(@TempDir Path tmpDir) throws Exception {
         Path dataRoot = tmpDir.resolve("data");
-        dm = new DataManager(dataRoot);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
         // Default world auto-created by constructor
 
         var factory = new ScopedKnowledgeStoreFactory(null);

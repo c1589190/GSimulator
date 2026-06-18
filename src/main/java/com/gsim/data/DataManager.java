@@ -22,23 +22,23 @@ public class DataManager {
 
     private static final Logger log = LoggerFactory.getLogger(DataManager.class);
     private static final String DEFAULT_WORLD = "default";
-    private static final String ROOT_BRANCH = "branch.b0000-start";
+    static final String ROOT_BRANCH = "branch.b0000-start";
 
     private final Path dataRoot;
     private final Map<String, DataDocument> documents = new LinkedHashMap<>();
     private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
-    private String activeWorld = DEFAULT_WORLD;
-    private String activeBranch = ROOT_BRANCH;
+    private String activeWorld = null;
+    private String activeBranch = null;
 
     public DataManager(Path dataRoot) {
         this.dataRoot = dataRoot.toAbsolutePath();
         try {
-            if (!Files.isDirectory(dataRoot) || !hasAnyRoot()) {
-                // 空 data 或无 root — 自动创建 default world 以保持向后兼容
-                // 生产代码应在 GSimulatorApplication 中先检查 needsRootBootstrap()
-                // 并通过 /root create 或 bootstrapFromEmpty 显式创建
-                if (!Files.isDirectory(dataRoot)) initDefault();
-                else bootstrapInternal(DEFAULT_WORLD);
+            if (!Files.isDirectory(dataRoot)) {
+                // STRICT_EMPTY_DATA — 不创建任何东西
+                log.info("Data root does not exist: {}", dataRoot);
+            } else if (!hasAnyRoot()) {
+                // 目录存在但没有有效 root — 不自动创建
+                log.info("Data root exists but has no valid root: {}", dataRoot);
             } else {
                 autoLoad();
             }
@@ -787,6 +787,7 @@ public class DataManager {
         rwLock.writeLock().lock();
         try {
             documents.clear();
+            if (activeWorld == null) return;
             Path wd = worldDir();
             if (!Files.isDirectory(wd)) return;
             for (String fn : List.of("world.md", "entities.md", "rules.md", "input.md", "players.md")) {
@@ -817,7 +818,10 @@ public class DataManager {
         } catch (IOException e) { log.warn("Failed to read {}: {}", file, e.getMessage()); }
     }
 
-    private Path worldDir() { return dataRoot.resolve("worlds").resolve(activeWorld); }
+    private Path worldDir() {
+        if (activeWorld == null) throw new IllegalStateException("No active root. Use /root create or bootstrap first.");
+        return dataRoot.resolve("worlds").resolve(activeWorld);
+    }
 
     private void writeFile(Path f, String content) throws IOException {
         Files.createDirectories(f.getParent());

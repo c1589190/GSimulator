@@ -21,8 +21,8 @@ class BranchContextRendererTest {
     private BranchMessageStore messageStore;
     private BranchAnalyzer branchAnalyzer;
 
-    @BeforeEach void setUp() {
-        dm = new DataManager(tempDir);
+    @BeforeEach void setUp() throws Exception {
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         PlayerProfileManager pm = new PlayerProfileManager(dm);
         branchAnalyzer = new BranchAnalyzer(dm, messageStore, pm);

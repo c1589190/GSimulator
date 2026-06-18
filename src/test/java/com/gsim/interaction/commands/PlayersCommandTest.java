@@ -46,7 +46,7 @@ class PlayersCommandTest {
         InteractionContext context = new InteractionContext();
         session = new InteractionSession(context, config, campaignService, turnService, playerActionService);
 
-        DataManager dm = new DataManager(dataDir);
+        DataManager dm = com.gsim.TestWorldFactory.createWithDefaultRoot(dataDir);
         PlayerProfileManager pm = new PlayerProfileManager(dm);
         cmd = new PlayersCommand(pm);
     }

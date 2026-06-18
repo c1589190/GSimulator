@@ -37,7 +37,7 @@ class ContextSessionManagerTest {
         Path dataRoot = tempDir.resolve("data");
         java.nio.file.Files.createDirectories(dataRoot);
 
-        dataManager = new DataManager(dataRoot);
+        dataManager = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
         // initDefault called automatically by constructor
 
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);

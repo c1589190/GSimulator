@@ -20,7 +20,7 @@ class BranchMessageStoreTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         store = new BranchMessageStore(dm, tempDir);
     }
 
@@ -160,7 +160,7 @@ class BranchMessageStoreTest {
                 """);
 
         // 需要 reload 让 DataManager 加载
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         store = new BranchMessageStore(dm, tempDir);
 
         List<BranchMessage> msgs = store.listMessages(branchId);

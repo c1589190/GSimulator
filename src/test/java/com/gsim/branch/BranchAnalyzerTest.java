@@ -28,8 +28,8 @@ class BranchAnalyzerTest {
     private BranchAnalyzer analyzer;
 
     @BeforeEach
-    void setUp() {
-        dm = new DataManager(tempDir);
+    void setUp() throws Exception {
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         profileManager = new PlayerProfileManager(dm);
         analyzer = new BranchAnalyzer(dm, messageStore, profileManager);
@@ -57,7 +57,7 @@ class BranchAnalyzerTest {
         dm.createBranch("branch.b0001-test", "测试节点", "T1");
 
         // 重新加载 to pick up new branch
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         profileManager = new PlayerProfileManager(dm);
         analyzer = new BranchAnalyzer(dm, messageStore, profileManager);
@@ -82,7 +82,7 @@ class BranchAnalyzerTest {
                 BranchMessage.create("m0002", "assistant", "sim_response", "推演结果内容..."));
 
         // 重新加载以读取新写入的 message blocks
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         profileManager = new PlayerProfileManager(dm);
         analyzer = new BranchAnalyzer(dm, messageStore, profileManager);
@@ -133,7 +133,7 @@ class BranchAnalyzerTest {
                 BranchMessage.create("m0004", "assistant", "chat_response", "暂无。"));
 
         // 重新加载
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         profileManager = new PlayerProfileManager(dm);
         analyzer = new BranchAnalyzer(dm, messageStore, profileManager);
@@ -155,7 +155,7 @@ class BranchAnalyzerTest {
         messageStore.appendMessage(bid,
                 BranchMessage.create("m0001", "user", "chat_user", "讨论中"));
 
-        dm = new DataManager(tempDir);
+        dm = com.gsim.TestWorldFactory.createWithDefaultRoot(tempDir);
         messageStore = new BranchMessageStore(dm, tempDir);
         profileManager = new PlayerProfileManager(dm);
         analyzer = new BranchAnalyzer(dm, messageStore, profileManager);

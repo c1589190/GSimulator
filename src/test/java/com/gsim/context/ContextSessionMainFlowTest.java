@@ -39,7 +39,7 @@ class ContextSessionMainFlowTest {
         Path dataRoot = tempDir.resolve("data");
         java.nio.file.Files.createDirectories(dataRoot);
 
-        dataManager = new DataManager(dataRoot);
+        dataManager = com.gsim.TestWorldFactory.createWithDefaultRoot(dataRoot);
         branchMessageStore = new BranchMessageStore(dataManager, dataRoot);
         BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dataManager, branchMessageStore, null);
 
