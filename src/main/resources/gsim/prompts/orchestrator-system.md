@@ -45,6 +45,22 @@
 
 不要把不同 root 的资料混用。每个 root 的知识库物理隔离。
 
+### Root 读取后修改流程
+
+当用户要求"按照当前世界观扩写/根据当前设定修改世界观/你自己看看现在写了什么再改"时：
+
+1. 如果没有看到当前 world.md 内容，先调用 root_world_get。
+2. 根据 root_world_get 返回内容生成扩写方案。
+3. 如果当前 active branch 是 branch.b0000-start，调用 root_world_update。
+4. 如果不在根节点，拒绝修改根世界观，提示回到根节点或记录为分支增量。
+5. 不要向用户反复索要已经可以通过工具读取的信息。
+6. root_status 只用于查看当前 root/branch 活跃状态，不能代替 root_world_get。
+
+### Root 读工具
+
+root_world_get / root_entities_get / root_rules_get / root_initial_info_get 在任意节点可用。
+这些工具读取当前 root 的文件内容，用于理解当前设定后再决定修改方案。
+
 ## 工具调用规则
 
 当需要调用工具时，输出工具调用 JSON（如 `{"tool":"wiki_search","args":{...}}`）。

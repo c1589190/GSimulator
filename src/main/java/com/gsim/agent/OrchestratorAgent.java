@@ -199,50 +199,10 @@ public class OrchestratorAgent {
 
     /**
      * 尝试从 LLM 响应中解析 tool call JSON。
-     * 支持格式：
-     * - 纯 JSON: {"tool":"...","args":{...}}
-     * - code-fenced: ```json\n{"tool":...}\n```
+     * 委托给 ToolCallExtractor 处理混合文本 + JSON 情况。
      */
     static ParsedToolCall tryParseToolCall(String text) {
-        if (text == null || text.isBlank()) return null;
-
-        String trimmed = text.trim();
-
-        // 去除 markdown code fences
-        if (trimmed.startsWith("```")) {
-            int end = trimmed.indexOf("\n");
-            if (end < 0) return null;
-            String afterFence = trimmed.substring(end + 1).trim();
-            if (afterFence.endsWith("```")) {
-                afterFence = afterFence.substring(0, afterFence.length() - 3).trim();
-            }
-            trimmed = afterFence;
-        }
-
-        if (!trimmed.startsWith("{")) return null;
-
-        try {
-            JsonNode root = MAPPER.readTree(trimmed);
-            if (!root.has("tool")) return null;
-
-            String tool = root.get("tool").asText();
-            if (tool == null || tool.isBlank()) return null;
-
-            JsonNode argsNode = root.get("args");
-            Map<String, String> args = new java.util.HashMap<>();
-            if (argsNode != null && argsNode.isObject()) {
-                var iter = argsNode.fields();
-                while (iter.hasNext()) {
-                    var entry = iter.next();
-                    args.put(entry.getKey(), entry.getValue().asText());
-                }
-            }
-
-            return new ParsedToolCall(tool, args);
-        } catch (Exception e) {
-            log.warn("Failed to parse tool call from: {}...", trimmed.substring(0, Math.min(80, trimmed.length())));
-            return null;
-        }
+        return ToolCallExtractor.extractFirstToolCall(text);
     }
 
     // ---- tool result 格式化 ----

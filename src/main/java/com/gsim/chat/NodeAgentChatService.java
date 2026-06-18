@@ -62,14 +62,19 @@ public class NodeAgentChatService {
      * 如果 data 严格为空，自动 bootstrap 创建第一个 root。
      */
     public String chat(String userText) throws IOException {
+        // 清洗 ANSI 控制字符
+        String cleaned = com.gsim.root.TextSanitizer.safeStrip(userText).trim();
+        if (cleaned.isEmpty()) {
+            return ""; // 控制字符空输入，忽略
+        }
         // 空 data bootstrap
         if (dm.needsRootBootstrap()) {
-            return bootstrapFirstRoot(userText);
+            return bootstrapFirstRoot(cleaned);
         }
         if (ctxSessionManager == null) {
             return "系统尚未初始化 root。请使用 /root create <rootId> <初始设定>。";
         }
-        return doChat(userText);
+        return doChat(cleaned);
     }
 
     /** 从空 data bootstrap 创建第一个 root。需要明确的初始化前缀。 */

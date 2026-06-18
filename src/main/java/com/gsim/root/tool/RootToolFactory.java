@@ -34,6 +34,10 @@ public class RootToolFactory {
         return List.of(
                 new RootStatusTool(),
                 new RootCreateTool(),
+                new RootWorldGetTool(),
+                new RootEntitiesGetTool(),
+                new RootRulesGetTool(),
+                new RootInitialInfoGetTool(),
                 new RootWorldUpdateTool(),
                 new RootEntitiesUpdateTool(),
                 new RootRulesUpdateTool(),
@@ -243,6 +247,99 @@ public class RootToolFactory {
                                 "updated initial info", 1.0)));
             } catch (Exception e) {
                 return ToolResult.fail(name(), "UPDATE_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== root_world_get (read-only, any node) =====
+
+    private class RootWorldGetTool implements AgentTool {
+        @Override public String name() { return "root_world_get"; }
+        @Override public String description() {
+            return "读取当前 root 的 world.md 内容。任意节点可读。读到内容后再计划修改方案。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+            try {
+                Path f = dm.worldFilePath();
+                if (!Files.exists(f)) return ToolResult.fail(name(), "WORLD_FILE_NOT_FOUND");
+                String content = Files.readString(f);
+                // Limit to reasonable size for LLM context
+                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("world.md", dm.getActiveRootId(), content, 1.0)));
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== root_entities_get (read-only, any node) =====
+
+    private class RootEntitiesGetTool implements AgentTool {
+        @Override public String name() { return "root_entities_get"; }
+        @Override public String description() {
+            return "读取当前 root 的 entities.md 内容。任意节点可读。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+            try {
+                Path f = dm.entitiesFilePath();
+                if (!Files.exists(f)) return ToolResult.fail(name(), "ENTITIES_FILE_NOT_FOUND");
+                String content = Files.readString(f);
+                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("entities.md", dm.getActiveRootId(), content, 1.0)));
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== root_rules_get (read-only, any node) =====
+
+    private class RootRulesGetTool implements AgentTool {
+        @Override public String name() { return "root_rules_get"; }
+        @Override public String description() {
+            return "读取当前 root 的 rules.md 内容。任意节点可读。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+            try {
+                Path f = dm.rulesFilePath();
+                if (!Files.exists(f)) return ToolResult.fail(name(), "RULES_FILE_NOT_FOUND");
+                String content = Files.readString(f);
+                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("rules.md", dm.getActiveRootId(), content, 1.0)));
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== root_initial_info_get (read-only, any node) =====
+
+    private class RootInitialInfoGetTool implements AgentTool {
+        @Override public String name() { return "root_initial_info_get"; }
+        @Override public String description() {
+            return "读取根节点 b0000-start.md 的全文。任意节点可读。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+            try {
+                Path f = dm.rootBranchFilePath();
+                if (!Files.exists(f)) return ToolResult.fail(name(), "ROOT_BRANCH_FILE_NOT_FOUND");
+                String content = Files.readString(f);
+                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("b0000-start.md", dm.getActiveRootId(), content, 1.0)));
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
             }
         }
     }
