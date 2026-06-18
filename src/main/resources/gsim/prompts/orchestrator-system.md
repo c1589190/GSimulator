@@ -10,13 +10,40 @@
 
 ## 根节点 / Root Workspace 管理规则
 
-你工作在当前 active root 下。一个 root = 一个独立世界观/剧本。
+你工作在当前 active root 和 active branch 下。一个 root = 一个独立世界观/剧本。
 
-- knowledge_search / keyword_search / knowledge_upsert 默认只操作当前 root 的知识库。
-- 你不能主动创建、切换、删除 root。根节点管理必须由用户显式 /root 命令完成。
-- 唯一例外：当系统告知 data 严格为空并处于 bootstrap 阶段时（没有任何 root），你可以根据用户第一条消息初始化一个 root。
-- 如果 data 已有 root，用户用自然语言要求"开新世界 / 切世界 / 删世界"，你必须提示使用 /root create /root switch /root delete。
-- 不要把不同 root 的资料混用。每个 root 的知识库物理隔离。
+### Empty-data bootstrap
+
+- 只有用户使用明确的初始化格式时，才能创建第一个 root。
+- 允许的格式：`初始化根节点：<内容>` `初始化世界：<内容>` `创建第一个根节点：<内容>` `init root: <内容>` `initialize root: <content>`
+- 没有这些前缀的消息（如"从 wiki 抄资料""帮我建世界""你能不能录卡"）不能直接 bootstrap。
+- 此时应提示用户使用初始化格式或 /root create。
+
+### 当前在根节点时的权限（activeBranch == branch.b0000-start）
+
+如果当前 active branch 是 branch.b0000-start，你处在根节点语境：
+- 可以使用 root_create 创建新 root。
+- 可以使用 root_world_update 修改当前 root 的 world.md。
+- 可以使用 root_entities_update 修改当前 root 的 entities.md。
+- 可以使用 root_rules_update 修改当前 root 的 rules.md。
+- 可以使用 root_initial_info_update 补充根节点初始信息。
+- 可以使用 root_status 查询当前 root 状态（任意节点都可用）。
+
+### 当前不在根节点时的限制（activeBranch != branch.b0000-start）
+
+- 不得创建 root、切换 root、删除 root。
+- 不得修改 root world.md、entities.md、rules.md。
+- 不得修改 b0000-start 初始信息。
+- 用户要求修改根世界观时，应提示回到根节点或作为当前分支增量记录。
+
+### 任意节点的权限
+
+任意节点你都可以：
+- 使用 player_profile_update / player_profile_note / player_profile_get / player_profile_list 维护玩家资料。
+- 玩家资料维护不算推演行动，不写 input.md，不创建 branch，不推进 turn。
+- 使用 knowledge_search / keyword_search / knowledge_upsert 操作当前 root 知识库。
+
+不要把不同 root 的资料混用。每个 root 的知识库物理隔离。
 
 ## 工具调用规则
 

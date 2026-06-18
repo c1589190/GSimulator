@@ -72,17 +72,25 @@ public class NodeAgentChatService {
         return doChat(userText);
     }
 
-    /** 从空 data bootstrap 创建第一个 root。 */
+    /** 从空 data bootstrap 创建第一个 root。需要明确的初始化前缀。 */
     private String bootstrapFirstRoot(String userText) throws IOException {
         if (!RootBootstrapPolicy.isStrictlyEmptyDataRoot(dm.getDataRoot())) {
             return "已有 root 数据。创建或切换根节点需要用户显式命令。\n请使用：\n  /root create <rootId> <初始设定>\n  /root switch <rootId>\n  /root list";
         }
-        // 生成 rootId 和 title
-        String rootId = "root." + slugify(userText);
-        String title = userText.length() > 40 ? userText.substring(0, 37) + "..." : userText;
+
+        // 检查 bootstrap 意图前缀
+        var intent = com.gsim.root.BootstrapIntentParser.parse(userText);
+        if (!intent.isBootstrap()) {
+            return com.gsim.root.BootstrapIntentParser.nonBootstrapHint();
+        }
+
+        String worldContent = intent.worldContent();
+        String title = com.gsim.root.RootIdGenerator.extractTitle(worldContent);
+        String rootId = com.gsim.root.RootIdGenerator.generateFromContent(worldContent);
+        String worldMd = com.gsim.root.RootIdGenerator.buildWorldMarkdown(title, worldContent);
 
         // Bootstrap
-        dm.bootstrapFromEmpty(rootId, userText);
+        dm.bootstrapFromEmpty(rootId, worldMd);
 
         // 重建 ContextSession + Knowledge
         appCtx.resolveKnowledgeForActiveRoot();
@@ -98,7 +106,7 @@ public class NodeAgentChatService {
         sb.append("Root ID: ").append(rootId).append("\n");
         sb.append("Title: ").append(title).append("\n");
         sb.append("Active Branch: branch.b0000-start\n\n");
-        sb.append("世界观已写入。可以开始推演或对话。\n");
+        sb.append("世界观已写入为结构化初始设定。可以开始推演或对话。\n");
         sb.append("使用 /root status 查看状态。");
         return sb.toString();
     }
@@ -202,13 +210,4 @@ public class NodeAgentChatService {
         return store.listMessages(branchId);
     }
 
-    /** 从文本生成 slug rootId。 */
-    private static String slugify(String text) {
-        if (text == null || text.isBlank()) return "r" + System.currentTimeMillis() % 10000;
-        String s = text.replaceAll("[^a-zA-Z0-9\\u4e00-\\u9fff_\\-.]", "")
-                .replaceAll("\\s+", "-");
-        if (s.length() > 30) s = s.substring(0, 30);
-        if (s.isEmpty()) s = "r" + System.currentTimeMillis() % 10000;
-        return s;
-    }
 }

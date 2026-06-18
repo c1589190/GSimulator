@@ -161,6 +161,23 @@ public class GSimulatorApplication {
         chatCommand = new ChatCommand(chatService);
         manager.registerCommand(chatCommand);
 
+        // 注册 Root Tools（带权限门禁的根节点管理工具，必须晚于 chatService 创建）
+        var rootToolFactory = new com.gsim.root.tool.RootToolFactory(dataManager, newRootId -> {
+            try {
+                var newRenderer = buildContextRenderer(dataManager, dataRoot, messageStore, branchAnalyzer);
+                var newCtxSessionMgr = buildContextSessionSystem(newRenderer, dataManager, dataRoot);
+                ctx.setBranchContextRenderer(newRenderer);
+                ctx.setContextSessionManager(newCtxSessionMgr);
+                ctx.resolveKnowledgeForActiveRoot();
+                chatService.onRootChanged(newRenderer, newCtxSessionMgr, dataRoot, ctx);
+            } catch (Exception e) {
+                log.error("Failed to switch root to '{}' via root tool: {}", newRootId, e.getMessage());
+            }
+        });
+        for (var tool : rootToolFactory.createAll()) {
+            toolRegistry.register(tool);
+        }
+
         // /sim /run — deprecated wrappers
         manager.registerCommand(new SimCommand(chatService));
         manager.registerCommand(new RunCommand(chatService));

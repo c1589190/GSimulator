@@ -20,15 +20,21 @@ class PromptRootGovernanceRulesTest {
 
         assertTrue(content.contains("根节点 / Root Workspace 管理规则"),
                 "Prompt must contain root governance section");
-        assertTrue(content.contains("你不能主动创建、切换、删除 root"),
-                "Prompt must forbid agent from managing roots");
-        assertTrue(content.contains("/root create"),
-                "Prompt must mention /root create");
-        assertTrue(content.contains("/root switch"),
-                "Prompt must mention /root switch");
-        assertTrue(content.contains("/root delete"),
-                "Prompt must mention /root delete");
+        assertTrue(content.contains("root_create"),
+                "Prompt must mention root_create tool");
+        assertTrue(content.contains("root_world_update"),
+                "Prompt must mention root_world_update tool");
+        assertTrue(content.contains("root_status"),
+                "Prompt must mention root_status tool");
+        assertTrue(content.contains("branch.b0000-start"),
+                "Prompt must mention root branch");
         assertTrue(content.contains("不要把不同 root 的资料混用"),
                 "Prompt must forbid cross-root contamination");
+        assertTrue(content.contains("player_profile_update"),
+                "Prompt must mention player profile tools are always available");
+        assertTrue(content.contains("初始化根节点"),
+                "Prompt must mention bootstrap prefix format");
+        assertTrue(content.contains("不在根节点时的限制"),
+                "Prompt must mention non-root-branch restrictions");
     }
 }

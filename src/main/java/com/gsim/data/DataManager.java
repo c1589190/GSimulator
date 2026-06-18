@@ -156,6 +156,127 @@ public class DataManager {
     /** 获取 active root ID（同 activeWorld）。 */
     public String getActiveRootId() { return activeWorld; }
 
+    /** 是否有 active root。 */
+    public boolean hasActiveRoot() { return activeWorld != null; }
+
+    /** 当前是否在根节点（branch.b0000-start）。 */
+    public boolean isAtRootBranch() {
+        return activeBranch != null && activeBranch.equals(ROOT_BRANCH);
+    }
+
+    /** 获取 active branch ID。 */
+    public String getActiveBranchId() { return activeBranch; }
+
+    /** 获取 active world 目录。 */
+    public Path activeWorldDir() { return worldDir(); }
+
+    /** 获取 world.md 文件路径。 */
+    public Path worldFilePath() { return worldDir().resolve("world.md"); }
+
+    /** 获取 entities.md 文件路径。 */
+    public Path entitiesFilePath() { return worldDir().resolve("entities.md"); }
+
+    /** 获取 rules.md 文件路径。 */
+    public Path rulesFilePath() { return worldDir().resolve("rules.md"); }
+
+    /** 获取根分支文件路径。 */
+    public Path rootBranchFilePath() { return worldDir().resolve("branches").resolve("b0000-start.md"); }
+
+    /** 更新 world.md 内容，加写锁。 */
+    public void updateWorldFile(String newContent) throws IOException {
+        rwLock.writeLock().lock();
+        try {
+            writeFile(worldFilePath(), newContent);
+            reload();
+        } finally { rwLock.writeLock().unlock(); }
+    }
+
+    /** 更新 entities.md 内容，加写锁。 */
+    public void updateEntitiesFile(String newContent) throws IOException {
+        rwLock.writeLock().lock();
+        try {
+            writeFile(entitiesFilePath(), newContent);
+            reload();
+        } finally { rwLock.writeLock().unlock(); }
+    }
+
+    /** 更新 rules.md 内容，加写锁。 */
+    public void updateRulesFile(String newContent) throws IOException {
+        rwLock.writeLock().lock();
+        try {
+            writeFile(rulesFilePath(), newContent);
+            reload();
+        } finally { rwLock.writeLock().unlock(); }
+    }
+
+    /** 更新 b0000-start.md 的初始信息章节，加写锁。 */
+    public void updateRootBranchSection(String sectionHeading, String newSectionContent) throws IOException {
+        rwLock.writeLock().lock();
+        try {
+            DataDocument doc = documents.get(ROOT_BRANCH);
+            if (doc == null) throw new IOException("Root branch not found: " + ROOT_BRANCH);
+            BranchUpdate update = sectionToUpdate(sectionHeading, newSectionContent);
+            overwriteBranchSectionsUnlocked(ROOT_BRANCH, update);
+        } finally { rwLock.writeLock().unlock(); }
+    }
+
+    /** 内部 overwriteBranchSections，不额外加锁。 */
+    private void overwriteBranchSectionsUnlocked(String branchId, BranchUpdate update) throws IOException {
+        DataDocument doc = documents.get(branchId);
+        if (doc == null || !"branch".equals(doc.type()))
+            throw new IOException("Branch not found: " + branchId);
+        Map<String, String> fm = doc.frontMatter();
+        String body = doc.body();
+        String newBody = buildBranchContent(
+                branchId, fm.getOrDefault("name", "时间节点"),
+                fm.getOrDefault("parent", "none"),
+                Integer.parseInt(fm.getOrDefault("turn", "0")),
+                fm.getOrDefault("world_time", ""),
+                nvl(update.nodeInput(), sectionText(body, "一、本节点输入")),
+                nvl(update.llmContextLog(), "### user\n\n无。\n"),
+                nvl(update.simulationResult(), sectionText(body, "三、推演结果")),
+                nvl(update.worldDelta(), sectionText(body, "四、世界观/设定增量")),
+                nvl(update.entityDelta(), sectionText(body, "五、实体状态增量")),
+                nvl(update.ruleDelta(), sectionText(body, "六、推演规则增量")),
+                nvl(update.interactionDelta(), sectionText(body, "七、交互逻辑增量")),
+                nvl(update.skillDelta(), sectionText(body, "八、未总结 Skill 增量")),
+                nvl(update.nextRisks(), sectionText(body, "九、下节点风险")));
+        writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), newBody);
+        reload();
+    }
+
+    private static String nvl(String val, String fallback) {
+        return val != null ? val : fallback;
+    }
+
+    private static String sectionText(String body, String heading) {
+        String s = extractSectionStatic(body, heading).replace("## " + heading + "\n", "").trim();
+        return s.isEmpty() ? "无。" : s;
+    }
+
+    private static String extractSectionStatic(String body, String heading) {
+        int start = body.indexOf("## " + heading);
+        if (start < 0) return "";
+        int end = body.indexOf("\n## ", start + heading.length() + 4);
+        if (end < 0) end = body.length();
+        return body.substring(start, end).trim() + "\n\n";
+    }
+
+    /** 将 section heading 映射到 BranchUpdate 对应字段。 */
+    private BranchUpdate sectionToUpdate(String heading, String content) {
+        return switch (heading) {
+            case "一、本节点输入" -> new BranchUpdate(content, null, null, null, null, null, null, null, null);
+            case "三、推演结果" -> new BranchUpdate(null, null, content, null, null, null, null, null, null);
+            case "四、世界观/设定增量" -> new BranchUpdate(null, null, null, content, null, null, null, null, null);
+            case "五、实体状态增量" -> new BranchUpdate(null, null, null, null, content, null, null, null, null);
+            case "六、推演规则增量" -> new BranchUpdate(null, null, null, null, null, content, null, null, null);
+            case "七、交互逻辑增量" -> new BranchUpdate(null, null, null, null, null, null, content, null, null);
+            case "八、未总结 Skill 增量" -> new BranchUpdate(null, null, null, null, null, null, null, content, null);
+            case "九、下节点风险" -> new BranchUpdate(null, null, null, null, null, null, null, null, content);
+            default -> new BranchUpdate(content, null, null, null, null, null, null, null, null);
+        };
+    }
+
     // ==================== init ====================
 
     private void initDefault() throws IOException {
