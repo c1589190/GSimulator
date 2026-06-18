@@ -136,6 +136,39 @@ public class OrchestratorAgent {
         }
     }
 
+    /**
+     * 构建完整 system prompt：orchestrator-system.md + ToolRegistry 工具目录 + BaseContext。
+     * 用于 ContextSession 和 RenderedContext 路径。
+     */
+    private String buildFullSystemPrompt(String contextMarkdown) {
+        StringBuilder sb = new StringBuilder();
+        // 1. orchestrator-system.md（身份、工具调用规则、详细工具说明）
+        sb.append(buildSystemPrompt());
+        sb.append("\n\n---\n\n");
+        // 2. ToolRegistry 生成的工具目录（确保与已注册工具一致）
+        sb.append(generateToolCatalog());
+        sb.append("\n\n---\n\n");
+        // 3. BaseContextSnapshot 或渲染上下文
+        sb.append(contextMarkdown);
+        return sb.toString();
+    }
+
+    /**
+     * 从 ToolRegistry 生成当前可用工具目录。
+     * 包含所有已注册工具的 name 和 description。
+     */
+    private String generateToolCatalog() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## 已注册工具 (Registered Tools)\n\n");
+        for (var entry : toolRegistry.all().entrySet()) {
+            sb.append("- **").append(entry.getKey()).append("**: ")
+                    .append(entry.getValue().description()).append("\n");
+        }
+        sb.append("\n调用格式：{\"tool\":\"<工具名>\",\"args\":{\"<参数名>\":\"<参数值>\"}}。");
+        sb.append("工具执行后系统会返回结果，你再自然语言总结。\n");
+        return sb.toString();
+    }
+
     private String buildUserPrompt(List<PlayerAction> playerActions, String instruction, String turnInfo) {
         StringBuilder sb = new StringBuilder();
         sb.append("## 回合信息\n");
@@ -263,7 +296,7 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        messages.add(LlmMessage.system(contextMarkdown));
+        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
 
         String userMsg = "请基于以上上下文进行推演。";
         if (simNote != null && !simNote.isBlank()) {
@@ -352,7 +385,7 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        messages.add(LlmMessage.system(contextMarkdown));
+        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
         messages.add(LlmMessage.user(userText));
         trace.add(new MessageTrace("user", "chat_user", userText));
 
@@ -425,7 +458,7 @@ public class OrchestratorAgent {
 
     /**
      * 基于 ContextSession 的对话模式。
-     * LLM messages = system(BaseContext) + sessionMessages + user(input)
+     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(input)
      */
     public ChatResult chatWithContextSession(String baseContextMarkdown,
                                               List<SessionMessage> sessionMessages,
@@ -434,8 +467,8 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        // 1. system: BaseContextSnapshot
-        messages.add(LlmMessage.system(baseContextMarkdown));
+        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
+        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
 
         // 2. history: 当前 ContextSession 内 SessionMessage
         for (SessionMessage sm : sessionMessages) {
@@ -458,7 +491,7 @@ public class OrchestratorAgent {
 
     /**
      * 基于 ContextSession 的推演模式。
-     * LLM messages = system(BaseContext) + sessionMessages + user(sim prompt)
+     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(sim prompt)
      */
     public SimResult runWithContextSession(String baseContextMarkdown,
                                             List<SessionMessage> sessionMessages,
@@ -467,8 +500,8 @@ public class OrchestratorAgent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
 
-        // 1. system: BaseContextSnapshot
-        messages.add(LlmMessage.system(baseContextMarkdown));
+        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
+        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
 
         // 2. history: 当前 ContextSession 内 SessionMessage
         for (SessionMessage sm : sessionMessages) {
