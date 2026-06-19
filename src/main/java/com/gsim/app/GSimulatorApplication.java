@@ -190,6 +190,10 @@ public class GSimulatorApplication {
         // Orchestrator + Chat
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel());
+
+        // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
+
         chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator,
                 ctxSessionManager, dataRoot, ctx);
         chatCommand = new ChatCommand(chatService);
@@ -226,6 +230,8 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.branch.tool.SimulationContentGetTool(dataManager));
         toolRegistry.register(new com.gsim.branch.tool.SimulationContentUpdateTool(dataManager));
         toolRegistry.register(new com.gsim.branch.tool.TurnSettlementSaveTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.TurnSettlementSaveLastResponseTool(
+                dataManager, orchestrator::getLastAssistantDraft));
         toolRegistry.register(new com.gsim.branch.tool.TurnSettlementGetTool(dataManager));
         toolRegistry.register(new com.gsim.branch.tool.BranchCreateChildTool(dataManager, onBranchChanged));
         toolRegistry.register(new com.gsim.branch.tool.BranchSwitchTool(dataManager, onBranchChanged));

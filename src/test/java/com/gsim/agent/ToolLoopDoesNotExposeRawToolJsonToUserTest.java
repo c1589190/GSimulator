@@ -34,6 +34,7 @@ class ToolLoopDoesNotExposeRawToolJsonToUserTest {
         fakeLlm = new FakeLlmClient();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -85,13 +86,15 @@ class ToolLoopDoesNotExposeRawToolJsonToUserTest {
     void toolLoopFinalTextFreeOfRawJson() {
         // 即使工具被正确提取，finalText 也应不含 raw JSON
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"step1\"}}");
-        fakeLlm.addResponse("操作已成功完成。当前 branch.b0000-start 状态正常。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"操作已成功完成。当前 branch.b0000-start 状态正常。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行操作");
 
         assertTrue(result.success());
+        assertEquals(2, result.toolCalls().size());
         assertFalse(result.finalText().contains("{\"tool\""),
                 "finalText must NOT contain raw tool JSON");
         assertFalse(result.finalText().contains("[TOOL_RESULT]"),
@@ -105,13 +108,14 @@ class ToolLoopDoesNotExposeRawToolJsonToUserTest {
     void multipleToolCallsFinalTextIsClean() {
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"a\"}}");
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"b\"}}");
-        fakeLlm.addResponse("所有操作已完成。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"所有操作已完成。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行");
 
-        assertEquals(2, result.toolCalls().size());
+        assertEquals(3, result.toolCalls().size());
         String ft = result.finalText();
         assertFalse(ft.contains("{\"tool\""), "finalText must be clean: " + ft);
         assertFalse(ft.contains("```"), "No fence markers: " + ft);

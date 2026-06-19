@@ -31,6 +31,7 @@ class ToolLoopExecutesFencedJsonToolCallTest {
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new BranchCreateChildTool());
         toolRegistry.register(new EchoTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -43,15 +44,16 @@ class ToolLoopExecutesFencedJsonToolCallTest {
                 + "\"initialInput\":\"罗德岛启程\""
                 + "}}\n```";
         fakeLlm.addResponse(fenced);
-        fakeLlm.addResponse("节点已创建。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"节点已创建。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "创建节点");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("branch_create_child", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
         assertFalse(result.finalText().contains("```"),
                 "finalText must not contain fence markers");
     }
@@ -63,15 +65,16 @@ class ToolLoopExecutesFencedJsonToolCallTest {
                 + "{\"tool\":\"echo\",\"args\":{\"message\":\"from spaced fence\"}}\n"
                 + "```";
         fakeLlm.addResponse(fenced);
-        fakeLlm.addResponse("已执行。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"已执行。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("echo", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
     }
 
     @Test
@@ -81,15 +84,16 @@ class ToolLoopExecutesFencedJsonToolCallTest {
                 + "{\"tool\":\"echo\",\"args\":{\"message\":\"no lang tag\"}}\n"
                 + "```";
         fakeLlm.addResponse(fenced);
-        fakeLlm.addResponse("完成。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"完成。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("echo", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
     }
 
     @Test
@@ -100,14 +104,14 @@ class ToolLoopExecutesFencedJsonToolCallTest {
                 + "然后：\n\n"
                 + "```json\n{\"tool\":\"echo\",\"args\":{\"message\":\"second\"}}\n```";
         fakeLlm.addResponse(response);
-        fakeLlm.addResponse("两个工具均已执行。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"两个工具均已执行。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
-        assertEquals(2, result.toolCalls().size(),
-                "Both fenced tool calls should be executed");
+        assertEquals(3, result.toolCalls().size(),
+                "Both fenced tool calls + finish_action should be executed");
     }
 
     // ===== Fake Tools =====

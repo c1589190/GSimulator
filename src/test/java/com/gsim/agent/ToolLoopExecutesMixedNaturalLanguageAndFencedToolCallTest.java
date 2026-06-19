@@ -30,6 +30,7 @@ class ToolLoopExecutesMixedNaturalLanguageAndFencedToolCallTest {
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new SimulationContentAppendTool());
         toolRegistry.register(new BranchCreateChildTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -49,17 +50,17 @@ class ToolLoopExecutesMixedNaturalLanguageAndFencedToolCallTest {
                 + "}}\n"
                 + "```";
         fakeLlm.addResponse(mixedResponse);
-        // 第三轮：自然语言
-        fakeLlm.addResponse("第一回合节点已创建：branch.b0001-first-turn。"
-                + "当前 active branch 已切换到 branch.b0001。");
+        // 第三轮：finish_action
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"第一回合节点已创建：branch.b0001-first-turn。当前 active branch 为 branch.b0001。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "创建第一回合并写序言");
 
         assertTrue(result.success());
-        assertEquals(2, result.toolCalls().size(),
-                "Both simulation_content_append and branch_create_child should be executed");
+        assertEquals(3, result.toolCalls().size(),
+                "simulation_content_append + branch_create_child + finish_action should be executed");
         assertEquals("simulation_content_append", result.toolCalls().get(0).tool());
         assertEquals("branch_create_child", result.toolCalls().get(1).tool());
         assertEquals("第一回合 — 博士苏醒",
@@ -89,14 +90,14 @@ class ToolLoopExecutesMixedNaturalLanguageAndFencedToolCallTest {
                 + "}}\n"
                 + "```";
         fakeLlm.addResponse(longText);
-        fakeLlm.addResponse("龙门特别行动节点已创建：branch.b0002。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"龙门特别行动节点已创建：branch.b0002。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0001\n",
                 List.of(), "创建龙门行动节点");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("branch_create_child", result.toolCalls().get(0).tool());
         assertEquals("龙门特别行动",
                 result.toolCalls().get(0).args().get("title"));
@@ -107,14 +108,14 @@ class ToolLoopExecutesMixedNaturalLanguageAndFencedToolCallTest {
     void naturalLanguageWithEmbeddedRawJsonExecuted() {
         fakeLlm.addResponse("我先查一下状态：{\"tool\":\"branch_create_child\","
                 + "\"args\":{\"title\":\"状态检查\"}}");
-        fakeLlm.addResponse("状态检查节点已创建。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"状态检查节点已创建。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "检查");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertFalse(result.finalText().contains("{\"tool\""),
                 "finalText must NOT contain raw JSON");
     }

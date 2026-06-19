@@ -31,6 +31,7 @@ class ToolLoopExecutesPureJsonToolCallTest {
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
         toolRegistry.register(new BranchCreateChildTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -38,14 +39,14 @@ class ToolLoopExecutesPureJsonToolCallTest {
     @DisplayName("纯 JSON tool call 被提取并执行")
     void pureJsonExecuted() {
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"hello\"}}");
-        fakeLlm.addResponse("工具已执行完毕。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"工具已执行完毕。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("echo", result.toolCalls().get(0).tool());
         assertFalse(result.finalText().contains("{\"tool\""),
                 "finalText must not contain raw JSON");
@@ -60,14 +61,14 @@ class ToolLoopExecutesPureJsonToolCallTest {
                 + "\"initialInput\":\"博士在罗德岛医疗舱苏醒。\""
                 + "}}";
         fakeLlm.addResponse(json);
-        fakeLlm.addResponse("第一回合节点已创建：branch.b0001-first-turn");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"第一回合节点已创建：branch.b0001-first-turn。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "创建第一回合");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         assertEquals("branch_create_child", result.toolCalls().get(0).tool());
         assertEquals("第一回合 — 博士苏醒",
                 result.toolCalls().get(0).args().get("title"));
@@ -78,15 +79,16 @@ class ToolLoopExecutesPureJsonToolCallTest {
     void twoConsecutivePureJsonCalls() {
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"first\"}}");
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"second\"}}");
-        fakeLlm.addResponse("两次工具调用均已完成。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\",\"message\":\"两次工具调用均已完成。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
-        assertEquals(2, result.toolCalls().size());
+        assertEquals(3, result.toolCalls().size());
         assertEquals("echo", result.toolCalls().get(0).tool());
         assertEquals("echo", result.toolCalls().get(1).tool());
+        assertEquals("finish_action", result.toolCalls().get(2).tool());
         assertTrue(result.finalText().contains("完成"));
     }
 

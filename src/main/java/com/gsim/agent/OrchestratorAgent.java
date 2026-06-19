@@ -22,6 +22,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Orchestrator Agent — 主协调者。
@@ -43,10 +44,18 @@ public class OrchestratorAgent {
     private final ToolRegistry toolRegistry;
     private final String model;
 
+    /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
+    private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
+
     public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.model = model;
+    }
+
+    /** 返回最近一次 assistant 输出草稿，用于工具保存。可能为空字符串。 */
+    public String getLastAssistantDraft() {
+        return lastAssistantDraft.get();
     }
 
     /**
@@ -235,7 +244,7 @@ public class OrchestratorAgent {
         }
         sb.append("[/TOOL_RESULT]\n\n");
         sb.append("请基于以上工具结果继续完成用户请求；如果还需要工具，继续输出 JSON 工具调用；");
-        sb.append("如果已经足够，输出最终自然语言回答。");
+        sb.append("如果已经足够，调用 finish_action 结束本轮。不要直接输出最终回答而不调用 finish_action。");
         return sb.toString();
     }
 
@@ -315,6 +324,120 @@ public class OrchestratorAgent {
         return finalText + "\n\n⚠️ [系统提示] 以上回复包含操作成功宣称，"
                 + "但在本轮对话中未检测到对应的工具执行记录。"
                 + "如确有操作需要执行，请重新输入指令。";
+    }
+
+    /**
+     * 将 assistant 输出转化为干净的草稿（供 turn_settlement_save_last_response 使用）。
+     * 剥离 fenced JSON、裸 tool call JSON、[工具结果] 标记和伪造的 {key=value} 块。
+     */
+    static String toCleanDraft(String text) {
+        if (text == null || text.isBlank()) return text;
+        String result = stripRawToolJson(text);
+        result = stripFakeBracketToolResult(result);
+        return result.trim();
+    }
+
+    // ---- finish_action 验证 ----
+
+    /**
+     * 验证 finish_action.message 不包含工具内部标记（占位符、raw JSON、伪造结果）。
+     * 返回 null 表示通过，返回 String 表示错误消息。
+     */
+    static String validateFinishActionMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "finish_action message 不能为空";
+        }
+        if (message.contains("[工具调用已执行]")) {
+            return "finish_action.message 包含 [工具调用已执行] 占位符，"
+                    + "请用自然语言描述操作结果，重新调用 finish_action。";
+        }
+        if (message.contains("[工具结果]") || message.contains("[TOOL_RESULT]")) {
+            return "finish_action.message 包含伪造的 [工具结果] / [TOOL_RESULT] 标记，"
+                    + "请移除所有工具内部标记，只输出给用户的自然语言回复，重新调用 finish_action。";
+        }
+        if (message.contains("```json") || (message.contains("```") && message.contains("\"tool\""))) {
+            return "finish_action.message 包含 fenced JSON tool call，"
+                    + "请移除所有 ``` 代码块，用自然语言重写，重新调用 finish_action。";
+        }
+        if (message.matches("(?s).*\\{\"tool\"\\s*:\\s*\"[^\"]+\".*\\}.*")) {
+            return "finish_action.message 包含裸 JSON tool call，"
+                    + "请移除所有 {\"tool\":...} 内容，用自然语言重写，重新调用 finish_action。";
+        }
+        // 检测裸 JSON（非 tool call，含 { 但不含 "tool": → 可能是 raw tool output 泄露）
+        String trimmed = message.strip();
+        if (trimmed.startsWith("{") && !trimmed.contains("\"tool\"")) {
+            return "finish_action.message 包含裸 JSON 工具输出（不含 tool 字段），"
+                    + "请用自然语言重写，重新调用 finish_action。";
+        }
+        // 检测伪造的 {key=value} 模式（model 幻觉生成的结果）
+        if (message.matches("(?s).*\\{(branchId|mode|status|title|createdBranchId|activeBranchId)\\s*=\\s*[^}]+\\}.*")) {
+            return "finish_action.message 包含伪造的 key=value 模式（疑似模型幻觉），"
+                    + "请移除所有 {key=value} 内容，用自然语言重写，重新调用 finish_action。";
+        }
+        return null;
+    }
+
+    /**
+     * 验证 finish_action.message 中的成功宣称是否有对应的工具执行记录支撑。
+     * 返回 null 表示通过，返回 String 表示错误消息。
+     */
+    static String validateFinishActionClaims(String message, List<ToolCallRecord> toolCalls) {
+        if (message == null || message.isBlank()) return null;
+
+        if (toolCalls.isEmpty()) {
+            String[] claims = {"已保存", "已创建", "已切换", "已进入",
+                    "已入库", "已写入", "已更新", "已完成", "已记录"};
+            for (String c : claims) {
+                if (message.contains(c)) {
+                    return "finish_action 声称操作成功（'" + c + "'），"
+                            + "但本轮没有执行任何工具。请先调用工具完成操作，再调用 finish_action。";
+                }
+            }
+            return null;
+        }
+
+        java.util.Set<String> successTools = new java.util.HashSet<>();
+        for (ToolCallRecord tc : toolCalls) {
+            if (tc.result().success()) {
+                successTools.add(tc.tool());
+            }
+        }
+
+        if (message.contains("已保存") && !hasAnyToolStartingWith(successTools, "turn_settlement_save")) {
+            return "finish_action 声称'已保存'，但没有 turn_settlement_save* 成功执行记录。"
+                    + "请先调用 turn_settlement_save_last_response，再调用 finish_action。";
+        }
+        if ((message.contains("已进入") || message.contains("已切换") || message.contains("切换到"))
+                && !successTools.contains("branch_next_turn")
+                && !successTools.contains("branch_switch")) {
+            return "finish_action 声称'已进入/已切换'，但没有 branch_next_turn 或 branch_switch 成功执行记录。"
+                    + "请先调用 branch_next_turn，再调用 finish_action。";
+        }
+        if (message.contains("已创建")
+                && !hasAnyToolStartingWith(successTools, "branch_create_child")
+                && !successTools.contains("branch_next_turn")
+                && !successTools.contains("knowledge_upsert")
+                && !successTools.contains("player_action_append")
+                && !successTools.contains("turn_settlement_save_last_response")) {
+            return "finish_action 声称'已创建'，但没有对应的创建工具成功执行记录。"
+                    + "请先调用 branch_create_child / knowledge_upsert / player_action_append 等创建工具，再调用 finish_action。";
+        }
+        if (message.contains("已写入") && !successTools.contains("knowledge_upsert")) {
+            return "finish_action 声称'已写入'，但没有 knowledge_upsert 成功执行记录。"
+                    + "请先调用 knowledge_upsert，再调用 finish_action。";
+        }
+        if (message.contains("已记录") && !successTools.contains("player_action_append")) {
+            return "finish_action 声称'已记录'，但没有 player_action_append 成功执行记录。"
+                    + "请先调用 player_action_append，再调用 finish_action。";
+        }
+        return null;
+    }
+
+    private static boolean hasAnyToolStartingWith(java.util.Set<String> tools, String prefix) {
+        for (String t : tools) {
+            if (t.startsWith(prefix)) return true;
+        }
+        return false;
     }
 
     // ---- fake [工具结果] 检测 ----
@@ -647,10 +770,20 @@ public class OrchestratorAgent {
             String content = response.content();
             messages.add(LlmMessage.assistant(content));
 
+            // 缓存当前 assistant 内容（清理 raw JSON/伪造结果）作为 draft，
+            // 供 turn_settlement_save_last_response 在当前轮工具执行中使用。
+            String strippedForDraft = toCleanDraft(content);
+            if (!strippedForDraft.isBlank()) {
+                lastAssistantDraft.set(strippedForDraft);
+            }
+
             // 提取所有 tool call（支持一次回复中包含多个工具调用）
             List<ParsedToolCall> allParsed = ToolCallExtractor.extractAllToolCalls(content);
             if (!allParsed.isEmpty()) {
                 int toolsBefore = toolCalls.size();
+                boolean finishActionSeen = false;
+                String finishMessage = null;
+
                 for (ParsedToolCall parsed : allParsed) {
                     trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
                     ToolCall call = new ToolCall(parsed.tool, parsed.args);
@@ -660,45 +793,62 @@ public class OrchestratorAgent {
                     messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool + " success=" + result.success()));
+
+                    // 检测 finish_action
+                    if ("finish_action".equals(parsed.tool) && result.success()) {
+                        finishActionSeen = true;
+                        for (ToolResult.Item item : result.items()) {
+                            finishMessage = item.snippet();
+                            break;
+                        }
+                    }
                 }
                 toolRound++;
-                // 如果这条回复中成功提取并执行了工具，继续 ToolLoop
+
+                if (finishActionSeen && finishMessage != null) {
+                    // 验证 finish_action.message
+                    String validationError = validateFinishActionMessage(finishMessage);
+                    if (validationError != null) {
+                        messages.add(LlmMessage.user(validationError));
+                        trace.add(new MessageTrace("system", "finish_rejected", validationError));
+                        continue;
+                    }
+                    String claimError = validateFinishActionClaims(finishMessage, toolCalls);
+                    if (claimError != null) {
+                        messages.add(LlmMessage.user(claimError));
+                        trace.add(new MessageTrace("system", "finish_rejected", claimError));
+                        continue;
+                    }
+                    finalText = finishMessage;
+                    trace.add(new MessageTrace("assistant", "chat_response", finalText));
+                    break;
+                }
+
+                // 执行了非 finish_action 工具：继续 ToolLoop
                 if (toolCalls.size() > toolsBefore) {
                     continue;
                 }
             }
 
-            finalText = content;
-            // 守卫：如果 LLM 输出看起来像 raw tool result（而非自然语言），追加一轮纠正
-            if (isRawToolOutput(finalText) && toolRound < MAX_TOOL_ROUNDS) {
-                messages.add(LlmMessage.user(
-                        "请将以上结果转化为自然语言回答。不要输出原始 JSON 或 [TOOL_RESULT] 标记。"));
-                trace.add(new MessageTrace("system", "guard_retry",
-                        "finalText appears to be raw tool output, requesting natural language"));
-                toolRound++;
-                continue;
-            }
-            if (ToolPollutionFilter.isPolluted(finalText)) {
-                trace.add(new MessageTrace("assistant", "chat_response",
-                        "[filtered, length=" + finalText.length() + "]"));
-            } else {
-                trace.add(new MessageTrace("assistant", "chat_response", finalText));
-            }
-            break;
+            // 无 tool call：提示必须调用 finish_action
+            messages.add(LlmMessage.user(
+                    "你还没有调用 finish_action。本轮不能结束。"
+                    + "请继续调用必要工具，或调用 finish_action 给出最终回复。"));
+            trace.add(new MessageTrace("system", "finish_required",
+                    "no tool call found, reminding to use finish_action"));
+            toolRound++;
+            continue;
         }
 
         if (finalText == null) {
-            messages.add(LlmMessage.user("请基于以上信息给出自然语言回答，不要调用更多工具，不要输出原始 JSON。"));
-            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
-            if (fr.success()) {
-                finalText = fr.content();
-                trace.add(new MessageTrace("assistant", "chat_response", finalText));
-            } else {
-                return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
-            }
+            String errMsg = "[系统错误] Agent 未调用 finish_action，本轮未能正常结束。"
+                    + "请重试或检查 prompt/tool loop。";
+            trace.add(new MessageTrace("system", "error", errMsg));
+            return new ChatResult(false, errMsg, toolCalls, trace,
+                    "Agent did not call finish_action within " + MAX_TOOL_ROUNDS + " rounds");
         }
 
-        // 后处理：strip raw JSON、检测 MODEL_FAKE_TOOL_RESULT、检查无 tool_result 的成功宣称
+        // 后处理（防御性：对已验证的 finish_action message 是 no-op）
         if (hasFakeBracketToolResult(finalText, toolCalls)) {
             log.warn("MODEL_FAKE_TOOL_RESULT detected in chat — stripping fabricated tool output");
             finalText = "[系统提示] 检测到模型伪造的工具结果（未经过真实工具执行），以下内容已过滤。\n\n"
@@ -706,6 +856,9 @@ public class OrchestratorAgent {
         }
         finalText = stripRawToolJson(finalText);
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
+
+        // 缓存草稿，供 turn_settlement_save_last_response 使用
+        lastAssistantDraft.set(finalText);
 
         return new ChatResult(true, finalText, toolCalls, trace, null);
     }
@@ -730,10 +883,19 @@ public class OrchestratorAgent {
             String content = response.content();
             messages.add(LlmMessage.assistant(content));
 
+            // 缓存当前 assistant 内容（清理 raw JSON/伪造结果）作为 draft
+            String strippedForDraft = toCleanDraft(content);
+            if (!strippedForDraft.isBlank()) {
+                lastAssistantDraft.set(strippedForDraft);
+            }
+
             // 提取所有 tool call（支持一次回复中包含多个工具调用）
             List<ParsedToolCall> allParsed = ToolCallExtractor.extractAllToolCalls(content);
             if (!allParsed.isEmpty()) {
                 int toolsBefore = toolCalls.size();
+                boolean finishActionSeen = false;
+                String finishMessage = null;
+
                 for (ParsedToolCall parsed : allParsed) {
                     trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
                     ToolCall call = new ToolCall(parsed.tool, parsed.args);
@@ -743,45 +905,61 @@ public class OrchestratorAgent {
                     messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool + " success=" + result.success()));
+
+                    // 检测 finish_action
+                    if ("finish_action".equals(parsed.tool) && result.success()) {
+                        finishActionSeen = true;
+                        for (ToolResult.Item item : result.items()) {
+                            finishMessage = item.snippet();
+                            break;
+                        }
+                    }
                 }
                 toolRound++;
-                // 如果这条回复中成功提取并执行了工具，继续 ToolLoop
+
+                if (finishActionSeen && finishMessage != null) {
+                    // 验证 finish_action.message
+                    String validationError = validateFinishActionMessage(finishMessage);
+                    if (validationError != null) {
+                        messages.add(LlmMessage.user(validationError));
+                        trace.add(new MessageTrace("system", "finish_rejected", validationError));
+                        continue;
+                    }
+                    String claimError = validateFinishActionClaims(finishMessage, toolCalls);
+                    if (claimError != null) {
+                        messages.add(LlmMessage.user(claimError));
+                        trace.add(new MessageTrace("system", "finish_rejected", claimError));
+                        continue;
+                    }
+                    finalText = finishMessage;
+                    trace.add(new MessageTrace("assistant", "sim_output", finalText));
+                    break;
+                }
+
+                // 执行了非 finish_action 工具：继续 ToolLoop
                 if (toolCalls.size() > toolsBefore) {
                     continue;
                 }
             }
 
-            finalText = content;
-            // 守卫：如果 LLM 输出看起来像 raw tool result，追加一轮纠正
-            if (isRawToolOutput(finalText) && toolRound < MAX_TOOL_ROUNDS) {
-                messages.add(LlmMessage.user(
-                        "请将以上结果转化为自然语言推演输出。不要输出原始 JSON 或 [TOOL_RESULT] 标记。"));
-                trace.add(new MessageTrace("system", "guard_retry",
-                        "finalText appears to be raw tool output, requesting natural language"));
-                toolRound++;
-                continue;
-            }
-            if (ToolPollutionFilter.isPolluted(finalText)) {
-                trace.add(new MessageTrace("assistant", "sim_output",
-                        "[filtered, length=" + finalText.length() + "]"));
-            } else {
-                trace.add(new MessageTrace("assistant", "sim_output", finalText));
-            }
-            break;
+            // 无 tool call：提示必须调用 finish_action
+            messages.add(LlmMessage.user(
+                    "你还没有调用 finish_action。本轮不能结束。"
+                    + "请继续调用必要工具，或调用 finish_action 给出最终推演输出。"));
+            trace.add(new MessageTrace("system", "finish_required",
+                    "no tool call found, reminding to use finish_action"));
+            toolRound++;
+            continue;
         }
 
         if (finalText == null) {
-            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结，不要输出原始 JSON。不要调用更多工具。"));
-            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
-            if (fr.success()) {
-                finalText = fr.content();
-                trace.add(new MessageTrace("assistant", "sim_output", finalText));
-            } else {
-                finalText = "推演总结生成失败: " + fr.errorMessage();
-            }
+            String errMsg = "[系统错误] Agent 未调用 finish_action，本轮未能正常结束。"
+                    + "请重试或检查 prompt/tool loop。";
+            trace.add(new MessageTrace("system", "error", errMsg));
+            return new SimResult(errMsg, toolCalls, trace);
         }
 
-        // 后处理：strip raw JSON、检测 MODEL_FAKE_TOOL_RESULT、检查无 tool_result 的成功宣称
+        // 后处理（防御性：对已验证的 finish_action message 是 no-op）
         if (hasFakeBracketToolResult(finalText, toolCalls)) {
             log.warn("MODEL_FAKE_TOOL_RESULT detected in sim — stripping fabricated tool output");
             finalText = "[系统提示] 检测到模型伪造的工具结果（未经过真实工具执行），以下内容已过滤。\n\n"
@@ -789,6 +967,9 @@ public class OrchestratorAgent {
         }
         finalText = stripRawToolJson(finalText);
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
+
+        // 缓存草稿，供 turn_settlement_save_last_response 使用
+        lastAssistantDraft.set(finalText);
 
         return new SimResult(finalText, toolCalls, trace);
     }

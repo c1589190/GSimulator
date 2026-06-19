@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Verifies CLI control character inputs are sanitized before entering Agent.
+ * 适配 finish_action 架构。
  */
 class CliControlCharInputTest {
 
@@ -33,8 +34,10 @@ class CliControlCharInputTest {
         dm.init();
 
         fakeLlm = new FakeLlmClient();
-        fakeLlm.setNextResponse("正常回复。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"正常回复。\"}}");
         ToolRegistry tools = new ToolRegistry();
+        tools.register(new com.gsim.agent.tool.FinishActionTool());
         OrchestratorAgent orch = new OrchestratorAgent(fakeLlm, tools, "test-model");
 
         BranchMessageStore msgStore = new BranchMessageStore(dm, dataRoot);
@@ -61,7 +64,8 @@ class CliControlCharInputTest {
 
     @Test
     void inputWithAnsiCodesIsCleaned() throws Exception {
-        fakeLlm.setNextResponse("理解你的问题。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"理解你的问题。\"}}");
         String input = "[31mRed text[0m 你好世界";
         String response = chatService.chat(input);
         assertTrue(response.contains("理解"), "Cleaned input should reach LLM: " + response);

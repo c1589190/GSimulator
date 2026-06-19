@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * <ol>
  * <li>tool result 被注入 LLM 上下文</li>
  * <li>LLM 在下一轮可以看到 tool result</li>
- * <li>ToolLoop 继续直到 LLM 不再调用工具</li>
+ * <li>ToolLoop 继续直到 LLM 调用 finish_action</li>
  * </ol>
  */
 @DisplayName("ToolLoop 回灌 tool_result 并继续")
@@ -35,6 +35,7 @@ class ToolLoopFeedsToolResultBackAndContinuesTest {
         fakeLlm = new FakeLlmClient();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new WeatherTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -42,7 +43,8 @@ class ToolLoopFeedsToolResultBackAndContinuesTest {
     @DisplayName("tool result 被注入 LLM 上下文供下一轮使用")
     void toolResultInjectedToLlmContext() {
         fakeLlm.addResponse("{\"tool\":\"check_weather\",\"args\":{\"region\":\"龙门\"}}");
-        fakeLlm.addResponse("根据天气数据，龙门当前阴天，适合行动。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"根据天气数据，龙门当前阴天，适合行动。\"}}");
 
         agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
@@ -67,22 +69,23 @@ class ToolLoopFeedsToolResultBackAndContinuesTest {
     @Test
     @DisplayName("ToolLoop 在工具调用后继续而非停止")
     void toolLoopContinuesAfterToolCall() {
-        // 三轮：工具调用 → 工具调用 → 自然语言
+        // 三轮：工具调用 → 工具调用 → finish_action
         fakeLlm.addResponse("{\"tool\":\"check_weather\",\"args\":{\"region\":\"龙门\"}}");
         fakeLlm.addResponse("{\"tool\":\"check_weather\",\"args\":{\"region\":\"乌萨斯\"}}");
-        fakeLlm.addResponse("两处天气已确认完毕。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"两处天气已确认完毕。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "查询多处天气");
 
         assertTrue(result.success());
-        assertEquals(2, result.toolCalls().size(),
-                "Should have 2 tool calls (loop continued after first)");
+        assertEquals(3, result.toolCalls().size(),
+                "Should have 3 tool calls (2 weather + finish_action)");
         assertEquals(3, fakeLlm.getCapturedRequests().size(),
-                "Should have 3 LLM calls (2 tool + 1 final)");
+                "Should have 3 LLM calls (2 tool + 1 finish_action)");
         assertTrue(result.finalText().contains("确认完毕"),
-                "Final answer should be the third response");
+                "Final answer should be the finish_action message");
     }
 
     @Test
@@ -90,16 +93,16 @@ class ToolLoopFeedsToolResultBackAndContinuesTest {
     void llmAdaptsResponseBasedOnToolResult() {
         // 第一轮：工具调用
         fakeLlm.addResponse("{\"tool\":\"check_weather\",\"args\":{\"region\":\"龙门\"}}");
-        // 第二轮：LLM 基于 tool result 给出含具体数据的回复
-        fakeLlm.addResponse("龙门外围荒漠地带当前天气晴朗，"
-                + "能见度高，风力3级，适合罗德岛小队行动。");
+        // 第二轮：finish_action
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"龙门外围荒漠地带当前天气晴朗，能见度高，风力3级，适合罗德岛小队行动。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "龙门天气");
 
         assertTrue(result.success());
-        assertEquals(1, result.toolCalls().size());
+        assertEquals(2, result.toolCalls().size());
         // LLM 的回复应包含从 tool result 得到的上下文
         assertTrue(result.finalText().contains("天气") || result.finalText().contains("风力"),
                 "LLM should incorporate tool result data: " + result.finalText());

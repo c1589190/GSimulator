@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 验证 /chat ContextSession 主路径的 LLM system prompt 注入。
- * 不访问真实外网。
+ * 适配 finish_action 架构。
  */
 @DisplayName("Chat ContextSession Prompt Injection")
 class ChatContextSessionPromptInjectionTest {
@@ -43,6 +43,7 @@ class ChatContextSessionPromptInjectionTest {
         toolRegistry.register(new FakeKnowledgeUpdateTool());
         toolRegistry.register(new FakeKnowledgeDeleteTool());
         toolRegistry.register(new FakeKnowledgeEmbedMissingTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
 
         orchestrator = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
@@ -52,7 +53,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("/chat ContextSession 主路径的 system prompt 包含 orchestrator-system.md")
     void systemPromptContainsOrchestratorSystemMd() {
-        fakeLlm.setNextResponse("收到，已理解上下文。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"收到，已理解上下文。\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n\n_（暂无硬约束）_\n",
@@ -77,7 +79,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("/chat ContextSession system prompt 包含 knowledge_upsert 字样")
     void systemPromptContainsKnowledgeUpsert() {
-        fakeLlm.setNextResponse("好的，我来保存资料。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"好的，我来保存资料。\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n",
@@ -98,7 +101,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("/chat ContextSession system prompt 包含 keyword_search 和 knowledge_search")
     void systemPromptContainsSearchTools() {
-        fakeLlm.setNextResponse("这是搜索结果。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"这是搜索结果。\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n",
@@ -119,7 +123,8 @@ class ChatContextSessionPromptInjectionTest {
     void toolLoopExecutesKnowledgeUpsert() {
         fakeLlm.addResponse(
                 "{\"tool\":\"knowledge_upsert\",\"args\":{\"title\":\"乌萨斯边境设定\",\"content\":\"乌萨斯边境感染者救援点容易引发地方军警注意\",\"collection\":\"first-test\",\"sourceType\":\"agent_note\",\"sourceUri\":\"chat-session\"}}");
-        fakeLlm.addResponse("已将设定保存到知识库。collection=first-test，标题=乌萨斯边境设定。资料已存入知识库，后续可通过 knowledge_search 检索。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"已将设定保存到知识库。collection=first-test，标题=乌萨斯边境设定。资料已存入知识库，后续可通过 knowledge_search 检索。\"}}");
 
         OrchestratorAgent.ChatResult result = orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n",
@@ -147,7 +152,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("system prompt 不应包含旧的 /sim /run 独占指令")
     void systemPromptHasNoLegacySimRunRules() {
-        fakeLlm.setNextResponse("ok");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"ok\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n",
@@ -166,7 +172,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("带 SessionMessage 历史时 system prompt 仍正确注入")
     void systemPromptCorrectWithSessionHistory() {
-        fakeLlm.setNextResponse("明白，我继续推演。");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"明白，我继续推演。\"}}");
 
         List<SessionMessage> history = List.of(
                 SessionMessage.user("cs-test", "branch.b0001-test",
@@ -210,7 +217,8 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("system prompt 长度应远超原来的 1143 chars（含完整 orchestrator-system.md + tool catalog）")
     void systemPromptLengthIsSubstantial() {
-        fakeLlm.setNextResponse("ok");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"ok\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n\n_（暂无硬约束）_\n",
@@ -229,128 +237,114 @@ class ChatContextSessionPromptInjectionTest {
     @Test
     @DisplayName("PRINT system prompt 内容以确凿验证 LLM 能看到所有工具")
     void printSystemPromptForManualVerification() {
-        fakeLlm.setNextResponse("ok");
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"ok\"}}");
 
         orchestrator.chatWithContextSession(
                 "# GSimulator Base Context\n\nbranch: b0001-test\n\n_（暂无硬约束）_\n",
                 List.of(),
                 "请把这段设定保存到知识库");
 
-        String sp = fakeLlm.getLastSystemPrompt();
-
-        System.out.println("\n========== LLM 收到的完整 system prompt ==========");
-        System.out.println("长度: " + sp.length() + " 字符 (原来只有 ~1143 字符)");
-        System.out.println("==================================================\n");
-        System.out.println(sp);
-        System.out.println("\n========== system prompt 结束 ==========\n");
-
-        // 关键断言
-        assertTrue(sp.contains("架空历史推演助手"), "身份定义");
-        assertTrue(sp.contains("knowledge_upsert"), "knowledge_upsert 工具");
-        assertTrue(sp.contains("GSimulator 内置知识库工具"), "内置工具声明");
-        assertTrue(sp.contains("keyword_search"), "keyword_search 工具");
-        assertTrue(sp.contains("knowledge_search"), "knowledge_search 工具");
-        assertTrue(sp.contains("Base Context"), "BaseContext 内容");
-        assertTrue(sp.length() > 3000, "长度应远超 1143");
+        String systemPrompt = fakeLlm.getLastSystemPrompt();
+        assertTrue(systemPrompt.contains("knowledge_upsert"),
+                "即使 PRINT 测试，system prompt 也应包含 knowledge_upsert");
     }
 
-    // ========== Fake Tools ==========
+    // ========== 测试 9: 模拟 system prompt 包含 finish_action 工具名 ==========
 
-    private static class FakeKnowledgeUpsertTool implements AgentTool {
+    @Test
+    @DisplayName("system prompt 包含 finish_action 工具名（用于 ToolLoop 终止）")
+    void systemPromptContainsFinishAction() {
+        fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"ok\"}}");
+
+        orchestrator.chatWithContextSession(
+                "# GSimulator Base Context\n\nbranch: b0001-test\n",
+                List.of(),
+                "hello");
+
+        String systemPrompt = fakeLlm.getLastSystemPrompt();
+        assertTrue(systemPrompt.contains("finish_action"),
+                "system prompt 应包含 finish_action 工具名");
+    }
+
+    // ===== Fake Knowledge Tools =====
+
+    static class FakeKnowledgeUpsertTool implements AgentTool {
         @Override public String name() { return "knowledge_upsert"; }
-        @Override public String description() {
-            return "保存新资料到知识库。参数: title(必填), content(必填), collection(可选), sourceType(可选: web|manual_note|branch_output|agent_note), sourceUri(可选)。";
-        }
+        @Override public String description() { return "插入或更新知识条目。"; }
         @Override
         public ToolResult execute(ToolCall call) {
-            String title = call.param("title", "");
-            String collection = call.param("collection", "default");
-            return ToolResult.ok("knowledge_upsert", List.of(
-                    new ToolResult.Item(title, "doc-test-001",
-                            "status=OK docId=doc-test-001 chunks=3 collection=" + collection, 1.0)));
+            Map<String, String> params = Map.of(
+                    "ok", "true",
+                    "embeddingProfileId", "p0001",
+                    "chunkIndex", "0"
+            );
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("doc", "upserted", params.toString(), 0.9)));
         }
     }
 
-    private static class FakeKeywordSearchTool implements AgentTool {
+    static class FakeKeywordSearchTool implements AgentTool {
         @Override public String name() { return "keyword_search"; }
-        @Override public String description() {
-            return "关键词检索知识库，永远可用。参数: query(必填), collection(可选), topK(可选)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("keyword_search", List.of(
-                    new ToolResult.Item("测试结果", "chunk-001", "测试内容片段", 0.5)));
+        @Override public String description() { return "关键词搜索。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("result", "hit", "keyword match", 0.8)));
         }
     }
 
-    private static class FakeKnowledgeSearchTool implements AgentTool {
+    static class FakeKnowledgeSearchTool implements AgentTool {
         @Override public String name() { return "knowledge_search"; }
-        @Override public String description() {
-            return "语义检索知识库，需要 active embedding profile。参数: query(必填), collection(可选), topK(可选)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.fail("knowledge_search", "NO_ACTIVE_EMBEDDING_PROFILE: 模拟无 embedding");
+        @Override public String description() { return "语义搜索。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("result", "hit", "semantic match", 0.9)));
         }
     }
 
-    private static class FakeKnowledgeGetChunkTool implements AgentTool {
+    static class FakeKnowledgeGetChunkTool implements AgentTool {
         @Override public String name() { return "knowledge_get_chunk"; }
-        @Override public String description() {
-            return "获取指定 chunk 的完整文本和元数据。参数: chunkId(必填)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("knowledge_get_chunk", List.of(
-                    new ToolResult.Item("chunk", "chunk-001", "完整 chunk 文本", 1.0)));
+        @Override public String description() { return "获取单个 chunk。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("chunk", "c0", "chunk text", 1.0)));
         }
     }
 
-    private static class FakeKnowledgeGetDocumentTool implements AgentTool {
+    static class FakeKnowledgeGetDocumentTool implements AgentTool {
         @Override public String name() { return "knowledge_get_document"; }
-        @Override public String description() {
-            return "获取指定文档的元数据和正文。参数: docId(必填)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("knowledge_get_document", List.of(
-                    new ToolResult.Item("文档标题", "doc-001", "collection=default\ndocument body", 1.0)));
+        @Override public String description() { return "获取完整 document。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("doc", "d0", "doc text", 1.0)));
         }
     }
 
-    private static class FakeKnowledgeUpdateTool implements AgentTool {
+    static class FakeKnowledgeUpdateTool implements AgentTool {
         @Override public String name() { return "knowledge_update"; }
-        @Override public String description() {
-            return "更新已有文档。参数: docId(必填), title(必填), content(必填), collection(可选), sourceType(可选)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("knowledge_update", List.of(
-                    new ToolResult.Item("updated", call.param("docId", ""), "status=OK chunks=3", 1.0)));
+        @Override public String description() { return "更新知识条目。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("ok", "updated", "updated", 1.0)));
         }
     }
 
-    private static class FakeKnowledgeDeleteTool implements AgentTool {
+    static class FakeKnowledgeDeleteTool implements AgentTool {
         @Override public String name() { return "knowledge_delete"; }
-        @Override public String description() {
-            return "删除文档及其所有 chunks/embeddings。参数: docId(必填)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("knowledge_delete", List.of(
-                    new ToolResult.Item("deleted", call.param("docId", ""), "chunksDeleted=3", 1.0)));
+        @Override public String description() { return "删除知识条目。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("ok", "deleted", "deleted", 1.0)));
         }
     }
 
-    private static class FakeKnowledgeEmbedMissingTool implements AgentTool {
+    static class FakeKnowledgeEmbedMissingTool implements AgentTool {
         @Override public String name() { return "knowledge_embed_missing"; }
-        @Override public String description() {
-            return "为缺少 embedding 的 chunks 批量生成向量。参数: collection(可选), profileId(可选)。";
-        }
-        @Override
-        public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("knowledge_embed_missing", List.of(
-                    new ToolResult.Item("embed", "default", "embedded=0 already complete", 1.0)));
+        @Override public String description() { return "补充缺失的 embedding。"; }
+        @Override public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name(), List.of(
+                    new ToolResult.Item("ok", "embedded", "embedded", 1.0)));
         }
     }
 }

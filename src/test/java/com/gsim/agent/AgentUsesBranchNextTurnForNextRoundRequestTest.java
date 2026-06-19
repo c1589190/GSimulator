@@ -9,15 +9,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证当用户要求「进入下一回合」时，Agent 通过 ToolLoop 调用 branch_next_turn。
+ * 验证当用户要求「进入下一回合」时，Agent 通过 ToolLoop 调用 branch_next_turn
+ * 并以 finish_action 结束。
  */
-@DisplayName("Agent 使用 branch_next_turn 响应下一回合请求")
+@DisplayName("Agent 使用 branch_next_turn 响应下一回合请求 (finish_action)")
 class AgentUsesBranchNextTurnForNextRoundRequestTest {
 
     private FakeLlmClient fakeLlm;
@@ -29,25 +29,27 @@ class AgentUsesBranchNextTurnForNextRoundRequestTest {
         fakeLlm = new FakeLlmClient();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new StubBranchNextTurnTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
     @Test
-    @DisplayName("用户说「进入下一回合」→ LLM 调用 branch_next_turn → 工具执行成功")
+    @DisplayName("用户说「进入下一回合」→ LLM 调用 branch_next_turn → finish_action")
     void userSaysEnterNextTurnTriggersToolCall() {
-        // 第一轮：LLM 输出 tool call JSON
+        // 第一轮：LLM 输出 branch_next_turn tool call
         fakeLlm.addResponse("{\"tool\":\"branch_next_turn\"," +
                 "\"args\":{\"worldTime\":\"泰拉纪年1096年冬\"}}");
-        // 第二轮：LLM 基于工具结果输出自然语言
-        fakeLlm.addResponse("已进入下一回合：branch.b0001，时间：泰拉纪年1096年冬。");
+        // 第二轮：LLM 调用 finish_action
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"已进入下一回合：branch.b0001，时间：泰拉纪年1096年冬。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "进入下一回合");
 
         assertTrue(result.success());
-        assertTrue(result.toolCalls().size() >= 1,
-                "Should execute at least 1 tool call");
+        assertTrue(result.toolCalls().size() >= 2,
+                "Should execute at least branch_next_turn + finish_action");
         assertEquals("branch_next_turn", result.toolCalls().get(0).tool(),
                 "Should call branch_next_turn for next turn request");
         assertTrue(result.toolCalls().get(0).result().success(),
@@ -55,18 +57,19 @@ class AgentUsesBranchNextTurnForNextRoundRequestTest {
     }
 
     @Test
-    @DisplayName("用户说「开始第一回合」→ LLM 调用 branch_next_turn")
+    @DisplayName("用户说「开始第一回合」→ LLM 调用 branch_next_turn → finish_action")
     void userSaysStartFirstTurnTriggersToolCall() {
         fakeLlm.addResponse("{\"tool\":\"branch_next_turn\"," +
                 "\"args\":{\"worldTime\":\"泰拉纪年1096年冬\",\"title\":\"第一回合·龙门\"}}");
-        fakeLlm.addResponse("第一回合已开始，场景：龙门之夜。");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"第一回合已开始，场景：龙门之夜。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "开始第一回合");
 
         assertTrue(result.success());
-        assertTrue(result.toolCalls().size() >= 1);
+        assertTrue(result.toolCalls().size() >= 2);
         assertEquals("branch_next_turn", result.toolCalls().get(0).tool());
     }
 
@@ -75,14 +78,15 @@ class AgentUsesBranchNextTurnForNextRoundRequestTest {
     void nextTurnUsesBranchNextTurnNotCreateChild() {
         fakeLlm.addResponse("{\"tool\":\"branch_next_turn\"," +
                 "\"args\":{\"worldTime\":\"1096 Winter\"}}");
-        fakeLlm.addResponse("Turn 2 ready.");
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"Turn 2 ready.\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0001\n",
                 List.of(), "next turn");
 
         assertTrue(result.success());
-        assertTrue(result.toolCalls().size() >= 1);
+        assertTrue(result.toolCalls().size() >= 2);
         // 验证使用的是 branch_next_turn，不是 branch_create_child
         boolean hasNextTurn = result.toolCalls().stream()
                 .anyMatch(tc -> "branch_next_turn".equals(tc.tool()));

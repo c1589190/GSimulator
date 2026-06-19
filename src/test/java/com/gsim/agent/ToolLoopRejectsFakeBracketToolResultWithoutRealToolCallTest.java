@@ -15,14 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 验证 ToolLoop 检测并拒绝模型伪造的 [工具结果] 和 {key=value} 输出。
- *
- * <p>当 LLM 在没有真实工具执行的情况下输出：
- * <ul>
- *   <li>[工具结果] {title=..., branchId=...}</li>
- *   <li>{mode=tree}</li>
- *   <li>{branchId=branch.b0002}</li>
- * </ul>
- * 这些应被检测为 MODEL_FAKE_TOOL_RESULT 并过滤。
+ * 适配 finish_action 架构：伪造检测通过 finish_action 验证 + 后处理守卫双重保障。
  */
 @DisplayName("ToolLoop 拒绝伪造的 [工具结果] 和 {key=value}")
 class ToolLoopRejectsFakeBracketToolResultWithoutRealToolCallTest {
@@ -36,6 +29,7 @@ class ToolLoopRejectsFakeBracketToolResultWithoutRealToolCallTest {
         fakeLlm = new FakeLlmClient();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
+        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");
     }
 
@@ -133,36 +127,42 @@ class ToolLoopRejectsFakeBracketToolResultWithoutRealToolCallTest {
                 "Should remove {branchId=...}: " + stripped);
     }
 
-    // ===== 全 ToolLoop 集成测试 =====
+    // ===== 全 ToolLoop 集成测试 (finish_action) =====
 
     @Test
-    @DisplayName("ToolLoop 集成：LLM 伪造 [工具结果] 被过滤")
+    @DisplayName("ToolLoop 集成：finish_action.message 中 [工具结果] 被拒绝")
     void toolLoopFiltersFakeBracketResult() {
-        // LLM 输出包含伪造的 [工具结果]，没有真正的 JSON tool call
-        fakeLlm.addResponse("让我查看分支结构。\n\n" +
-                "[工具结果] {mode=tree}\n" +
-                "branch.b0000-start\n" +
-                "  └── branch.b0001 (已创建)\n\n" +
-                "已确认进入 branch.b0001。");
+        // finish_action 的 message 包含伪造的 [工具结果] → 被 validateFinishActionMessage 拒绝
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"让我查看分支结构。\\n\\n[工具结果] {mode=tree}\\nbranch.b0000-start\\n  └── branch.b0001 (已创建)\\n\\n已确认进入 branch.b0001。\"}}");
+        // 重试：干净的 finish_action
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"当前根分支 branch.b0000-start，有一个子节点 branch.b0001。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "查看分支并进入下一回合");
 
         assertTrue(result.success());
-        // [工具结果] 应被过滤
+        // [工具结果] 应被拒绝（resolved by retry）
         assertFalse(result.finalText().contains("[工具结果]"),
                 "Final text should NOT contain [工具结果] pattern");
-        // {mode=tree} 应被过滤
+        // {mode=tree} 应被拒绝
         assertFalse(result.finalText().contains("{mode=tree}"),
                 "Final text should NOT contain {mode=tree}");
     }
 
     @Test
-    @DisplayName("ToolLoop 集成：LLM 伪造 {branchId=b0002} 被过滤")
+    @DisplayName("ToolLoop 集成：finish_action.message 中 {branchId=...} 被后处理守卫过滤")
     void toolLoopFiltersFakeBranchIdBlock() {
-        fakeLlm.addResponse("节点创建完毕 {branchId=branch.b0002, status=OK}。" +
-                "现在开始推演第一回合的内容...");
+        // finish_action message 含 {branchId=...} 但不含 [工具结果] 等其他 banned pattern
+        // → validateFinishActionMessage 不拒绝
+        // → 到达 post-loop guard hasFakeBracketToolResult → 被过滤
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"节点创建完毕 {branchId=branch.b0002, status=OK}。现在开始推演第一回合的内容...\"}}");
+        // 重试
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"节点创建完毕。现在开始推演第一回合的内容...\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
