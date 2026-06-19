@@ -993,7 +993,7 @@ public class OrchestratorAgent {
                             + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
                             + "\n禁止: [tool_a, finish_action]"
                             + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
-                    messages.add(LlmMessage.user(rejection));
+                    messages.add(LlmMessage.system(rejection));
                     trace.add(new MessageTrace("system", "finish_rejected",
                             "FINISH_ACTION_WITH_OTHER_TOOLS"));
                     ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
@@ -1137,7 +1137,9 @@ public class OrchestratorAgent {
                     trace.add(new MessageTrace("assistant", "chat_response", finalText));
                     ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound,
                             true, null, null, null, null);
-                    break;
+                    ToolLoopDebug.logFinalText(log, "runToolLoop", "finish_action", finalText);
+                    lastAssistantDraft.set(finalText);
+                    return new ChatResult(true, finalText, toolCalls, trace, null);
                 }
 
                 if (toolCalls.size() > toolsBefore) {
@@ -1341,7 +1343,7 @@ public class OrchestratorAgent {
                             + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
                             + "\n禁止: [tool_a, finish_action]"
                             + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
-                    messages.add(LlmMessage.user(rejectionSim));
+                    messages.add(LlmMessage.system(rejectionSim));
                     trace.add(new MessageTrace("system", "finish_rejected",
                             "FINISH_ACTION_WITH_OTHER_TOOLS"));
                     ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
@@ -1437,7 +1439,8 @@ public class OrchestratorAgent {
                     ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
                             true, null, null, null, null);
                     ToolLoopDebug.logFinalText(log, "runSimToolLoop", "finish_action", finalText);
-                    break;
+                    lastAssistantDraft.set(finalText);
+                    return new SimResult(finalText, toolCalls, trace);
                 }
 
                 if (toolCalls.size() > toolsBefore) {

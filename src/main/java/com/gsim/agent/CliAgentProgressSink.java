@@ -64,12 +64,24 @@ public class CliAgentProgressSink implements AgentProgressSink {
             case AgentProgressEvent.INVALID_BRACKET_INTENT ->
                     "[Agent] " + event.detail();
             case AgentProgressEvent.FINISH_ACTION_REJECTED ->
-                    "[Agent] " + event.detail();
+                    "[Agent] finish_action 被拒绝：" + reasonText(event.detail());
             case AgentProgressEvent.FINISH_ACTION_ACCEPTED ->
                     null; // 成功结束不额外输出
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
             default -> null;
+        };
+    }
+
+    /** 将拒绝原因码转为人类可读消息。 */
+    static String reasonText(String reasonCode) {
+        if (reasonCode == null) return "未知原因";
+        return switch (reasonCode) {
+            case "FINISH_ACTION_WITH_OTHER_TOOLS" ->
+                    "与其他工具同轮混用，要求模型先单独执行工具。";
+            case "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT" ->
+                    "声称了未经真实工具执行支持的结果。";
+            default -> reasonCode; // message validation 错误直接展示原文
         };
     }
 
