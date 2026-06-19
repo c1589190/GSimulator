@@ -65,6 +65,98 @@ public final class RootIdGenerator {
         return title.isEmpty() ? "未命名世界" : title;
     }
 
+    /** 已知作品/主题关键词映射。key 为小写匹配词，value 为 rootId 后缀。 */
+    private static final java.util.Map<String, String> KNOWN_TOPICS = java.util.Map.ofEntries(
+            java.util.Map.entry("明日方舟", "arknights-terra"),
+            java.util.Map.entry("arknights", "arknights-terra"),
+            java.util.Map.entry("泰拉", "arknights-terra"),
+            java.util.Map.entry("罗马尼亚", "romania"),
+            java.util.Map.entry("romania", "romania"),
+            java.util.Map.entry("东南亚", "sea"),
+            java.util.Map.entry("southeast asia", "sea"),
+            java.util.Map.entry("乌萨斯", "arknights-ursus"),
+            java.util.Map.entry("ursus", "arknights-ursus"),
+            java.util.Map.entry("罗德岛", "arknights-rhodes"),
+            java.util.Map.entry("rhodes island", "arknights-rhodes"),
+            java.util.Map.entry("维多利亚", "arknights-victoria"),
+            java.util.Map.entry("victoria", "arknights-victoria"),
+            java.util.Map.entry("炎国", "arknights-yen"),
+            java.util.Map.entry("龙门", "arknights-lungmen"),
+            java.util.Map.entry("lungmen", "arknights-lungmen"),
+            java.util.Map.entry("卡西米尔", "arknights-kazimierz"),
+            java.util.Map.entry("kazimierz", "arknights-kazimierz"),
+            java.util.Map.entry("莱塔尼亚", "arknights-leithanien"),
+            java.util.Map.entry("leithanien", "arknights-leithanien"),
+            java.util.Map.entry("哥伦比亚", "arknights-columbia"),
+            java.util.Map.entry("columbia", "arknights-columbia"),
+            java.util.Map.entry("1850", "1850-era"),
+            java.util.Map.entry("1876", "1876-era"),
+            java.util.Map.entry("架空", "alt-history"),
+            java.util.Map.entry("alternative history", "alt-history"),
+            java.util.Map.entry("文游", "narrative"),
+            java.util.Map.entry("边境", "frontier"),
+            java.util.Map.entry("frontier", "frontier"),
+            java.util.Map.entry("感染者", "arknights-infected"),
+            java.util.Map.entry("infected", "arknights-infected"),
+            java.util.Map.entry("源石", "arknights-originium"),
+            java.util.Map.entry("originium", "arknights-originium"),
+            java.util.Map.entry("天灾", "arknights-catastrophe"),
+            java.util.Map.entry("移动城邦", "arknights-mobile-city"),
+            java.util.Map.entry("mobile city", "arknights-mobile-city")
+    );
+
+    /**
+     * 从用户文本中识别主题，生成语义化 rootId。
+     * 如果能识别已知作品/主题 → root.&lt;topic&gt;
+     * 如果无法识别 → root.&lt;hash8&gt;
+     * 保证 ASCII-only。
+     */
+    public static String suggestRootId(String userText) {
+        if (userText == null || userText.isBlank()) {
+            return generateFromContent(userText);
+        }
+
+        String lower = userText.toLowerCase(java.util.Locale.ROOT);
+
+        // 按匹配长度降序排列，优先匹配更长的关键词。
+        // 同等长度时，纯数字 key 排在后面（中文/英文主题优先）。
+        var sorted = KNOWN_TOPICS.entrySet().stream()
+                .filter(e -> lower.contains(e.getKey().toLowerCase(java.util.Locale.ROOT)))
+                .sorted((a, b) -> {
+                    int lenCmp = Integer.compare(b.getKey().length(), a.getKey().length());
+                    if (lenCmp != 0) return lenCmp;
+                    // 同等长度：纯数字 key 排在后面
+                    boolean aNumeric = a.getKey().chars().allMatch(Character::isDigit);
+                    boolean bNumeric = b.getKey().chars().allMatch(Character::isDigit);
+                    if (aNumeric && !bNumeric) return 1;
+                    if (!aNumeric && bNumeric) return -1;
+                    return 0;
+                })
+                .toList();
+
+        if (!sorted.isEmpty()) {
+            String suffix = sorted.get(0).getValue();
+            return "root." + suffix;
+        }
+
+        // 无法识别 — 使用 hash
+        return generateFromContent(userText);
+    }
+
+    /**
+     * 生成带冲突避免的 rootId。
+     * 如果 baseId 已被占用，追加短 hash。
+     */
+    public static String suggestRootIdWithCollisionAvoidance(String userText, java.util.Set<String> existingIds) {
+        String base = suggestRootId(userText);
+        if (existingIds == null || !existingIds.contains(base)) {
+            return base;
+        }
+        // 冲突 — 追加短 hash
+        String hash = sha256Hex8(userText != null ? userText : String.valueOf(System.nanoTime()));
+        return base + "-" + hash.substring(0, 4);
+    }
+
     private static String sha256Hex8(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

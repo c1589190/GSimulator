@@ -32,8 +32,10 @@ class PromptRootGovernanceRulesTest {
                 "Prompt must forbid cross-root contamination");
         assertTrue(content.contains("player_profile_update"),
                 "Prompt must mention player profile tools are always available");
-        assertTrue(content.contains("初始化根节点"),
-                "Prompt must mention bootstrap prefix format");
+        assertTrue(content.contains("第一条自然语言视为创建第一个 root 的需求")
+                || content.contains("任意自然语言输入都允许 bootstrap")
+                || content.contains("不得把原始用户消息直接作为 world.md"),
+                "Prompt must contain new any-text bootstrap rules");
         assertTrue(content.contains("不在根节点时的限制"),
                 "Prompt must mention non-root-branch restrictions");
     }

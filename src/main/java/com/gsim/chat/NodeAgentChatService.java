@@ -77,25 +77,31 @@ public class NodeAgentChatService {
         return doChat(cleaned);
     }
 
-    /** 从空 data bootstrap 创建第一个 root。需要明确的初始化前缀。 */
+    /** 从空 data bootstrap 创建第一个 root。任意非空自然语言输入都允许。 */
     private String bootstrapFirstRoot(String userText) throws IOException {
         if (!RootBootstrapPolicy.isStrictlyEmptyDataRoot(dm.getDataRoot())) {
             return "已有 root 数据。创建或切换根节点需要用户显式命令。\n请使用：\n  /root create <rootId> <初始设定>\n  /root switch <rootId>\n  /root list";
         }
 
-        // 检查 bootstrap 意图前缀
-        var intent = com.gsim.root.BootstrapIntentParser.parse(userText);
-        if (!intent.isBootstrap()) {
-            return com.gsim.root.BootstrapIntentParser.nonBootstrapHint();
+        // 解析 bootstrap 意图（data 为空时任意非空文本都允许）
+        var intent = com.gsim.root.BootstrapIntentParser.parse(userText, true);
+        if (!intent.shouldBootstrap()) {
+            return ""; // 空输入，忽略
         }
 
-        String worldContent = intent.worldContent();
-        String title = com.gsim.root.RootIdGenerator.extractTitle(worldContent);
-        String rootId = com.gsim.root.RootIdGenerator.generateFromContent(worldContent);
-        String worldMd = com.gsim.root.RootIdGenerator.buildWorldMarkdown(title, worldContent);
+        // 生成结构化 draft
+        var generator = new com.gsim.root.BootstrapWorldDraftGenerator(
+                appCtx.getLlmClient(), appCtx.getConfig().getLlmModel());
+        var draft = generator.generate(intent);
+
+        String rootId = draft.rootIdSuggestion();
+        // 确保 rootId 有效
+        if (!com.gsim.root.RootIdGenerator.isValidRootId(rootId)) {
+            rootId = com.gsim.root.RootIdGenerator.suggestRootId(intent.sanitizedRequest());
+        }
 
         // Bootstrap
-        dm.bootstrapFromEmpty(rootId, worldMd);
+        dm.bootstrapFromEmpty(rootId, draft);
 
         // 重建 ContextSession + Knowledge
         appCtx.resolveKnowledgeForActiveRoot();
@@ -105,14 +111,26 @@ public class NodeAgentChatService {
         appCtx.setBranchContextRenderer(newRenderer);
         appCtx.setContextSessionManager(this.ctxSessionManager);
 
-        // 确认消息
+        // 构建确认消息
         StringBuilder sb = new StringBuilder();
-        sb.append("已自动创建第一个根节点。\n");
+        sb.append("已根据你的描述创建第一个根节点。\n\n");
         sb.append("Root ID: ").append(rootId).append("\n");
-        sb.append("Title: ").append(title).append("\n");
+        sb.append("Title: ").append(draft.title()).append("\n");
         sb.append("Active Branch: branch.b0000-start\n\n");
-        sb.append("世界观已写入为结构化初始设定。可以开始推演或对话。\n");
-        sb.append("使用 /root status 查看状态。");
+        sb.append("已生成基础世界观模板：\n");
+        sb.append("- world.md：").append(draft.title()).append("基础设定\n");
+        sb.append("- entities.md：主要势力与人物卡占位\n");
+        sb.append("- rules.md：推演规则占位\n");
+        sb.append("- players.md：玩家资料占位\n");
+
+        if (!draft.warnings().isEmpty()) {
+            sb.append("\n注意：");
+            for (String w : draft.warnings()) {
+                sb.append("\n- ").append(w);
+            }
+        }
+
+        sb.append("\n\n使用 /root status 查看状态，/chat 开始对话。");
         return sb.toString();
     }
 

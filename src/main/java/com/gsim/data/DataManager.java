@@ -84,18 +84,23 @@ public class DataManager {
     }
 
     /**
-     * 从空 data bootstrap 创建初始 root。
+     * 从空 data bootstrap 创建初始 root（使用完整 draft）。
      * 只在 dataRoot 严格为空时调用。
      */
-    public void bootstrapFromEmpty(String rootId, String worldContentMd) throws IOException {
+    public void bootstrapFromEmpty(String rootId,
+                                    com.gsim.root.BootstrapWorldDraftGenerator.BootstrapWorldDraft draft)
+            throws IOException {
         if (hasAnyRoot()) {
             throw new IOException("Cannot bootstrap: data already has roots. Use /root create instead.");
+        }
+        if (!rootId.matches("[a-zA-Z0-9._-]+")) {
+            throw new IOException("Invalid rootId: '" + rootId + "'. Must match [a-zA-Z0-9._-]+");
         }
         // 确保 dataRoot 存在
         if (!Files.isDirectory(dataRoot)) {
             Files.createDirectories(dataRoot);
         }
-        // 创建 skills 和 experience（从 initDefault 中提取）
+        // 创建 skills 和 experience
         Path skillsDir = dataRoot.resolve("skills");
         if (!Files.isDirectory(skillsDir)) {
             Files.createDirectories(skillsDir);
@@ -110,13 +115,80 @@ public class DataManager {
             Files.createDirectories(expDir);
             writeFile(expDir.resolve("e0001.md"), ResourceManager.readText("gsim/templates/e0001-experience.md"));
         }
-        // 创建 root
-        initWorld(rootId, worldContentMd);
+        // 创建 root 目录结构
+        Path wd = dataRoot.resolve("worlds").resolve(rootId);
+        for (String d : List.of("branches", "patches/pending", "patches/accepted", "patches/rejected"))
+            Files.createDirectories(wd.resolve(d));
+        Files.writeString(wd.resolve("active-branch.txt"), ROOT_BRANCH, StandardCharsets.UTF_8);
+
+        String today = "2026-06-19";
+
+        // 写 world.md（使用 draft 内容或 fallback 模板）
+        String worldMd = draft.worldMarkdown() != null && !draft.worldMarkdown().isBlank()
+                ? draft.worldMarkdown()
+                : ResourceManager.renderTemplate("gsim/templates/world-template.md", "updated", today);
+        String worldFile = "id: world.base\n"
+                + "type: world\n"
+                + "name: " + rootId + "\n"
+                + "tags: [世界观, 初始设定]\n"
+                + "updated: " + today + "\n"
+                + "-------------------\n\n"
+                + worldMd + "\n";
+        writeFile(wd.resolve("world.md"), worldFile);
+
+        // 写 entities.md
+        String entitiesMd = draft.entitiesMarkdown() != null && !draft.entitiesMarkdown().isBlank()
+                ? draft.entitiesMarkdown()
+                : ResourceManager.renderTemplate("gsim/templates/entities-template.md", "updated", today);
+        writeFile(wd.resolve("entities.md"), entitiesMd);
+
+        // 写 rules.md
+        String rulesMd = draft.rulesMarkdown() != null && !draft.rulesMarkdown().isBlank()
+                ? draft.rulesMarkdown()
+                : ResourceManager.renderTemplate("gsim/templates/rules-template.md", "updated", today);
+        writeFile(wd.resolve("rules.md"), rulesMd);
+
+        // 写 input.md
+        String inputMd = draft.inputMarkdown() != null && !draft.inputMarkdown().isBlank()
+                ? draft.inputMarkdown()
+                : ResourceManager.renderTemplate("gsim/templates/input-template.md", "updated", today);
+        writeFile(wd.resolve("input.md"), inputMd);
+
+        // 写 players.md
+        String playersMd = draft.playersMarkdown() != null && !draft.playersMarkdown().isBlank()
+                ? draft.playersMarkdown()
+                : ResourceManager.readText("gsim/templates/players-template.md");
+        writeFile(wd.resolve("players.md"), playersMd);
+
+        // 写 branches/b0000-start.md
+        String branchInput = draft.rootBranchInput() != null && !draft.rootBranchInput().isBlank()
+                ? draft.rootBranchInput()
+                : "世界初始化。";
+        writeFile(wd.resolve("branches/b0000-start.md"), buildBranchContent(
+                ROOT_BRANCH, "时间原点", "none", 0, "时间原点",
+                branchInput, "无。",
+                "待推演。", "无。", "无。", "无。", "无。", "无。", "待后续推演。"));
+
         this.activeWorld = rootId;
         this.activeBranch = ROOT_BRANCH;
         Files.writeString(dataRoot.resolve("active-world.txt"), rootId, StandardCharsets.UTF_8);
         reload();
-        log.info("Bootstrapped root '{}' from empty data", rootId);
+        log.info("Bootstrapped root '{}' from empty data with full draft", rootId);
+    }
+
+    /**
+     * 从空 data bootstrap 创建初始 root（仅 worldContent，向后兼容）。
+     * 委托到完整 draft 版本。
+     */
+    public void bootstrapFromEmpty(String rootId, String worldContentMd) throws IOException {
+        String title = com.gsim.root.RootIdGenerator.extractTitle(worldContentMd);
+        String worldMd = com.gsim.root.RootIdGenerator.buildWorldMarkdown(title, worldContentMd);
+        var draft = new com.gsim.root.BootstrapWorldDraftGenerator.BootstrapWorldDraft(
+                rootId, title, worldMd,
+                null, null, null, null,
+                "世界初始化。\n\n" + (worldContentMd != null ? worldContentMd : ""),
+                List.of());
+        bootstrapFromEmpty(rootId, draft);
     }
 
     /**
