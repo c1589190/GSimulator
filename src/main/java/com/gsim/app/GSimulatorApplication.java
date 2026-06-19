@@ -52,7 +52,8 @@ public class GSimulatorApplication {
         InteractionManager manager = ctx.getInteractionManager();
 
         // 创建 CLI 适配器（必须在注册命令前，因为 ExitCommand 需要 adapter 引用）
-        this.adapter = new ConsoleInteractionAdapter(manager, ctx.getInteractionSession());
+        this.adapter = new ConsoleInteractionAdapter(manager, ctx.getInteractionSession(),
+                () -> ctx.getDataManager());
 
         // 注册命令
         registerCommands(manager);
@@ -63,6 +64,9 @@ public class GSimulatorApplication {
 
         // /help — 显示所有命令
         manager.registerCommand(new HelpCommand(manager::getCommands));
+
+        // /where — 当前位置信息
+        manager.registerCommand(new com.gsim.interaction.commands.WhereCommand(ctx));
 
         // /config — 配置管理
         manager.registerCommand(new ConfigCommand());
@@ -144,7 +148,15 @@ public class GSimulatorApplication {
         manager.registerCommand(new EmbeddingCommand(ctx.getEmbeddingProfileManager()));
 
         // 注册 Memory Tools（如果 summary/pin store 可用）
-        registerMemoryTools(toolRegistry, dataManager, dataRoot, messageStore, branchAnalyzer);
+        registerMemoryToolsIfAvailable(dataManager, dataRoot, messageStore, branchAnalyzer);
+
+        // 设置 root 就绪回调（用于自然语言 bootstrap 后重新注册 memory tools）
+        ctx.setOnRootReadyCallback(() -> {
+            var dm = ctx.getDataManager();
+            if (dm != null) {
+                registerMemoryToolsIfAvailable(dm, dataRoot, messageStore, branchAnalyzer);
+            }
+        });
 
         manager.registerCommand(new DataCommand(dataManager));
         manager.registerCommand(new SkillCommand(skillManager));
@@ -169,6 +181,7 @@ public class GSimulatorApplication {
                 ctx.setBranchContextRenderer(newRenderer);
                 ctx.setContextSessionManager(newCtxSessionMgr);
                 ctx.resolveKnowledgeForActiveRoot();
+                registerMemoryToolsIfAvailable(dataManager, dataRoot, messageStore, branchAnalyzer);
                 chatService.onRootChanged(newRenderer, newCtxSessionMgr, dataRoot, ctx);
             } catch (Exception e) {
                 log.error("Failed to switch root to '{}' via root tool: {}", newRootId, e.getMessage());
@@ -180,8 +193,9 @@ public class GSimulatorApplication {
 
         // 注册 SimulationContent Tools（单回合推演内容保存 + 回合结算）
         Runnable onBranchChanged = () -> {
-            if (ctxSessionManager != null) {
-                ctxSessionManager.resetSession("default", "branch switched via agent tool");
+            var current = ctx.getContextSessionManager();
+            if (current != null) {
+                current.resetSession("default", "branch switched via agent tool");
                 log.debug("ContextSession reset due to branch switch");
             }
         };
@@ -225,6 +239,7 @@ public class GSimulatorApplication {
                 ctx.setBranchContextRenderer(newRenderer);
                 ctx.setContextSessionManager(newCtxSessionMgr);
                 ctx.resolveKnowledgeForActiveRoot();
+                registerMemoryToolsIfAvailable(dataManager, dataRoot, messageStore, branchAnalyzer);
                 // 更新 chat service
                 chatService.onRootChanged(newRenderer, newCtxSessionMgr, dataRoot, ctx);
                 log.info("Root switched to '{}', context session and knowledge store re-initialized", newRootId);
@@ -357,24 +372,28 @@ public class GSimulatorApplication {
         return new com.gsim.context.memory.PinnedConstraintManager(pinStore);
     }
 
-    private void registerMemoryTools(ToolRegistry toolRegistry, DataManager dm, Path dataRoot,
-                                      BranchMessageStore messageStore, BranchAnalyzer branchAnalyzer) {
-        Path worldDir;
-        if (!dm.needsRootBootstrap()) {
-            worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
-        } else {
+    /** 注册 Memory Tools（可多次调用，root 切换后重新注册）。 */
+    private void registerMemoryToolsIfAvailable(DataManager dm, Path dataRoot,
+                                                 BranchMessageStore messageStore, BranchAnalyzer branchAnalyzer) {
+        if (dm.needsRootBootstrap()) {
             return; // 没有 root 就不注册 memory tools
         }
+        Path worldDir = dataRoot.resolve("worlds").resolve(dm.getActiveRootId());
+        if (!java.nio.file.Files.exists(worldDir)) return;
+
+        var tr = ctx.getToolRegistry();
         var summaryStore = new com.gsim.context.summary.NodeSummaryStore(worldDir);
         var pathRenderer = new com.gsim.context.summary.BranchPathSummaryRenderer(dm, summaryStore);
         var pinStore = new com.gsim.context.memory.PinnedConstraintStore(worldDir);
         var pinManager = new com.gsim.context.memory.PinnedConstraintManager(pinStore);
-        toolRegistry.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
-        toolRegistry.register(new com.gsim.context.memory.BranchNodeGetTool(dm, messageStore));
-        toolRegistry.register(new com.gsim.context.memory.BranchNodeSearchTool(dm, summaryStore));
-        toolRegistry.register(new com.gsim.context.memory.BranchLogFilterTool(dm));
-        toolRegistry.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
-        toolRegistry.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
+
+        // register (overwrites existing) — idempotent on repeated calls
+        tr.register(new com.gsim.context.memory.BranchPathTool(pathRenderer));
+        tr.register(new com.gsim.context.memory.BranchNodeGetTool(dm, messageStore));
+        tr.register(new com.gsim.context.memory.BranchNodeSearchTool(dm, summaryStore));
+        tr.register(new com.gsim.context.memory.BranchLogFilterTool(dm));
+        tr.register(new com.gsim.context.memory.BranchPinGetTool(pinManager));
+        tr.register(new com.gsim.context.memory.BranchPinAddTool(pinManager));
     }
 
 }

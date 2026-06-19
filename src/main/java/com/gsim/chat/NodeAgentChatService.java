@@ -110,6 +110,8 @@ public class NodeAgentChatService {
         this.ctxSessionManager = createSessionManager(newRenderer);
         appCtx.setBranchContextRenderer(newRenderer);
         appCtx.setContextSessionManager(this.ctxSessionManager);
+        // 触发 root 就绪回调（重新注册 memory tools 等）
+        appCtx.fireOnRootReady();
 
         // 构建确认消息
         StringBuilder sb = new StringBuilder();
@@ -117,11 +119,11 @@ public class NodeAgentChatService {
         sb.append("Root ID: ").append(rootId).append("\n");
         sb.append("Title: ").append(draft.title()).append("\n");
         sb.append("Active Branch: branch.b0000-start\n\n");
-        sb.append("已生成基础世界观模板：\n");
-        sb.append("- world.md：").append(draft.title()).append("基础设定\n");
-        sb.append("- entities.md：主要势力与人物卡占位\n");
-        sb.append("- rules.md：推演规则占位\n");
-        sb.append("- players.md：玩家资料占位\n");
+        sb.append("已生成基础设定文件：\n");
+        sb.append("- world.md：已生成基础设定\n");
+        sb.append("- entities.md：已生成主要势力/人物初稿\n");
+        sb.append("- rules.md：已生成推演规则\n");
+        sb.append("- players.md：已生成玩家资料结构\n");
 
         if (!draft.warnings().isEmpty()) {
             sb.append("\n注意：");
@@ -130,7 +132,7 @@ public class NodeAgentChatService {
             }
         }
 
-        sb.append("\n\n使用 /root status 查看状态，/chat 开始对话。");
+        sb.append("\n\n使用 /root status 查看状态，直接输入文本与 Agent 对话。");
         return sb.toString();
     }
 

@@ -45,6 +45,10 @@ public class HelpCommand implements InteractionCommand {
 
         sb.append("=========================================\n");
         sb.append("输入命令时不需要尖括号，直接输入实际内容。\n");
+        sb.append("\n非 / 开头的输入自动路由到 Agent 对话。\n");
+        sb.append("/where — 查看当前工作区位置（root/branch/LLM 配置等）。\n");
+        sb.append("/root status — 查看当前 root 状态。\n");
+        sb.append("/messages — 查看当前 branch 的对话与操作记录。\n");
 
         return InteractionResult.ok(sb.toString());
     }

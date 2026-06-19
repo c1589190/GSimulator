@@ -68,6 +68,9 @@ public class ApplicationContext {
     private BranchContextRenderer branchContextRenderer;
     private ContextSessionManager contextSessionManager;
 
+    // Root 就绪回调（bootstrap 完成后触发 memory tools 重注册等）
+    private Runnable onRootReadyCallback;
+
     public ApplicationContext(AppConfig config) {
         this.config = config;
         this.dataPaths = new DataPaths(config);
@@ -230,6 +233,16 @@ public class ApplicationContext {
 
     public ContextSessionManager getContextSessionManager() { return contextSessionManager; }
     public void setContextSessionManager(ContextSessionManager m) { this.contextSessionManager = m; }
+
+    /** 设置 root 就绪回调（bootstrap/root create/switch 后触发）。 */
+    public void setOnRootReadyCallback(Runnable callback) { this.onRootReadyCallback = callback; }
+
+    /** 触发 root 就绪回调。 */
+    public void fireOnRootReady() {
+        if (onRootReadyCallback != null) {
+            onRootReadyCallback.run();
+        }
+    }
 
     public SessionManager getSessionManager() {
         return apiManager != null ? apiManager.getSessionManager() : null;

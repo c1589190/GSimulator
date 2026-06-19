@@ -125,7 +125,8 @@ public class RootToolFactory {
         @Override public String name() { return "root_world_update"; }
         @Override public String description() {
             return "修改当前 root 的 world.md。仅允许在根节点 (branch.b0000-start)。" +
-                   "参数: mode(replace|append, 默认replace), content(必填), reason(可选)。";
+                   "参数: mode(append|replace, 默认append), content(必填), reason(可选)。" +
+                   "replace 必须用户明确要求覆盖，并传 confirmReplace=true。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -138,14 +139,19 @@ public class RootToolFactory {
 
             String content = call.param("content", "");
             if (content.isBlank()) return ToolResult.fail(name(), "content is required");
-            String mode = call.param("mode", "replace");
+            String mode = call.param("mode", "append");
+
+            // replace 模式需要确认
+            if ("replace".equals(mode) && !"true".equalsIgnoreCase(call.param("confirmReplace", "false"))) {
+                return ToolResult.fail(name(), "REPLACE_REQUIRES_CONFIRM: mode=replace 需要 confirmReplace=true。" +
+                        "如果只需要追加资料，使用 mode=append（默认）。");
+            }
 
             try {
                 Path file = dm.worldFilePath();
-                if (Files.exists(file)) {
+                if (Files.exists(file) && "append".equals(mode)) {
                     String existing = Files.readString(file);
-                    String updated = "append".equals(mode) ? existing + "\n" + content : content;
-                    dm.updateWorldFile(updated);
+                    dm.updateWorldFile(existing + "\n" + content);
                 } else {
                     dm.updateWorldFile(content);
                 }
@@ -163,7 +169,8 @@ public class RootToolFactory {
     private class RootEntitiesUpdateTool implements AgentTool {
         @Override public String name() { return "root_entities_update"; }
         @Override public String description() {
-            return "修改当前 root 的 entities.md。仅允许在根节点。参数: content(必填), mode(replace|append)。";
+            return "修改当前 root 的 entities.md。仅允许在根节点。参数: content(必填), mode(append|replace, 默认append)。" +
+                   "replace 必须用户明确要求覆盖，并传 confirmReplace=true。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -174,7 +181,11 @@ public class RootToolFactory {
 
             String content = call.param("content", "");
             if (content.isBlank()) return ToolResult.fail(name(), "content is required");
-            String mode = call.param("mode", "replace");
+            String mode = call.param("mode", "append");
+
+            if ("replace".equals(mode) && !"true".equalsIgnoreCase(call.param("confirmReplace", "false"))) {
+                return ToolResult.fail(name(), "REPLACE_REQUIRES_CONFIRM: mode=replace 需要 confirmReplace=true。");
+            }
 
             try {
                 if ("append".equals(mode) && Files.exists(dm.entitiesFilePath())) {
@@ -197,7 +208,8 @@ public class RootToolFactory {
     private class RootRulesUpdateTool implements AgentTool {
         @Override public String name() { return "root_rules_update"; }
         @Override public String description() {
-            return "修改当前 root 的 rules.md。仅允许在根节点。参数: content(必填), mode(replace|append)。";
+            return "修改当前 root 的 rules.md。仅允许在根节点。参数: content(必填), mode(append|replace, 默认append)。" +
+                   "replace 必须用户明确要求覆盖，并传 confirmReplace=true。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -208,7 +220,11 @@ public class RootToolFactory {
 
             String content = call.param("content", "");
             if (content.isBlank()) return ToolResult.fail(name(), "content is required");
-            String mode = call.param("mode", "replace");
+            String mode = call.param("mode", "append");
+
+            if ("replace".equals(mode) && !"true".equalsIgnoreCase(call.param("confirmReplace", "false"))) {
+                return ToolResult.fail(name(), "REPLACE_REQUIRES_CONFIRM: mode=replace 需要 confirmReplace=true。");
+            }
 
             try {
                 if ("append".equals(mode) && Files.exists(dm.rulesFilePath())) {

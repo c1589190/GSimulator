@@ -22,6 +22,20 @@ public class ToolRegistry {
         return tools.get(name);
     }
 
+    /** 检查是否已注册指定名称的工具。 */
+    public boolean has(String name) {
+        return tools.containsKey(name);
+    }
+
+    /** 仅在尚未注册时才注册工具。返回 true 表示实际注册了。 */
+    public boolean registerIfAbsent(AgentTool tool) {
+        if (tools.containsKey(tool.name())) {
+            return false;
+        }
+        tools.put(tool.name(), tool);
+        return true;
+    }
+
     /** 返回所有已注册工具的名称。 */
     public Set<String> names() {
         return Collections.unmodifiableSet(tools.keySet());
