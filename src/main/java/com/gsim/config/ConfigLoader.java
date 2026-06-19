@@ -239,6 +239,7 @@ public class ConfigLoader {
             case "EMBEDDING_MODEL" -> "embedding.model";
             case "EMBEDDING_DIMENSIONS" -> "embedding.dimensions";
             case "EMBEDDING_MODEL_DIR" -> "embedding.model_dir";
+            case "GSIM_BOOTSTRAP_ROOT_LLM_ENABLED" -> "bootstrap.root.llm.enabled";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -275,6 +276,8 @@ public class ConfigLoader {
         defaults.put("embedding.model", "");
         defaults.put("embedding.dimensions", "");
         defaults.put("embedding.model_dir", "data/models/local-small");
+
+        defaults.put("bootstrap.root.llm.enabled", "false");
 
         return defaults;
     }

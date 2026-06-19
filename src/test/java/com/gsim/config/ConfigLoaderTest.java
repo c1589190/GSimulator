@@ -97,6 +97,13 @@ class ConfigLoaderTest {
     }
 
     @Test
+    @DisplayName("GSIM_BOOTSTRAP_ROOT_LLM_ENABLED → bootstrap.root.llm.enabled")
+    void shouldMapBootstrapRootLlmEnabled() {
+        assertEquals("bootstrap.root.llm.enabled",
+                ConfigLoader.mapEnvKey("GSIM_BOOTSTRAP_ROOT_LLM_ENABLED"));
+    }
+
+    @Test
     @DisplayName("环境变量 key 映射应正确")
     void shouldMapEnvKeys() {
         assertEquals("llm.base_url", ConfigLoader.mapEnvKey("LLM_BASE_URL"));
@@ -216,6 +223,45 @@ class ConfigLoaderTest {
         if (apiKeyEntry.source() == ConfigSource.DEFAULT) {
             assertEquals("", apiKeyEntry.value());
         }
+    }
+
+    @Test
+    @DisplayName("bootstrap.root.llm.enabled 默认值应为 false")
+    void shouldHaveBootstrapRootLlmEnabledDefaultFalse() {
+        ConfigLoader loader = new ConfigLoader(new String[]{});
+        ConfigLoader.ConfigResult result = loader.load();
+
+        ConfigLoader.ConfigEntry entry = result.entries().get("bootstrap.root.llm.enabled");
+        assertNotNull(entry, "bootstrap.root.llm.enabled should exist in defaults");
+        if (entry.source() == ConfigSource.DEFAULT) {
+            assertEquals("false", entry.value(),
+                    "bootstrap.root.llm.enabled default should be false");
+        }
+    }
+
+    @Test
+    @DisplayName("AppConfig.isBootstrapRootLlmEnabled() 默认返回 false")
+    void shouldReturnFalseByDefault() {
+        ConfigLoader loader = new ConfigLoader(new String[]{});
+        AppConfig config = new AppConfig(loader.load());
+        assertFalse(config.isBootstrapRootLlmEnabled(),
+                "isBootstrapRootLlmEnabled should default to false");
+    }
+
+    @Test
+    @DisplayName("bootstrap.root.llm.enabled=true 时 AppConfig 应返回 true")
+    void shouldReturnTrueWhenBootstrapLlmEnabled() throws IOException {
+        Path propsFile = tempDir.resolve("bootstrap.properties");
+        writeProps(propsFile,
+                "llm.base_url=https://api.example.com/v1\n" +
+                        "llm.api_key=sk-test\n" +
+                        "llm.model=m\n" +
+                        "bootstrap.root.llm.enabled=true");
+
+        ConfigLoader loader = new ConfigLoader(new String[]{"--config", propsFile.toString()});
+        AppConfig config = new AppConfig(loader.load());
+        assertTrue(config.isBootstrapRootLlmEnabled(),
+                "isBootstrapRootLlmEnabled should be true when config enables it");
     }
 
     // ---- AppConfig 集成测试 ----

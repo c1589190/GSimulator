@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN">
+    <Properties>
+        <!-- 日志目录：可通过 -Dgsim.log.dir=/path/to/logs 覆盖，默认 logs/ -->
+        <Property name="LOG_DIR">${sys:gsim.log.dir:-logs}</Property>
+    </Properties>
+
     <Appenders>
         <!-- === 控制台：精简格式，适配 CLI/REPL 调试 === -->
         <Console name="CONSOLE" target="SYSTEM_OUT">
@@ -9,8 +14,8 @@
 
         <!-- === 主日志文件 === -->
         <RollingFile name="MAIN_LOG"
-                     fileName="logs/gsimulator.log"
-                     filePattern="logs/gsimulator-%d{yyyy-MM-dd}-%i.log.gz"
+                     fileName="${LOG_DIR}/gsimulator.log"
+                     filePattern="${LOG_DIR}/gsimulator-%d{yyyy-MM-dd}-%i.log.gz"
                      append="true">
             <PatternLayout
                 pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
@@ -22,8 +27,8 @@
 
         <!-- === ToolLoop 专用日志 === -->
         <RollingFile name="TOOLLOOP_LOG"
-                     fileName="logs/toolloop.log"
-                     filePattern="logs/toolloop-%d{yyyy-MM-dd}-%i.log.gz"
+                     fileName="${LOG_DIR}/toolloop.log"
+                     filePattern="${LOG_DIR}/toolloop-%d{yyyy-MM-dd}-%i.log.gz"
                      append="true">
             <PatternLayout
                 pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{1.} - %msg%n"/>
@@ -35,8 +40,8 @@
 
         <!-- === LLM 专用日志（独立文件，代码层通过 LogSanitizer 脱敏） === -->
         <RollingFile name="LLM_LOG"
-                     fileName="logs/llm.log"
-                     filePattern="logs/llm-%d{yyyy-MM-dd}-%i.log.gz"
+                     fileName="${LOG_DIR}/llm.log"
+                     filePattern="${LOG_DIR}/llm-%d{yyyy-MM-dd}-%i.log.gz"
                      append="true">
             <PatternLayout
                 pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{1.} - %msg%n"/>
@@ -45,19 +50,41 @@
             </Policies>
             <DefaultRolloverStrategy max="5"/>
         </RollingFile>
+
+        <!-- === 统一 Debug 日志（汇总所有 com.gsim 包 DEBUG+ 日志） === -->
+        <RollingFile name="DEBUG_LOG"
+                     fileName="${LOG_DIR}/debug.log"
+                     filePattern="${LOG_DIR}/debug-%d{yyyy-MM-dd}-%i.log.gz"
+                     append="true">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
     </Appenders>
 
     <Loggers>
         <!-- ToolLoop 调试：agent 包 DEBUG → toolloop.log；CONSOLE 仅 INFO+ -->
         <Logger name="com.gsim.agent" level="DEBUG" additivity="false">
             <AppenderRef ref="TOOLLOOP_LOG"/>
+            <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="INFO"/>
         </Logger>
 
         <!-- LLM 调试：llm 包 DEBUG → llm.log；CONSOLE 仅 INFO+ -->
         <Logger name="com.gsim.llm" level="DEBUG" additivity="false">
             <AppenderRef ref="LLM_LOG"/>
+            <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="INFO"/>
+        </Logger>
+
+        <!-- 统一 debug 汇总：com.gsim 包 DEBUG+ → debug.log；CONSOLE/MAIN_LOG 仅 INFO+ -->
+        <Logger name="com.gsim" level="DEBUG" additivity="false">
+            <AppenderRef ref="DEBUG_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="MAIN_LOG" level="INFO"/>
         </Logger>
 
         <!-- 默认：所有其他包 INFO → console + 主日志 -->

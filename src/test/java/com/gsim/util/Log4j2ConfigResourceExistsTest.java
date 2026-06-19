@@ -45,6 +45,39 @@ class Log4j2ConfigResourceExistsTest {
                 "Should define TOOLLOOP_LOG appender for toolloop.log");
         assertTrue(content.contains("LLM_LOG"),
                 "Should define LLM_LOG appender for llm.log");
+        assertTrue(content.contains("DEBUG_LOG"),
+                "Should define DEBUG_LOG appender for debug.log");
+    }
+
+    @Test
+    @DisplayName("log4j2.xml 包含 LOG_DIR 属性和日志文件引用")
+    void log4j2ConfigHasLogDirPropertyAndLogFiles() throws Exception {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        String content;
+        try (InputStream is = cl.getResourceAsStream("log4j2.xml")) {
+            assert is != null;
+            content = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        // LOG_DIR 属性：通过系统属性 gsim.log.dir 或默认 logs 目录
+        assertTrue(content.contains("LOG_DIR"),
+                "Should define LOG_DIR property");
+        assertTrue(content.contains("${sys:gsim.log.dir:-logs}"),
+                "LOG_DIR should use ${sys:gsim.log.dir:-logs}");
+
+        // 日志文件名
+        assertTrue(content.contains("gsimulator.log"),
+                "Should contain gsimulator.log");
+        assertTrue(content.contains("toolloop.log"),
+                "Should contain toolloop.log");
+        assertTrue(content.contains("llm.log"),
+                "Should contain llm.log");
+        assertTrue(content.contains("debug.log"),
+                "Should contain debug.log");
+
+        // 路径使用 LOG_DIR 变量（非硬编码 logs/）
+        assertTrue(content.contains("${LOG_DIR}"),
+                "Should use ${LOG_DIR} variable, not hardcoded logs/");
     }
 
     @Test

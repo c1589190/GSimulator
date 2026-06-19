@@ -15,8 +15,8 @@ import java.util.List;
 /**
  * 根据用户第一条消息生成结构化根节点初稿。
  *
- * <p>优先使用 LLM 生成贴合用户意图的内容。
- * 如果 LLM 不可用，使用 deterministic fallback。
+ * <p>默认使用 deterministic fallback 快速创建基础根节点。
+ * 仅在配置显式开启 bootstrap.root.llm.enabled=true 且 LLM 可用时，才调用 LLM 生成 draft。
  */
 public class BootstrapWorldDraftGenerator {
     private static final Logger log = LoggerFactory.getLogger(BootstrapWorldDraftGenerator.class);
@@ -25,6 +25,10 @@ public class BootstrapWorldDraftGenerator {
     private final String model;
     private final boolean llmEnabled;
 
+    /**
+     * 二参构造函数（源码兼容，默认走 deterministic fallback）。
+     * 如需 LLM bootstrap，请使用三参构造并传入 llmEnabled=true。
+     */
     public BootstrapWorldDraftGenerator(LlmClient llmClient, String model) {
         this(llmClient, model, false);
     }
@@ -67,7 +71,8 @@ public class BootstrapWorldDraftGenerator {
     }
 
     /**
-     * LLM 路径：调用 LLM 生成结构化 draft。
+     * LLM 路径：仅在 bootstrap.root.llm.enabled=true 且 LLM 可用时调用。
+     * 调用 LLM 生成结构化 draft，解析失败时回退到 fallback。
      */
     BootstrapWorldDraft generateWithLlm(BootstrapIntentParser.BootstrapIntent intent) {
         String userRequest = intent.sanitizedRequest();
