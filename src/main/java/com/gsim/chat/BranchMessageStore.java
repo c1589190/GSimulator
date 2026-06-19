@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +33,8 @@ public class BranchMessageStore {
 
     private final DataManager dm;
     private final Path dataRoot;
+    /** per-branch 锁，保证同一 branch 的 appendMessage 串行化。 */
+    private final ConcurrentHashMap<String, Object> branchLocks = new ConcurrentHashMap<>();
 
     public BranchMessageStore(DataManager dm, Path dataRoot) {
         this.dm = dm; this.dataRoot = dataRoot;
@@ -71,8 +74,15 @@ public class BranchMessageStore {
         return new ArrayList<>(merged.values());
     }
 
-    /** 向当前 branch 文件的消息区插入一条 message block。写入前进行污染过滤。如果尚无 marker block 但已有旧 message blocks，自动迁移进 marker。 */
+    /** 向当前 branch 文件的消息区插入一条 message block。写入前进行污染过滤。如果尚无 marker block 但已有旧 message blocks，自动迁移进 marker。per-branch 加锁保证并发安全。 */
     public void appendMessage(String branchId, BranchMessage msg) throws IOException {
+        Object lock = branchLocks.computeIfAbsent(branchId, k -> new Object());
+        synchronized (lock) {
+            appendMessageLocked(branchId, msg);
+        }
+    }
+
+    private void appendMessageLocked(String branchId, BranchMessage msg) throws IOException {
         Path f = branchFile(branchId);
         if (!Files.exists(f)) throw new IOException("Branch file not found: " + f);
 

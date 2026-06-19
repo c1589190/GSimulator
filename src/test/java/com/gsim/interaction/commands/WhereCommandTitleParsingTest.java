@@ -54,6 +54,30 @@ class WhereCommandTitleParsingTest {
             String title = WhereCommand.extractTitle(content);
             assertEquals("明日方舟/泰拉", title);
         }
+
+        @Test
+        @DisplayName("## 世界名称 ： Title → 中文冒号+空格")
+        void titleFromChineseColonWithSpaces() {
+            String content = "## 世界名称 ： 明日方舟/泰拉\n";
+            String title = WhereCommand.extractTitle(content);
+            assertEquals("明日方舟/泰拉", title);
+        }
+
+        @Test
+        @DisplayName("## 世界名称 : Title → 英文冒号+空格")
+        void titleFromEnglishColonWithSpaces() {
+            String content = "## 世界名称 : 明日方舟/泰拉\n";
+            String title = WhereCommand.extractTitle(content);
+            assertEquals("明日方舟/泰拉", title);
+        }
+
+        @Test
+        @DisplayName("## 世界名称  Title → 仅有空格分隔")
+        void titleFromSpaceOnly() {
+            String content = "## 世界名称 明日方舟/泰拉\n";
+            String title = WhereCommand.extractTitle(content);
+            assertEquals("明日方舟/泰拉", title);
+        }
     }
 
     @Nested

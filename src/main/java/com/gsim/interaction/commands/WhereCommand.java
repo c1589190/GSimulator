@@ -89,7 +89,9 @@ public class WhereCommand implements InteractionCommand {
      * - # Title（H1）
      * - ## 世界名称\nTitle（下一行）
      * - ## 世界名称\n\nTitle（下一行有空行）
-     * - ## 世界名称：Title（冒号分隔同行）
+     * - ## 世界名称：Title（中文冒号）
+     * - ## 世界名称: Title（英文冒号）
+     * - ## 世界名称 ： Title / ## 世界名称 : Title（空格+冒号+空格）
      * 返回 null 表示无法提取。
      */
     static String extractTitle(String excerpt) {
@@ -97,9 +99,10 @@ public class WhereCommand implements InteractionCommand {
         String[] lines = excerpt.split("\n");
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i].trim();
-            // 格式: ## 世界名称：Title
-            if (line.startsWith("## 世界名称") || line.startsWith("## 世界名称：") || line.startsWith("## 世界名称:")) {
-                String afterHeading = line.replaceFirst("^## 世界名称[：:]?\\s*", "").trim();
+            // 格式: ## 世界名称（可能后接冒号+空格+标题）
+            if (line.startsWith("## 世界名称")) {
+                // 去掉前缀 "## 世界名称"，然后去掉可选的前导空格+冒号(中/英)+空格
+                String afterHeading = line.replaceFirst("^## 世界名称\\s*[：:]?\\s*", "").trim();
                 if (!afterHeading.isBlank()) {
                     return afterHeading;
                 }
