@@ -242,6 +242,7 @@ public class ConfigLoader {
             case "GSIM_BOOTSTRAP_ROOT_LLM_ENABLED" -> "bootstrap.root.llm.enabled";
             case "GSIM_CONTEXT_SESSION_HISTORY_TURNS" -> "context.session.history.turns";
             case "GSIM_CONTEXT_SESSION_MESSAGE_MAX_CHARS" -> "context.session.message.max_chars";
+            case "GSIM_AGENT_TOOL_LOOP_MAX_ROUNDS" -> "agent.tool_loop.max_rounds";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -283,6 +284,8 @@ public class ConfigLoader {
 
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");
+
+        defaults.put("agent.tool_loop.max_rounds", "32");
 
         return defaults;
     }

@@ -14,9 +14,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证 MAX_TOOL_ROUNDS (5) 内未调用 finish_action 时 ToolLoop 返回错误。
+ * 验证达到 maxToolRounds 仍未调用 finish_action 时 ToolLoop 返回错误。
  */
-@DisplayName("ToolLoop MAX_TOOL_ROUNDS 内无 finish_action 返回错误")
+@DisplayName("ToolLoop 达到最大轮数无 finish_action 返回错误")
 class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
 
     private FakeLlmClient fakeLlm;
@@ -35,10 +35,10 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
     }
 
     @Test
-    @DisplayName("5 轮纯自然语言无 finish_action → ToolLoop 返回错误")
+    @DisplayName("maxToolRounds=5 时纯自然语言无 finish_action → ToolLoop 返回错误")
     void fiveRoundsOfPlainTextReturnsError() {
-        // 5 轮全部返回纯自然语言（无 tool call）
-        // Round 1-5: 纯自然语言 → 每轮触发"请调用 finish_action"提醒 → 继续
+        agent.setMaxToolRounds(5);
+        // 5 轮全部返回纯自然语言（无 tool call），但会在连续无工具时提前中止
         fakeLlm.addResponse("正在处理...");
         fakeLlm.addResponse("还需要更多信息...");
         fakeLlm.addResponse("让我再检查一下...");
@@ -50,7 +50,7 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
                 List.of(), "执行复杂任务");
 
         assertFalse(result.success(),
-                "ToolLoop should fail when no finish_action within MAX_TOOL_ROUNDS");
+                "ToolLoop should fail when no finish_action within maxToolRounds");
         assertNotNull(result.errorMessage());
         assertTrue(result.errorMessage().contains("finish_action")
                         || result.errorMessage().contains("rounds"),
@@ -58,8 +58,9 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
     }
 
     @Test
-    @DisplayName("5 轮工具调用但无 finish_action → ToolLoop 返回错误")
+    @DisplayName("maxToolRounds=5 时工具调用但无 finish_action → ToolLoop 返回错误")
     void fiveRoundsOfToolCallsWithoutFinishActionReturnsError() {
+        agent.setMaxToolRounds(5);
         // 每轮都调用 echo，但都不调用 finish_action
         for (int i = 0; i < 5; i++) {
             fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"round" + i + "\"}}");
@@ -76,7 +77,7 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
     }
 
     @Test
-    @DisplayName("第 4 轮 finish_action → 正常结束（不触发 MAX_TOOL_ROUNDS）")
+    @DisplayName("第 4 轮 finish_action → 正常结束（不触发 maxToolRounds）")
     void finishActionOnRound4Succeeds() {
         // 前三轮：echo 工具调用
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"r1\"}}");

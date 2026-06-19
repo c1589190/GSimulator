@@ -61,6 +61,9 @@ public class AppConfig {
     /** 单条 SessionMessage 渲染进 LLM 上下文的最大字符数（500..20000，默认 4000）。 */
     private final int contextSessionMessageMaxChars;
 
+    /** Agent ToolLoop 最大工具轮数（≥1，默认 32）。 */
+    private final int agentToolLoopMaxRounds;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -117,6 +120,10 @@ public class AppConfig {
                 parseInt(result.get("context.session.history.turns"), 12), 1, 50);
         this.contextSessionMessageMaxChars = clamp(
                 parseInt(result.get("context.session.message.max_chars"), 4000), 500, 20000);
+
+        // Agent ToolLoop 配置（下限 1，无上限）
+        this.agentToolLoopMaxRounds = Math.max(1,
+                parseInt(result.get("agent.tool_loop.max_rounds"), 32));
     }
 
     // ---- Getters ----
@@ -177,6 +184,11 @@ public class AppConfig {
     /** 单条 SessionMessage 渲染进 LLM 上下文的最大字符数（500..20000，默认 4000）。 */
     public int getContextSessionMessageMaxChars() {
         return contextSessionMessageMaxChars;
+    }
+
+    /** Agent ToolLoop 最大工具轮数（≥1，默认 32）。 */
+    public int getAgentToolLoopMaxRounds() {
+        return agentToolLoopMaxRounds;
     }
 
     /** 获取当前生效的配置文件路径。 */

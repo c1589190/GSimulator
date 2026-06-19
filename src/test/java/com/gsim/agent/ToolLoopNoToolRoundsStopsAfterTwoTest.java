@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 验证连续 2 轮无工具调用后 ToolLoop 提前中止，
- * 不再烧满 5 轮 MAX_TOOL_ROUNDS。
+ * 不再烧满 maxToolRounds（可配置，默认 8）。
  */
 @DisplayName("ToolLoop 连续 2 轮无工具提前中止")
 class ToolLoopNoToolRoundsStopsAfterTwoTest {

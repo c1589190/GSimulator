@@ -196,6 +196,7 @@ public class GSimulatorApplication {
         orchestrator.setContextHistoryConfig(new OrchestratorAgent.ContextHistoryConfig(
                 config.getContextSessionHistoryTurns(),
                 config.getContextSessionMessageMaxChars()));
+        orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
 
         // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

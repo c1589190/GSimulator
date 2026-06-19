@@ -57,6 +57,11 @@ public class CliAgentProgressSink implements AgentProgressSink {
                 String tool = event.meta().getOrDefault("tool", "");
                 yield "[Agent] 工具成功：" + tool;
             }
+            case AgentProgressEvent.TOOL_FAILED -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String error = event.meta().getOrDefault("error", "");
+                yield "[Agent] 工具失败：" + tool + (error.isBlank() ? "" : "，原因：" + error);
+            }
             case AgentProgressEvent.AWAITING_FINISH_ACTION ->
                     "[Agent] 正在让 LLM 根据工具结果生成 finish_action……";
             case AgentProgressEvent.PLAIN_ANSWER_WITHOUT_FINISH ->

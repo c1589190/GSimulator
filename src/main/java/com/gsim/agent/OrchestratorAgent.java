@@ -34,12 +34,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * 1. 构建 system prompt（含可用工具说明）+ user prompt（玩家行动）
  * 2. 发送 LLM
  * 3. 解析响应：普通文本 → 最终结果；JSON tool call → 调用工具 → 追加结果 → 回到步骤 2
- * 4. 最多 5 轮 tool 调用，超限后要求 LLM 直接总结
+ * 4. 最多 N 轮 tool 调用（可配置，默认 8），超限后要求 LLM 直接总结
  */
 public class OrchestratorAgent {
 
     private static final Logger log = LoggerFactory.getLogger(OrchestratorAgent.class);
-    private static final int MAX_TOOL_ROUNDS = 5;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final LlmClient llmClient;
@@ -50,6 +49,9 @@ public class OrchestratorAgent {
     private final ToolExecutionPolicy executionPolicy;
     private final ToolPermissionGate permissionGate;
     private final ToolPermissionConfig permissionConfig;
+
+    /** Agent ToolLoop 最大工具轮数（默认 32，≥1，可由 setter 注入覆盖）。 */
+    private volatile int maxToolRounds = 32;
 
     /** 对话上下文历史配置（可运行时更新）。 */
     private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
@@ -100,6 +102,17 @@ public class OrchestratorAgent {
         this.historyConfig = config != null ? config : ContextHistoryConfig.DEFAULT;
     }
 
+    /** 设置最大工具轮数（由调用方从 AppConfig 注入，默认 32，下限 1，无上限）。 */
+    public void setMaxToolRounds(int rounds) {
+        this.maxToolRounds = Math.max(1, rounds);
+        log.debug("[ToolLoop] maxToolRounds={}", this.maxToolRounds);
+    }
+
+    /** 获取当前最大工具轮数。 */
+    public int getMaxToolRounds() {
+        return maxToolRounds;
+    }
+
     /**
      * 执行推演运行。
      *
@@ -122,7 +135,7 @@ public class OrchestratorAgent {
         int toolRound = 0;
 
         // 3. ToolLoop
-        while (toolRound < MAX_TOOL_ROUNDS) {
+        while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
             LlmResponse response = llmClient.chat(request);
 
@@ -159,7 +172,7 @@ public class OrchestratorAgent {
 
         // 6. 超过最大轮数，要求总结
         if (finalText == null) {
-            log.warn("Max tool rounds ({}) reached, forcing summary", MAX_TOOL_ROUNDS);
+            log.warn("Max tool rounds ({}) reached, forcing summary", maxToolRounds);
             messages.add(LlmMessage.user(
                     "你已经完成了多轮工具调用。请基于以上所有查询结果，" +
                     "写一段完整的推演总结。必须引用信息来源的路径（如 import/web/prts.wiki/...）。" +
@@ -654,7 +667,7 @@ public class OrchestratorAgent {
         String finalText = null;
         int toolRound = 0;
 
-        while (toolRound < MAX_TOOL_ROUNDS) {
+        while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
             LlmResponse response = llmClient.chat(request);
 
@@ -738,7 +751,7 @@ public class OrchestratorAgent {
         String finalText = null;
         int toolRound = 0;
 
-        while (toolRound < MAX_TOOL_ROUNDS) {
+        while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
             LlmResponse response = llmClient.chat(request);
 
@@ -929,7 +942,7 @@ public class OrchestratorAgent {
         ExpectedNextStep expectedNextStep = ExpectedNextStep.CALL_TOOL;
         List<ToolDef> toolDefs = buildToolDefs();
 
-        while (toolRound <= MAX_TOOL_ROUNDS) {
+        while (toolRound <= maxToolRounds) {
             // context load debug
             ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, toolDefs, contextMeta);
 
@@ -949,11 +962,11 @@ public class OrchestratorAgent {
             int totalMessageChars = 0;
             for (var m : messages) { if (m.content() != null) totalMessageChars += m.content().length(); }
             int toolsJsonChars = ToolLoopDebug.estimateToolsJsonChars(toolDefs);
-            progressSink.onProgress(AgentProgressEvent.contextLoaded(toolRound, MAX_TOOL_ROUNDS,
+            progressSink.onProgress(AgentProgressEvent.contextLoaded(toolRound, maxToolRounds,
                     totalMessageChars + toolsJsonChars, toolDefs.size()));
 
             // progress: 等待 LLM
-            progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, MAX_TOOL_ROUNDS));
+            progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse response = llmClient.chat(request);
@@ -1015,7 +1028,7 @@ public class OrchestratorAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool));
                 }
 
                 // === 检查 finish_action 是否与其他工具同轮混用 ===
@@ -1027,7 +1040,7 @@ public class OrchestratorAgent {
                             .map(ParsedToolCall::tool)
                             .collect(java.util.stream.Collectors.joining(", "));
                     progressSink.onProgress(AgentProgressEvent.finishRejected(
-                            toolRound, MAX_TOOL_ROUNDS, "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                            toolRound, maxToolRounds, "FINISH_ACTION_WITH_OTHER_TOOLS"));
                     String rejection = "[系统] finish_action 必须是本轮唯一工具调用。"
                             + "检测到同时包含 finish_action 和其他工具（" + toolsList + "）。"
                             + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
@@ -1058,7 +1071,7 @@ public class OrchestratorAgent {
 
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(
-                            toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool));
 
                     // === 执行前门禁：路由 + 分类 + 确认 ===
                     ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
@@ -1074,7 +1087,7 @@ public class OrchestratorAgent {
                         trace.add(new MessageTrace("system", "tool_rejected",
                                 execDecision.reason()));
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, MAX_TOOL_ROUNDS, parsed.tool,
+                                toolRound, maxToolRounds, parsed.tool,
                                 "REJECTED: " + execDecision.reason()));
                         continue;
                     }
@@ -1110,10 +1123,10 @@ public class OrchestratorAgent {
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                                toolRound, maxToolRounds, parsed.tool));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, MAX_TOOL_ROUNDS, parsed.tool, result.error()));
+                                toolRound, maxToolRounds, parsed.tool, result.error()));
                     }
 
                     messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
@@ -1148,7 +1161,7 @@ public class OrchestratorAgent {
                     if (validationError != null) {
                         // progress: finish_action 被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
-                                toolRound, MAX_TOOL_ROUNDS,
+                                toolRound, maxToolRounds,
                                 reasonFromMessageError(validationError)));
                         messages.add(LlmMessage.user(validationError));
                         trace.add(new MessageTrace("system", "finish_rejected", validationError));
@@ -1162,7 +1175,7 @@ public class OrchestratorAgent {
                     if (claimError != null) {
                         // progress: finish_action 声明被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
-                                toolRound, MAX_TOOL_ROUNDS, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
+                                toolRound, maxToolRounds, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
                         messages.add(LlmMessage.user(claimError));
                         trace.add(new MessageTrace("system", "finish_rejected", claimError));
                         ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound,
@@ -1192,7 +1205,7 @@ public class OrchestratorAgent {
             if (toolSource == ToolLoopDebug.ToolCallSource.INVALID_TOOL_INTENT) {
                 // progress: 非法工具调用格式
                 progressSink.onProgress(AgentProgressEvent.invalidBracketIntent(
-                        toolRound, MAX_TOOL_ROUNDS));
+                        toolRound, maxToolRounds));
                 // 非法工具意图：打回重写，不计入连续无工具轮
                 consecutiveInvalidToolIntent++;
                 ToolLoopDebug.logInvalidToolIntent(log, "runToolLoop", toolRound,
@@ -1230,7 +1243,7 @@ public class OrchestratorAgent {
                     strippedForDraft, false);
             if (finishIntent == ToolLoopDebug.FinishIntent.PLAIN_ANSWER_WITHOUT_FINISH) {
                 progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
-                        toolRound, MAX_TOOL_ROUNDS));
+                        toolRound, maxToolRounds));
             }
 
             if (consecutiveNoToolRounds >= 2) {
@@ -1259,7 +1272,7 @@ public class OrchestratorAgent {
             trace.add(new MessageTrace("system", "error", errMsg));
             ToolLoopDebug.logFinalText(log, "runToolLoop", "max_rounds_error", errMsg);
             return new ChatResult(false, errMsg, toolCalls, trace,
-                    "Agent did not call finish_action within " + MAX_TOOL_ROUNDS + " rounds");
+                    "Agent did not call finish_action within " + maxToolRounds + " rounds");
         }
 
         if (hasFakeBracketToolResult(finalText, toolCalls)) {
@@ -1288,7 +1301,7 @@ public class OrchestratorAgent {
         int consecutiveInvalidToolIntent = 0;
         List<ToolDef> toolDefs = buildToolDefs();
 
-        while (toolRound <= MAX_TOOL_ROUNDS) {
+        while (toolRound <= maxToolRounds) {
             // context load debug
             ToolLoopDebug.logContextLoad(log, "runSimToolLoop", toolRound, messages, toolDefs, contextMeta);
 
@@ -1307,11 +1320,11 @@ public class OrchestratorAgent {
             int totalMessageChars = 0;
             for (var m : messages) { if (m.content() != null) totalMessageChars += m.content().length(); }
             int toolsJsonChars = ToolLoopDebug.estimateToolsJsonChars(toolDefs);
-            progressSink.onProgress(AgentProgressEvent.contextLoaded(toolRound, MAX_TOOL_ROUNDS,
+            progressSink.onProgress(AgentProgressEvent.contextLoaded(toolRound, maxToolRounds,
                     totalMessageChars + toolsJsonChars, toolDefs.size()));
 
             // progress: 等待 LLM
-            progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, MAX_TOOL_ROUNDS));
+            progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse response = llmClient.chat(request);
@@ -1366,7 +1379,7 @@ public class OrchestratorAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool));
                 }
 
                 // === 检查 finish_action 是否与其他工具同轮混用 ===
@@ -1377,7 +1390,7 @@ public class OrchestratorAgent {
                             .map(ParsedToolCall::tool)
                             .collect(java.util.stream.Collectors.joining(", "));
                     progressSink.onProgress(AgentProgressEvent.finishRejected(
-                            toolRound, MAX_TOOL_ROUNDS, "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                            toolRound, maxToolRounds, "FINISH_ACTION_WITH_OTHER_TOOLS"));
                     String rejectionSim = "[系统] finish_action 必须是本轮唯一工具调用。"
                             + "检测到同时包含 finish_action 和其他工具（" + toolsListSim + "）。"
                             + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
@@ -1408,7 +1421,7 @@ public class OrchestratorAgent {
 
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(
-                            toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool));
 
                     ToolCall call = new ToolCall(parsed.tool, parsed.args);
                     ToolResult result = toolRegistry.call(call);
@@ -1417,10 +1430,10 @@ public class OrchestratorAgent {
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+                                toolRound, maxToolRounds, parsed.tool));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, MAX_TOOL_ROUNDS, parsed.tool, result.error()));
+                                toolRound, maxToolRounds, parsed.tool, result.error()));
                     }
 
                     messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
@@ -1450,7 +1463,7 @@ public class OrchestratorAgent {
                     if (validationError != null) {
                         // progress: finish_action 被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
-                                toolRound, MAX_TOOL_ROUNDS, reasonFromMessageError(validationError)));
+                                toolRound, maxToolRounds, reasonFromMessageError(validationError)));
                         messages.add(LlmMessage.user(validationError));
                         trace.add(new MessageTrace("system", "finish_rejected", validationError));
                         ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
@@ -1463,7 +1476,7 @@ public class OrchestratorAgent {
                     if (claimError != null) {
                         // progress: finish_action 声明被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
-                                toolRound, MAX_TOOL_ROUNDS, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
+                                toolRound, maxToolRounds, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
                         messages.add(LlmMessage.user(claimError));
                         trace.add(new MessageTrace("system", "finish_rejected", claimError));
                         ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
