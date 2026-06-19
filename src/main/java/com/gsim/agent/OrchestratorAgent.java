@@ -46,6 +46,10 @@ public class OrchestratorAgent {
     private final ToolRegistry toolRegistry;
     private final String model;
     private final AgentProgressSink progressSink;
+    private final ToolRoutePolicy routePolicy;
+    private final ToolExecutionPolicy executionPolicy;
+    private final ToolPermissionGate permissionGate;
+    private final ToolPermissionConfig permissionConfig;
 
     /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
     private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
@@ -56,10 +60,31 @@ public class OrchestratorAgent {
 
     public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
                              AgentProgressSink progressSink) {
+        this(llmClient, toolRegistry, model, progressSink, null);
+    }
+
+    public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
+                             AgentProgressSink progressSink,
+                             ToolPermissionGate permissionGate) {
+        this(llmClient, toolRegistry, model, progressSink != null ? progressSink : AgentProgressSink.NOOP,
+                new ToolRoutePolicy(), new ToolExecutionPolicy(),
+                permissionGate, new ToolPermissionConfig());
+    }
+
+    OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
+                       AgentProgressSink progressSink,
+                       ToolRoutePolicy routePolicy,
+                       ToolExecutionPolicy executionPolicy,
+                       ToolPermissionGate permissionGate,
+                       ToolPermissionConfig permissionConfig) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.model = model;
         this.progressSink = progressSink != null ? progressSink : AgentProgressSink.NOOP;
+        this.routePolicy = routePolicy != null ? routePolicy : new ToolRoutePolicy();
+        this.executionPolicy = executionPolicy != null ? executionPolicy : new ToolExecutionPolicy();
+        this.permissionGate = permissionGate;
+        this.permissionConfig = permissionConfig != null ? permissionConfig : new ToolPermissionConfig();
     }
 
     /** 返回最近一次 assistant 输出草稿，用于工具保存。可能为空字符串。 */
@@ -859,6 +884,9 @@ public class OrchestratorAgent {
         int toolRound = 1;
         int consecutiveNoToolRounds = 0;
         int consecutiveInvalidToolIntent = 0;
+        boolean allowAllMutations = false;
+        UserIntent userIntent = UserIntent.infer(userText);
+        ExpectedNextStep expectedNextStep = ExpectedNextStep.CALL_TOOL;
         List<ToolDef> toolDefs = buildToolDefs();
 
         while (toolRound <= MAX_TOOL_ROUNDS) {
@@ -873,8 +901,9 @@ public class OrchestratorAgent {
             boolean hasToolResult = !toolCalls.isEmpty();
             java.util.List<String> expectedTools = toolRound == 1
                     ? java.util.List.of() : java.util.List.of("finish_action");
-            ToolLoopDebug.logTaskBrief(log, "runToolLoop", toolRound, userText,
-                    lastToolName, lastToolSuccess, hasToolResult, expectedTools);
+            ToolLoopDebug.logTaskBrief(log, "runToolLoop", toolRound,
+                    userIntent, expectedNextStep,
+                    lastToolName, lastToolSuccess, expectedTools);
 
             // progress: 上下文加载完毕
             int totalMessageChars = 0;
@@ -936,12 +965,43 @@ public class OrchestratorAgent {
             ToolLoopDebug.logToolExtraction(log, "runToolLoop", toolRound, allParsed,
                     apiToolCallCount, textFallbackCount, toolSource, content);
 
+            // === 工具路由决策 ===
+            ToolRouteDecision routeDecision = routePolicy.decide(
+                    userIntent, expectedNextStep, permissionConfig.defaultEnabledTools());
+            ToolLoopDebug.logToolRouteDecision(log, "runToolLoop", toolRound,
+                    userIntent, expectedNextStep, routeDecision, allowAllMutations);
+
             if (!allParsed.isEmpty()) {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
                             toolRound, MAX_TOOL_ROUNDS, parsed.tool));
                 }
+
+                // === 检查 finish_action 是否与其他工具同轮混用 ===
+                boolean hasFinishAction = allParsed.stream().anyMatch(p -> "finish_action".equals(p.tool));
+                boolean hasOtherTool = allParsed.stream().anyMatch(p -> !"finish_action".equals(p.tool));
+                if (hasFinishAction && hasOtherTool) {
+                    // 不执行任何工具，直接打回模型重写
+                    String toolsList = allParsed.stream()
+                            .map(ParsedToolCall::tool)
+                            .collect(java.util.stream.Collectors.joining(", "));
+                    progressSink.onProgress(AgentProgressEvent.finishRejected(
+                            toolRound, MAX_TOOL_ROUNDS, "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                    String rejection = "[系统] finish_action 必须是本轮唯一工具调用。"
+                            + "检测到同时包含 finish_action 和其他工具（" + toolsList + "）。"
+                            + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
+                            + "\n禁止: [tool_a, finish_action]"
+                            + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
+                    messages.add(LlmMessage.user(rejection));
+                    trace.add(new MessageTrace("system", "finish_rejected",
+                            "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                    ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
+                            "runToolLoop", toolRound, allParsed);
+                    toolRound++;
+                    continue;
+                }
+
                 consecutiveNoToolRounds = 0;
                 consecutiveInvalidToolIntent = 0;
                 int toolsBefore = toolCalls.size();
@@ -959,6 +1019,49 @@ public class OrchestratorAgent {
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(
                             toolRound, MAX_TOOL_ROUNDS, parsed.tool));
+
+                    // === 执行前门禁：路由 + 分类 + 确认 ===
+                    ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
+                            parsed.tool, parsed.args, routeDecision,
+                            expectedNextStep, allowAllMutations);
+                    ToolLoopDebug.logToolExecutionPolicy(log, "runToolLoop", toolRound,
+                            parsed.tool, execDecision);
+
+                    if (execDecision.decision() == ToolExecutionDecisionType.REJECT) {
+                        String reprompt = executionPolicy.buildRejectionReprompt(
+                                parsed.tool, execDecision, routeDecision);
+                        messages.add(LlmMessage.user(reprompt));
+                        trace.add(new MessageTrace("system", "tool_rejected",
+                                execDecision.reason()));
+                        progressSink.onProgress(AgentProgressEvent.toolFailed(
+                                toolRound, MAX_TOOL_ROUNDS, parsed.tool,
+                                "REJECTED: " + execDecision.reason()));
+                        continue;
+                    }
+
+                    if (execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
+                        if (permissionGate != null) {
+                            ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
+                                    parsed.tool, execDecision.category(),
+                                    execDecision.reason(), parsed.args,
+                                    contextMeta != null ? contextMeta.activeBranch() : null);
+                            ConfirmationChoice choice = permissionGate.askConfirmation(confirmReq);
+                            ToolLoopDebug.logToolPermissionDecision(log, "runToolLoop",
+                                    toolRound, parsed.tool, choice);
+
+                            if (choice == ConfirmationChoice.DENY) {
+                                String denyMsg = executionPolicy.buildDenyStopMessage(parsed.tool);
+                                messages.add(LlmMessage.user(denyMsg));
+                                trace.add(new MessageTrace("system", "tool_denied",
+                                        "tool=" + parsed.tool + " choice=DENY"));
+                                finalText = denyMsg;
+                                break;
+                            }
+                            if (choice == ConfirmationChoice.ALLOW_ALL_THIS_TURN) {
+                                allowAllMutations = true;
+                            }
+                        }
+                    }
 
                     ToolCall call = new ToolCall(parsed.tool, parsed.args);
                     ToolResult result = toolRegistry.call(call);
@@ -990,7 +1093,11 @@ public class OrchestratorAgent {
                         }
                     }
                 }
-                toolRound++;
+
+                // 用户拒绝了确认 → finalText 已设置，直接结束 while 循环
+                if (finalText != null) {
+                    break;
+                }
 
                 if (finishActionSeen && finishMessage != null) {
                     ToolLoopDebug.logFinishAction(log, "runToolLoop", toolRound,
@@ -1008,6 +1115,7 @@ public class OrchestratorAgent {
                         ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound,
                                 false, reasonFromMessageError(validationError),
                                 null, null, null);
+                        toolRound++;
                         continue;
                     }
                     String claimError = validateFinishActionClaims(finishMessage, toolCalls);
@@ -1022,6 +1130,7 @@ public class OrchestratorAgent {
                                 extractClaimFromError(claimError),
                                 null,
                                 successToolNames(toolCalls));
+                        toolRound++;
                         continue;
                     }
                     finalText = finishMessage;
@@ -1032,6 +1141,7 @@ public class OrchestratorAgent {
                 }
 
                 if (toolCalls.size() > toolsBefore) {
+                    toolRound++;
                     continue;
                 }
             }
@@ -1217,6 +1327,29 @@ public class OrchestratorAgent {
                             toolRound, MAX_TOOL_ROUNDS, parsed.tool));
                 }
 
+                // === 检查 finish_action 是否与其他工具同轮混用 ===
+                boolean hasFinishActionSim = allParsed.stream().anyMatch(p -> "finish_action".equals(p.tool));
+                boolean hasOtherToolSim = allParsed.stream().anyMatch(p -> !"finish_action".equals(p.tool));
+                if (hasFinishActionSim && hasOtherToolSim) {
+                    String toolsListSim = allParsed.stream()
+                            .map(ParsedToolCall::tool)
+                            .collect(java.util.stream.Collectors.joining(", "));
+                    progressSink.onProgress(AgentProgressEvent.finishRejected(
+                            toolRound, MAX_TOOL_ROUNDS, "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                    String rejectionSim = "[系统] finish_action 必须是本轮唯一工具调用。"
+                            + "检测到同时包含 finish_action 和其他工具（" + toolsListSim + "）。"
+                            + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
+                            + "\n禁止: [tool_a, finish_action]"
+                            + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
+                    messages.add(LlmMessage.user(rejectionSim));
+                    trace.add(new MessageTrace("system", "finish_rejected",
+                            "FINISH_ACTION_WITH_OTHER_TOOLS"));
+                    ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
+                            "runSimToolLoop", toolRound, allParsed);
+                    toolRound++;
+                    continue;
+                }
+
                 consecutiveNoToolRounds = 0;
                 consecutiveInvalidToolIntent = 0;
                 int toolsBefore = toolCalls.size();
@@ -1265,7 +1398,6 @@ public class OrchestratorAgent {
                         }
                     }
                 }
-                toolRound++;
 
                 if (finishActionSeen && finishMessage != null) {
                     ToolLoopDebug.logFinishAction(log, "runSimToolLoop", toolRound,
@@ -1274,15 +1406,22 @@ public class OrchestratorAgent {
 
                     String validationError = validateFinishActionMessage(finishMessage);
                     if (validationError != null) {
+                        // progress: finish_action 被拒绝
+                        progressSink.onProgress(AgentProgressEvent.finishRejected(
+                                toolRound, MAX_TOOL_ROUNDS, reasonFromMessageError(validationError)));
                         messages.add(LlmMessage.user(validationError));
                         trace.add(new MessageTrace("system", "finish_rejected", validationError));
                         ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
                                 false, reasonFromMessageError(validationError),
                                 null, null, null);
+                        toolRound++;
                         continue;
                     }
                     String claimError = validateFinishActionClaims(finishMessage, toolCalls);
                     if (claimError != null) {
+                        // progress: finish_action 声明被拒绝
+                        progressSink.onProgress(AgentProgressEvent.finishRejected(
+                                toolRound, MAX_TOOL_ROUNDS, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
                         messages.add(LlmMessage.user(claimError));
                         trace.add(new MessageTrace("system", "finish_rejected", claimError));
                         ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
@@ -1290,16 +1429,19 @@ public class OrchestratorAgent {
                                 extractClaimFromError(claimError),
                                 null,
                                 successToolNames(toolCalls));
+                        toolRound++;
                         continue;
                     }
                     finalText = finishMessage;
                     trace.add(new MessageTrace("assistant", "sim_output", finalText));
                     ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
                             true, null, null, null, null);
+                    ToolLoopDebug.logFinalText(log, "runSimToolLoop", "finish_action", finalText);
                     break;
                 }
 
                 if (toolCalls.size() > toolsBefore) {
+                    toolRound++;
                     continue;
                 }
             }

@@ -251,6 +251,26 @@ public final class ToolLoopDebug {
         log.debug(sb.toString());
     }
 
+    // ---- finish_action mixed with other tools rejection ----
+
+    static void logFinishActionWithOtherToolsRejected(Logger log, String loopName,
+                                                      int round,
+                                                      java.util.List<OrchestratorAgent.ParsedToolCall> allParsed) {
+        if (!log.isDebugEnabled()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n=== TOOL_LOOP FINISH_ACTION ===\n");
+        sb.append("loop=").append(loopName).append('\n');
+        sb.append("round=").append(round).append('\n');
+        sb.append("finishAccepted=false\n");
+        sb.append("rejectReason=FINISH_ACTION_WITH_OTHER_TOOLS\n");
+        sb.append("allTools=");
+        sb.append(allParsed.stream()
+                .map(OrchestratorAgent.ParsedToolCall::tool)
+                .collect(java.util.stream.Collectors.joining(", ")));
+        sb.append("\n=== TOOL_LOOP FINISH_ACTION END ===");
+        log.debug(sb.toString());
+    }
+
     // ---- finalText ----
 
     static void logFinalText(Logger log, String loopName, String source,
@@ -404,18 +424,19 @@ public final class ToolLoopDebug {
                               String userText, String lastToolName,
                               boolean lastToolSuccess, boolean hasToolResult,
                               java.util.List<String> expectedTools) {
-        if (!log.isDebugEnabled()) return;
-        String userIntent = inferUserIntent(userText);
-        // 首轮无工具结果 → CALL_TOOL；有工具结果且成功 → FINISH_ACTION
-        String expectedNextStep;
-        if (!hasToolResult) {
-            expectedNextStep = "CALL_TOOL";
-        } else if (lastToolSuccess) {
-            expectedNextStep = "FINISH_ACTION";
-        } else {
-            expectedNextStep = "CALL_TOOL"; // 工具失败需重试或调用其他工具
-        }
+        logTaskBrief(log, loopName, round, UserIntent.infer(userText),
+                computeExpectedNextStep(hasToolResult, lastToolSuccess),
+                lastToolName, lastToolSuccess, expectedTools);
+    }
 
+    /** 带 UserIntent / ExpectedNextStep 的重载版本。 */
+    static void logTaskBrief(Logger log, String loopName, int round,
+                              UserIntent userIntent,
+                              ExpectedNextStep expectedNextStep,
+                              String lastToolName,
+                              boolean lastToolSuccess,
+                              java.util.List<String> expectedTools) {
+        if (!log.isDebugEnabled()) return;
         StringBuilder sb = new StringBuilder();
         sb.append("\n=== TOOL_LOOP TASK_BRIEF ===\n");
         sb.append("loop=").append(loopName).append('\n');
@@ -428,6 +449,17 @@ public final class ToolLoopDebug {
         sb.append("lastToolSuccess=").append(lastToolSuccess).append('\n');
         sb.append("=== TOOL_LOOP TASK_BRIEF END ===");
         log.debug(sb.toString());
+    }
+
+    private static ExpectedNextStep computeExpectedNextStep(
+            boolean hasToolResult, boolean lastToolSuccess) {
+        if (!hasToolResult) {
+            return ExpectedNextStep.CALL_TOOL;
+        } else if (lastToolSuccess) {
+            return ExpectedNextStep.FINISH_ACTION;
+        } else {
+            return ExpectedNextStep.CALL_TOOL;
+        }
     }
 
     /** 从用户输入粗略推断意图，仅用于 debug 显示。 */
@@ -569,5 +601,61 @@ public final class ToolLoopDebug {
         return "[错误] Agent 连续 " + consecutive
                 + " 次输出非法工具调用文本，未能生成可执行 tool_calls。"
                 + "请检查 ToolLoop prompt 或模型输出。";
+    }
+
+    // ===== 工具路由 / 执行策略 / 确认决策 =====
+
+    /** 记录本轮工具路由决策。 */
+    static void logToolRouteDecision(Logger log, String loopName, int round,
+                                     UserIntent userIntent,
+                                     ExpectedNextStep expectedNextStep,
+                                     ToolRouteDecision route,
+                                     boolean allowAllMutations) {
+        if (!log.isDebugEnabled()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n=== TOOL_ROUTE_DECISION ===\n");
+        sb.append("loop=").append(loopName).append('\n');
+        sb.append("round=").append(round).append('\n');
+        sb.append("userIntent=").append(userIntent).append('\n');
+        sb.append("expectedNextStep=").append(expectedNextStep).append('\n');
+        sb.append("routeName=").append(route.routeName()).append('\n');
+        sb.append("allowedTools=").append(route.allowedTools()).append('\n');
+        sb.append("reason=").append(route.reason()).append('\n');
+        sb.append("allowAllMutations=").append(allowAllMutations).append('\n');
+        sb.append("=== TOOL_ROUTE_DECISION END ===");
+        log.debug(sb.toString());
+    }
+
+    /** 记录单个工具的执行策略校验。 */
+    static void logToolExecutionPolicy(Logger log, String loopName, int round,
+                                       String toolName,
+                                       ToolExecutionDecision decision) {
+        if (!log.isDebugEnabled()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n=== TOOL_EXECUTION_POLICY ===\n");
+        sb.append("loop=").append(loopName).append('\n');
+        sb.append("round=").append(round).append('\n');
+        sb.append("tool=").append(toolName).append('\n');
+        sb.append("category=").append(decision.category()).append('\n');
+        sb.append("allowedByRoute=").append(decision.allowedByRoute()).append('\n');
+        sb.append("decision=").append(decision.decision()).append('\n');
+        sb.append("reason=").append(decision.reason()).append('\n');
+        sb.append("=== TOOL_EXECUTION_POLICY END ===");
+        log.debug(sb.toString());
+    }
+
+    /** 记录用户对工具确认请求的选择。 */
+    static void logToolPermissionDecision(Logger log, String loopName, int round,
+                                          String toolName,
+                                          ConfirmationChoice choice) {
+        if (!log.isDebugEnabled()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n=== TOOL_PERMISSION_DECISION ===\n");
+        sb.append("loop=").append(loopName).append('\n');
+        sb.append("round=").append(round).append('\n');
+        sb.append("tool=").append(toolName).append('\n');
+        sb.append("userChoice=").append(choice).append('\n');
+        sb.append("=== TOOL_PERMISSION_DECISION END ===");
+        log.debug(sb.toString());
     }
 }

@@ -83,6 +83,11 @@ public class FakeLlmClient implements LlmClient {
         return List.copyOf(capturedRequests);
     }
 
+    /** 返回已发送的 LLM 请求总数（用于验证是否发起了新请求）。 */
+    public int getRequestCount() {
+        return capturedRequests.size();
+    }
+
     /** 返回最后一次请求的 system 消息内容（合并所有 system 消息）。 */
     public String getLastSystemPrompt() {
         if (capturedRequests.isEmpty()) return "";
