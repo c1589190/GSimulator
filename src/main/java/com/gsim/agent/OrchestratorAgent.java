@@ -262,6 +262,61 @@ public class OrchestratorAgent {
         return false;
     }
 
+    // ---- raw JSON 防泄露 ----
+
+    /**
+     * 从最终回复文本中移除 raw tool JSON 和 fenced code block。
+     * 防止 ```json...``` 或 {"tool":"..."} 原样泄露给用户。
+     */
+    static String stripRawToolJson(String text) {
+        if (text == null || text.isBlank()) return text;
+        String result = text;
+
+        // 移除 fenced code blocks (```json ... ``` 或 ``` ... ```)
+        result = result.replaceAll(
+                "```[a-z]*\\s*\\n?\\{\"tool\"[^`]*```\\s*",
+                "[工具调用已执行]");
+        // 移除内联 fenced blocks
+        result = result.replaceAll(
+                "```[a-z]*\\s*\\{\"tool\"[^`]*```\\s*",
+                "[工具调用已执行]");
+
+        // 移除裸露的 {"tool":"..."} JSON（不在 fence 中但仍是 raw JSON）
+        result = result.replaceAll(
+                "\\{\"tool\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"args\"\\s*:\\s*\\{[^}]*\\}\\}",
+                "[工具调用已执行]");
+
+        return result;
+    }
+
+    /**
+     * 保守规则：如果 finalText 包含"已保存/已创建/已切换/已入库/已写入"等成功宣称，
+     * 但整个 ToolLoop 中没有执行任何工具，则追加警告。
+     * 这防止 assistant 在没有 tool_result 支撑的情况下声称操作成功。
+     */
+    static String guardSuccessClaimWithoutToolBacking(String finalText,
+                                                       List<ToolCallRecord> toolCalls,
+                                                       int toolRound) {
+        if (finalText == null || finalText.isBlank()) return finalText;
+        if (!toolCalls.isEmpty()) return finalText; // 有工具执行，允许
+
+        // 检查是否包含成功宣称关键词
+        String[] claims = {"已保存", "已创建", "已切换", "已入库", "已写入", "已更新", "已完成"};
+        boolean hasClaim = false;
+        for (String c : claims) {
+            if (finalText.contains(c)) {
+                hasClaim = true;
+                break;
+            }
+        }
+        if (!hasClaim) return finalText;
+
+        // 没有工具执行却有成功宣称 → 追加警告
+        return finalText + "\n\n⚠️ [系统提示] 以上回复包含操作成功宣称，"
+                + "但在本轮对话中未检测到对应的工具执行记录。"
+                + "如确有操作需要执行，请重新输入指令。";
+    }
+
     /** 旧版 tool result 格式化（保留给旧 run() 路径使用）。 */
     private String formatToolResult(ToolResult result) {
         return buildToolResultFeedback(result.toolName(), result);
@@ -549,18 +604,25 @@ public class OrchestratorAgent {
             String content = response.content();
             messages.add(LlmMessage.assistant(content));
 
-            ParsedToolCall parsed = tryParseToolCall(content);
-            if (parsed != null) {
-                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                ToolCall call = new ToolCall(parsed.tool, parsed.args);
-                ToolResult result = toolRegistry.call(call);
-                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+            // 提取所有 tool call（支持一次回复中包含多个工具调用）
+            List<ParsedToolCall> allParsed = ToolCallExtractor.extractAllToolCalls(content);
+            if (!allParsed.isEmpty()) {
+                int toolsBefore = toolCalls.size();
+                for (ParsedToolCall parsed : allParsed) {
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolResult result = toolRegistry.call(call);
+                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
-                trace.add(new MessageTrace("tool", "tool_result",
-                        "tool=" + parsed.tool + " success=" + result.success()));
+                    messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                    trace.add(new MessageTrace("tool", "tool_result",
+                            "tool=" + parsed.tool + " success=" + result.success()));
+                }
                 toolRound++;
-                continue;
+                // 如果这条回复中成功提取并执行了工具，继续 ToolLoop
+                if (toolCalls.size() > toolsBefore) {
+                    continue;
+                }
             }
 
             finalText = content;
@@ -593,6 +655,10 @@ public class OrchestratorAgent {
             }
         }
 
+        // 后处理：strip raw JSON、检查无 tool_result 的成功宣称
+        finalText = stripRawToolJson(finalText);
+        finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
+
         return new ChatResult(true, finalText, toolCalls, trace, null);
     }
 
@@ -616,18 +682,25 @@ public class OrchestratorAgent {
             String content = response.content();
             messages.add(LlmMessage.assistant(content));
 
-            ParsedToolCall parsed = tryParseToolCall(content);
-            if (parsed != null) {
-                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                ToolCall call = new ToolCall(parsed.tool, parsed.args);
-                ToolResult result = toolRegistry.call(call);
-                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+            // 提取所有 tool call（支持一次回复中包含多个工具调用）
+            List<ParsedToolCall> allParsed = ToolCallExtractor.extractAllToolCalls(content);
+            if (!allParsed.isEmpty()) {
+                int toolsBefore = toolCalls.size();
+                for (ParsedToolCall parsed : allParsed) {
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolResult result = toolRegistry.call(call);
+                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
-                trace.add(new MessageTrace("tool", "tool_result",
-                        "tool=" + parsed.tool + " success=" + result.success()));
+                    messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                    trace.add(new MessageTrace("tool", "tool_result",
+                            "tool=" + parsed.tool + " success=" + result.success()));
+                }
                 toolRound++;
-                continue;
+                // 如果这条回复中成功提取并执行了工具，继续 ToolLoop
+                if (toolCalls.size() > toolsBefore) {
+                    continue;
+                }
             }
 
             finalText = content;
@@ -659,6 +732,10 @@ public class OrchestratorAgent {
                 finalText = "推演总结生成失败: " + fr.errorMessage();
             }
         }
+
+        // 后处理：strip raw JSON、检查无 tool_result 的成功宣称
+        finalText = stripRawToolJson(finalText);
+        finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
 
         return new SimResult(finalText, toolCalls, trace);
     }
