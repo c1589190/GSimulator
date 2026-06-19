@@ -1,16 +1,16 @@
 package com.gsim.agent;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import com.gsim.llm.FakeLlmClient;
 import com.gsim.tool.ToolRegistry;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -23,23 +23,39 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop DEBUG 日志 LLM_RESPONSE 格式")
 class ToolLoopDebugFormatsLlmResponsePreviewTest {
 
-    private ListAppender<ILoggingEvent> listAppender;
-    private Logger orchestratorLogger;
+    private TestLogAppender appender;
+    private LoggerContext ctx;
+    private Configuration config;
+    private Level originalLevel;
 
     @BeforeEach
     void setUp() {
-        orchestratorLogger = (Logger) LoggerFactory.getLogger(OrchestratorAgent.class);
-        orchestratorLogger.setLevel(Level.DEBUG);
-        listAppender = new ListAppender<>();
-        listAppender.start();
-        orchestratorLogger.addAppender(listAppender);
+        ctx = (LoggerContext) LogManager.getContext(false);
+        config = ctx.getConfiguration();
+
+        // 保存原始级别
+        LoggerConfig loggerConfig = config.getLoggerConfig("com.gsim.agent.OrchestratorAgent");
+        originalLevel = loggerConfig.getLevel();
+
+        // 设置 DEBUG 级别
+        loggerConfig.setLevel(Level.DEBUG);
+
+        // 添加测试 appender
+        appender = new TestLogAppender("test-preview");
+        appender.start();
+        config.addAppender(appender);
+        loggerConfig.addAppender(appender, Level.DEBUG, null);
+
+        ctx.updateLoggers();
     }
 
     @AfterEach
     void tearDown() {
-        orchestratorLogger.detachAppender(listAppender);
-        listAppender.stop();
-        orchestratorLogger.setLevel(null); // reset to default
+        LoggerConfig loggerConfig = config.getLoggerConfig("com.gsim.agent.OrchestratorAgent");
+        loggerConfig.removeAppender("test-preview");
+        loggerConfig.setLevel(originalLevel);
+        appender.stop();
+        ctx.updateLoggers();
     }
 
     @Test
@@ -56,12 +72,11 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
         agent.chatWithContextSession("# Base\nbranch: branch.b0000-start\n",
                 java.util.List.of(), "测试");
 
-        List<ILoggingEvent> logs = listAppender.list;
         boolean foundLlmResponse = false;
-        for (ILoggingEvent event : logs) {
-            if (event.getFormattedMessage().contains("TOOL_LOOP LLM_RESPONSE")) {
+        for (var event : appender.events()) {
+            String msg = event.getMessage().getFormattedMessage();
+            if (msg.contains("TOOL_LOOP LLM_RESPONSE")) {
                 foundLlmResponse = true;
-                String msg = event.getFormattedMessage();
                 assertTrue(msg.contains("rawChars="),
                         "LLM_RESPONSE should contain rawChars: " + msg);
                 assertTrue(msg.contains("rawPreview:"),
@@ -80,11 +95,9 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
     @DisplayName("LLM 响应超过 2000 字符时截断并标记 truncated")
     void longLlmResponseIsTruncated() {
         FakeLlmClient fakeLlm = new FakeLlmClient();
-        // 构造超长 finish_action JSON (generic fill to exceed 2000 chars)
         StringBuilder sb = new StringBuilder();
         sb.append("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"");
-        // Fill with content to exceed 2000 chars
         while (sb.length() < 2500) {
             sb.append("任务完成。这是一段很长的回复内容用于测试截断功能。");
         }
@@ -98,10 +111,9 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
         agent.chatWithContextSession("# Base\nbranch: branch.b0000-start\n",
                 java.util.List.of(), "测试");
 
-        List<ILoggingEvent> logs = listAppender.list;
         boolean found = false;
-        for (ILoggingEvent event : logs) {
-            String msg = event.getFormattedMessage();
+        for (var event : appender.events()) {
+            String msg = event.getMessage().getFormattedMessage();
             if (msg.contains("TOOL_LOOP LLM_RESPONSE") && msg.contains("truncated")) {
                 found = true;
                 assertTrue(msg.contains("truncated, rawChars="),
@@ -126,11 +138,10 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
         agent.chatWithContextSession("# Base\nbranch: branch.b0000-start\n",
                 java.util.List.of(), "测试");
 
-        List<ILoggingEvent> logs = listAppender.list;
-        assertFalse(logs.isEmpty(), "Should produce debug logs");
+        assertFalse(appender.events().isEmpty(), "Should produce debug logs");
 
-        for (ILoggingEvent event : logs) {
-            String msg = event.getFormattedMessage();
+        for (var event : appender.events()) {
+            String msg = event.getMessage().getFormattedMessage();
             if (msg.contains("TOOL_LOOP")) {
                 assertTrue(msg.startsWith("\n=== TOOL_LOOP "),
                         "TOOL_LOOP section should start with unified prefix: " + msg);

@@ -21,7 +21,7 @@
         <jackson.version>2.18.2</jackson.version>
         <okhttp.version>4.12.0</okhttp.version>
         <slf4j.version>2.0.16</slf4j.version>
-        <logback.version>1.5.12</logback.version>
+        <log4j2.version>2.26.0</log4j2.version>
         <junit.version>5.11.4</junit.version>
         <sqlite.version>3.47.1.0</sqlite.version>
         <jsoup.version>1.18.3</jsoup.version>
@@ -60,11 +60,26 @@
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- Logback (SLF4J implementation) -->
+        <!-- Log4j2 API -->
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>${logback.version}</version>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+
+        <!-- Log4j2 Core -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+
+        <!-- SLF4J-to-Log4j2 bridge (SLF4J 2.x compatible, runtime binding) -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
+            <version>${log4j2.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- SQLite JDBC -->
@@ -134,6 +149,7 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.gsim.Main</mainClass>
                                 </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                         </configuration>

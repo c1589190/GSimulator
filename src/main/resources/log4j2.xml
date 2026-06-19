@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- === 控制台：精简格式，适配 CLI/REPL 调试 === -->
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout
+                pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{1.} - %msg%n%xEx{filters(org.junit,org.apache.maven,sun.reflect,java.lang.reflect)}"/>
+        </Console>
+
+        <!-- === 主日志文件 === -->
+        <RollingFile name="MAIN_LOG"
+                     fileName="logs/gsimulator.log"
+                     filePattern="logs/gsimulator-%d{yyyy-MM-dd}-%i.log.gz"
+                     append="true">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+
+        <!-- === ToolLoop 专用日志 === -->
+        <RollingFile name="TOOLLOOP_LOG"
+                     fileName="logs/toolloop.log"
+                     filePattern="logs/toolloop-%d{yyyy-MM-dd}-%i.log.gz"
+                     append="true">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{1.} - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="5 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
+
+        <!-- === LLM 专用日志（独立文件，代码层通过 LogSanitizer 脱敏） === -->
+        <RollingFile name="LLM_LOG"
+                     fileName="logs/llm.log"
+                     filePattern="logs/llm-%d{yyyy-MM-dd}-%i.log.gz"
+                     append="true">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{1.} - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="5 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <!-- ToolLoop 调试：agent 包 DEBUG → toolloop.log；CONSOLE 仅 INFO+ -->
+        <Logger name="com.gsim.agent" level="DEBUG" additivity="false">
+            <AppenderRef ref="TOOLLOOP_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+        </Logger>
+
+        <!-- LLM 调试：llm 包 DEBUG → llm.log；CONSOLE 仅 INFO+ -->
+        <Logger name="com.gsim.llm" level="DEBUG" additivity="false">
+            <AppenderRef ref="LLM_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+        </Logger>
+
+        <!-- 默认：所有其他包 INFO → console + 主日志 -->
+        <Root level="INFO">
+            <AppenderRef ref="CONSOLE"/>
+            <AppenderRef ref="MAIN_LOG"/>
+        </Root>
+    </Loggers>
+</Configuration>
