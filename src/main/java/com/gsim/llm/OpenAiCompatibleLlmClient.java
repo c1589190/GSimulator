@@ -90,6 +90,28 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             body.put("max_tokens", request.maxTokens());
         }
 
+        // Serialize tools if present
+        if (request.tools() != null && !request.tools().isEmpty()) {
+            List<Map<String, Object>> tools = new java.util.ArrayList<>();
+            for (ToolDef tool : request.tools()) {
+                Map<String, Object> fnDef = new java.util.LinkedHashMap<>();
+                fnDef.put("name", tool.name());
+                fnDef.put("description", tool.description());
+                Map<String, Object> params = new java.util.LinkedHashMap<>();
+                params.put("type", "object");
+                params.put("properties", Map.of());
+                params.put("additionalProperties", true);
+                fnDef.put("parameters", params);
+
+                Map<String, Object> t = new java.util.LinkedHashMap<>();
+                t.put("type", "function");
+                t.put("function", fnDef);
+                tools.add(t);
+            }
+            body.put("tools", tools);
+            body.put("tool_choice", request.toolChoice() != null ? request.toolChoice() : "auto");
+        }
+
         return MAPPER.writeValueAsString(body);
     }
 
@@ -104,16 +126,59 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
             Map<String, Object> choice = choices.get(0);
             Map<String, Object> message = (Map<String, Object>) choice.get("message");
-            String content = (String) message.get("content");
+            String content = message != null ? (String) message.get("content") : "";
 
+            String finishReason = (String) choice.getOrDefault("finish_reason", "stop");
             String responseModel = (String) map.getOrDefault("model", model);
             Map<String, Object> usage = (Map<String, Object>) map.get("usage");
             int tokens = usage != null ? ((Number) usage.getOrDefault("total_tokens", 0)).intValue() : 0;
 
-            return LlmResponse.success(content, responseModel, tokens);
+            // Parse tool_calls
+            List<LlmToolCall> toolCalls = parseToolCalls(message);
+
+            if (!toolCalls.isEmpty()) {
+                return LlmResponse.successWithToolCalls(toolCalls, responseModel, tokens);
+            }
+            return new LlmResponse(content != null ? content : "", responseModel, tokens,
+                    true, null, List.of(), finishReason);
         } catch (Exception e) {
             log.error("Failed to parse LLM response: {}", e.getMessage());
             return LlmResponse.failure("Failed to parse response: " + e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<LlmToolCall> parseToolCalls(Map<String, Object> message) {
+        List<LlmToolCall> result = new java.util.ArrayList<>();
+        if (message == null) return result;
+
+        Object tcObj = message.get("tool_calls");
+        if (!(tcObj instanceof List)) return result;
+
+        List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) tcObj;
+        for (Map<String, Object> tc : toolCalls) {
+            String id = (String) tc.getOrDefault("id", "");
+            Map<String, Object> fn = (Map<String, Object>) tc.get("function");
+            if (fn == null) continue;
+
+            String name = (String) fn.get("name");
+            if (name == null || name.isBlank()) continue;
+
+            Map<String, String> args = new java.util.HashMap<>();
+            Object argsObj = fn.get("arguments");
+            if (argsObj instanceof String argsStr && !argsStr.isBlank()) {
+                try {
+                    Map<String, Object> parsed = MAPPER.readValue(argsStr, Map.class);
+                    for (Map.Entry<String, Object> e : parsed.entrySet()) {
+                        args.put(e.getKey(), String.valueOf(e.getValue()));
+                    }
+                } catch (Exception e) {
+                    // Leave args empty
+                }
+            }
+
+            result.add(new LlmToolCall(id, name, args));
+        }
+        return result;
     }
 }

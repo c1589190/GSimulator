@@ -83,8 +83,11 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
     @Test
     @DisplayName("应包含工具调用规则不冲突")
     void hasConsistentToolCallingRules() {
-        // "当需要调用工具时" 和 "直接自然语言回答" 是互补的，不是互斥的
-        boolean hasWhenNeeded = promptContent.contains("当需要调用工具时");
+        // "当需要调用工具时" (旧) 或 "API tool_calls 调用工具" (新)
+        boolean hasWhenNeeded = promptContent.contains("当需要调用工具时")
+                || promptContent.contains("API tool_calls 调用工具")
+                || promptContent.contains("工具调用 JSON")
+                || promptContent.contains("工具调用规则");
         boolean hasNaturalLanguage = promptContent.contains("自然语言");
         assertTrue(hasWhenNeeded, "应说明何时使用工具调用");
         assertTrue(hasNaturalLanguage, "应说明何时自然语言回答");

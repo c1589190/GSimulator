@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 从 LLM 响应中提取 tool call JSON。
@@ -22,12 +24,17 @@ import java.util.Map;
  *   <li>无语言标记 fence: ```\n{"tool":"..."}\n```</li>
  *   <li>内联 fence（无换行）: ```json{"tool":"..."}```</li>
  *   <li>波浪线 fence: ~~~json\n{"tool":"..."}\n~~~</li>
+ *   <li>中文括号调用: [调用 toolName] {"args":{...}}</li>
  * </ul>
  */
 public final class ToolCallExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(ToolCallExtractor.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** Chinese bracket invoke: [调用 toolName] {jsonArgs} */
+    private static final Pattern BRACKET_INVOKE = Pattern.compile(
+            "\\[调用\\s+([a-zA-Z0-9_:-]+)\\]\\s*");
 
     private ToolCallExtractor() {}
 
@@ -91,6 +98,10 @@ public final class ToolCallExtractor {
             OrchestratorAgent.ParsedToolCall parsed = tryParseJson(candidate);
             if (parsed != null) results.add(parsed);
         }
+
+        // 注意：[调用 toolName] {args} 格式不在 extractAllToolCalls 中解析。
+        // 此格式由 ToolLoop 的 invalidToolIntent 检测处理，作为非法工具意图打回模型重写。
+        // 合法 fallback 仍是 {"tool":"...","args":{...}} 标准 JSON。
 
         return results;
     }
@@ -262,5 +273,49 @@ public final class ToolCallExtractor {
             }
         }
         return -1;
+    }
+
+    /**
+     * 从文本中提取中文括号调用格式: [调用 toolName] {jsonArgs}。
+     * 只支持合法工具名格式 {@code [a-zA-Z0-9_:-]+} 后跟合法 JSON object。
+     * 不支持 [工具结果]、{key=value} 等伪格式。
+     */
+    static List<OrchestratorAgent.ParsedToolCall> extractBracketInvokeToolCalls(String text) {
+        List<OrchestratorAgent.ParsedToolCall> results = new ArrayList<>();
+        if (text == null || text.isBlank()) return results;
+
+        Matcher matcher = BRACKET_INVOKE.matcher(text);
+        while (matcher.find()) {
+            String toolName = matcher.group(1);
+            int jsonStart = matcher.end();
+            if (jsonStart >= text.length() || text.charAt(jsonStart) != '{') continue;
+
+            int jsonEnd = findMatchingBrace(text, jsonStart);
+            if (jsonEnd < 0) continue;
+
+            String jsonText = text.substring(jsonStart, jsonEnd + 1);
+            try {
+                JsonNode root = MAPPER.readTree(jsonText);
+                Map<String, String> args = new java.util.HashMap<>();
+                if (root.isObject()) {
+                    var iter = root.fields();
+                    while (iter.hasNext()) {
+                        var entry = iter.next();
+                        args.put(entry.getKey(), entry.getValue().asText());
+                    }
+                }
+                results.add(new OrchestratorAgent.ParsedToolCall(toolName, args));
+            } catch (Exception e) {
+                log.debug("Bracket invoke JSON parse failed for tool={}: {}", toolName,
+                        jsonText.substring(0, Math.min(80, jsonText.length())));
+            }
+        }
+        return results;
+    }
+
+    /** 检测文本中是否包含中文括号调用格式。 */
+    static boolean hasBracketInvokeSyntax(String text) {
+        if (text == null || text.isBlank()) return false;
+        return BRACKET_INVOKE.matcher(text).find();
     }
 }

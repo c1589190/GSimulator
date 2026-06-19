@@ -160,7 +160,29 @@ public class NodeAgentChatService {
         // 4. 渲染 LLM 输入
         String llmInput = ctxSessionManager.renderForLlm(apiSessionId, userText);
 
-        // 5. 调用 LLM
+        // 5. 构建 AgentContextMeta
+        String rootId = dm.getActiveRootId();
+        String activeB = dm.getActiveBranch();
+        java.util.List<String> branchPath = java.util.List.of(); // DataManager.getBranchChain not available directly
+        java.util.List<String> parentBranches = java.util.List.of();
+        try {
+            var chain = dm.getBranchChain(activeB);
+            branchPath = chain.stream()
+                    .map(d -> d != null ? d.id() : "?")
+                    .filter(id -> id != null && !id.startsWith("root."))
+                    .collect(java.util.stream.Collectors.toList());
+            if (branchPath.size() > 1) {
+                parentBranches = branchPath.subList(0, branchPath.size() - 1);
+            }
+        } catch (Exception e) {
+            // fallback empty
+        }
+        var contextMeta = new com.gsim.agent.AgentContextMeta(
+                rootId, activeB, "FULL_CONTEXT", true,
+                "current_context_builder_default",
+                branchPath, parentBranches, true);
+
+        // 6. 调用 LLM
         OrchestratorAgent.ChatResult result;
         List<SessionMessage> sessionMsgs = ctxSessionManager.getSessionMessages(csId);
         String baseMarkdown = ctxSessionManager.getBaseContextMarkdown(apiSessionId);
@@ -170,7 +192,7 @@ public class NodeAgentChatService {
                 .filter(m -> !m.id().equals(smUser.id()))
                 .toList();
 
-        result = orchestrator.chatWithContextSession(baseMarkdown, historyMsgs, userText);
+        result = orchestrator.chatWithContextSession(baseMarkdown, historyMsgs, userText, contextMeta);
 
         if (!result.success()) {
             String errMsgId = store.nextMessageId(branchId);
