@@ -68,6 +68,21 @@ public class WhereCommand implements InteractionCommand {
             // Knowledge DB path
             var dbPath = dm.getActiveKnowledgeDbPath();
             sb.append("knowledgeDb: ").append(dbPath != null ? dbPath : "(none)").append("\n");
+
+            // 检测废弃 branch extra 数据（旧版四/五/六/七/八 section 中的增量数据）
+            try {
+                String fullCtx = dm.getEffectiveContext();
+                boolean hasDeprecatedSections = fullCtx.contains("四、世界观/设定增量")
+                        || fullCtx.contains("五、实体状态增量")
+                        || fullCtx.contains("六、推演规则增量")
+                        || fullCtx.contains("八、未总结 Skill 增量");
+                if (hasDeprecatedSections) {
+                    sb.append("\n--- 注意 ---\n");
+                    sb.append("发现 deprecated branch extra sections（四/五/六/八）。\n");
+                    sb.append("这些章节已废弃，不会默认注入 Agent 上下文。\n");
+                    sb.append("如需迁移旧分支增量数据到 embDB，请手动要求 Agent：\"迁移旧分支额外设定到 knowledge\"。\n");
+                }
+            } catch (Exception ignored) {}
         } else {
             sb.append("activeRoot: (none — use /root create or type a world description)\n");
         }

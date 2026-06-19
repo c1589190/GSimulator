@@ -2,7 +2,7 @@
 
 本文件记录当前世界中的玩家角色、玩家势力、公开目标、隐藏倾向、资源、关系与当前状态。
 玩家本回合行动不要写在这里，行动应写入 input.md。
-推演后的玩家状态变化应优先写入 branch 的实体状态增量。
+推演后的玩家状态变化应优先写入 embDB（knowledge_upsert 带 branchId + targetKey），不写入 branch markdown 的实体状态增量章节。
 
 ## 示例玩家
 

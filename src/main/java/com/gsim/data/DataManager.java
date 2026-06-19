@@ -1011,6 +1011,12 @@ public class DataManager {
 
     // ==================== effective context ====================
 
+    /**
+     * @deprecated Branch extra sections（四/五/六/七/八）已废弃。
+     * 分支化细碎事实应通过 knowledge_upsert 写入 embDB。
+     * 此方法仅保留用于旧数据诊断/迁移参考，不注入 Agent 上下文。
+     */
+    @Deprecated
     public String getEffectiveContext() {
         rwLock.readLock().lock();
         try {

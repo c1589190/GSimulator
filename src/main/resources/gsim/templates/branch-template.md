@@ -25,23 +25,23 @@ updated: {{updated}}
 
 {{result}}
 
-## 四、世界观/设定增量
+## 四、世界观/设定增量（已废弃 — 请使用 knowledge_upsert 写入 embDB）
 
 {{world_delta}}
 
-## 五、实体状态增量
+## 五、实体状态增量（已废弃 — 请使用 knowledge_upsert 写入 embDB）
 
 {{entity_delta}}
 
-## 六、推演规则增量
+## 六、推演规则增量（已废弃 — 请使用 knowledge_upsert 写入 embDB）
 
 {{rule_delta}}
 
-## 七、交互逻辑增量
+## 七、交互逻辑增量（已废弃 — 请使用 knowledge_upsert 写入 embDB）
 
 {{interaction_delta}}
 
-## 八、未总结 Skill 增量
+## 八、未总结 Skill 增量（已废弃 — 请使用 knowledge_upsert 写入 embDB）
 
 {{skill_delta}}
 

@@ -327,7 +327,7 @@ public class BootstrapWorldDraftGenerator {
         return "# 玩家档案\n\n"
                 + "本文件记录当前世界中的玩家角色、玩家势力、公开目标、隐藏倾向、资源、关系与当前状态。\n"
                 + "玩家本回合行动不要写在这里，行动应写入 branch 的 PlayerAction 记录区。\n"
-                + "推演后的玩家状态变化应优先写入 branch 的实体状态增量。\n\n"
+                + "推演后的玩家状态变化应优先写入 embDB（knowledge_upsert 带 branchId + targetKey）。\n\n"
                 + "## 玩家资料区\n\n"
                 + "（玩家基本信息：名称、代号、身份、所属势力等）\n\n"
                 + "暂无录入。\n\n"
