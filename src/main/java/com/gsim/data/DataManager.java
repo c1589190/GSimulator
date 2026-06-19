@@ -167,6 +167,70 @@ public class DataManager {
     /** 获取 active branch ID。 */
     public String getActiveBranchId() { return activeBranch; }
 
+    /** 获取 active branch 文件路径。 */
+    public Path getActiveBranchFilePath() {
+        if (activeWorld == null || activeBranch == null) return null;
+        return activeWorldDir().resolve("branches/" + branchIdToFilename(activeBranch));
+    }
+
+    /** 获取指定 branch 文件路径。 */
+    public Path getBranchFilePath(String branchId) {
+        String normalized = normalizeBranchId(branchId);
+        return activeWorldDir().resolve("branches/" + branchIdToFilename(normalized));
+    }
+
+    /** 读取指定 branch 文件完整内容（带读锁）。 */
+    public String readBranchFile(String branchId) throws IOException {
+        rwLock.readLock().lock();
+        try {
+            Path file = getBranchFilePath(branchId);
+            if (!Files.exists(file)) throw new IOException("Branch file not found: " + branchId);
+            return Files.readString(file, StandardCharsets.UTF_8);
+        } finally { rwLock.readLock().unlock(); }
+    }
+
+    /** 读取 active branch 文件完整内容（带读锁）。 */
+    public String readActiveBranchFile() throws IOException {
+        return readBranchFile(activeBranch);
+    }
+
+    /** 写入分支文件并 reload（带写锁）。 */
+    public void writeBranchFile(String branchId, String content, String reason) throws IOException {
+        rwLock.writeLock().lock();
+        try {
+            Path file = getBranchFilePath(branchId);
+            writeFile(file, content);
+            reload();
+            log.info("Wrote branch file '{}' reason='{}'", branchId, reason);
+        } finally { rwLock.writeLock().unlock(); }
+    }
+
+    /** 生成当前 active branch 的下一个 simId。 */
+    public String generateNextSimId(String branchId) throws IOException {
+        String markdown = readBranchFile(branchId);
+        int max = 0;
+        int idx = 0;
+        while ((idx = markdown.indexOf("<!-- SIM_CONTENT:sim", idx)) >= 0) {
+            int start = idx + "<!-- SIM_CONTENT:sim".length();
+            // 找到数字结束位置
+            int end = start;
+            while (end < markdown.length() && Character.isDigit(markdown.charAt(end))) end++;
+            if (end > start) {
+                try {
+                    int n = Integer.parseInt(markdown.substring(start, end));
+                    if (n > max) max = n;
+                } catch (NumberFormatException ignored) {}
+            }
+            idx = end;
+        }
+        return "sim" + String.format("%04d", max + 1);
+    }
+
+    /** 获取 active branch 文件名（去除 branch. 前缀）。 */
+    public String getActiveBranchFilename() {
+        return branchIdToFilename(activeBranch);
+    }
+
     /** 获取 active world 目录。 */
     public Path activeWorldDir() { return worldDir(); }
 

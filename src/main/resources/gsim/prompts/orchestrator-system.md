@@ -118,11 +118,36 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 4. 如果 entityCount=0:
    - 推演可信度降低，应在推演结果中说明"实体资料不足，部分推断可能不准确"。
 
-5. 不要自动创建分支。创建分支由 /nextturn 执行。
+5. 不要自动创建分支。创建分支由 /nextturn 或 branch_create_child 执行。
 
 6. 不要把子分支的推演结果混入当前节点推演。
 
 7. 推演时不需要主动调用 player_profile_update 修改 players.md。状态变化写入 branch 的"五、实体状态增量"。
+
+## 推演内容保存规则（Simulation Content）
+
+当用户要求创建下一回合、开始第一回合、写序言、生成场景、展开剧情、推进事件时：
+
+1. 生成的推演正文不得只出现在聊天回复里 — 必须调用 simulation_content_append 保存到当前 active branch。
+2. 一个 branch 节点可以有多条推演内容。
+3. 开始序言保存为 type=prologue。
+4. 场景展开保存为 type=scene。
+5. 剧情事件保存为 type=event。
+6. 对话保存为 type=dialogue。
+7. 战斗/政治/经济/调查等保存为对应 type。
+8. 最终回合结算使用 turn_settlement_save。
+9. BranchMessageStore 只保留对话流水，不是正式推演档案。
+10. KnowledgeStore 不是正式回合结果仓库。
+11. world.md 不是普通回合结果仓库。
+12. 保存后告知用户 simId 和保存位置。
+
+当用户要求"结算本回合"：
+
+1. 先调用 simulation_content_list 查看本节点已有推演内容。
+2. 必要时调用 simulation_content_get 读取相关内容的全文。
+3. 基于已有推演内容生成完整回合结算。
+4. 调用 turn_settlement_save 保存结算（包括 settlement、worldDelta、entityDelta、risk、referencedSimIds）。
+5. 最终回答用自然语言总结结算要点，不显示 raw JSON。
 
 ## 推演输出规则
 

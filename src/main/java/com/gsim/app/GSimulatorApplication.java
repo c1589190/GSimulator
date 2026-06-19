@@ -178,6 +178,22 @@ public class GSimulatorApplication {
             toolRegistry.register(tool);
         }
 
+        // 注册 SimulationContent Tools（单回合推演内容保存 + 回合结算）
+        Runnable onBranchChanged = () -> {
+            if (ctxSessionManager != null) {
+                ctxSessionManager.resetSession("default", "branch switched via agent tool");
+                log.debug("ContextSession reset due to branch switch");
+            }
+        };
+        toolRegistry.register(new com.gsim.branch.tool.SimulationContentAppendTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.SimulationContentListTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.SimulationContentGetTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.SimulationContentUpdateTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.TurnSettlementSaveTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.TurnSettlementGetTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.BranchCreateChildTool(dataManager, onBranchChanged));
+        toolRegistry.register(new com.gsim.branch.tool.BranchSwitchTool(dataManager, onBranchChanged));
+
         // /sim /run — deprecated wrappers
         manager.registerCommand(new SimCommand(chatService));
         manager.registerCommand(new RunCommand(chatService));
