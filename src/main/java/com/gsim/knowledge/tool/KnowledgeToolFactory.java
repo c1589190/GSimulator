@@ -241,9 +241,10 @@ public class KnowledgeToolFactory {
             String targetKey = call.param("targetKey", "");
             String changeType = call.param("changeType", "created");
 
-            // no-root 或 no-active-branch 检查
-            if (rootId.isBlank() && branchId.isBlank()) {
-                // 允许在 bootstrap 阶段没有 root 时仍写入（branchId="" 兼容）
+            // no-root 且 no-active-branch 检查 — 仅在 context suppliers 已配置时强制
+            if (rootId.isBlank() && branchId.isBlank() && activeRootIdSupplier != null) {
+                return ToolResult.fail(name(), "NO_ACTIVE_ROOT_OR_BRANCH: 当前没有 active root/branch，无法确定知识归属。"
+                        + " 请先创建 root 或切换到有效 branch。");
             }
 
             Map<String, String> metadata = null;
@@ -267,25 +268,27 @@ public class KnowledgeToolFactory {
             }
 
             // 如果有 active profile，只为本次 upsert 的 doc 自动生成 embeddings
-            Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
-            if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
-                EmbeddingModel model = profileManager.getEmbeddingModel();
-                if (model != null && model.isAvailable()) {
-                    try {
-                        List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
-                                result.docId(), activeProfile.get().profileId());
-                        int embedded = embedChunks(chunkIds, model, activeProfile.get());
-                        // 重新检查状态
-                        return ToolResult.ok(name(), List.of(
-                                new ToolResult.Item(title, result.docId(),
-                                        "status=OK docId=" + result.docId()
-                                        + " chunks=" + result.chunksCreated()
-                                        + " embeddings=" + embedded
-                                        + " profile=" + activeProfile.get().profileId(), 1.0)));
-                    } catch (com.gsim.knowledge.store.KnowledgeStoreException e) {
-                        return ToolResult.fail(name(), "KNOWLEDGE_STORE_WRITE_FAILED: " + e.getMessage());
-                    } catch (Exception e) {
-                        log.warn("Auto-embedding failed during upsert: {}", e.getMessage());
+            if (profileManager != null) {
+                Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
+                if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
+                    EmbeddingModel model = profileManager.getEmbeddingModel();
+                    if (model != null && model.isAvailable()) {
+                        try {
+                            List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
+                                    result.docId(), activeProfile.get().profileId());
+                            int embedded = embedChunks(chunkIds, model, activeProfile.get());
+                            // 重新检查状态
+                            return ToolResult.ok(name(), List.of(
+                                    new ToolResult.Item(title, result.docId(),
+                                            "status=OK docId=" + result.docId()
+                                            + " chunks=" + result.chunksCreated()
+                                            + " embeddings=" + embedded
+                                            + " profile=" + activeProfile.get().profileId(), 1.0)));
+                        } catch (com.gsim.knowledge.store.KnowledgeStoreException e) {
+                            return ToolResult.fail(name(), "KNOWLEDGE_STORE_WRITE_FAILED: " + e.getMessage());
+                        } catch (Exception e) {
+                            log.warn("Auto-embedding failed during upsert: {}", e.getMessage());
+                        }
                     }
                 }
             }
@@ -300,7 +303,9 @@ public class KnowledgeToolFactory {
     private class KnowledgeUpdateTool implements AgentTool {
         @Override public String name() { return "knowledge_update"; }
         @Override public String description() {
-            return "更新已有文档。删除旧 chunks/embeddings，重建新 chunks。参数: docId(必填), title(必填), content(必填), collection(可选), sourceType(可选), sourceUri(可选), metadata(可选)。";
+            return "更新已有文档。删除旧 chunks/embeddings，重建新 chunks。"
+                    + "注意: 分支知识文档（branchId 非空）不可使用此工具覆盖 — 必须使用 knowledge_upsert 并传 revisionOf。"
+                    + "参数: docId(必填), title(必填), content(必填), collection(可选), sourceType(可选), sourceUri(可选), metadata(可选)。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -314,6 +319,18 @@ public class KnowledgeToolFactory {
             String sourceType = call.param("sourceType", "agent_note");
             String sourceUri = call.param("sourceUri", "");
 
+            // 检查是否为分支 scoped 文档 — 分支知识不可覆盖，必须走 revisionOf
+            Optional<KnowledgeDocument> existing = store.getDocument(docId);
+            if (existing.isPresent() && !existing.get().branchId().isBlank()) {
+                String targetKey = existing.get().targetKey();
+                return ToolResult.fail(name(),
+                        "KNOWLEDGE_UPDATE_REJECTED_FOR_BRANCH_DOC: 分支知识文档不可使用 knowledge_update 覆盖。"
+                                + "请使用 knowledge_upsert 并设置 revisionOf=" + docId
+                                + (targetKey != null && !targetKey.isBlank()
+                                        ? " targetKey=" + targetKey : "")
+                                + "。");
+            }
+
             KnowledgeDocumentInput input = new KnowledgeDocumentInput(
                     title, content, collection, sourceType, sourceUri, null);
             KnowledgeUpdateResult result = store.update(docId, input);
@@ -323,16 +340,18 @@ public class KnowledgeToolFactory {
             }
 
             // 如果有 active profile，只为本次 update 的 doc 自动重嵌入
-            Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
-            if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
-                EmbeddingModel model = profileManager.getEmbeddingModel();
-                if (model != null && model.isAvailable()) {
-                    try {
-                        List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
-                                docId, activeProfile.get().profileId());
-                        embedChunks(chunkIds, model, activeProfile.get());
-                    } catch (Exception e) {
-                        log.warn("Auto-embedding failed during update: {}", e.getMessage());
+            if (profileManager != null) {
+                Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
+                if (activeProfile.isPresent() && activeProfile.get().isAvailable()) {
+                    EmbeddingModel model = profileManager.getEmbeddingModel();
+                    if (model != null && model.isAvailable()) {
+                        try {
+                            List<String> chunkIds = store.findChunksMissingEmbeddingForDoc(
+                                    docId, activeProfile.get().profileId());
+                            embedChunks(chunkIds, model, activeProfile.get());
+                        } catch (Exception e) {
+                            log.warn("Auto-embedding failed during update: {}", e.getMessage());
+                        }
                     }
                 }
             }

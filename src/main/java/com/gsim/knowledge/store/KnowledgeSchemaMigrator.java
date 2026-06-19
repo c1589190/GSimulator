@@ -120,8 +120,14 @@ public class KnowledgeSchemaMigrator {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("ALTER TABLE documents ADD COLUMN " + col[0] + " " + col[1]);
             } catch (SQLException e) {
-                // 列已存在 — 忽略
-                log.debug("Column {} may already exist: {}", col[0], e.getMessage());
+                String msg = e.getMessage();
+                // 只忽略「列已存在」错误，其他 SQL 异常必须抛出
+                if (msg != null && (msg.toLowerCase().contains("duplicate column")
+                        || msg.toLowerCase().contains("already exists"))) {
+                    log.debug("Column {} already exists, skipping: {}", col[0], msg);
+                } else {
+                    throw e;
+                }
             }
         }
 

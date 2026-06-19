@@ -104,8 +104,15 @@ public class GSimulatorApplication {
                 () -> dataManager.getActiveRootId(),
                 () -> dataManager.getActiveBranchId(),
                 () -> {
-                    var chain = dataManager.getBranchChain(dataManager.getActiveBranch());
-                    return chain.stream().map(d -> d.id()).toList();
+                    try {
+                        var activeBranch = dataManager.getActiveBranch();
+                        if (activeBranch == null) return java.util.List.of();
+                        var chain = dataManager.getBranchChain(activeBranch);
+                        return chain.stream().map(d -> d.id()).toList();
+                    } catch (Exception e) {
+                        log.warn("Failed to resolve visible branch IDs: {}", e.getMessage());
+                        return java.util.List.of();
+                    }
                 });
 
         // BranchMessageStore / BranchAnalyzer

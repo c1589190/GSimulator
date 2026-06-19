@@ -122,6 +122,12 @@ Import 文档读取只是临时阅读，**不会自动入库**。只有用户明
 不要大量保存低价值闲聊。
 保存资料时要写清 title、collection、sourceType、sourceUri。
 
+### knowledge_update 限制
+
+- knowledge_update 用于非分支知识（branchId 为空，如通用设定、全局资料等）。
+- **分支知识文档不得使用 knowledge_update 覆盖。** 修改/补充分支知识必须使用 knowledge_upsert，并传 revisionOf 和 targetKey。
+- 如果调用 knowledge_update 收到 KNOWLEDGE_UPDATE_REJECTED_FOR_BRANCH_DOC 错误，改用 knowledge_upsert revisionOf=... targetKey=...。
+
 ### 分支知识隔离规则 (Branch Knowledge Isolation)
 
 **写入 embDB 时必须带当前 branchId。** 系统会自动注入 rootId 和 branchId。

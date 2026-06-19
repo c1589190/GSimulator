@@ -39,7 +39,7 @@ public class ImportDocumentSearchTool implements AgentTool {
     public ToolResult execute(ToolCall call) {
         String query = call.param("query", "");
         if (query.isBlank()) {
-            return ToolResult.fail(NAME, "query is required");
+            return ToolResult.fail(NAME, "IMPORT_QUERY_EMPTY: query is required and must not be empty");
         }
 
         String documentId = call.param("documentId", "");
@@ -49,7 +49,8 @@ public class ImportDocumentSearchTool implements AgentTool {
         if (source.isBlank()) source = null;
 
         int maxResults = parseInt(call.param("maxResults"), 10, 1, 50);
-        int contextChars = parseInt(call.param("contextChars"), 300, 50, 2000);
+        // 允许 contextChars 为 0（仅返回精确匹配位置），下限 0
+        int contextChars = Math.max(0, parseInt(call.param("contextChars"), 300, 0, 2000));
         boolean caseSensitive = "true".equalsIgnoreCase(call.param("caseSensitive", "false"));
 
         try {

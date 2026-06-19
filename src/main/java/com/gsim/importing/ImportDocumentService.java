@@ -39,7 +39,7 @@ public class ImportDocumentService {
         this.importDir = importDir.toAbsolutePath().normalize();
     }
 
-    /** 列出所有可读导入文档。 */
+    /** 列出所有可读导入文档。不跟随 symlink 遍历，逐个校验路径安全。 */
     public List<ImportDocumentInfo> listDocuments() throws IOException {
         List<ImportDocumentInfo> results = new ArrayList<>();
         if (!Files.isDirectory(importDir)) {
@@ -47,11 +47,13 @@ public class ImportDocumentService {
         }
 
         try (Stream<Path> files = Files.walk(importDir)) {
-            files.filter(Files::isRegularFile)
+            files.filter(f -> Files.isRegularFile(f) && !Files.isSymbolicLink(f))
                     .filter(this::isAllowedFile)
                     .forEach(file -> {
                         try {
                             results.add(toDocumentInfo(file));
+                        } catch (ImportDocumentException e) {
+                            log.debug("Skipping unsafe file: {} — {}", file, e.getMessage());
                         } catch (Exception e) {
                             log.debug("Skipping unreadable file: {}", file, e);
                         }
@@ -79,13 +81,19 @@ public class ImportDocumentService {
 
         int effectiveLimit = full ? MAX_FULL_READ_CHARS : Math.max(1, limit);
         if (offset < 0) offset = 0;
-        if (offset >= originalLength) offset = 0;
+
+        String source = determineSource(file);
+        if (offset >= originalLength) {
+            return new ImportDocumentReadResult(
+                    documentId, source, file.getFileName().toString(),
+                    originalLength, offset, effectiveLimit,
+                    "none", false, "none", "");
+        }
 
         int end = Math.min(offset + effectiveLimit, originalLength);
         boolean truncated = end < originalLength;
         String returnedContent = content.substring(offset, end);
 
-        String source = determineSource(file);
         return new ImportDocumentReadResult(
                 documentId, source, file.getFileName().toString(),
                 originalLength, offset, effectiveLimit,
@@ -98,6 +106,13 @@ public class ImportDocumentService {
     public List<ImportDocumentSearchMatch> searchDocuments(
             String query, String documentId, String source,
             int maxResults, int contextChars, boolean caseSensitive) throws IOException {
+
+        if (query == null || query.isBlank()) {
+            throw new ImportDocumentException("IMPORT_QUERY_EMPTY", "Search query must not be empty");
+        }
+
+        int effectiveMaxResults = Math.max(1, maxResults);
+        int effectiveContextChars = Math.max(0, contextChars);
 
         List<ImportDocumentSearchMatch> results = new ArrayList<>();
         String searchQuery = caseSensitive ? query : query.toLowerCase();
@@ -120,9 +135,12 @@ public class ImportDocumentService {
 
                 int idx = 0;
                 int matchIndex = 0;
-                while ((idx = searchContent.indexOf(searchQuery, idx)) >= 0 && matchIndex < maxResults) {
-                    int previewStart = Math.max(0, idx - contextChars / 3);
-                    int previewEnd = Math.min(content.length(), idx + query.length() + contextChars * 2 / 3);
+                int queryLen = query.length();
+                while (queryLen > 0 && (idx = searchContent.indexOf(searchQuery, idx)) >= 0
+                        && matchIndex < effectiveMaxResults) {
+                    int previewStart = Math.max(0, idx - effectiveContextChars / 3);
+                    int previewEnd = Math.min(content.length(),
+                            idx + queryLen + effectiveContextChars * 2 / 3);
                     // 尽量在词边界截断
                     while (previewStart > 0 && content.charAt(previewStart) != '\n'
                             && content.charAt(previewStart) != ' ') previewStart--;
@@ -136,7 +154,7 @@ public class ImportDocumentService {
                     results.add(new ImportDocumentSearchMatch(
                             doc.documentId(), doc.source(), doc.displayName(),
                             idx, preview));
-                    idx += query.length();
+                    idx += queryLen;
                     matchIndex++;
                 }
             } catch (Exception e) {
@@ -145,8 +163,8 @@ public class ImportDocumentService {
         }
 
         results.sort(Comparator.comparingInt(ImportDocumentSearchMatch::offset));
-        if (results.size() > maxResults) {
-            return results.subList(0, maxResults);
+        if (results.size() > effectiveMaxResults) {
+            return results.subList(0, effectiveMaxResults);
         }
         return results;
     }
@@ -193,6 +211,8 @@ public class ImportDocumentService {
 
     private ImportDocumentInfo toDocumentInfo(Path file) throws IOException {
         String relPath = importDir.relativize(file).toString();
+        // Security: validate path before reading file metadata/content
+        resolveSafe(relPath);
         long size = Files.size(file);
         long lastModified = Files.getLastModifiedTime(file).toMillis();
         int charCount;
