@@ -89,9 +89,11 @@ public class NodeAgentChatService {
             return ""; // 空输入，忽略
         }
 
-        // 生成结构化 draft
+        // 生成结构化 draft（默认走 deterministic fallback，仅当
+        // bootstrap.root.llm.enabled=true 时调用 LLM）
+        boolean llmEnabled = appCtx.getConfig().isBootstrapRootLlmEnabled();
         var generator = new com.gsim.root.BootstrapWorldDraftGenerator(
-                appCtx.getLlmClient(), appCtx.getConfig().getLlmModel());
+                appCtx.getLlmClient(), appCtx.getConfig().getLlmModel(), llmEnabled);
         var draft = generator.generate(intent);
 
         String rootId = draft.rootIdSuggestion();
@@ -115,15 +117,15 @@ public class NodeAgentChatService {
 
         // 构建确认消息
         StringBuilder sb = new StringBuilder();
-        sb.append("已根据你的描述创建第一个根节点。\n\n");
+        sb.append("快速创建基础根节点。建议继续对话以完善世界观设定。\n\n");
         sb.append("Root ID: ").append(rootId).append("\n");
         sb.append("Title: ").append(draft.title()).append("\n");
         sb.append("Active Branch: branch.b0000-start\n\n");
         sb.append("已生成基础设定文件：\n");
-        sb.append("- world.md：已生成基础设定\n");
-        sb.append("- entities.md：已生成主要势力/人物初稿\n");
-        sb.append("- rules.md：已生成推演规则\n");
-        sb.append("- players.md：已生成玩家资料结构\n");
+        sb.append("- world.md：基础设定\n");
+        sb.append("- entities.md：主要势力/人物框架\n");
+        sb.append("- rules.md：推演规则\n");
+        sb.append("- players.md：玩家资料结构\n");
 
         if (!draft.warnings().isEmpty()) {
             sb.append("\n注意：");

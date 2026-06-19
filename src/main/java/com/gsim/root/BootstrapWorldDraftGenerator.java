@@ -23,10 +23,16 @@ public class BootstrapWorldDraftGenerator {
 
     private final LlmClient llmClient;
     private final String model;
+    private final boolean llmEnabled;
 
     public BootstrapWorldDraftGenerator(LlmClient llmClient, String model) {
+        this(llmClient, model, false);
+    }
+
+    public BootstrapWorldDraftGenerator(LlmClient llmClient, String model, boolean llmEnabled) {
         this.llmClient = llmClient;
         this.model = model;
+        this.llmEnabled = llmEnabled;
     }
 
     /**
@@ -46,10 +52,11 @@ public class BootstrapWorldDraftGenerator {
 
     /**
      * 主入口：根据 BootstrapIntent 生成 draft。
-     * 优先 LLM，不可用时 fallback。
+     * 默认走 deterministic fallback（快速创建基础根节点）。
+     * 仅当配置显式开启 bootstrap.root.llm.enabled=true 时才调用 LLM。
      */
     public BootstrapWorldDraft generate(BootstrapIntentParser.BootstrapIntent intent) {
-        if (llmClient != null && llmClient.isAvailable()) {
+        if (llmEnabled && llmClient != null && llmClient.isAvailable()) {
             try {
                 return generateWithLlm(intent);
             } catch (Exception e) {

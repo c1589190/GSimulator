@@ -283,7 +283,7 @@ public class GSimulatorApplication {
         if (dataManager.needsRootBootstrap()) {
             System.out.println();
             System.out.println("当前没有 root。");
-            System.out.println("你可以直接输入第一条世界观描述，系统将创建第一个 root。");
+            System.out.println("输入一句话将快速创建基础 root，之后可继续在对话中完善世界观。");
             System.out.println("或使用 /root create <rootId> <初始设定>。");
             System.out.println();
         }

@@ -53,6 +53,9 @@ public class AppConfig {
 
     private final boolean llmConfigured;
 
+    /** Bootstrap root 创建时是否允许调用 LLM 生成 draft。默认 false（直接 deterministic fallback）。 */
+    private final boolean bootstrapRootLlmEnabled;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -100,6 +103,9 @@ public class AppConfig {
         this.llmConfigured = !isBlank(llmBaseUrl)
                 && !isBlank(llmApiKey) && !"no-api-key".equals(llmApiKey)
                 && !isBlank(llmModel);
+
+        // Bootstrap root LLM 开关（默认 false，快速 deterministic fallback）
+        this.bootstrapRootLlmEnabled = parseBoolean(result.get("bootstrap.root.llm.enabled"), false);
     }
 
     // ---- Getters ----
@@ -145,6 +151,11 @@ public class AppConfig {
     /** 判定 LLM 是否已完整配置。 */
     public boolean isLlmConfigured() {
         return llmConfigured;
+    }
+
+    /** Bootstrap root 创建时是否允许调用 LLM 生成 draft（默认关闭）。 */
+    public boolean isBootstrapRootLlmEnabled() {
+        return bootstrapRootLlmEnabled;
     }
 
     /** 获取当前生效的配置文件路径。 */
