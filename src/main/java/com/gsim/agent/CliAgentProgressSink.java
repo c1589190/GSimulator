@@ -64,7 +64,8 @@ public class CliAgentProgressSink implements AgentProgressSink {
             case AgentProgressEvent.INVALID_BRACKET_INTENT ->
                     "[Agent] " + event.detail();
             case AgentProgressEvent.FINISH_ACTION_REJECTED ->
-                    "[Agent] finish_action 被拒绝：" + reasonText(event.detail());
+                    "[Agent] finish_action 被拒绝：" + reasonText(
+                            event.meta().getOrDefault("rejectReason", ""));
             case AgentProgressEvent.FINISH_ACTION_ACCEPTED ->
                     null; // 成功结束不额外输出
             case AgentProgressEvent.ABORTED ->
