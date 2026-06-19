@@ -301,7 +301,7 @@ public class OrchestratorAgent {
         if (!toolCalls.isEmpty()) return finalText; // 有工具执行，允许
 
         // 检查是否包含成功宣称关键词
-        String[] claims = {"已保存", "已创建", "已切换", "已入库", "已写入", "已更新", "已完成"};
+        String[] claims = {"已保存", "已创建", "已切换", "已进入", "已入库", "已写入", "已更新", "已完成"};
         boolean hasClaim = false;
         for (String c : claims) {
             if (finalText.contains(c)) {
@@ -315,6 +315,49 @@ public class OrchestratorAgent {
         return finalText + "\n\n⚠️ [系统提示] 以上回复包含操作成功宣称，"
                 + "但在本轮对话中未检测到对应的工具执行记录。"
                 + "如确有操作需要执行，请重新输入指令。";
+    }
+
+    // ---- fake [工具结果] 检测 ----
+
+    /**
+     * 检测 assistant 是否伪造了 [工具结果] 输出。
+     * 当 LLM 在本轮没有执行工具，却在回复中使用 [工具结果] / {mode=...} / {branchId=...} 等格式
+     * 模仿工具输出时，判定为 MODEL_FAKE_TOOL_RESULT。
+     */
+    static boolean hasFakeBracketToolResult(String text, List<ToolCallRecord> recentToolCalls) {
+        if (text == null || text.isBlank()) return false;
+
+        // 检查是否包含伪造的工具结果标记
+        boolean hasBracketResult = text.contains("[工具结果]");
+        // 检查是否包含伪造的 {key=value} 工具输出模式
+        boolean hasFakeKvBlock = text.matches(
+                "(?s).*\\{(?:mode|branchId|activeBranch|createdBranchId|parentBranchId|switched|turn|status)\\s*[=:].*\\}.*");
+
+        if (!hasBracketResult && !hasFakeKvBlock) return false;
+
+        // 如果最近有真实的工具执行，这些标记可能是合理的（工具结果可能包含这些 key）
+        if (recentToolCalls != null && !recentToolCalls.isEmpty()) return false;
+
+        return true;
+    }
+
+    /**
+     * 从 finalText 中剥离伪造的 [工具结果] 和 {key=value} 块。
+     */
+    static String stripFakeBracketToolResult(String text) {
+        if (text == null || text.isBlank()) return text;
+
+        // 移除 [工具结果] ... [工具结果] 块（含内容）
+        String result = text.replaceAll(
+                "(?s)\\[工具结果\\][^\\[]*?(?=\\[工具结果\\]|\\n\\n|$)", "");
+        // 移除孤立的 [工具结果] 标记
+        result = result.replace("[工具结果]", "");
+        // 移除伪造的 {mode=tree} / {branchId=b0002} 等孤立块
+        result = result.replaceAll(
+                "\\{(?:mode|branchId|activeBranch|createdBranchId|parentBranchId|switched|turn|status)\\s*[=:]\\s*[^}]*\\}",
+                "");
+
+        return result.trim();
     }
 
     /** 旧版 tool result 格式化（保留给旧 run() 路径使用）。 */
@@ -655,7 +698,12 @@ public class OrchestratorAgent {
             }
         }
 
-        // 后处理：strip raw JSON、检查无 tool_result 的成功宣称
+        // 后处理：strip raw JSON、检测 MODEL_FAKE_TOOL_RESULT、检查无 tool_result 的成功宣称
+        if (hasFakeBracketToolResult(finalText, toolCalls)) {
+            log.warn("MODEL_FAKE_TOOL_RESULT detected in chat — stripping fabricated tool output");
+            finalText = "[系统提示] 检测到模型伪造的工具结果（未经过真实工具执行），以下内容已过滤。\n\n"
+                    + stripFakeBracketToolResult(finalText);
+        }
         finalText = stripRawToolJson(finalText);
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
 
@@ -733,7 +781,12 @@ public class OrchestratorAgent {
             }
         }
 
-        // 后处理：strip raw JSON、检查无 tool_result 的成功宣称
+        // 后处理：strip raw JSON、检测 MODEL_FAKE_TOOL_RESULT、检查无 tool_result 的成功宣称
+        if (hasFakeBracketToolResult(finalText, toolCalls)) {
+            log.warn("MODEL_FAKE_TOOL_RESULT detected in sim — stripping fabricated tool output");
+            finalText = "[系统提示] 检测到模型伪造的工具结果（未经过真实工具执行），以下内容已过滤。\n\n"
+                    + stripFakeBracketToolResult(finalText);
+        }
         finalText = stripRawToolJson(finalText);
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
 
