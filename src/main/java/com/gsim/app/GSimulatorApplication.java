@@ -187,10 +187,11 @@ public class GSimulatorApplication {
             manager.registerCommand(new ContextCommand(contextRenderer, dataManager, dataRoot, ctxSessionManager));
         }
 
-        // Orchestrator + Chat（CLI 模式默认开启进度输出）
+        // Orchestrator + Chat（CLI 模式默认开启进度输出 + 写入确认）
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel(),
-                new com.gsim.agent.CliAgentProgressSink(System.out));
+                new com.gsim.agent.CliAgentProgressSink(System.out),
+                new com.gsim.agent.CliToolPermissionGate());
 
         // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

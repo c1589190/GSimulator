@@ -104,6 +104,42 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 
 具体工具清单和参数见下文「已注册工具 (Registered Tools)」。
 
+### 工具分类与调用约束
+
+系统会根据工具是否修改数据将其分为三类，并据此限制调用：
+
+| 分类 | 说明 | 示例 |
+|------|------|------|
+| READ_ONLY | 只读查询，不修改任何数据 | player_action_list, knowledge_search, root_status |
+| MUTATING | 写入/修改数据，需要谨慎 | knowledge_upsert, simulation_content_append, branch_create_child |
+| DESTRUCTIVE | 删除数据，非常危险 | knowledge_delete |
+
+**写入确认**：CLI 模式下，MUTATING 和 DESTRUCTIVE 工具首次调用时系统会弹出确认提示，用户可选择：
+- Y — 允许本次
+- A — 本轮全部允许（不再确认）
+- N — 拒绝执行
+
+如果你不确定某个写入操作是否合适，应在调用前在 finish_action.message 中向用户说明意图。
+
+### 意图驱动工具选择
+
+系统会根据用户意图自动限定本轮可用的工具范围。你应在当前限定的工具集中选择最合适的工具：
+
+| 用户意图 | 推荐工具 | 说明 |
+|---------|---------|------|
+| 查看/列出行动 | player_action_list, player_action_get | 只读查询，不要调用写入工具 |
+| 记录玩家行动 | player_action_append | 写入 branch 文件，非 KnowledgeStore |
+| 搜索知识/资料 | knowledge_search, keyword_search | 优先 knowledge_search，失败后降级 keyword_search |
+| 写入知识库 | knowledge_upsert | 带 rootId + branchId，不要覆盖父知识单元 |
+| 短推/复写 | simulation_content_list, simulation_content_append | 先读后写 |
+| 结算+下一回合 | turn_settlement_save_last_response → branch_next_turn | 严格按序，保存失败不进入下一回合 |
+| 通用/状态检查 | root_status, branch_list 等只读工具 | 不确定意图时先用只读工具探查 |
+
+**约束**：
+- 不要在只读查询意图下调用写入/删除工具（会被系统拒绝）。
+- 不要在同一轮中混用 finish_action 和其他工具 — finish_action 必须是单独一轮。
+- 如果你的工具被系统拒绝（REJECT），消息中会说明允许的工具列表，请改用允许的工具或调用 finish_action。
+
 ### finish_action 规则
 
 **每轮 Agent 工作流必须以 finish_action 显式结束。** 系统不会在你不调用 finish_action 的情况下自动结束对话。即使你认为已经完成了所有任务，也必须调用 finish_action。
