@@ -193,6 +193,13 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.branch.tool.TurnSettlementGetTool(dataManager));
         toolRegistry.register(new com.gsim.branch.tool.BranchCreateChildTool(dataManager, onBranchChanged));
         toolRegistry.register(new com.gsim.branch.tool.BranchSwitchTool(dataManager, onBranchChanged));
+        toolRegistry.register(new com.gsim.branch.tool.BranchGotoParentTool(dataManager, onBranchChanged));
+
+        // 注册 PlayerAction Tools（branch 节点内的玩家行动记录）
+        toolRegistry.register(new com.gsim.branch.tool.PlayerActionAppendTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.PlayerActionListTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.PlayerActionGetTool(dataManager));
+        toolRegistry.register(new com.gsim.branch.tool.PlayerActionUpdateTool(dataManager));
 
         // /sim /run — deprecated wrappers
         manager.registerCommand(new SimCommand(chatService));

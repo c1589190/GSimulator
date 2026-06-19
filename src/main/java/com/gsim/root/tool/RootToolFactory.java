@@ -41,7 +41,8 @@ public class RootToolFactory {
                 new RootWorldUpdateTool(),
                 new RootEntitiesUpdateTool(),
                 new RootRulesUpdateTool(),
-                new RootInitialInfoUpdateTool()
+                new RootInitialInfoUpdateTool(),
+                new RootPlayersUpdateTool()
         );
     }
 
@@ -317,6 +318,43 @@ public class RootToolFactory {
                         new ToolResult.Item("rules.md", dm.getActiveRootId(), content, 1.0)));
             } catch (Exception e) {
                 return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== root_players_update =====
+
+    private class RootPlayersUpdateTool implements AgentTool {
+        @Override public String name() { return "root_players_update"; }
+        @Override public String description() {
+            return "修改当前 root 的 players.md（玩家资料/人物卡/长期状态）。仅允许在根节点。"
+                    + "参数: content(必填), mode(replace|append, 默认append)。"
+                    + "本工具用于维护玩家长期档案，不是记录本回合行动。本回合行动请用 player_action_append。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.isAtRootBranch()) {
+                return ToolResult.fail(name(), "NOT_AT_ROOT_BRANCH: 只能在根节点修改 players.md。");
+            }
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+
+            String content = call.param("content", "");
+            if (content.isBlank()) return ToolResult.fail(name(), "content is required");
+            String mode = call.param("mode", "append");
+
+            try {
+                Path f = dm.getPlayersPath();
+                if ("append".equals(mode) && Files.exists(f)) {
+                    String existing = Files.readString(f);
+                    dm.writePlayers(existing + "\n" + content);
+                } else {
+                    dm.writePlayers(content);
+                }
+                return ToolResult.ok(name(), List.of(
+                        new ToolResult.Item("players.md", dm.getActiveRootId(),
+                                "mode=" + mode, 1.0)));
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "UPDATE_FAILED: " + e.getMessage());
             }
         }
     }

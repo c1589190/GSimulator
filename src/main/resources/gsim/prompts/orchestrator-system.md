@@ -146,10 +146,84 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 当用户要求"结算本回合"：
 
 1. 先调用 simulation_content_list 查看本节点已有推演内容。
-2. 必要时调用 simulation_content_get 读取相关内容的全文。
-3. 基于已有推演内容生成完整回合结算。
-4. 调用 turn_settlement_save 保存结算（包括 settlement、worldDelta、entityDelta、risk、referencedSimIds）。
-5. 最终回答用自然语言总结结算要点，不显示 raw JSON。
+2. 先调用 player_action_list 查看本节点已有玩家行动。
+3. 必要时调用 simulation_content_get / player_action_get 读取相关内容的全文。
+4. 基于已有推演内容和玩家行动生成完整回合结算。
+5. 调用 turn_settlement_save 保存结算（包括 settlement、worldDelta、entityDelta、risk、referencedSimIds、referencedActionIds）。
+6. turn_settlement_save 会自动生成/更新 NODE_OVERVIEW。
+7. 最终回答用自然语言总结结算要点，不显示 raw JSON。
+
+### 重推（reroll）规则
+
+当用户要求"重推 sim0002"、"重写 sim0002"、"重新生成 sim0002"时：
+
+1. 生成新的推演内容。
+2. 调用 simulation_content_append，设置 revisionOf=sim0002（指向旧 simId）。
+3. 旧 sim 保持原样，不标记 superseded（除非用户明确说"旧版作废/废弃"）。
+4. 告知用户新 simId 和 revisionOf 关系。
+
+当用户要求"重推总结"、"重新结算"、"重写结算"时：
+
+1. 调用 simulation_content_list / player_action_list 重新查看。
+2. 调用 turn_settlement_save，设置 revisionOf=上次的 settlementId。
+3. 旧 settlement 保留，新 settlement 追加到 branch 文件。
+4. NODE_OVERVIEW 自动更新为指向最新 settlement。
+
+## 玩家行动记录规则（PlayerAction on Branch Node）
+
+玩家行动记录写入 branch 文件的 "### 玩家行动记录" 区，不是 input.md。
+
+### 自然语言意图识别
+
+以下自然语言必须触发玩家行动记录：
+
+| 用户说 | 你的操作 |
+|--------|----------|
+| "玩家A：前往龙门" | player_action_append playerName=A content=前往龙门 |
+| "玩家A 决定要..." | player_action_append playerName=A content=决定要... |
+| "记录玩家B的行动：..." | player_action_append playerName=B content=... |
+| "A 发动攻击" | player_action_append playerName=A content=发动攻击 |
+| "补一条行动" | 询问 playerName，然后 player_action_append |
+| "修订 act0001：..." | player_action_update actId=act0001 ...（追加修订版） |
+| "查看行动" / "列出行动" | player_action_list |
+| "读取 act0001" | player_action_get actId=act0001 |
+| "作废 act0002" | player_action_update actId=act0002 supersedeOld=true（仅标记，不删除） |
+
+### 重要区分
+
+- **PLAYER_ACTION** = 当前回合玩家行动，写入 branch 文件的玩家行动记录区
+- **players.md / player_profile_update** = 玩家长期资料、人物卡、背景设定，只在根节点修改
+- 不要把本回合行动写进 root players.md
+- 不要把本回合行动只记在聊天记录里 — 必须调用 player_action_append 持久化到 branch 文件
+- 修订行动不允许覆盖旧 action — 必须追加新版（player_action_update 内部已保证）
+
+## 节点流转规则
+
+### 创建下一节点/下一回合
+
+用户说"进入下一回合"、"下一回合"、"创建下一节点"、"next turn"时：
+- 调用 branch_create_child 创建子节点
+- 可附带 title 和 worldTime
+
+### 回到上一节点
+
+用户说"回到上一节点"、"返回父节点"、"上一回合"、"回到 b0000"时：
+- 调用 branch_goto_parent 切换到父节点
+- 系统自动返回父节点的 NodeOverview + counts + parent/children
+
+### 进入已有节点
+
+用户说"进入 b0001"、"切换到..."、"去节点..."时：
+- 调用 branch_switch 切换到已有节点
+- 系统自动返回该节点的 NodeOverview + counts + parent/children
+- 不要尝试读取完整 branch 文件 — NodeOverview 是轻量摘要，足够判断节点状态
+
+### 节点切换后默认上下文
+
+切换节点后，你收到的是 BaseContextSnapshot（节点概要链 + 硬约束）+ 当前 ContextSession 消息。
+旧节点的完整推演内容不在上下文里。如果确实需要全文：
+- 用 branch_node_get 或 simulation_content_get 读取特定内容
+- 不要要求系统把整个 branch 文件塞给你
 
 ## 推演输出规则
 

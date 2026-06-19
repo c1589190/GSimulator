@@ -298,6 +298,46 @@ public class DataManager {
         return "sim" + String.format("%04d", max + 1);
     }
 
+    /** 生成当前 active branch 的下一个 actId。 */
+    public String generateNextActId(String branchId) throws IOException {
+        String markdown = readBranchFile(branchId);
+        int max = 0;
+        int idx = 0;
+        while ((idx = markdown.indexOf("<!-- PLAYER_ACTION:act", idx)) >= 0) {
+            int start = idx + "<!-- PLAYER_ACTION:act".length();
+            int end = start;
+            while (end < markdown.length() && Character.isDigit(markdown.charAt(end))) end++;
+            if (end > start) {
+                try {
+                    int n = Integer.parseInt(markdown.substring(start, end));
+                    if (n > max) max = n;
+                } catch (NumberFormatException ignored) {}
+            }
+            idx = end;
+        }
+        return "act" + String.format("%04d", max + 1);
+    }
+
+    /** 生成当前 active branch 的下一个 settlementId。 */
+    public String generateNextSettlementId(String branchId) throws IOException {
+        String markdown = readBranchFile(branchId);
+        int max = 0;
+        int idx = 0;
+        while ((idx = markdown.indexOf("<!-- TURN_SETTLEMENT:stl", idx)) >= 0) {
+            int start = idx + "<!-- TURN_SETTLEMENT:stl".length();
+            int end = start;
+            while (end < markdown.length() && Character.isDigit(markdown.charAt(end))) end++;
+            if (end > start) {
+                try {
+                    int n = Integer.parseInt(markdown.substring(start, end));
+                    if (n > max) max = n;
+                } catch (NumberFormatException ignored) {}
+            }
+            idx = end;
+        }
+        return "stl" + String.format("%04d", max + 1);
+    }
+
     /** 获取 active branch 文件名（去除 branch. 前缀）。 */
     public String getActiveBranchFilename() {
         return branchIdToFilename(activeBranch);

@@ -165,7 +165,9 @@ public class OrchestratorAgent {
                     .append(entry.getValue().description()).append("\n");
         }
         sb.append("\n调用格式：{\"tool\":\"<工具名>\",\"args\":{\"<参数名>\":\"<参数值>\"}}。");
-        sb.append("工具执行后系统会返回结果，你再自然语言总结。\n");
+        sb.append("工具执行后你会收到 [TOOL_RESULT]...[/TOOL_RESULT] 格式的反馈，");
+        sb.append("这是内部数据不是最终输出，你必须基于它继续推理并用自然语言回答用户。");
+        sb.append("不要把工具结果原文回显。\n");
         return sb.toString();
     }
 
@@ -207,21 +209,62 @@ public class OrchestratorAgent {
 
     // ---- tool result 格式化 ----
 
-    private String formatToolResult(ToolResult result) {
+    /**
+     * 构建工具结果反馈文本，使用 [TOOL_RESULT] 包裹明确告知 LLM 这是内部数据。
+     * 必须包含"继续完成用户请求"的指令，防止 LLM 把工具结果原样回显。
+     */
+    static String buildToolResultFeedback(String toolName, ToolResult result) {
         StringBuilder sb = new StringBuilder();
-        sb.append("工具调用结果: ").append(result.toolName()).append("\n");
+        sb.append("[TOOL_RESULT]\n");
+        sb.append("tool: ").append(toolName).append("\n");
+        sb.append("success: ").append(result.success()).append("\n");
+        sb.append("content:\n");
         if (!result.success()) {
-            sb.append("错误: ").append(result.error()).append("\n");
-            return sb.toString();
+            sb.append("error: ").append(result.error()).append("\n");
+        } else {
+            for (int i = 0; i < result.items().size(); i++) {
+                ToolResult.Item item = result.items().get(i);
+                sb.append("[").append(i + 1).append("] ").append(item.title()).append("\n");
+                sb.append("    path: ").append(item.path()).append("\n");
+                String snippet = item.snippet();
+                if (snippet != null) {
+                    if (snippet.length() > 500) snippet = snippet.substring(0, 500) + "...";
+                    sb.append("    snippet: ").append(snippet).append("\n");
+                }
+            }
         }
-        sb.append("找到 ").append(result.items().size()).append(" 条结果：\n\n");
-        for (int i = 0; i < result.items().size(); i++) {
-            ToolResult.Item item = result.items().get(i);
-            sb.append("[").append(i + 1).append("] ").append(item.title()).append("\n");
-            sb.append("    路径: ").append(item.path()).append("\n");
-            sb.append("    片段: ").append(item.snippet()).append("\n");
-        }
+        sb.append("[/TOOL_RESULT]\n\n");
+        sb.append("请基于以上工具结果继续完成用户请求；如果还需要工具，继续输出 JSON 工具调用；");
+        sb.append("如果已经足够，输出最终自然语言回答。");
         return sb.toString();
+    }
+
+    /**
+     * 检测文本是否看起来像 raw tool output 而非自然语言。
+     * 触发条件：以 [TOOL_RESULT] 开头、是纯 JSON 对象（无 "tool" 字段的 JSON 可能是工具结果回显）。
+     */
+    static boolean isRawToolOutput(String text) {
+        if (text == null || text.isBlank()) return false;
+        String trimmed = text.trim();
+        // 以 [TOOL_RESULT] 或 [工具 开头 → 工具结果泄漏
+        if (trimmed.startsWith("[TOOL_RESULT]") || trimmed.startsWith("[工具")) {
+            return true;
+        }
+        // 纯 JSON 对象且不含 "tool" 字段 → 可能是 raw tool result 回显
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                JsonNode node = MAPPER.readTree(trimmed);
+                if (!node.has("tool")) return true;
+            } catch (Exception ignored) {
+                // 不是合法 JSON，不过滤
+            }
+        }
+        return false;
+    }
+
+    /** 旧版 tool result 格式化（保留给旧 run() 路径使用）。 */
+    private String formatToolResult(ToolResult result) {
+        return buildToolResultFeedback(result.toolName(), result);
     }
 
     // ---- result types ----
@@ -513,25 +556,23 @@ public class OrchestratorAgent {
                 ToolResult result = toolRegistry.call(call);
                 toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                StringBuilder tr = new StringBuilder();
-                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
-                if (result.success()) {
-                    for (ToolResult.Item item : result.items()) {
-                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                        String snippet = item.snippet();
-                        if (snippet != null && snippet.length() > 200) {
-                            snippet = snippet.substring(0, 200) + "...";
-                        }
-                        tr.append("  ").append(snippet).append("\n");
-                    }
-                } else tr.append("错误: ").append(result.error());
-                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
-                messages.add(LlmMessage.user(tr.toString()));
+                messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                trace.add(new MessageTrace("tool", "tool_result",
+                        "tool=" + parsed.tool + " success=" + result.success()));
                 toolRound++;
                 continue;
             }
 
             finalText = content;
+            // 守卫：如果 LLM 输出看起来像 raw tool result（而非自然语言），追加一轮纠正
+            if (isRawToolOutput(finalText) && toolRound < MAX_TOOL_ROUNDS) {
+                messages.add(LlmMessage.user(
+                        "请将以上结果转化为自然语言回答。不要输出原始 JSON 或 [TOOL_RESULT] 标记。"));
+                trace.add(new MessageTrace("system", "guard_retry",
+                        "finalText appears to be raw tool output, requesting natural language"));
+                toolRound++;
+                continue;
+            }
             if (ToolPollutionFilter.isPolluted(finalText)) {
                 trace.add(new MessageTrace("assistant", "chat_response",
                         "[filtered, length=" + finalText.length() + "]"));
@@ -542,7 +583,7 @@ public class OrchestratorAgent {
         }
 
         if (finalText == null) {
-            messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
+            messages.add(LlmMessage.user("请基于以上信息给出自然语言回答，不要调用更多工具，不要输出原始 JSON。"));
             LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
             if (fr.success()) {
                 finalText = fr.content();
@@ -582,25 +623,23 @@ public class OrchestratorAgent {
                 ToolResult result = toolRegistry.call(call);
                 toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                StringBuilder tr = new StringBuilder();
-                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
-                if (result.success()) {
-                    for (ToolResult.Item item : result.items()) {
-                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                        String snippet = item.snippet();
-                        if (snippet != null && snippet.length() > 200) {
-                            snippet = snippet.substring(0, 200) + "...";
-                        }
-                        tr.append("  ").append(snippet).append("\n");
-                    }
-                } else tr.append("错误: ").append(result.error());
-                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
-                messages.add(LlmMessage.user(tr.toString()));
+                messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                trace.add(new MessageTrace("tool", "tool_result",
+                        "tool=" + parsed.tool + " success=" + result.success()));
                 toolRound++;
                 continue;
             }
 
             finalText = content;
+            // 守卫：如果 LLM 输出看起来像 raw tool result，追加一轮纠正
+            if (isRawToolOutput(finalText) && toolRound < MAX_TOOL_ROUNDS) {
+                messages.add(LlmMessage.user(
+                        "请将以上结果转化为自然语言推演输出。不要输出原始 JSON 或 [TOOL_RESULT] 标记。"));
+                trace.add(new MessageTrace("system", "guard_retry",
+                        "finalText appears to be raw tool output, requesting natural language"));
+                toolRound++;
+                continue;
+            }
             if (ToolPollutionFilter.isPolluted(finalText)) {
                 trace.add(new MessageTrace("assistant", "sim_output",
                         "[filtered, length=" + finalText.length() + "]"));
@@ -611,7 +650,7 @@ public class OrchestratorAgent {
         }
 
         if (finalText == null) {
-            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
+            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结，不要输出原始 JSON。不要调用更多工具。"));
             LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
             if (fr.success()) {
                 finalText = fr.content();

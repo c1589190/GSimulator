@@ -31,7 +31,8 @@ public class SimulationContentAppendTool implements AgentTool {
         return "向当前 active branch 追加一条推演内容。参数: branchId (可选，默认当前active branch), "
                 + "type (prologue|scene|event|dialogue|battle|policy|economy|investigation|settlement_draft|other), "
                 + "title (必填), content (必填), summary (可选), status (draft|active|superseded, 默认draft), "
-                + "metadata (可选JSON)。返回 simId, branchId, filePath。";
+                + "metadata (可选JSON), revisionOf (可选, 重推时指向旧simId，默认无)。"
+                + "返回 simId, branchId, filePath。重推不覆盖旧版，追加新版。";
     }
 
     @Override
@@ -57,31 +58,39 @@ public class SimulationContentAppendTool implements AgentTool {
         String summary = call.param("summary", "");
         String status = call.param("status", "draft");
         String metadata = call.param("metadata", "");
+        String revisionOf = call.param("revisionOf", "");
 
         try {
             // 生成 simId
             String simId = dm.generateNextSimId(branchId);
 
             // 创建记录
-            SimContentRecord record = SimContentRecord.create(
-                    simId, branchId, type, title, content, summary, status, "agent", metadata);
+            SimContentRecord record;
+            if (revisionOf != null && !revisionOf.isBlank()) {
+                record = SimContentRecord.createRevision(
+                        simId, branchId, type, title, content, summary, status, "agent", metadata, revisionOf);
+            } else {
+                record = SimContentRecord.create(
+                        simId, branchId, type, title, content, summary, status, "agent", metadata);
+            }
 
             // 读取当前 branch 文件
             String markdown = dm.readBranchFile(branchId);
 
-            // 追加 sim content
+            // 追加 sim content（不覆盖旧版）
             String newMarkdown = BranchFileSimContent.appendSimContent(markdown, record);
 
             // 写回
             dm.writeBranchFile(branchId, newMarkdown, "append_" + simId);
 
             String filePath = dm.getBranchFilePath(branchId).toString();
-            log.info("Appended {} to branch {}", simId, branchId);
+            String revInfo = (revisionOf != null && !revisionOf.isBlank()) ? " revisionOf=" + revisionOf : "";
+            log.info("Appended {} to branch {}{}", simId, branchId, revInfo);
 
             return ToolResult.ok(NAME, List.of(
                     new ToolResult.Item(title, simId,
                             "simId=" + simId + " branchId=" + branchId + " filePath=" + filePath
-                                    + " type=" + type + " status=" + status,
+                                    + " type=" + type + " status=" + status + revInfo,
                             1.0)));
         } catch (Exception e) {
             log.error("simulation_content_append failed: {}", e.getMessage());

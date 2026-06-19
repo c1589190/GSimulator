@@ -1,5 +1,6 @@
 package com.gsim.branch.tool;
 
+import com.gsim.data.DataDocument;
 import com.gsim.data.DataManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
@@ -7,10 +8,11 @@ import com.gsim.tool.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
- * branch_switch — 切换当前 active branch。
+ * branch_switch — 切换到已有 branch，返回轻量节点状态。
  */
 public class BranchSwitchTool implements AgentTool {
 
@@ -30,7 +32,8 @@ public class BranchSwitchTool implements AgentTool {
 
     @Override
     public String description() {
-        return "切换到指定 branch。参数: branchId (必填, 如 b0001 或 branch.b0001-first-turn)。";
+        return "切换到指定 branch。参数: branchId (必填, 如 b0001 或 branch.b0001-first-turn)。"
+                + "切换后返回 NodeOverview、actionCount、simContentCount、settlementCount、parent、children。";
     }
 
     @Override
@@ -50,16 +53,45 @@ public class BranchSwitchTool implements AgentTool {
                 onBranchChanged.run();
             }
 
-            log.info("Switched branch {} -> {}", oldBranch, dm.getActiveBranchId());
+            // 读取目标节点轻量状态
+            String normalizedBranchId = dm.getActiveBranchId();
+            String markdown = dm.readBranchFile(normalizedBranchId);
+            BranchFileSimContent.NodeLightStatus status =
+                    BranchFileSimContent.getNodeLightStatus(markdown);
+
+            DataDocument doc = dm.readById(normalizedBranchId);
+            String parent = doc != null
+                    ? doc.frontMatter().getOrDefault("parent", "none") : "none";
+            List<DataDocument> children = dm.getChildBranches(normalizedBranchId);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("status=OK activeBranch=").append(normalizedBranchId).append("\n");
+            sb.append("isAtRoot=").append(dm.isAtRootBranch()).append("\n");
+            sb.append("parent=").append(parent).append("\n");
+            sb.append("actionCount=").append(status.actionCount()).append("\n");
+            sb.append("simContentCount=").append(status.simContentCount()).append("\n");
+            sb.append("settlementCount=").append(status.settlementCount()).append("\n");
+            sb.append("children=[");
+            for (int i = 0; i < children.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(children.get(i).id());
+            }
+            sb.append("]\n");
+            if (!status.nodeOverview().isBlank()) {
+                sb.append("nodeOverview:\n").append(status.nodeOverview()).append("\n");
+            } else {
+                sb.append("nodeOverview: (无)\n");
+            }
+            if (!status.latestSettlementSnippet().isBlank()) {
+                sb.append("latestSettlement: ").append(status.latestSettlementSnippet()).append("\n");
+            }
+
+            log.info("Switched branch {} -> {}", oldBranch, normalizedBranchId);
 
             return ToolResult.ok(NAME, List.of(
-                    new ToolResult.Item("Switched to " + dm.getActiveBranchId(),
-                            dm.getActiveBranchId(),
-                            "status=OK previousBranch=" + oldBranch
-                                    + " activeBranch=" + dm.getActiveBranchId()
-                                    + " isAtRoot=" + dm.isAtRootBranch(),
-                            1.0)));
-        } catch (Exception e) {
+                    new ToolResult.Item("Switched to " + normalizedBranchId,
+                            normalizedBranchId, sb.toString(), 1.0)));
+        } catch (IOException e) {
             log.error("branch_switch failed: {}", e.getMessage());
             return ToolResult.fail(NAME, "SWITCH_FAILED: " + e.getMessage());
         }

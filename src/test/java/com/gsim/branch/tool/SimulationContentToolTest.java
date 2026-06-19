@@ -291,12 +291,12 @@ public class SimulationContentToolTest {
             String markdown = dm.readBranchFile("branch.b0000-start");
             assertTrue(markdown.contains("SIM_CONTENT:sim0001 START"),
                     "file should still contain sim0001 after settlement:\n" + markdown);
-            assertTrue(markdown.contains("TURN_SETTLEMENT START"),
+            assertTrue(markdown.contains("TURN_SETTLEMENT:stl0001 START"),
                     "file should contain TURN_SETTLEMENT:\n" + markdown);
 
             // sim0001 should appear BEFORE the settlement
             int simPos = markdown.indexOf("SIM_CONTENT:sim0001 START");
-            int tsPos = markdown.indexOf("TURN_SETTLEMENT START");
+            int tsPos = markdown.indexOf("TURN_SETTLEMENT:stl0001 START");
             assertTrue(simPos < tsPos,
                     "SIM_CONTENT should appear before TURN_SETTLEMENT in file");
         } catch (IOException e) {
@@ -411,7 +411,7 @@ public class SimulationContentToolTest {
             String markdown = dm.readBranchFile("branch.b0000-start");
             assertTrue(markdown.contains("SIM_CONTENT:sim0001"), "still has sim0001");
             assertTrue(markdown.contains("SIM_CONTENT:sim0002"), "still has sim0002");
-            assertTrue(markdown.contains("TURN_SETTLEMENT START"), "has settlement");
+            assertTrue(markdown.contains("TURN_SETTLEMENT:stl0001 START"), "has settlement");
             assertTrue(markdown.contains("异常信号"), "has settlement content");
             assertTrue(markdown.contains("边境局势紧张"), "has worldDelta content in section 四");
         } catch (IOException e) {
