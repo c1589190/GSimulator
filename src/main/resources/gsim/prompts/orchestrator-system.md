@@ -60,8 +60,12 @@
 
 ### Root 读工具
 
-root_world_get / root_entities_get / root_rules_get / root_initial_info_get 在任意节点可用。
+root_world_get / root_entities_get / root_rules_get / root_initial_info_get / root_players_get 在任意节点可用。
 这些工具读取当前 root 的文件内容，用于理解当前设定后再决定修改方案。
+
+- root_players_get — 读取玩家长期资料、人物卡、背景设定。当需要了解玩家长期状态时优先使用。
+- 当读取文件结果显示 truncated=true 时，如需后续内容，继续用 offset/limit 分页读取，不要假装已经读完全量。
+- full=true 可返回全文（上限 30000 字符）。默认 limit=8000。
 
 ## 工具调用规则
 
@@ -153,6 +157,8 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 6. turn_settlement_save 会自动生成/更新 NODE_OVERVIEW。
 7. 最终回答用自然语言总结结算要点，不显示 raw JSON。
 
+当需要读取历史回合总结时，不要只用最新总结。如果用户指定 settlementId，使用 turn_settlement_get settlementId=... 读取对应版本全文。不传 settlementId 时返回列表和最新结算。
+
 ### 重推（reroll）规则
 
 当用户要求"重推 sim0002"、"重写 sim0002"、"重新生成 sim0002"时：
@@ -198,6 +204,12 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 - 修订行动不允许覆盖旧 action — 必须追加新版（player_action_update 内部已保证）
 
 ## 节点流转规则
+
+### 查看全局节点结构
+
+当需要判断有哪些节点、要进入哪个节点、当前世界节点结构时，先使用 branch_list 列出所有节点。
+branch_list 支持 flat（平铺）和 tree（树形缩进）两种模式，返回每个节点的 branchId、name、parent、children、turn、status、world_time、actionCount、simContentCount、settlementCount、nodeOverview preview。
+不要盲目猜测节点名称或在不知道有哪些节点的情况下调用 branch_switch。
 
 ### 创建下一节点/下一回合
 

@@ -10,6 +10,7 @@ import com.gsim.tool.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -38,6 +39,7 @@ public class RootToolFactory {
                 new RootEntitiesGetTool(),
                 new RootRulesGetTool(),
                 new RootInitialInfoGetTool(),
+                new RootPlayersGetTool(),
                 new RootWorldUpdateTool(),
                 new RootEntitiesUpdateTool(),
                 new RootRulesUpdateTool(),
@@ -257,7 +259,9 @@ public class RootToolFactory {
     private class RootWorldGetTool implements AgentTool {
         @Override public String name() { return "root_world_get"; }
         @Override public String description() {
-            return "读取当前 root 的 world.md 内容。任意节点可读。读到内容后再计划修改方案。";
+            return "读取当前 root 的 world.md 内容。任意节点可读。读到内容后再计划修改方案。"
+                    + "参数: offset(可选,默认0), limit(可选,默认8000), full(可选,默认false)。"
+                    + "full=true 返回全文(上限30000)。返回 truncated/originalLength/returnedRange。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -265,11 +269,7 @@ public class RootToolFactory {
             try {
                 Path f = dm.worldFilePath();
                 if (!Files.exists(f)) return ToolResult.fail(name(), "WORLD_FILE_NOT_FOUND");
-                String content = Files.readString(f);
-                // Limit to reasonable size for LLM context
-                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
-                return ToolResult.ok(name(), List.of(
-                        new ToolResult.Item("world.md", dm.getActiveRootId(), content, 1.0)));
+                return readWithPagination(name(), f, "world.md", dm.getActiveRootId(), call);
             } catch (Exception e) {
                 return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
             }
@@ -281,7 +281,9 @@ public class RootToolFactory {
     private class RootEntitiesGetTool implements AgentTool {
         @Override public String name() { return "root_entities_get"; }
         @Override public String description() {
-            return "读取当前 root 的 entities.md 内容。任意节点可读。";
+            return "读取当前 root 的 entities.md 内容。任意节点可读。"
+                    + "参数: offset(可选,默认0), limit(可选,默认8000), full(可选,默认false)。"
+                    + "full=true 返回全文(上限30000)。返回 truncated/originalLength/returnedRange。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -289,10 +291,7 @@ public class RootToolFactory {
             try {
                 Path f = dm.entitiesFilePath();
                 if (!Files.exists(f)) return ToolResult.fail(name(), "ENTITIES_FILE_NOT_FOUND");
-                String content = Files.readString(f);
-                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
-                return ToolResult.ok(name(), List.of(
-                        new ToolResult.Item("entities.md", dm.getActiveRootId(), content, 1.0)));
+                return readWithPagination(name(), f, "entities.md", dm.getActiveRootId(), call);
             } catch (Exception e) {
                 return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
             }
@@ -304,7 +303,9 @@ public class RootToolFactory {
     private class RootRulesGetTool implements AgentTool {
         @Override public String name() { return "root_rules_get"; }
         @Override public String description() {
-            return "读取当前 root 的 rules.md 内容。任意节点可读。";
+            return "读取当前 root 的 rules.md 内容。任意节点可读。"
+                    + "参数: offset(可选,默认0), limit(可选,默认8000), full(可选,默认false)。"
+                    + "full=true 返回全文(上限30000)。返回 truncated/originalLength/returnedRange。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -312,10 +313,7 @@ public class RootToolFactory {
             try {
                 Path f = dm.rulesFilePath();
                 if (!Files.exists(f)) return ToolResult.fail(name(), "RULES_FILE_NOT_FOUND");
-                String content = Files.readString(f);
-                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
-                return ToolResult.ok(name(), List.of(
-                        new ToolResult.Item("rules.md", dm.getActiveRootId(), content, 1.0)));
+                return readWithPagination(name(), f, "rules.md", dm.getActiveRootId(), call);
             } catch (Exception e) {
                 return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
             }
@@ -364,7 +362,9 @@ public class RootToolFactory {
     private class RootInitialInfoGetTool implements AgentTool {
         @Override public String name() { return "root_initial_info_get"; }
         @Override public String description() {
-            return "读取根节点 b0000-start.md 的全文。任意节点可读。";
+            return "读取根节点 b0000-start.md 的全文。任意节点可读。"
+                    + "参数: offset(可选,默认0), limit(可选,默认8000), full(可选,默认false)。"
+                    + "full=true 返回全文(上限30000)。返回 truncated/originalLength/returnedRange。";
         }
         @Override
         public ToolResult execute(ToolCall call) {
@@ -372,13 +372,93 @@ public class RootToolFactory {
             try {
                 Path f = dm.rootBranchFilePath();
                 if (!Files.exists(f)) return ToolResult.fail(name(), "ROOT_BRANCH_FILE_NOT_FOUND");
-                String content = Files.readString(f);
-                if (content.length() > 4000) content = content.substring(0, 3997) + "...";
-                return ToolResult.ok(name(), List.of(
-                        new ToolResult.Item("b0000-start.md", dm.getActiveRootId(), content, 1.0)));
+                return readWithPagination(name(), f, "b0000-start.md", dm.getActiveRootId(), call);
             } catch (Exception e) {
                 return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
             }
+        }
+    }
+
+    // ===== root_players_get (read-only, any node) =====
+
+    private class RootPlayersGetTool implements AgentTool {
+        @Override public String name() { return "root_players_get"; }
+        @Override public String description() {
+            return "读取当前 root 的 players.md（玩家资料/人物卡/长期状态）。任意节点可读。"
+                    + "参数: offset(可选,默认0), limit(可选,默认8000), full(可选,默认false)。"
+                    + "full=true 返回全文(上限30000)。返回 truncated/originalLength/returnedRange。";
+        }
+        @Override
+        public ToolResult execute(ToolCall call) {
+            if (!dm.hasActiveRoot()) return ToolResult.fail(name(), "NO_ACTIVE_ROOT");
+            try {
+                Path f = dm.getPlayersPath();
+                if (!Files.exists(f)) return ToolResult.fail(name(), "PLAYERS_FILE_NOT_FOUND");
+                return readWithPagination(name(), f, "players.md", dm.getActiveRootId(), call);
+            } catch (Exception e) {
+                return ToolResult.fail(name(), "READ_FAILED: " + e.getMessage());
+            }
+        }
+    }
+
+    // ===== Pagination helper =====
+
+    private static final int DEFAULT_LIMIT = 8000;
+    private static final int MAX_FULL_CHARS = 30000;
+
+    /**
+     * 从文件读取内容，支持 offset/limit/full 三个参数。
+     * full=true 返回全文，上限 MAX_FULL_CHARS。
+     * full=false 按 offset/limit 切片。
+     * 所有返回都附带 truncated/originalLength/returnedRange。
+     */
+    private static ToolResult readWithPagination(String toolName, Path path,
+                                                  String itemTitle, String itemId,
+                                                  ToolCall call) throws IOException {
+        String raw = Files.readString(path);
+        int originalLength = raw.length();
+        boolean full = "true".equalsIgnoreCase(call.param("full", "false"));
+        int offset = parseIntParam(call.param("offset"), 0, 0);
+        int limit = parseIntParam(call.param("limit"), DEFAULT_LIMIT, 1);
+
+        String content;
+        int start, end;
+        boolean truncated;
+
+        if (full) {
+            start = 0;
+            end = Math.min(originalLength, MAX_FULL_CHARS);
+            truncated = originalLength > MAX_FULL_CHARS;
+            content = raw.substring(0, end);
+        } else {
+            start = Math.min(offset, originalLength);
+            end = Math.min(start + limit, originalLength);
+            truncated = end < originalLength;
+            content = raw.substring(start, end);
+        }
+
+        if (truncated && end < originalLength) {
+            content += "\n\n[已截断，使用 offset=" + end + " 继续读取]";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("originalLength: ").append(originalLength).append("\n");
+        sb.append("truncated: ").append(truncated).append("\n");
+        sb.append("returnedRange: ").append(start).append("-").append(end).append("\n");
+        sb.append("---\n");
+        sb.append(content);
+
+        return ToolResult.ok(toolName, List.of(
+                new ToolResult.Item(itemTitle, itemId, sb.toString(), 1.0)));
+    }
+
+    private static int parseIntParam(String value, int defaultValue, int minValue) {
+        if (value == null || value.isBlank()) return defaultValue;
+        try {
+            int v = Integer.parseInt(value.trim());
+            return Math.max(minValue, v);
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 }

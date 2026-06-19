@@ -194,6 +194,7 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.branch.tool.BranchCreateChildTool(dataManager, onBranchChanged));
         toolRegistry.register(new com.gsim.branch.tool.BranchSwitchTool(dataManager, onBranchChanged));
         toolRegistry.register(new com.gsim.branch.tool.BranchGotoParentTool(dataManager, onBranchChanged));
+        toolRegistry.register(new com.gsim.branch.tool.BranchListTool(dataManager));
 
         // 注册 PlayerAction Tools（branch 节点内的玩家行动记录）
         toolRegistry.register(new com.gsim.branch.tool.PlayerActionAppendTool(dataManager));
