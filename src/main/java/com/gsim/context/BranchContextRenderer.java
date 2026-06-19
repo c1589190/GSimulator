@@ -209,25 +209,44 @@ public class BranchContextRenderer {
 
     /**
      * 渲染会话上下文：BaseContext + session messages + user input。
-     *
-     * @param baseContextMarkdown BaseContextSnapshot markdown
-     * @param sessionMessages     当前 ContextSession 内的消息列表（由调用者传入）
-     * @param currentUserInput    当前用户输入
+     * 使用默认截断参数（historyTurns=12, messageMaxChars=2000）。
      */
     public String renderSessionContext(String baseContextMarkdown,
                                         List<SessionMessage> sessionMessages,
                                         String currentUserInput) {
+        return renderSessionContext(baseContextMarkdown, sessionMessages,
+                currentUserInput, 12, 2000);
+    }
+
+    /**
+     * 渲染会话上下文：BaseContext + session messages + user input。
+     *
+     * @param baseContextMarkdown BaseContextSnapshot markdown
+     * @param sessionMessages     当前 ContextSession 内的消息列表（由调用者传入）
+     * @param currentUserInput    当前用户输入
+     * @param historyTurns        最近保留轮数
+     * @param messageMaxChars     单条消息最大字符数
+     */
+    public String renderSessionContext(String baseContextMarkdown,
+                                        List<SessionMessage> sessionMessages,
+                                        String currentUserInput,
+                                        int historyTurns,
+                                        int messageMaxChars) {
         StringBuilder sb = new StringBuilder();
         sb.append(baseContextMarkdown).append("\n\n");
 
-        // Session messages（由调用者传入）
-        if (sessionMessages != null && !sessionMessages.isEmpty()) {
+        // 按轮数过滤
+        List<SessionMessage> filtered = com.gsim.agent.OrchestratorAgent.filterByTurns(
+                sessionMessages, historyTurns);
+
+        // Session messages（由调用者传入，按 turn 过滤 + 单条截断）
+        if (filtered != null && !filtered.isEmpty()) {
             sb.append("## Session Messages\n\n");
-            for (SessionMessage msg : sessionMessages) {
+            for (SessionMessage msg : filtered) {
                 sb.append("[").append(msg.role()).append("] ");
                 String c = msg.content();
-                if (c.length() > 2000) {
-                    c = c.substring(0, 1997) + "...";
+                if (c.length() > messageMaxChars) {
+                    c = c.substring(0, messageMaxChars - 3) + "...";
                 }
                 sb.append(c).append("\n\n");
             }

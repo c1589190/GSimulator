@@ -68,6 +68,8 @@ public class CliAgentProgressSink implements AgentProgressSink {
                             event.meta().getOrDefault("rejectReason", ""));
             case AgentProgressEvent.FINISH_ACTION_ACCEPTED ->
                     null; // 成功结束不额外输出
+            case AgentProgressEvent.AGENT_PUBLIC_MESSAGE ->
+                    event.detail(); // 直接输出用户可见正文，不加调试前缀
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
             default -> null;

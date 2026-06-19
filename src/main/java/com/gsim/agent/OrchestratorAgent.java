@@ -51,6 +51,9 @@ public class OrchestratorAgent {
     private final ToolPermissionGate permissionGate;
     private final ToolPermissionConfig permissionConfig;
 
+    /** 对话上下文历史配置（可运行时更新）。 */
+    private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
+
     /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
     private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
 
@@ -90,6 +93,11 @@ public class OrchestratorAgent {
     /** 返回最近一次 assistant 输出草稿，用于工具保存。可能为空字符串。 */
     public String getLastAssistantDraft() {
         return lastAssistantDraft.get();
+    }
+
+    /** 设置上下文历史配置（由调用方在创建后注入）。 */
+    public void setContextHistoryConfig(ContextHistoryConfig config) {
+        this.historyConfig = config != null ? config : ContextHistoryConfig.DEFAULT;
     }
 
     /**
@@ -809,6 +817,16 @@ public class OrchestratorAgent {
                                               List<SessionMessage> sessionMessages,
                                               String userText,
                                               AgentContextMeta contextMeta) {
+        ContextHistoryConfig cfg = this.historyConfig;
+        List<SessionMessage> filtered = filterByTurns(sessionMessages, cfg.historyTurns());
+
+        if (log.isDebugEnabled()) {
+            log.debug("[ContextSession] historyTurns={}, originalMessages={}, filteredMessages={},"
+                            + " messageMaxChars={}",
+                    cfg.historyTurns(), sessionMessages != null ? sessionMessages.size() : 0,
+                    filtered.size(), cfg.messageMaxChars());
+        }
+
         List<MessageTrace> trace = new ArrayList<>();
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
@@ -816,10 +834,14 @@ public class OrchestratorAgent {
         // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
         messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
 
-        // 2. history: 当前 ContextSession 内 SessionMessage
-        for (SessionMessage sm : sessionMessages) {
+        // 2. history: 当前 ContextSession 内 SessionMessage（按 turn 过滤 + 单条截断）
+        int renderedChars = 0;
+        for (SessionMessage sm : filtered) {
             String content = sm.content();
-            if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+            if (content.length() > cfg.messageMaxChars()) {
+                content = content.substring(0, cfg.messageMaxChars() - 3) + "...";
+            }
+            renderedChars += content.length();
             switch (sm.role()) {
                 case "user" -> messages.add(LlmMessage.user(content));
                 case "assistant" -> messages.add(LlmMessage.assistant(content));
@@ -827,6 +849,8 @@ public class OrchestratorAgent {
                 default -> messages.add(LlmMessage.user(content));
             }
         }
+
+        log.debug("[ContextSession] renderedChars={}", renderedChars);
 
         // 3. user: 当前输入
         messages.add(LlmMessage.user(userText));
@@ -842,6 +866,16 @@ public class OrchestratorAgent {
     public SimResult runWithContextSession(String baseContextMarkdown,
                                             List<SessionMessage> sessionMessages,
                                             String simNote) {
+        ContextHistoryConfig cfg = this.historyConfig;
+        List<SessionMessage> filtered = filterByTurns(sessionMessages, cfg.historyTurns());
+
+        if (log.isDebugEnabled()) {
+            log.debug("[ContextSession] historyTurns={}, originalMessages={}, filteredMessages={},"
+                            + " messageMaxChars={}",
+                    cfg.historyTurns(), sessionMessages != null ? sessionMessages.size() : 0,
+                    filtered.size(), cfg.messageMaxChars());
+        }
+
         List<MessageTrace> trace = new ArrayList<>();
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         List<LlmMessage> messages = new ArrayList<>();
@@ -849,10 +883,14 @@ public class OrchestratorAgent {
         // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
         messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
 
-        // 2. history: 当前 ContextSession 内 SessionMessage
-        for (SessionMessage sm : sessionMessages) {
+        // 2. history: 当前 ContextSession 内 SessionMessage（按 turn 过滤 + 单条截断）
+        int renderedChars = 0;
+        for (SessionMessage sm : filtered) {
             String content = sm.content();
-            if (content.length() > 4000) content = content.substring(0, 3997) + "...";
+            if (content.length() > cfg.messageMaxChars()) {
+                content = content.substring(0, cfg.messageMaxChars() - 3) + "...";
+            }
+            renderedChars += content.length();
             switch (sm.role()) {
                 case "user" -> messages.add(LlmMessage.user(content));
                 case "assistant" -> messages.add(LlmMessage.assistant(content));
@@ -860,6 +898,8 @@ public class OrchestratorAgent {
                 default -> messages.add(LlmMessage.user(content));
             }
         }
+
+        log.debug("[ContextSession] renderedChars={}", renderedChars);
 
         // 3. user: 推演提示
         String userMsg = "请基于以上上下文进行推演。";
@@ -1520,5 +1560,42 @@ public class OrchestratorAgent {
 
         ToolLoopDebug.logFinalText(log, "runSimToolLoop", "finish_action", finalText);
         return new SimResult(finalText, toolCalls, trace);
+    }
+
+    // ---- Context History 配置 ----
+
+    /**
+     * 对话上下文历史配置。
+     * @param historyTurns  最近保留轮数（1..50）
+     * @param messageMaxChars 单条消息最大字符数（500..20000）
+     */
+    public record ContextHistoryConfig(int historyTurns, int messageMaxChars) {
+        public static final ContextHistoryConfig DEFAULT = new ContextHistoryConfig(12, 4000);
+    }
+
+    /**
+     * 按轮数过滤 sessionMessage 列表，保留最近 N 轮。
+     * 一轮按 user/chat_user 消息切分；每个 user 消息到下一 user 消息之间为一轮。
+     * 保留完整轮内容（含 assistant / tool_call / tool_result），不截断轮内 tool 链。
+     */
+    public static List<SessionMessage> filterByTurns(List<SessionMessage> messages, int maxTurns) {
+        if (messages == null || messages.isEmpty()) return List.of();
+        if (maxTurns <= 0) return List.of();
+
+        // 从后向前扫描 user 消息，找到第 maxTurns 个
+        int userCount = 0;
+        int cutoffIdx = 0;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            SessionMessage msg = messages.get(i);
+            if ("user".equals(msg.role())) {
+                userCount++;
+                if (userCount >= maxTurns) {
+                    cutoffIdx = i;
+                    break;
+                }
+            }
+        }
+
+        return messages.subList(cutoffIdx, messages.size());
     }
 }

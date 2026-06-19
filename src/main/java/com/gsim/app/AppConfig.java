@@ -56,6 +56,11 @@ public class AppConfig {
     /** Bootstrap root 创建时是否允许调用 LLM 生成 draft。默认 false（直接 deterministic fallback）。 */
     private final boolean bootstrapRootLlmEnabled;
 
+    /** 对话上下文最近保留轮数（1..50，默认 12）。 */
+    private final int contextSessionHistoryTurns;
+    /** 单条 SessionMessage 渲染进 LLM 上下文的最大字符数（500..20000，默认 4000）。 */
+    private final int contextSessionMessageMaxChars;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -106,6 +111,12 @@ public class AppConfig {
 
         // Bootstrap root LLM 开关（默认 false，快速 deterministic fallback）
         this.bootstrapRootLlmEnabled = parseBoolean(result.get("bootstrap.root.llm.enabled"), false);
+
+        // Context session 历史配置
+        this.contextSessionHistoryTurns = clamp(
+                parseInt(result.get("context.session.history.turns"), 12), 1, 50);
+        this.contextSessionMessageMaxChars = clamp(
+                parseInt(result.get("context.session.message.max_chars"), 4000), 500, 20000);
     }
 
     // ---- Getters ----
@@ -158,6 +169,16 @@ public class AppConfig {
         return bootstrapRootLlmEnabled;
     }
 
+    /** 对话上下文最近保留轮数（1..50，默认 12）。 */
+    public int getContextSessionHistoryTurns() {
+        return contextSessionHistoryTurns;
+    }
+
+    /** 单条 SessionMessage 渲染进 LLM 上下文的最大字符数（500..20000，默认 4000）。 */
+    public int getContextSessionMessageMaxChars() {
+        return contextSessionMessageMaxChars;
+    }
+
     /** 获取当前生效的配置文件路径。 */
     public Path getConfigPath() {
         return configPath;
@@ -192,6 +213,10 @@ public class AppConfig {
     private static boolean parseBoolean(String s, boolean def) {
         if (isBlank(s)) return def;
         return "true".equalsIgnoreCase(s) || "yes".equalsIgnoreCase(s) || "1".equals(s);
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     /**

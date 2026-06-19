@@ -240,6 +240,8 @@ public class ConfigLoader {
             case "EMBEDDING_DIMENSIONS" -> "embedding.dimensions";
             case "EMBEDDING_MODEL_DIR" -> "embedding.model_dir";
             case "GSIM_BOOTSTRAP_ROOT_LLM_ENABLED" -> "bootstrap.root.llm.enabled";
+            case "GSIM_CONTEXT_SESSION_HISTORY_TURNS" -> "context.session.history.turns";
+            case "GSIM_CONTEXT_SESSION_MESSAGE_MAX_CHARS" -> "context.session.message.max_chars";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -278,6 +280,9 @@ public class ConfigLoader {
         defaults.put("embedding.model_dir", "data/models/local-small");
 
         defaults.put("bootstrap.root.llm.enabled", "false");
+
+        defaults.put("context.session.history.turns", "12");
+        defaults.put("context.session.message.max_chars", "4000");
 
         return defaults;
     }

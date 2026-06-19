@@ -25,6 +25,7 @@ public record AgentProgressEvent(
     public static final String INVALID_BRACKET_INTENT = "INVALID_BRACKET_INTENT";
     public static final String FINISH_ACTION_REJECTED = "FINISH_ACTION_REJECTED";
     public static final String FINISH_ACTION_ACCEPTED = "FINISH_ACTION_ACCEPTED";
+    public static final String AGENT_PUBLIC_MESSAGE = "AGENT_PUBLIC_MESSAGE";
     public static final String ABORTED = "ABORTED";
 
     // ---- factory methods ----
@@ -90,6 +91,13 @@ public record AgentProgressEvent(
     public static AgentProgressEvent finishAccepted(int round, int maxRounds) {
         return new AgentProgressEvent(FINISH_ACTION_ACCEPTED, round, maxRounds,
                 "finish_action 通过，本轮结束。", Map.of());
+    }
+
+    public static AgentProgressEvent publicMessage(String message) {
+        return new AgentProgressEvent(AGENT_PUBLIC_MESSAGE, 0, 0,
+                message,
+                Map.of("source", "console_print",
+                        "chars", String.valueOf(message != null ? message.length() : 0)));
     }
 
     public static AgentProgressEvent aborted(int round, int maxRounds, String reason) {
