@@ -9,7 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +26,9 @@ public class BranchMessageStore {
     private static final String MSG_BLOCK_START = "<!-- BRANCH_MESSAGES START -->";
     private static final String MSG_BLOCK_END = "<!-- BRANCH_MESSAGES END -->";
     private static final String LLM_SECTION_HEADING = "## 二、LLM 上下文记录";
+    /** 匹配单个 message block（用于迁移时从正文中清除）。 */
+    private static final Pattern MSG_BLOCK_PATTERN = Pattern.compile(
+            "<!-- message:start [^>]* -->[\\s\\S]*?<!-- message:end -->\\s*");
 
     private final DataManager dm;
     private final Path dataRoot;
@@ -32,31 +37,41 @@ public class BranchMessageStore {
         this.dm = dm; this.dataRoot = dataRoot;
     }
 
-    /** 从 branch 文件读取所有 message blocks。优先从 marker block 内读取。也兼容旧格式。 */
+    /** 从 branch 文件读取所有 message blocks。合并 marker 内、marker 外、legacy 格式，按 id 去重（marker 优先）。 */
     public List<BranchMessage> listMessages(String branchId) throws IOException {
-        List<BranchMessage> msgs = new ArrayList<>();
+        List<BranchMessage> result = new ArrayList<>();
         Path f = branchFile(branchId);
-        if (!Files.exists(f)) return msgs;
+        if (!Files.exists(f)) return result;
 
         String raw = Files.readString(f, StandardCharsets.UTF_8);
 
-        // 优先从 marker block 内解析
+        // 1. marker block 内消息
+        List<BranchMessage> markerMsgs = new ArrayList<>();
         int blockStart = raw.indexOf(MSG_BLOCK_START);
         int blockEnd = raw.indexOf(MSG_BLOCK_END);
         if (blockStart >= 0 && blockEnd > blockStart) {
             String blockContent = raw.substring(blockStart + MSG_BLOCK_START.length(), blockEnd);
-            parseMessageBlocks(blockContent, msgs);
-            if (!msgs.isEmpty()) return msgs;
+            parseMessageBlocks(blockContent, markerMsgs);
         }
 
-        // 从全文解析 message blocks（兼容旧文件无 marker 的情况）
-        parseMessageBlocks(raw, msgs);
-        // 兼容旧格式 ### user / ### assistant / ### tool_call / ### tool_result
-        if (msgs.isEmpty()) parseLegacyFormat(raw, msgs);
-        return msgs;
+        // 2. 全文 message blocks（marker 外旧消息）
+        List<BranchMessage> fullMsgs = new ArrayList<>();
+        parseMessageBlocks(raw, fullMsgs);
+
+        // 3. legacy ### user / ### assistant / ### tool_call / ### tool_result
+        List<BranchMessage> legacyMsgs = new ArrayList<>();
+        parseLegacyFormat(raw, legacyMsgs);
+
+        // 合并：marker 内版本优先，按 id 去重
+        Map<String, BranchMessage> merged = new LinkedHashMap<>();
+        for (BranchMessage m : fullMsgs) merged.put(m.id(), m);
+        for (BranchMessage m : legacyMsgs) merged.putIfAbsent(m.id(), m);
+        for (BranchMessage m : markerMsgs) merged.put(m.id(), m); // marker 覆盖
+
+        return new ArrayList<>(merged.values());
     }
 
-    /** 向当前 branch 文件的消息区插入一条 message block。写入前进行污染过滤。 */
+    /** 向当前 branch 文件的消息区插入一条 message block。写入前进行污染过滤。如果尚无 marker block 但已有旧 message blocks，自动迁移进 marker。 */
     public void appendMessage(String branchId, BranchMessage msg) throws IOException {
         Path f = branchFile(branchId);
         if (!Files.exists(f)) throw new IOException("Branch file not found: " + f);
@@ -85,27 +100,41 @@ public class BranchMessageStore {
             Files.writeString(f, updated, StandardCharsets.UTF_8);
             log.debug("Inserted message {} into marker block in {}", writable.id(), branchId);
         } else {
-            // 没有 marker block — 创建或迁移
-            int llmSection = raw.indexOf(LLM_SECTION_HEADING);
+            // 没有 marker block — 检查是否有旧 message blocks 需要迁移
+            List<BranchMessage> legacyMsgs = new ArrayList<>();
+            parseMessageBlocks(raw, legacyMsgs);
+
+            String cleanedRaw = raw;
+            if (!legacyMsgs.isEmpty()) {
+                // 迁移：把旧 message blocks 从正文中移除，稍后放入 marker
+                cleanedRaw = MSG_BLOCK_PATTERN.matcher(raw).replaceAll("");
+                log.info("Migrating {} legacy message blocks into marker in {}", legacyMsgs.size(), branchId);
+            }
+
+            // 构建 marker 内容：旧消息（如有）+ 新消息
+            StringBuilder markerContent = new StringBuilder();
+            for (BranchMessage m : legacyMsgs) {
+                markerContent.append(m.toBlock()).append("\n");
+            }
+            markerContent.append(block);
+
+            int llmSection = cleanedRaw.indexOf(LLM_SECTION_HEADING);
             if (llmSection >= 0) {
-                // 在 "## 二、LLM 上下文记录" 下创建 marker block
                 int insertAt = llmSection + LLM_SECTION_HEADING.length();
-                // 找到下一行
-                int nextNewline = raw.indexOf('\n', insertAt);
+                int nextNewline = cleanedRaw.indexOf('\n', insertAt);
                 if (nextNewline < 0) nextNewline = insertAt;
                 insertAt = nextNewline + 1;
-                String before = raw.substring(0, insertAt);
-                String after = raw.substring(insertAt);
-                String updated = before + "\n" + MSG_BLOCK_START + "\n" + block + MSG_BLOCK_END + "\n" + after;
+                String before = cleanedRaw.substring(0, insertAt);
+                String after = cleanedRaw.substring(insertAt);
+                String updated = before + "\n" + MSG_BLOCK_START + "\n" + markerContent + MSG_BLOCK_END + "\n" + after;
                 Files.writeString(f, updated, StandardCharsets.UTF_8);
-                log.info("Created marker block under LLM section in {}", branchId);
+                log.info("Created marker block{} under LLM section in {}", legacyMsgs.isEmpty() ? "" : " (with migration)", branchId);
             } else {
-                // 完全没有 section 结构 — 兼容旧文件：追加到 EOF 但创建 marker 区
-                String updated = raw;
-                if (!raw.endsWith("\n")) updated += "\n";
-                updated += "\n" + LLM_SECTION_HEADING + "\n\n" + MSG_BLOCK_START + "\n" + block + MSG_BLOCK_END + "\n";
+                String updated = cleanedRaw;
+                if (!updated.endsWith("\n")) updated += "\n";
+                updated += "\n" + LLM_SECTION_HEADING + "\n\n" + MSG_BLOCK_START + "\n" + markerContent + MSG_BLOCK_END + "\n";
                 Files.writeString(f, updated, StandardCharsets.UTF_8);
-                log.info("Created LLM section + marker block at EOF in {}", branchId);
+                log.info("Created LLM section + marker block{} at EOF in {}", legacyMsgs.isEmpty() ? "" : " (with migration)", branchId);
             }
         }
     }

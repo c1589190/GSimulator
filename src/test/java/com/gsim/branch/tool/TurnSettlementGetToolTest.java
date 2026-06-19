@@ -166,5 +166,37 @@ class TurnSettlementGetToolTest {
             String content = result.items().get(0).snippet();
             assertTrue(content.contains("returnedRange: 0-"));
         }
+
+        @Test
+        @DisplayName("mode=full truncated=true 时 nextOffset 为数字")
+        void fullModeNextOffsetWhenTruncated() throws Exception {
+            var store = new com.gsim.chat.BranchMessageStore(dm, tempDir);
+            var nodeGetTool = new com.gsim.context.memory.BranchNodeGetTool(dm, store);
+
+            var call = new ToolCall("branch_node_get", Map.of(
+                    "nodeId", "branch.b0000-start", "mode", "full",
+                    "limit", "50"));
+            ToolResult result = nodeGetTool.execute(call);
+            String content = result.items().get(0).snippet();
+            assertTrue(content.contains("truncated: true"));
+            assertTrue(content.contains("nextOffset: "));
+            assertFalse(content.contains("nextOffset: none"));
+        }
+
+        @Test
+        @DisplayName("mode=full truncated=false 时 nextOffset 为 none")
+        void fullModeNextOffsetNoneWhenNotTruncated() throws Exception {
+            var store = new com.gsim.chat.BranchMessageStore(dm, tempDir);
+            var nodeGetTool = new com.gsim.context.memory.BranchNodeGetTool(dm, store);
+
+            var call = new ToolCall("branch_node_get", Map.of(
+                    "nodeId", "branch.b0000-start", "mode", "full",
+                    "full", "true"));
+            ToolResult result = nodeGetTool.execute(call);
+            String content = result.items().get(0).snippet();
+            if (content.contains("truncated: false")) {
+                assertTrue(content.contains("nextOffset: none"));
+            }
+        }
     }
 }

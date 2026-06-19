@@ -147,6 +147,7 @@ public class BranchNodeGetTool implements AgentTool {
         sb.append("originalLength: ").append(originalLength).append("\n");
         sb.append("truncated: ").append(truncated).append("\n");
         sb.append("returnedRange: ").append(start).append("-").append(end).append("\n");
+        sb.append("nextOffset: ").append(truncated ? String.valueOf(end) : "none").append("\n");
         sb.append("---\n");
 
         String content = body.substring(start, end);

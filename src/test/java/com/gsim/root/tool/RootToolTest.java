@@ -136,6 +136,29 @@ class RootToolTest {
             String content = result.items().get(0).snippet();
             assertTrue(content.contains("returnedRange: 0-"));
         }
+
+        @Test
+        @DisplayName("truncated=true 时 nextOffset 为 end 值")
+        void nextOffsetWhenTruncated() {
+            var call = new ToolCall("root_world_get", java.util.Map.of("limit", "50"));
+            ToolResult result = registry.call(call);
+            String content = result.items().get(0).snippet();
+            assertTrue(content.contains("truncated: true"));
+            assertTrue(content.contains("nextOffset: "), "should include nextOffset: " + content);
+            assertFalse(content.contains("nextOffset: none"), "nextOffset should be a number, not none");
+        }
+
+        @Test
+        @DisplayName("truncated=false 时 nextOffset 为 none")
+        void nextOffsetNoneWhenNotTruncated() {
+            var call = new ToolCall("root_world_get", java.util.Map.of("full", "true"));
+            ToolResult result = registry.call(call);
+            String content = result.items().get(0).snippet();
+            // 全文 test data is only ~200 lines, well under 30000 limit
+            if (content.contains("truncated: false")) {
+                assertTrue(content.contains("nextOffset: none"));
+            }
+        }
     }
 
     @Nested

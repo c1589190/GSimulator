@@ -52,28 +52,15 @@ public class WhereCommand implements InteractionCommand {
                         .append("/branches/").append(fn).append("\n");
             }
 
-            // Root title (if readable)
+            // Root title (if readable) — 读取前 4000 chars，支持多种 Markdown 标题格式
             try {
                 java.nio.file.Path worldFile = dm.worldFilePath();
                 if (java.nio.file.Files.exists(worldFile)) {
                     String content = java.nio.file.Files.readString(worldFile);
-                    // Extract title from first # heading or ## 世界名称
-                    for (String line : content.split("\n")) {
-                        String trimmed = line.trim();
-                        if (trimmed.startsWith("## 世界名称")) {
-                            String title = trimmed.replace("## 世界名称", "").trim();
-                            if (!title.isBlank()) {
-                                sb.append("root title: ").append(title).append("\n");
-                            }
-                            break;
-                        }
-                        if (trimmed.startsWith("# ") && !trimmed.startsWith("## ")) {
-                            String title = trimmed.replace("# ", "").trim();
-                            if (!title.isBlank() && !title.equals("世界观")) {
-                                sb.append("root title: ").append(title).append("\n");
-                            }
-                            break;
-                        }
+                    String excerpt = content.length() > 4000 ? content.substring(0, 4000) : content;
+                    String title = extractTitle(excerpt);
+                    if (title != null) {
+                        sb.append("root title: ").append(title).append("\n");
                     }
                 }
             } catch (Exception ignored) {}
@@ -95,5 +82,51 @@ public class WhereCommand implements InteractionCommand {
         }
 
         return InteractionResult.ok(sb.toString().trim());
+    }
+
+    /**
+     * 从 world.md 文本中提取标题。支持格式：
+     * - # Title（H1）
+     * - ## 世界名称\nTitle（下一行）
+     * - ## 世界名称\n\nTitle（下一行有空行）
+     * - ## 世界名称：Title（冒号分隔同行）
+     * 返回 null 表示无法提取。
+     */
+    static String extractTitle(String excerpt) {
+        if (excerpt == null || excerpt.isBlank()) return null;
+        String[] lines = excerpt.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            // 格式: ## 世界名称：Title
+            if (line.startsWith("## 世界名称") || line.startsWith("## 世界名称：") || line.startsWith("## 世界名称:")) {
+                String afterHeading = line.replaceFirst("^## 世界名称[：:]?\\s*", "").trim();
+                if (!afterHeading.isBlank()) {
+                    return afterHeading;
+                }
+                // 同行无内容，检查下一行
+                if (i + 1 < lines.length) {
+                    String nextLine = lines[i + 1].trim();
+                    if (!nextLine.isBlank() && !nextLine.startsWith("#")) {
+                        return nextLine;
+                    }
+                    // 再跳过一个空行
+                    if (nextLine.isBlank() && i + 2 < lines.length) {
+                        String nextNext = lines[i + 2].trim();
+                        if (!nextNext.isBlank() && !nextNext.startsWith("#")) {
+                            return nextNext;
+                        }
+                    }
+                }
+                return null; // 找不到标题
+            }
+            // 格式: # Title（H1，不匹配 ##）
+            if (line.startsWith("# ") && !line.startsWith("## ")) {
+                String title = line.replaceFirst("^# ", "").trim();
+                if (!title.isBlank() && !title.equals("世界观")) {
+                    return title;
+                }
+            }
+        }
+        return null;
     }
 }

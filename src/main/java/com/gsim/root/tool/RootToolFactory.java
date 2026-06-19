@@ -342,7 +342,8 @@ public class RootToolFactory {
         @Override public String name() { return "root_players_update"; }
         @Override public String description() {
             return "修改当前 root 的 players.md（玩家资料/人物卡/长期状态）。仅允许在根节点。"
-                    + "参数: content(必填), mode(replace|append, 默认append)。"
+                    + "参数: content(必填), mode(append|replace, 默认append)。"
+                    + "players.md 是玩家长期档案/人物卡/长期状态文件；replace 会覆盖长期档案，必须 confirmReplace=true。"
                     + "本工具用于维护玩家长期档案，不是记录本回合行动。本回合行动请用 player_action_append。";
         }
         @Override
@@ -355,6 +356,12 @@ public class RootToolFactory {
             String content = call.param("content", "");
             if (content.isBlank()) return ToolResult.fail(name(), "content is required");
             String mode = call.param("mode", "append");
+
+            if ("replace".equals(mode) && !"true".equalsIgnoreCase(call.param("confirmReplace", "false"))) {
+                return ToolResult.fail(name(), "REPLACE_REQUIRES_CONFIRM: mode=replace 需要 confirmReplace=true。"
+                        + "players.md 是玩家长期资料/人物卡/长期状态文件，覆盖会丢失长期档案。"
+                        + "如果只需要追加资料，使用 mode=append（默认）。");
+            }
 
             try {
                 Path f = dm.getPlayersPath();
@@ -461,6 +468,7 @@ public class RootToolFactory {
         sb.append("originalLength: ").append(originalLength).append("\n");
         sb.append("truncated: ").append(truncated).append("\n");
         sb.append("returnedRange: ").append(start).append("-").append(end).append("\n");
+        sb.append("nextOffset: ").append(truncated ? String.valueOf(end) : "none").append("\n");
         sb.append("---\n");
         sb.append(content);
 

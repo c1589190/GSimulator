@@ -59,20 +59,42 @@ public class ConsoleInteractionAdapter {
     }
 
     private void initJline() {
+        // 两段式：先尝试正常 terminal，失败再试 dumb，都失败则 BufferedReader
+        Terminal terminal = null;
         try {
-            Terminal terminal = TerminalBuilder.builder()
+            terminal = TerminalBuilder.builder()
                     .system(true)
-                    .dumb(true) // fallback if real terminal unavailable
                     .build();
-            Path historyFile = resolveHistoryFile();
-            lineReader = LineReaderBuilder.builder()
-                    .terminal(terminal)
-                    .variable(LineReader.HISTORY_FILE, historyFile)
-                    .build();
-            jlineAvailable = true;
-            log.debug("JLine initialized, history: {}", historyFile);
-        } catch (Exception e) {
-            log.warn("JLine unavailable, falling back to BufferedReader: {}", e.getMessage());
+            log.debug("JLine: normal terminal acquired");
+        } catch (Exception e1) {
+            log.debug("JLine: normal terminal unavailable ({})", e1.getMessage());
+            try {
+                terminal = TerminalBuilder.builder()
+                        .system(true)
+                        .dumb(true)
+                        .build();
+                log.debug("JLine: dumb terminal fallback acquired");
+            } catch (Exception e2) {
+                log.warn("JLine unavailable (normal: {}, dumb: {}), falling back to BufferedReader",
+                        e1.getMessage(), e2.getMessage());
+            }
+        }
+
+        if (terminal != null) {
+            try {
+                Path historyFile = resolveHistoryFile();
+                lineReader = LineReaderBuilder.builder()
+                        .terminal(terminal)
+                        .variable(LineReader.HISTORY_FILE, historyFile)
+                        .build();
+                jlineAvailable = true;
+                log.debug("JLine initialized, history: {}", historyFile);
+            } catch (Exception e) {
+                log.warn("JLine LineReader build failed: {}", e.getMessage());
+                this.fallbackReader = new BufferedReader(new InputStreamReader(System.in));
+                jlineAvailable = false;
+            }
+        } else {
             this.fallbackReader = new BufferedReader(new InputStreamReader(System.in));
             jlineAvailable = false;
         }

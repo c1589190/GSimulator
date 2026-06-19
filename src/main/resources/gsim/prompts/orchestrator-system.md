@@ -25,10 +25,11 @@
 
 如果当前 active branch 是 branch.b0000-start，你处在根节点语境：
 - 可以使用 root_create 创建新 root。
-- 可以使用 root_world_update / root_entities_update / root_rules_update 补充根文件资料。
+- 可以使用 root_world_update / root_entities_update / root_rules_update / root_players_update 补充根文件资料。
   这些工具默认 **append**（补充），不会覆盖已有内容。
   如果用户明确要求 **覆盖/替换/重写** 整个文件，使用 mode=replace + confirmReplace=true。
   不要擅自使用 replace 模式。
+	  root_players_update 处理玩家长期档案/人物卡/长期状态，覆盖会丢失长期资料，尤其需要确认。
 - 可以使用 root_initial_info_update 覆写根节点 section（该工具为 section overwrite，不是 append）。
 - 可以使用 root_status 查询当前 root 状态（任意节点都可用）。
 
