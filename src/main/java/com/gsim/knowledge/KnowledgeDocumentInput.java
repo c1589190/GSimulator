@@ -12,7 +12,12 @@ public record KnowledgeDocumentInput(
         String collection,
         @JsonProperty("source_type") String sourceType,
         @JsonProperty("source_uri") String sourceUri,
-        @JsonProperty("metadata") Map<String, String> metadata
+        @JsonProperty("metadata") Map<String, String> metadata,
+        @JsonProperty("root_id") String rootId,
+        @JsonProperty("branch_id") String branchId,
+        @JsonProperty("revision_of") String revisionOf,
+        @JsonProperty("target_key") String targetKey,
+        @JsonProperty("change_type") String changeType
 ) {
     public KnowledgeDocumentInput {
         if (collection == null || collection.isBlank()) {
@@ -27,5 +32,27 @@ public record KnowledgeDocumentInput(
         if (metadata == null) {
             metadata = Map.of();
         }
+        if (rootId == null) {
+            rootId = "";
+        }
+        if (branchId == null) {
+            branchId = "";
+        }
+        if (revisionOf == null) {
+            revisionOf = "";
+        }
+        if (targetKey == null) {
+            targetKey = "";
+        }
+        if (changeType == null || changeType.isBlank()) {
+            changeType = "created";
+        }
+    }
+
+    /** 兼容旧构造器（无 branch metadata）。 */
+    public KnowledgeDocumentInput(String title, String content, String collection,
+                                  String sourceType, String sourceUri,
+                                  Map<String, String> metadata) {
+        this(title, content, collection, sourceType, sourceUri, metadata, "", "", "", "", "created");
     }
 }

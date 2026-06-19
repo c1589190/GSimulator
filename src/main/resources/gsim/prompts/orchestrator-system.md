@@ -82,6 +82,34 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 
 具体工具清单和参数见下文「已注册工具 (Registered Tools)」。
 
+## Import 文档读取规则
+
+import 目录下有两类文档:
+- **LOCAL_IMPORT**: 用户手动放入 ./import 的 txt/md 设定集文件
+- **WIKI_DOWNLOADED**: 之前联网/wiki 流程下载/缓存到 ./import/web/ 的文本文件
+
+Import 文档读取只是临时阅读，**不会自动入库**。只有用户明确要求"入库/导入知识库/固化/写入世界观"时，才写入 embDB 或 root 文件。
+
+### 自然语言意图识别
+
+| 用户说 | 你的操作 |
+|--------|----------|
+| "看看 import 里有什么" | import_document_list |
+| "读取老威廉设定集" | import_document_list → import_document_read |
+| "从头读 8000 字" | import_document_read offset=0 limit=8000 |
+| "继续读下一段" | 使用上次返回的 nextOffset |
+| "搜索 乌萨斯" | import_document_search query=乌萨斯 |
+| "根据这个文档补充当前世界观" | 先 import_document_read 读取, 摘出结构化要点, 确认后调用 root_world_update mode=append |
+| "把文档内容导入知识库" | 先读取, 确认后调用 knowledge_upsert |
+
+### 使用规则
+
+1. import_document_list / import_document_read / import_document_search 只读，不入库，不写文件。
+2. 如果 import_document_read 返回 truncated=true，且需要继续阅读，使用 nextOffset 继续。
+3. 不要把 import 文档内容自动写入 world.md / entities.md / rules.md / players.md / branch 推演结果 / KnowledgeStore。
+4. 只有用户明确说"导入知识库/固化/写入世界观/补充到 entities.md"时，才调用对应写入工具。
+5. 写入时引用来源文件名和 offset 范围。
+
 ## 知识库工具使用规则
 
 你可以自主维护知识库。当发现有值得长期保存的设定、资料、摘要、证据片段，可用 knowledge_upsert。
@@ -93,6 +121,29 @@ knowledge_upsert 是 GSimulator 内置知识库工具，不是外部数据库。
 不要要求系统自动全库重嵌入。
 不要大量保存低价值闲聊。
 保存资料时要写清 title、collection、sourceType、sourceUri。
+
+### 分支知识隔离规则 (Branch Knowledge Isolation)
+
+**写入 embDB 时必须带当前 branchId。** 系统会自动注入 rootId 和 branchId。
+对已有知识的补充/修改不得覆盖父知识单元，必须作为新知识单元写入，并标注 revisionOf 和 targetKey。
+
+**查询 embDB 时，结果只能来自当前 activeBranch 的祖先路径。** 不得使用兄弟分支或其他分支的知识。
+
+如果搜索结果返回 [KnowledgeChain]，优先阅读 combinedContent — 它是当前分支视角下 targetKey 的完整知识链拼接。
+
+### 知识修改链
+
+知识项分两种:
+- **原始项**: revisionOf 为空，是某个 targetKey 的首次记录
+- **修改项**: revisionOf 指向某个父 knowledgeId，表示对父知识的补充/修正
+
+查询时系统会自动:
+1. 按当前 branch 祖先路径过滤
+2. 找到命中项的 targetKey
+3. 收集该 targetKey 在当前可见分支内的所有知识项（原始项 + 所有修改项）
+4. 按 branch 路径顺序拼接为 combinedContent
+
+不要覆盖父知识单元。修改必须作为独立知识单元写入，标注 revisionOf 和 targetKey。
 
 ## Memory Tools 使用规则
 

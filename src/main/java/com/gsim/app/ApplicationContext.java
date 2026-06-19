@@ -271,6 +271,9 @@ public class ApplicationContext {
     public ScopedKnowledgeStoreFactory getScopedStoreFactory() { return scopedStoreFactory; }
     public EmbeddingModel getEmbeddingModel() { return embeddingModel; }
 
+    /** 获取 KnowledgeToolFactory（用于注入 branch context suppliers）。 */
+    public KnowledgeToolFactory getKnowledgeToolFactory() { return knowledgeToolFactory; }
+
     /**
      * 关闭所有资源：LLM client、embedding model、knowledge stores、event bus、API server。
      */

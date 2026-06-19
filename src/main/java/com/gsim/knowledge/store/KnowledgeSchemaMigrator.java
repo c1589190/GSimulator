@@ -92,8 +92,18 @@ public class KnowledgeSchemaMigrator {
             )
             """;
 
+    // v2 新增列 — branch 元数据和修改链
+    private static final String[][] V2_COLUMNS = {
+            {"root_id", "TEXT"},
+            {"branch_id", "TEXT"},
+            {"revision_of", "TEXT"},
+            {"target_key", "TEXT"},
+            {"change_type", "TEXT DEFAULT 'created'"},
+    };
+
     /**
      * 执行所有建表语句。幂等：使用 IF NOT EXISTS。
+     * V2: 为 documents 表新增 branch metadata 列（root_id, branch_id, revision_of, target_key, change_type）。
      */
     public void migrate(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
@@ -104,6 +114,17 @@ public class KnowledgeSchemaMigrator {
             stmt.execute(CREATE_CHUNK_EMBEDDINGS);
             stmt.execute(CREATE_KNOWLEDGE_SETTINGS);
         }
+
+        // V2 迁移：为 documents 表添加 branch metadata 列
+        for (String[] col : V2_COLUMNS) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE documents ADD COLUMN " + col[0] + " " + col[1]);
+            } catch (SQLException e) {
+                // 列已存在 — 忽略
+                log.debug("Column {} may already exist: {}", col[0], e.getMessage());
+            }
+        }
+
         log.info("Knowledge schema migration complete");
     }
 }

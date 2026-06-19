@@ -93,6 +93,21 @@ public class GSimulatorApplication {
         toolRegistry.register(new PlayerProfileUpdateTool(profileManager));
         toolRegistry.register(new PlayerProfileNoteTool(profileManager));
 
+        // Import 文档读取工具 — 统一 LOCAL_IMPORT + WIKI_DOWNLOADED，不依赖 active root
+        var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentListTool(importDocService));
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentReadTool(importDocService));
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
+
+        // 注入 branch context suppliers 到 KnowledgeToolFactory（用于 upsert 自动填充 + search 祖先过滤）
+        ctx.getKnowledgeToolFactory().setContextSuppliers(
+                () -> dataManager.getActiveRootId(),
+                () -> dataManager.getActiveBranchId(),
+                () -> {
+                    var chain = dataManager.getBranchChain(dataManager.getActiveBranch());
+                    return chain.stream().map(d -> d.id()).toList();
+                });
+
         // BranchMessageStore / BranchAnalyzer
         BranchMessageStore messageStore = new BranchMessageStore(dataManager, dataRoot);
         BranchAnalyzer branchAnalyzer = new BranchAnalyzer(dataManager, messageStore, profileManager);

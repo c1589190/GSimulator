@@ -89,8 +89,9 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                 // 1. 写 documents
                 String docSql = """
                         INSERT INTO documents (doc_id, source_type, source_uri, title, collection,
-                          content, metadata_json, content_hash, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          content, metadata_json, content_hash, created_at, updated_at,
+                          root_id, branch_id, revision_of, target_key, change_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """;
                 try (PreparedStatement ps = conn.prepareStatement(docSql)) {
                     ps.setString(1, docId);
@@ -103,6 +104,11 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                     ps.setString(8, contentHash);
                     ps.setString(9, now);
                     ps.setString(10, now);
+                    ps.setString(11, input.rootId() != null ? input.rootId() : "");
+                    ps.setString(12, input.branchId() != null ? input.branchId() : "");
+                    ps.setString(13, input.revisionOf() != null ? input.revisionOf() : "");
+                    ps.setString(14, input.targetKey() != null ? input.targetKey() : "");
+                    ps.setString(15, input.changeType() != null ? input.changeType() : "created");
                     ps.executeUpdate();
                 }
 
@@ -442,6 +448,75 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
     }
 
     /**
+     * 按 branch 祖先路径过滤搜索结果。保留 branchId 在 visibleBranchIds 中（或为空，兼容旧数据）的候选项。
+     */
+    public List<KnowledgeSearchResult> filterByVisibleBranches(
+            List<KnowledgeSearchResult> results, List<String> visibleBranchIds) {
+        if (visibleBranchIds == null || visibleBranchIds.isEmpty()) return results;
+        List<KnowledgeSearchResult> filtered = new ArrayList<>();
+        for (KnowledgeSearchResult r : results) {
+            Optional<KnowledgeDocument> doc = getDocument(r.docId());
+            if (doc.isEmpty()) {
+                filtered.add(r); // 找不到文档则不过滤
+                continue;
+            }
+            String docBranch = doc.get().branchId();
+            if (docBranch == null || docBranch.isBlank() || visibleBranchIds.contains(docBranch)) {
+                filtered.add(r);
+            }
+        }
+        return filtered;
+    }
+
+    /** 按 targetKey 查找可见分支内的所有文档（用于构建修改链）。 */
+    public List<KnowledgeDocument> findByTargetKey(String targetKey, List<String> visibleBranchIds) {
+        List<KnowledgeDocument> docs = new ArrayList<>();
+        if (targetKey == null || targetKey.isBlank()) return docs;
+        try {
+            Connection conn = getConnection();
+            String sql = "SELECT * FROM documents WHERE target_key = ? ORDER BY created_at";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, targetKey);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        KnowledgeDocument doc = mapDocument(rs);
+                        String docBranch = doc.branchId();
+                        if (docBranch.isBlank() || visibleBranchIds == null
+                                || visibleBranchIds.isEmpty()
+                                || visibleBranchIds.contains(docBranch)) {
+                            docs.add(doc);
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            log.error("findByTargetKey failed: {}", e.getMessage());
+        }
+        return docs;
+    }
+
+    /** 查找 revisionOf 指向指定 parentId 的文档。 */
+    public List<KnowledgeDocument> findRevisionsOf(String parentId) {
+        List<KnowledgeDocument> docs = new ArrayList<>();
+        if (parentId == null || parentId.isBlank()) return docs;
+        try {
+            Connection conn = getConnection();
+            String sql = "SELECT * FROM documents WHERE revision_of = ? ORDER BY created_at";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, parentId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        docs.add(mapDocument(rs));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            log.error("findRevisionsOf failed: {}", e.getMessage());
+        }
+        return docs;
+    }
+
+    /**
      * 查找是否已存在相同文档，用于 dedup。
      * 规则：collection + source_type + source_uri + content_hash 相同视为重复。
      * 如果 source_uri 为空，使用 collection + title + content_hash。
@@ -754,8 +829,22 @@ public class SQLiteKnowledgeStore implements KnowledgeStore {
                 rs.getString("metadata_json"),
                 rs.getString("content_hash"),
                 rs.getString("created_at"),
-                rs.getString("updated_at")
+                rs.getString("updated_at"),
+                getStringOrEmpty(rs, "root_id"),
+                getStringOrEmpty(rs, "branch_id"),
+                getStringOrEmpty(rs, "revision_of"),
+                getStringOrEmpty(rs, "target_key"),
+                getStringOrEmpty(rs, "change_type")
         );
+    }
+
+    private static String getStringOrEmpty(ResultSet rs, String column) {
+        try {
+            String val = rs.getString(column);
+            return val != null ? val : "";
+        } catch (SQLException e) {
+            return "";
+        }
     }
 
     private KnowledgeChunk mapChunk(ResultSet rs) throws SQLException {

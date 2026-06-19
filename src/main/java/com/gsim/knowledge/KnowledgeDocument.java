@@ -15,5 +15,10 @@ public record KnowledgeDocument(
         @JsonProperty("metadata_json") String metadataJson,
         @JsonProperty("content_hash") String contentHash,
         @JsonProperty("created_at") String createdAt,
-        @JsonProperty("updated_at") String updatedAt
+        @JsonProperty("updated_at") String updatedAt,
+        @JsonProperty("root_id") String rootId,
+        @JsonProperty("branch_id") String branchId,
+        @JsonProperty("revision_of") String revisionOf,
+        @JsonProperty("target_key") String targetKey,
+        @JsonProperty("change_type") String changeType
 ) {}
