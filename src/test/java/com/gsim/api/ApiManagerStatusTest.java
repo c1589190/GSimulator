@@ -140,13 +140,13 @@ class ApiManagerStatusTest {
     }
 
     @Test
-    @DisplayName("未实现端点应返回 not implemented")
-    void shouldReturnNotImplemented() throws Exception {
-        // Branches 端点目前返回 not implemented
+    @DisplayName("Branches 端点应返回分支列表")
+    void shouldReturnBranchesList() throws Exception {
+        // Branches 端点现在返回真实数据
         HttpURLConnection conn = get("/api/branches");
-        assertEquals(200, conn.getResponseCode());  // 仍返回 200，但 success=false
+        assertEquals(200, conn.getResponseCode());
         String body = readBody(conn);
-        assertTrue(body.contains("not yet implemented") || body.contains("not_implemented"));
+        assertTrue(body.contains("branches") || body.contains("Branches"));
     }
 
     @Test

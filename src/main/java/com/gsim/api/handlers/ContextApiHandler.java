@@ -72,6 +72,11 @@ public class ContextApiHandler implements HttpHandler {
     }
 
     private void handleGetSession(HttpExchange exchange) throws IOException {
+        if (ctxSessionManager == null) {
+            BaseApiHandler.sendOk(exchange, "Context session manager not available",
+                    Map.of("active", false, "available", false));
+            return;
+        }
         Optional<ContextSession> active = ctxSessionManager.getActiveSession("default");
         Map<String, Object> data = new LinkedHashMap<>();
         if (active.isPresent()) {
@@ -136,6 +141,11 @@ public class ContextApiHandler implements HttpHandler {
      * GET /api/context/base — 只返回 BaseContextSnapshot markdown，不含 session messages。
      */
     private void handleGetBase(HttpExchange exchange) throws IOException {
+        if (ctxSessionManager == null || renderer == null || dataManager == null) {
+            BaseApiHandler.sendOk(exchange, "Context services not available",
+                    Map.of("markdown", "", "approxChars", 0, "available", false));
+            return;
+        }
         Optional<ContextSession> active = ctxSessionManager.getActiveSession("default");
         String markdown;
 

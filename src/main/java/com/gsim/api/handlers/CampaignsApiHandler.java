@@ -121,12 +121,21 @@ public class CampaignsApiHandler implements HttpHandler {
     // ---- Campaign ----
 
     private void handleListCampaigns(HttpExchange exchange) throws IOException {
-        Campaign current = ctx.getCampaignService().getCurrentCampaign().orElse(null);
-        List<Map<String, Object>> list = new ArrayList<>();
-        if (current != null) {
-            list.add(campaignToMap(current));
+        // 列出所有已保存的 campaign（不仅当前）
+        List<Campaign> all = ctx.getCampaignService().listAll();
+        if (all.isEmpty()) {
+            // 回退：至少返回当前 campaign
+            Campaign current = ctx.getCampaignService().getCurrentCampaign().orElse(null);
+            if (current != null) {
+                all = List.of(current);
+            }
         }
-        BaseApiHandler.sendOk(exchange, "Campaigns retrieved", Map.of("campaigns", list));
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Campaign c : all) {
+            list.add(campaignToMap(c));
+        }
+        BaseApiHandler.sendOk(exchange, "Campaigns retrieved",
+                Map.of("campaigns", list, "count", list.size()));
     }
 
     private void handleCreateCampaign(HttpExchange exchange) throws IOException {

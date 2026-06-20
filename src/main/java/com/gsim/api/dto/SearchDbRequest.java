@@ -7,10 +7,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record SearchDbRequest(
         @JsonProperty("query") String query,
-        @JsonProperty("topK") int topK
+        @JsonProperty("topK") int topK,
+        @JsonProperty("mode") String mode
 ) {
     public SearchDbRequest {
         if (query == null) query = "";
         if (topK <= 0) topK = 5;
+        if (mode == null || mode.isBlank()) mode = "keyword";
     }
 }

@@ -52,6 +52,8 @@ public class ImportApiHandler implements HttpHandler {
                 handleLocalImport(exchange);
             } else if ("/api/import/url".equals(path)) {
                 handleUrlImport(exchange);
+            } else if ("/api/import/wiki-allpages".equals(path)) {
+                handleWikiAllPages(exchange);
             } else {
                 BaseApiHandler.sendNotFound(exchange, "Unknown import endpoint");
             }
@@ -127,5 +129,39 @@ public class ImportApiHandler implements HttpHandler {
                 Map.of("message", "URL import completed: " + result.pagesFetched() + " pages fetched")));
 
         BaseApiHandler.sendOk(exchange, "URL import completed", data);
+    }
+
+    private void handleWikiAllPages(HttpExchange exchange) throws IOException {
+        String body = BaseApiHandler.readBody(exchange);
+        ImportUrlRequest req = JsonBodyParser.parse(body, ImportUrlRequest.class);
+
+        if (req.url() == null || req.url().isBlank()) {
+            BaseApiHandler.sendError(exchange, 400, "Missing required field: url (MediaWiki API base URL)");
+            return;
+        }
+
+        eventBus.publish(GSimEvent.of("api", "import_progress",
+                Map.of("message", "Starting wiki all-pages import: " + req.url())));
+
+        // 通过 InteractionManager 调用 /import --wiki-allpages
+        var session = new com.gsim.interaction.InteractionSession(
+                ctx.getInteractionContext(), ctx.getConfig(),
+                ctx.getCampaignService(), ctx.getTurnService(), ctx.getPlayerActionService(),
+                ctx.getToolRegistry(), ctx.getLlmManager());
+        String cmd = "/import " + req.url() + " --wiki-allpages";
+        if (req.maxPages() > 0) {
+            cmd += " --max-pages " + req.maxPages();
+        }
+        var result = ctx.getInteractionManager().handle(cmd, session);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("url", req.url());
+        data.put("success", result.success());
+        data.put("message", result.displayText());
+
+        eventBus.publish(GSimEvent.of("api", "import_progress",
+                Map.of("message", "Wiki all-pages import completed")));
+
+        BaseApiHandler.sendOk(exchange, "Wiki all-pages import completed", data);
     }
 }

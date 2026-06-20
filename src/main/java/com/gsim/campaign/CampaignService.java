@@ -10,7 +10,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Campaign 管理服务。
@@ -47,6 +50,34 @@ public class CampaignService {
         saveToDisk(currentCampaign);
         log.info("Created default campaign: {}", id);
         return currentCampaign;
+    }
+
+    /**
+     * 列出所有已保存的 campaign。
+     */
+    public List<Campaign> listAll() {
+        List<Campaign> result = new ArrayList<>();
+        Path campaignsDir = dataPaths.campaignDir("").getParent(); // data/campaigns/
+        if (campaignsDir == null || !Files.isDirectory(campaignsDir)) {
+            return result;
+        }
+        try (Stream<Path> dirs = Files.list(campaignsDir)) {
+            dirs.filter(Files::isDirectory).forEach(dir -> {
+                Path file = dir.resolve("campaign.json");
+                if (Files.exists(file)) {
+                    try {
+                        String json = Files.readString(file);
+                        Campaign c = JsonUtils.fromJson(json, Campaign.class);
+                        result.add(c);
+                    } catch (IOException e) {
+                        log.warn("Failed to read campaign from {}: {}", file, e.getMessage());
+                    }
+                }
+            });
+        } catch (IOException e) {
+            log.warn("Failed to list campaigns: {}", e.getMessage());
+        }
+        return result;
     }
 
     /**
