@@ -103,20 +103,22 @@ class ToolLoopFinalTextSourceIsFinishActionTest {
     }
 
     @Test
-    @DisplayName("无 finish_action 时不应有 finalText = null 以外的错误路径")
+    @DisplayName("无显式 finish_action → R1 纯文本触发 forced finish_action → R2 auto-wrap 成功")
     void withoutFinishActionReturnsError() {
-        // 只返回普通文本，不调用 finish_action
+        // R1: 纯文本 → 触发 forcedFinishAction
         fakeLlm.addResponse("系统状态正常。");
+        // R2: 仍返回纯文本 → 被 auto-wrap 为 finish_action
         fakeLlm.addResponse("一切就绪。");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "检查状态");
 
-        assertFalse(result.success(),
-                "Without finish_action, result should not be success");
-        assertNotNull(result.errorMessage(),
-                "Error message should indicate missing finish_action");
+        assertTrue(result.success(),
+                "R2 纯文本应被 auto-wrap 为 finish_action 并成功结束");
+        assertEquals("一切就绪。", result.finalText());
+        assertEquals(1, result.toolCalls().size());
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
     }
 
     // ===== Stubs =====

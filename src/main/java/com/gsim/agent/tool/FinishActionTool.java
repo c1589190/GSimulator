@@ -46,6 +46,15 @@ public class FinishActionTool implements AgentTool {
     }
 
     @Override
+    public java.util.Map<String, Object> getParameters() {
+        java.util.Map<String, java.util.Map<String, Object>> props = new java.util.LinkedHashMap<>();
+        props.put("message", java.util.Map.of(
+                "type", "string",
+                "description", "最终展示给用户的完整回复正文。必须自包含，不得使用「以上」「如上」「刚才」「前文」等引用不可见内容。"));
+        return com.gsim.llm.ToolDef.strictSchema(props, java.util.List.of("message"));
+    }
+
+    @Override
     public ToolResult execute(ToolCall call) {
         String status = call.param("status", "");
         String message = call.param("message", "");

@@ -535,18 +535,16 @@ class OpenAiCompatibleStreamTest {
         OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
                 "base context", sessionMessages, "帮我生成报名表");
 
-        // 断言：R1 普通文本没有被当作最终输出
-        assertFalse(result.success(),
-                "R1 普通文本无 finish_action 不应成功");
-        assertNotNull(result.errorMessage(), "应有明确错误消息");
-        assertTrue(result.errorMessage().contains("没有调用任何工具")
-                        || result.errorMessage().contains("no tool calls")
-                        || result.errorMessage().contains("Agent"),
-                "错误消息应说明 ToolLoop 失败原因，实际: " + result.errorMessage());
+        // 断言：R1 普通文本触发 forced finish_action → R2 auto-wrap 成功
+        assertTrue(result.success(),
+                "R1 普通文本 → forced finish_action → R2 auto-wrap 应成功结束");
+        assertEquals(1, result.toolCalls().size(),
+                "应记录 1 个 auto-wrapped finish_action");
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
     }
 
     @Test
-    @DisplayName("repeated no-finish-action: 连续两轮无 finish_action → 不静默 out，有明确错误")
+    @DisplayName("repeated no-finish-action: 连续纯文本 → R1 forced → R2 auto-wrap 成功")
     void repeatedNoFinishActionDoesNotSilentlyOut() {
         ControlledStreamClient llmClient = new ControlledStreamClient();
         ToolRegistry toolRegistry = new ToolRegistry();
@@ -568,16 +566,12 @@ class OpenAiCompatibleStreamTest {
         OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
                 "base context", sessionMessages, "测试请求");
 
-        // 断言：不应静默成功
-        assertFalse(result.success(),
-                "连续无 finish_action 不应静默 out，应返回失败");
-        assertNotNull(result.errorMessage(), "必须有明确错误消息");
-        assertFalse(result.errorMessage().isBlank(), "错误消息不能为空");
-        // 应该包含"Agent produced no tool calls"或类似表述
-        assertTrue(result.errorMessage().contains("没有调用任何工具")
-                        || result.errorMessage().contains("no tool calls")
-                        || result.errorMessage().contains("finish_action"),
-                "错误消息应说明原因，实际: " + result.errorMessage());
+        // 断言：auto-wrap 将纯文本包裹为 finish_action，不应静默失败
+        assertTrue(result.success(),
+                "连续纯文本 → auto-wrap 应成功结束");
+        assertEquals(1, result.toolCalls().size(),
+                "应记录 1 个 auto-wrapped finish_action");
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
     }
 
     // ======================== 8. StreamParseState 请求作用域测试 ========================

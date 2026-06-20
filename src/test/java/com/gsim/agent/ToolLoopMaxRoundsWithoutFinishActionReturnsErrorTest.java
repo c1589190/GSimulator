@@ -35,26 +35,25 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
     }
 
     @Test
-    @DisplayName("maxToolRounds=5 时纯自然语言无 finish_action → ToolLoop 返回错误")
+    @DisplayName("R1 纯文本 → forced finish_action → R2 auto-wrap 成功（不会烧到 5 轮）")
     void fiveRoundsOfPlainTextReturnsError() {
         agent.setMaxToolRounds(5);
-        // 5 轮全部返回纯自然语言（无 tool call），但会在连续无工具时提前中止
+        // R1: 纯文本 → 触发 forcedFinishAction
         fakeLlm.addResponse("正在处理...");
+        // R2: 仍纯文本 → auto-wrap 为 finish_action → 成功
         fakeLlm.addResponse("还需要更多信息...");
-        fakeLlm.addResponse("让我再检查一下...");
-        fakeLlm.addResponse("似乎还没完成...");
-        fakeLlm.addResponse("最后一次尝试...");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行复杂任务");
 
-        assertFalse(result.success(),
-                "ToolLoop should fail when no finish_action within maxToolRounds");
-        assertNotNull(result.errorMessage());
-        assertTrue(result.errorMessage().contains("finish_action")
-                        || result.errorMessage().contains("rounds"),
-                "Error message should mention finish_action or max rounds: " + result.errorMessage());
+        assertTrue(result.success(),
+                "R2 纯文本应被 auto-wrap 为 finish_action 并成功结束");
+        assertEquals("还需要更多信息...", result.finalText());
+        assertEquals(1, result.toolCalls().size());
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
+        assertEquals(2, fakeLlm.getRequestCount(),
+                "只有 2 轮（1 forced + 1 auto-wrap）");
     }
 
     @Test

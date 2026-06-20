@@ -31,20 +31,23 @@ class ToolLoopRejectsChineseBracketInvokeInStrictModeTest {
     }
 
     @Test
-    @DisplayName("[调用 player_action_list] → 被检测为非法，不被执行")
+    @DisplayName("[调用 player_action_list] → 被检测为非法，不被执行 → reprompt 后 finish_action 成功")
     void bracketInvokeDetectedAndNotExecuted() {
-        // 中文方括号格式（非法）
+        // Round 1: 中文方括号格式（非法）→ INVALID_TOOL_INTENT → reprompt
         fakeLlm.addResponse("[调用 player_action_list] {\"branchId\":\"branch.b0002\"}");
-        // 后续 default "{}" 触发 consecutiveNoToolRounds abort
+        // Round 2: 收到 reprompt 后调用 finish_action 结束
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"已收到纠正提示，无法执行 bracket 格式的工具调用。\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0002\n",
                 List.of(), "查询玩家行动");
 
-        assertFalse(result.success(),
-                "Bracket invoke should result in failure, not success");
-        assertEquals(0, result.toolCalls().size(),
-                "Bracket invoke should NOT be executed as a tool call");
+        assertTrue(result.success(),
+                "收到 reprompt 后应能正常调用 finish_action 结束");
+        assertEquals(1, result.toolCalls().size(),
+                "只有 finish_action 被真正执行（bracket invoke 被跳过）");
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
     }
 
     @Test

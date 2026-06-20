@@ -142,7 +142,8 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
 
         for (var event : appender.events()) {
             String msg = event.getMessage().getFormattedMessage();
-            if (msg.contains("TOOL_LOOP")) {
+            // Skip [TOOL_LOOP_TRACE] messages from OrchestratorAgent — they use a different format
+            if (msg.contains("TOOL_LOOP") && !msg.startsWith("[TOOL_LOOP_TRACE]")) {
                 assertTrue(msg.startsWith("\n=== TOOL_LOOP "),
                         "TOOL_LOOP section should start with unified prefix: " + msg);
                 assertTrue(msg.contains(" END ==="),

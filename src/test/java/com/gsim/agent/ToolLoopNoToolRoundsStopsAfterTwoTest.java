@@ -33,46 +33,47 @@ class ToolLoopNoToolRoundsStopsAfterTwoTest {
     }
 
     @Test
-    @DisplayName("连续 2 轮纯自然语言无 tool → 第 2 轮后立即返回错误，不烧满 5 轮")
+    @DisplayName("连续 2 轮纯自然语言 → R1 触发 forced finish_action → R2 auto-wrap 成功")
     void stopsAfterTwoConsecutiveNoToolRounds() {
-        // Round 1: 纯自然语言
+        // Round 1: 纯自然语言 → 触发 forcedFinishAction
         fakeLlm.addResponse("正在处理中...");
-        // Round 2: 又是纯自然语言
+        // Round 2: 又是纯自然语言 → 被 auto-wrap 为 finish_action("还需要再看看...")
         fakeLlm.addResponse("还需要再看看...");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行一个任务");
 
-        assertFalse(result.success(),
-                "ToolLoop should fail after 2 consecutive no-tool rounds");
-        assertTrue(result.errorMessage() != null && result.errorMessage().contains("consecutive"),
-                "Error message should mention consecutive rounds: " + result.errorMessage());
-        assertEquals(0, result.toolCalls().size(),
-                "No tools should have been called before abort");
-        assertTrue(result.finalText() != null && result.finalText().contains("连续"),
-                "finalText should contain consecutive abort message");
+        assertTrue(result.success(),
+                "R2 纯文本应被 auto-wrap 为 finish_action 并成功");
+        assertEquals(1, result.toolCalls().size(),
+                "应记录 1 个 auto-wrapped finish_action");
+        assertEquals("finish_action", result.toolCalls().get(0).tool());
+        assertEquals("还需要再看看...", result.finalText());
     }
 
     @Test
-    @DisplayName("工具调用后连续计数器重置 → 随后连续 2 轮无工具仍中止")
+    @DisplayName("echo → 纯文本(forcedFinishAction) → finish_action 成功结束")
     void toolCallResetsConsecutiveCounter() {
         // Round 1: echo 工具 → consecutiveNoToolRounds 重置为 0
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"r1\"}}");
-        // Round 2: 纯自然语言（consecutiveNoTool=1）
+        // Round 2: 纯自然语言 → 触发 forcedFinishAction
         fakeLlm.addResponse("做了些事情...");
-        // Round 3: 仅 2 个预设响应，FakeLlm 返回 defaultResponse "{}"
-        // "{}" 无 tool → consecutiveNoTool=2 → 中止
+        // Round 3: forced finish_action 阶段，返回 finish_action 结束
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"所有操作已完成。\"}}");
 
         toolRegistry.register(new EchoTool());
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "测试");
 
-        assertFalse(result.success(),
-                "Should abort after 2 consecutive no-tool rounds (rounds 2-3)");
-        assertTrue(result.errorMessage() != null && result.errorMessage().contains("consecutive"),
-                "Error should mention consecutive rounds");
+        assertTrue(result.success(),
+                "echo + forced finish_action + finish_action JSON = 应成功");
+        assertEquals(2, result.toolCalls().size(),
+                "1 echo + 1 finish_action = 2 tool calls");
+        assertEquals("echo", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
     }
 
     @Test

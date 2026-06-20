@@ -14,4 +14,12 @@ public interface AgentTool {
 
     /** 执行工具并返回结果。 */
     ToolResult execute(ToolCall call);
+
+    /**
+     * 工具的 JSON Schema 参数定义。
+     * 返回 null 表示无严格 schema（序列化时使用宽 schema）。
+     */
+    default java.util.Map<String, Object> getParameters() {
+        return null;
+    }
 }

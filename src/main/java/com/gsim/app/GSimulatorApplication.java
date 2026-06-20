@@ -188,17 +188,25 @@ public class GSimulatorApplication {
         }
 
         // Orchestrator + Chat（CLI 模式默认开启进度输出 + 写入确认）
+        // 共享 registry：CLI sink 和 Orchestrator 必须使用同一个 LlmStreamStateRegistry
+        var streamRegistry = new com.gsim.agent.LlmStreamStateRegistry();
         var streamRenderer = com.gsim.agent.CliStreamPreviewRenderer.fromConfig(config, System.out);
-        var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(System.out, true, streamRenderer);
+        var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(
+                System.out, true, streamRenderer, streamRegistry);
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel(),
                 cliProgressSink,
                 new com.gsim.agent.CliToolPermissionGate());
+        orchestrator.setStreamRegistry(streamRegistry);
         orchestrator.setContextHistoryConfig(new OrchestratorAgent.ContextHistoryConfig(
                 config.getContextSessionHistoryTurns(),
                 config.getContextSessionMessageMaxChars()));
         orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
         orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
+
+        log.info("[STREAM_TRACE] sharedRegistryIdentity={} orchestratorStreamRegistryIdentity={}",
+                System.identityHashCode(streamRegistry),
+                System.identityHashCode(orchestrator.getStreamRegistry()));
 
         // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

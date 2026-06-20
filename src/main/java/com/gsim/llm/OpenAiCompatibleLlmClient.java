@@ -565,10 +565,11 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 Map<String, Object> fnDef = new LinkedHashMap<>();
                 fnDef.put("name", tool.name());
                 fnDef.put("description", tool.description());
-                Map<String, Object> params = new LinkedHashMap<>();
-                params.put("type", "object");
-                params.put("properties", Map.of());
-                params.put("additionalProperties", true);
+                // 使用 ToolDef.parameters，若为 null 则 fallback 到宽 schema
+                Map<String, Object> params = tool.parameters();
+                if (params == null) {
+                    params = ToolDef.defaultOpenSchema();
+                }
                 fnDef.put("parameters", params);
 
                 Map<String, Object> t = new LinkedHashMap<>();
@@ -577,7 +578,9 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 tools.add(t);
             }
             body.put("tools", tools);
-            body.put("tool_choice", request.toolChoice() != null ? request.toolChoice() : "auto");
+            // toolChoice: String ("auto"/"none") 或 Map (forced object)
+            Object tc = request.toolChoice();
+            body.put("tool_choice", tc != null ? tc : "auto");
         }
 
         return MAPPER.writeValueAsString(body);

@@ -123,15 +123,19 @@ public class OpenAiLlmClient implements LlmClient {
                 ObjectNode fn = t.putObject("function");
                 fn.put("name", tool.name());
                 fn.put("description", tool.description());
-                // Minimal parameters schema — LLM 从 description 中理解参数
-                ObjectNode params = fn.putObject("parameters");
-                params.put("type", "object");
-                params.putObject("properties");
-                params.put("additionalProperties", true);
+                // 使用 ToolDef.parameters，若为 null 则 fallback 到宽 schema
+                java.util.Map<String, Object> params = tool.parameters();
+                if (params == null) {
+                    params = ToolDef.defaultOpenSchema();
+                }
+                fn.set("parameters", mapper.valueToTree(params));
             }
-            // tool_choice: "auto" by default, "none" to disable, "required" to force
-            if (req.toolChoice() != null) {
-                root.put("tool_choice", req.toolChoice());
+            // toolChoice: String ("auto"/"none") 或 Map (forced object)
+            Object tc = req.toolChoice();
+            if (tc instanceof String s) {
+                root.put("tool_choice", s);
+            } else if (tc != null) {
+                root.set("tool_choice", mapper.valueToTree(tc));
             } else {
                 root.put("tool_choice", "auto");
             }

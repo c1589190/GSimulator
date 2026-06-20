@@ -63,6 +63,88 @@ public class CliStreamPreviewRenderer {
                 config.isCliStreamPreviewShowReasoning());
     }
 
+    /** 绘制"等待输出……"框（用于 LLM_STREAM_STARTED 或空快照）。 */
+    public void renderWaiting(String streamId) {
+        if (!enabled || !ansiSupported) return;
+        clearPreviousBox();
+        int lineCount = 0;
+        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
+        out.println();
+        lineCount++;
+        printGrey(V + " 等待输出……" + repeat(" ", BOX_WIDTH - 12) + V);
+        out.println();
+        lineCount++;
+        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
+        out.println();
+        lineCount++;
+        out.flush();
+        lastPrintedLines = lineCount;
+        lastStreamId = streamId;
+    }
+
+    /** registry miss fallback：直接用 delta 字符串渲染输出区。 */
+    public void renderContentFallback(String streamId, String delta) {
+        if (!enabled || !ansiSupported) return;
+        clearPreviousBox();
+        int lineCount = 0;
+        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
+        out.println();
+        lineCount++;
+        String truncated = truncate(delta, maxChars);
+        for (String cl : wrapLines(truncated, BOX_WIDTH - 6)) {
+            printGrey(V + " 输出：" + padRight(cl, BOX_WIDTH - 6) + " " + V);
+            out.println();
+            lineCount++;
+        }
+        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
+        out.println();
+        lineCount++;
+        out.flush();
+        lastPrintedLines = lineCount;
+        lastStreamId = streamId;
+    }
+
+    /** registry miss fallback：直接用 delta 字符串渲染思考区。 */
+    public void renderReasoningFallback(String streamId, String delta) {
+        if (!enabled || !ansiSupported || !showReasoning) return;
+        clearPreviousBox();
+        int lineCount = 0;
+        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
+        out.println();
+        lineCount++;
+        String truncated = truncate(delta, maxChars);
+        for (String rl : wrapLines(truncated, BOX_WIDTH - 6)) {
+            printGrey(V + " 思考：" + padRight(rl, BOX_WIDTH - 6) + " " + V);
+            out.println();
+            lineCount++;
+        }
+        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
+        out.println();
+        lineCount++;
+        out.flush();
+        lastPrintedLines = lineCount;
+        lastStreamId = streamId;
+    }
+
+    /** 绘制"正在选择工具……"框（tool_call-only 流）。 */
+    public void renderToolChoosing(String streamId) {
+        if (!enabled || !ansiSupported) return;
+        clearPreviousBox();
+        int lineCount = 0;
+        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
+        out.println();
+        lineCount++;
+        printGrey(V + " 正在选择工具……" + repeat(" ", BOX_WIDTH - 14) + V);
+        out.println();
+        lineCount++;
+        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
+        out.println();
+        lineCount++;
+        out.flush();
+        lastPrintedLines = lineCount;
+        lastStreamId = streamId;
+    }
+
     /**
      * 根据 snapshot 渲染灰框。
      * 自动清除上一次渲染的内容。
@@ -74,8 +156,8 @@ public class CliStreamPreviewRenderer {
         // 清除之前的灰框
         clearPreviousBox();
 
-        // 不活跃的 stream 不渲染（已完成/失败/未开始）
-        if (!snapshot.active()) {
+        // 不活跃且无内容的 stream 不渲染
+        if (!snapshot.active() && !snapshot.hasAnyContent()) {
             lastPrintedLines = 0;
             lastStreamId = null;
             return;

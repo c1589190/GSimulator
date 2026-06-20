@@ -58,7 +58,7 @@ public class CliAgentProgressSink implements AgentProgressSink {
 
     /**
      * 处理 LLM 流式事件。返回 true 表示已处理（不需要再走 format）。
-     * 从 registry 获取 snapshot 并调用 renderer.render(snapshot)。
+     * 优先从 registry 获取 snapshot 渲染；registry miss 时 fallback 到 event.detail 直接渲染。
      */
     private boolean handleStreamEvent(AgentProgressEvent event) {
         if (streamRenderer == null) return false;
@@ -67,20 +67,45 @@ public class CliAgentProgressSink implements AgentProgressSink {
 
         return switch (event.phase()) {
             case AgentProgressEvent.LLM_STREAM_STARTED -> {
-                // renderer 在收到 delta 时才渲染，先不画（避免只有"等待"）
+                // STARTED 必须渲染等待框（不依赖 registry）
+                streamRenderer.renderWaiting(streamId);
                 yield true;
             }
-            case AgentProgressEvent.LLM_CONTENT_DELTA,
-                 AgentProgressEvent.LLM_REASONING_DELTA,
-                 AgentProgressEvent.LLM_TOOL_CALL_DELTA -> {
+            case AgentProgressEvent.LLM_CONTENT_DELTA -> {
                 LlmStreamSnapshot snapshot = getSnapshot(streamId);
-                if (snapshot == null || snapshot == LlmStreamSnapshot.EMPTY) {
-                    // DEBUG：registry 中没有对应状态
-                    out.println("[Agent] WARNING: stream " + streamId
-                            + " delta event but no snapshot in registry");
-                    yield true;
+                if (snapshot != null && snapshot.hasAnyContent()) {
+                    streamRenderer.render(snapshot);
+                } else {
+                    // registry miss fallback：直接用 event.detail 渲染
+                    logRegistryMiss(streamId, "LLM_CONTENT_DELTA");
+                    String delta = event.detail();
+                    if (delta != null && !delta.isEmpty()) {
+                        streamRenderer.renderContentFallback(streamId, delta);
+                    }
                 }
-                streamRenderer.render(snapshot);
+                yield true;
+            }
+            case AgentProgressEvent.LLM_REASONING_DELTA -> {
+                LlmStreamSnapshot snapshot = getSnapshot(streamId);
+                if (snapshot != null && snapshot.hasAnyContent()) {
+                    streamRenderer.render(snapshot);
+                } else {
+                    logRegistryMiss(streamId, "LLM_REASONING_DELTA");
+                    String delta = event.detail();
+                    if (delta != null && !delta.isEmpty()) {
+                        streamRenderer.renderReasoningFallback(streamId, delta);
+                    }
+                }
+                yield true;
+            }
+            case AgentProgressEvent.LLM_TOOL_CALL_DELTA -> {
+                LlmStreamSnapshot snapshot = getSnapshot(streamId);
+                if (snapshot != null && snapshot.toolCallDeltaCount() > 0) {
+                    streamRenderer.render(snapshot);
+                } else {
+                    logRegistryMiss(streamId, "LLM_TOOL_CALL_DELTA");
+                    streamRenderer.renderToolChoosing(streamId);
+                }
                 yield true;
             }
             case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
@@ -97,13 +122,17 @@ public class CliAgentProgressSink implements AgentProgressSink {
         };
     }
 
-    /** 从 registry 获取 snapshot。若无 registry 则返回 EMPTY。 */
+    private void logRegistryMiss(String streamId, String eventType) {
+        out.println("[STREAM_TRACE] registry miss streamId=" + streamId
+                + " event=" + eventType);
+    }
+
+    /** 从 registry 获取 snapshot。若无 registry 则返回 null（触发 fallback）。 */
     private LlmStreamSnapshot getSnapshot(String streamId) {
         if (streamRegistry != null && streamId != null) {
-            LlmStreamSnapshot snap = streamRegistry.snapshot(streamId);
-            if (snap != null) return snap;
+            return streamRegistry.snapshot(streamId);
         }
-        return LlmStreamSnapshot.EMPTY;
+        return null;
     }
 
     /** 格式化非流式事件为简短状态行。保证长度 ≤ 120 chars。 */

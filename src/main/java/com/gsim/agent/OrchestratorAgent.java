@@ -765,9 +765,32 @@ public class OrchestratorAgent {
     private List<ToolDef> buildToolDefs() {
         List<ToolDef> defs = new ArrayList<>();
         for (var tool : toolRegistry.all().values()) {
-            defs.add(new ToolDef(tool.name(), tool.description()));
+            var params = tool.getParameters();
+            defs.add(params != null
+                    ? new ToolDef(tool.name(), tool.description(), params)
+                    : new ToolDef(tool.name(), tool.description()));
         }
         return defs;
+    }
+
+    /** 只构建 finish_action 的 ToolDef（用于 forced finish_action 阶段）。 */
+    private ToolDef buildFinishActionToolDef() {
+        var tool = toolRegistry.all().get("finish_action");
+        if (tool != null) {
+            var params = tool.getParameters();
+            return params != null
+                    ? new ToolDef(tool.name(), tool.description(), params)
+                    : new ToolDef(tool.name(), tool.description());
+        }
+        return new ToolDef("finish_action",
+                "结束当前工具调用循环并返回最终回复。参数: message（必填）");
+    }
+
+    /** 构建 forced tool_choice object 强制模型只调用指定工具。 */
+    static Object forceToolChoice(String toolName) {
+        return java.util.Map.of(
+                "type", "function",
+                "function", java.util.Map.of("name", toolName));
     }
 
     /** 将 API tool_calls 转为内部 ParsedToolCall 列表。 */
@@ -1168,13 +1191,15 @@ public class OrchestratorAgent {
         int consecutiveNoToolRounds = 0;
         int consecutiveInvalidToolIntent = 0;
         boolean allowAllMutations = false;
+        boolean forcedFinishAction = false;
+        String lastPlainContent = null;
         UserIntent userIntent = UserIntent.infer(userText);
         ExpectedNextStep expectedNextStep = ExpectedNextStep.CALL_TOOL;
-        List<ToolDef> toolDefs = buildToolDefs();
+        List<ToolDef> allToolDefs = buildToolDefs();
 
         while (toolRound <= maxToolRounds) {
             // context load debug
-            ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, toolDefs, contextMeta);
+            ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, allToolDefs, contextMeta);
 
             // task brief
             String lastToolName = !toolCalls.isEmpty()
@@ -1182,23 +1207,39 @@ public class OrchestratorAgent {
             boolean lastToolSuccess = !toolCalls.isEmpty()
                     && toolCalls.get(toolCalls.size() - 1).result().success();
             boolean hasToolResult = !toolCalls.isEmpty();
-            java.util.List<String> expectedTools = toolRound == 1
-                    ? java.util.List.of() : java.util.List.of("finish_action");
+            java.util.List<String> expectedTools = forcedFinishAction
+                    ? java.util.List.of("finish_action")
+                    : (toolRound == 1 ? java.util.List.of() : java.util.List.of("finish_action"));
             ToolLoopDebug.logTaskBrief(log, "runToolLoop", toolRound,
                     userIntent, expectedNextStep,
                     lastToolName, lastToolSuccess, expectedTools);
 
+            // 每轮动态构造 tools：forced finish_action 阶段只给 finish_action
+            List<ToolDef> roundToolDefs;
+            Object roundToolChoice;
+            if (forcedFinishAction) {
+                roundToolDefs = List.of(buildFinishActionToolDef());
+                roundToolChoice = forceToolChoice("finish_action");
+            } else {
+                roundToolDefs = allToolDefs;
+                roundToolChoice = "auto";
+            }
+            log.debug("[TOOL_LOOP_TRACE] engine=runToolLoop round={} requestTools={} toolChoice={} forcedFinishAction={}",
+                    toolRound, roundToolDefs.size(),
+                    roundToolChoice instanceof String ? roundToolChoice : "forced:" + ((java.util.Map<?,?>)roundToolChoice).get("function"),
+                    forcedFinishAction);
+
             // progress: 上下文加载完毕
             int totalMessageChars = 0;
             for (var m : messages) { if (m.content() != null) totalMessageChars += m.content().length(); }
-            int toolsJsonChars = ToolLoopDebug.estimateToolsJsonChars(toolDefs);
+            int toolsJsonChars = ToolLoopDebug.estimateToolsJsonChars(roundToolDefs);
             progressSink.onProgress(AgentProgressEvent.contextLoaded(toolRound, maxToolRounds,
-                    totalMessageChars + toolsJsonChars, toolDefs.size()));
+                    totalMessageChars + toolsJsonChars, roundToolDefs.size()));
 
             // progress: 等待 LLM
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, roundToolDefs, roundToolChoice);
             LlmResponse response = callLlm(request);
 
             if (!response.success()) {
@@ -1247,6 +1288,18 @@ public class OrchestratorAgent {
 
             ToolLoopDebug.logToolExtraction(log, "runToolLoop", toolRound, allParsed,
                     apiToolCallCount, textFallbackCount, toolSource, content);
+
+            // === Auto-wrap: forced finish_action 阶段 LLM 仍返回普通文本 → 包裹为 finish_action ===
+            if (forcedFinishAction && allParsed.isEmpty() && content != null && !content.isBlank()) {
+                log.debug("[TOOL_LOOP_TRACE] forced finish_action returned plain content; auto-wrapping round={} chars={}",
+                        toolRound, content.length());
+                progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
+                        toolRound, maxToolRounds));
+                ParsedToolCall autoWrapped = new ParsedToolCall("finish_action",
+                        java.util.Map.of("message", content.strip(), "status", "success"));
+                allParsed = List.of(autoWrapped);
+                toolSource = ToolLoopDebug.ToolCallSource.TEXT_FALLBACK;
+            }
 
             // === 工具路由决策 ===
             ToolRouteDecision routeDecision = routePolicy.decide(
@@ -1463,37 +1516,61 @@ public class OrchestratorAgent {
             }
 
             // 普通无工具轮
-            consecutiveNoToolRounds++;
             consecutiveInvalidToolIntent = 0;
-            ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
 
-            // finish intent detection: 模型是否想结束但没合法 finish_action?
-            var finishIntent = ToolLoopDebug.detectFinishIntent(
-                    apiToolCallCount, textFallbackCount, false,
-                    strippedForDraft, false);
-            if (finishIntent == ToolLoopDebug.FinishIntent.PLAIN_ANSWER_WITHOUT_FINISH) {
-                progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
-                        toolRound, maxToolRounds));
+            // === 普通无工具轮（forced finish_action 已在上面 auto-wrap 处理）===
+            {
+                consecutiveNoToolRounds++;
+                ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
+
+                // finish intent detection: 模型是否想结束但没合法 finish_action?
+                var finishIntent = ToolLoopDebug.detectFinishIntent(
+                        apiToolCallCount, textFallbackCount, false,
+                        strippedForDraft, false);
+                if (finishIntent == ToolLoopDebug.FinishIntent.PLAIN_ANSWER_WITHOUT_FINISH) {
+                    progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
+                            toolRound, maxToolRounds));
+                }
+
+                // 第一轮无工具 → 触发 forced finish_action
+                if (!forcedFinishAction && consecutiveNoToolRounds == 1 && content != null && !content.isBlank()) {
+                    forcedFinishAction = true;
+                    lastPlainContent = content.strip();
+                    log.debug("[TOOL_LOOP_TRACE] round={} plain text detected, enabling forced finish_action nextRound={}",
+                            toolRound, toolRound + 1);
+
+                    String reminder = "你刚才生成了普通答复，但没有调用 finish_action，因此该答复没有展示给用户。\n"
+                            + "下一轮系统只允许你调用 finish_action。\n"
+                            + "必须把完整最终答复放入 finish_action.message。\n"
+                            + "禁止使用“以上”“如上”“刚才”“已生成”“前文”等引用不可见内容的词语。\n"
+                            + "上一轮的答复内容如下，请改写为自包含的 finish_action.message：\n\n"
+                            + lastPlainContent;
+                    messages.add(LlmMessage.user(reminder));
+                    trace.add(new MessageTrace("system", "forced_finish_action",
+                            "plain text detected, forcing finish_action next round"));
+                    toolRound++;
+                    continue;
+                }
+
+                if (consecutiveNoToolRounds >= 2) {
+                    String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
+                    trace.add(new MessageTrace("system", "error", errMsg));
+                    ToolLoopDebug.logNoToolAbort(log, "runToolLoop", toolRound,
+                            "consecutive_no_tool_rounds_exceeded", consecutiveNoToolRounds);
+                    ToolLoopDebug.logFinalText(log, "runToolLoop", "no_tool_abort", errMsg);
+                    return new ChatResult(false, errMsg, toolCalls, trace,
+                            "Agent produced no tool calls for " + consecutiveNoToolRounds
+                                    + " consecutive rounds");
+                }
+
+                String reminder = ToolLoopDebug.buildNoToolReminder(
+                        lastUserMessage(messages));
+                messages.add(LlmMessage.user(reminder));
+                trace.add(new MessageTrace("system", "finish_required",
+                        "no tool call found, reminding to use finish_action"));
+                toolRound++;
+                continue;
             }
-
-            if (consecutiveNoToolRounds >= 2) {
-                String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
-                trace.add(new MessageTrace("system", "error", errMsg));
-                ToolLoopDebug.logNoToolAbort(log, "runToolLoop", toolRound,
-                        "consecutive_no_tool_rounds_exceeded", consecutiveNoToolRounds);
-                ToolLoopDebug.logFinalText(log, "runToolLoop", "no_tool_abort", errMsg);
-                return new ChatResult(false, errMsg, toolCalls, trace,
-                        "Agent produced no tool calls for " + consecutiveNoToolRounds
-                                + " consecutive rounds");
-            }
-
-            String reminder = ToolLoopDebug.buildNoToolReminder(
-                    lastUserMessage(messages));
-            messages.add(LlmMessage.user(reminder));
-            trace.add(new MessageTrace("system", "finish_required",
-                    "no tool call found, reminding to use finish_action"));
-            toolRound++;
-            continue;
         }
 
         if (finalText == null) {

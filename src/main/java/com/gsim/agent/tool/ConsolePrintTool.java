@@ -53,6 +53,13 @@ public class ConsolePrintTool implements AgentTool {
     }
 
     @Override
+    public java.util.Map<String, Object> getParameters() {
+        java.util.Map<String, java.util.Map<String, Object>> props = new java.util.LinkedHashMap<>();
+        props.put("message", java.util.Map.of("type", "string"));
+        return com.gsim.llm.ToolDef.strictSchema(props, java.util.List.of("message"));
+    }
+
+    @Override
     public ToolResult execute(ToolCall call) {
         String message = call.param("message", "");
 
