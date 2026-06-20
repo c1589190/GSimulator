@@ -108,8 +108,9 @@ public class KnowledgeToolFactory {
     private class KeywordSearchTool implements AgentTool {
         @Override public String name() { return "keyword_search"; }
         @Override public String description() {
-            return "关键词检索知识库，永远可用。使用 FTS5 + LIKE 搜索。"
+            return "关键词检索知识库（需先激活 knowledge 工具组）。使用 FTS5 + LIKE 搜索。"
                     + "结果自动过滤为当前 active branch 祖先路径可见内容。"
+                    + "当 knowledge_search 因无 embedding profile 不可用时，使用此工具作为降级方案。"
                     + "如果需要完整知识链和 combinedContent，结果中会包含 KnowledgeChain。"
                     + "参数: query(必填), collection(可选,默认default), topK(可选,默认5,最大20)。";
         }
