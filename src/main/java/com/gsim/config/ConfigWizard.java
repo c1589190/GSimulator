@@ -27,6 +27,26 @@ public class ConfigWizard {
     public record ChannelInfo(String name, String defaultBaseUrl, String defaultModel) {}
 
     /**
+     * Embedding 模型独立配置。
+     * @param useSeparateConfig 是否使用独立于 LLM 的配置
+     * @param baseUrl           embedding API 地址（仅 useSeparateConfig=true 时有效）
+     * @param apiKey            embedding API 密钥（仅 useSeparateConfig=true 时有效）
+     * @param model             embedding 模型名（仅 useSeparateConfig=true 时有效）
+     */
+    public record EmbeddingConfig(boolean useSeparateConfig,
+                                  String baseUrl, String apiKey, String model) {
+        /** 使用与 LLM 相同的配置（默认）。 */
+        public static EmbeddingConfig sameAsLlm() {
+            return new EmbeddingConfig(false, "", "", "");
+        }
+
+        /** 使用独立的 embedding 配置。 */
+        public static EmbeddingConfig separate(String baseUrl, String apiKey, String model) {
+            return new EmbeddingConfig(true, baseUrl, apiKey, model);
+        }
+    }
+
+    /**
      * 运行配置向导，返回创建的配置文件路径（用户可能选择退出返回 null）。
      */
     public static Path run() {
@@ -64,18 +84,22 @@ public class ConfigWizard {
         String model = askModel(console, channel);
         if (model == null) return null;
 
-        // Step 6: timeout
+        // Step 6: Embedding 模型配置
+        EmbeddingConfig embConfig = askEmbeddingConfig(console, baseUrl, apiKey, model);
+        if (embConfig == null) return null;
+
+        // Step 7: timeout
         String timeout = askTimeout(console);
         if (timeout == null) return null;
 
-        // Step 7: 写入文件
-        writeConfigFile(configPath, baseUrl, apiKey, model, timeout);
+        // Step 8: 写入文件
+        writeConfigFile(configPath, baseUrl, apiKey, model, timeout, embConfig);
 
         console.printf("\n✅ 配置已保存到: %s\n", configPath.toAbsolutePath());
         console.printf("⚠️  API Key 已保存到本地文件，请勿提交到 Git。\n");
         console.printf("\n");
 
-        // Step 8: 询问是否测试连通性
+        // Step 9: 询问是否测试连通性
         console.printf("是否测试 LLM 连通性？(y/n) [y]: ");
         String testChoice = console.readLine().trim();
         if (testChoice.isEmpty() || "y".equalsIgnoreCase(testChoice) || "yes".equalsIgnoreCase(testChoice)) {
@@ -201,6 +225,81 @@ public class ConfigWizard {
         }
     }
 
+    /**
+     * Step 6: 询问 Embedding 模型是否使用独立配置。
+     * Embedding 模型可能使用与 LLM 不同的 API 地址、密钥和模型名，
+     * 因此需要独立询问而非直接复制 LLM 配置。
+     */
+    private static EmbeddingConfig askEmbeddingConfig(Console console,
+                                                       String llmBaseUrl, String llmApiKey, String llmModel) {
+        console.printf("\n--- Embedding 模型配置 ---\n");
+        console.printf("Embedding 模型用于知识库的向量化检索（/searchdb）。\n");
+        console.printf("它可以与 LLM 使用相同的 API，也可以使用不同的 API。\n");
+        console.printf("\n");
+        console.printf("是否使用独立的 Embedding API 配置？\n");
+        console.printf("  y = 使用独立配置（API 地址/密钥/模型名与 LLM 不同）\n");
+        console.printf("  n = 与 LLM 使用相同配置（默认）\n");
+        console.printf("\n");
+
+        while (true) {
+            console.printf("使用独立 Embedding 配置？(y/n) [n]: ");
+            String choice = console.readLine().trim();
+            if (choice.isEmpty() || "n".equalsIgnoreCase(choice) || "no".equalsIgnoreCase(choice)) {
+                return EmbeddingConfig.sameAsLlm();
+            }
+            if ("y".equalsIgnoreCase(choice) || "yes".equalsIgnoreCase(choice)) {
+                break;
+            }
+            console.printf("无效选择，请输入 y 或 n。\n");
+        }
+
+        // 填写 Embedding Base URL
+        String embBaseUrl;
+        while (true) {
+            console.printf("Embedding Base URL [%s]: ", llmBaseUrl);
+            String input = console.readLine().trim();
+            if (input.isEmpty()) {
+                embBaseUrl = llmBaseUrl;
+            } else {
+                if (input.endsWith("/")) input = input.substring(0, input.length() - 1);
+                embBaseUrl = input;
+            }
+            if (!embBaseUrl.isBlank()) break;
+            console.printf("Embedding Base URL 不能为空。\n");
+        }
+
+        // 填写 Embedding API Key
+        String embApiKey;
+        console.printf("\n");
+        while (true) {
+            console.printf("Embedding API Key [使用 LLM API Key]: ");
+            char[] keyChars = console.readPassword();
+            if (keyChars == null || keyChars.length == 0) {
+                embApiKey = llmApiKey;
+                break;
+            }
+            embApiKey = new String(keyChars);
+            if (!embApiKey.isBlank()) break;
+            console.printf("Embedding API Key 不能为空。\n");
+        }
+
+        // 填写 Embedding 模型名
+        String embModel;
+        while (true) {
+            console.printf("Embedding 模型名 [%s]: ", llmModel);
+            String input = console.readLine().trim();
+            if (input.isEmpty()) {
+                embModel = llmModel;
+            } else {
+                embModel = input;
+            }
+            if (!embModel.isBlank()) break;
+            console.printf("Embedding 模型名不能为空。\n");
+        }
+
+        return EmbeddingConfig.separate(embBaseUrl, embApiKey, embModel);
+    }
+
     private static String askTimeout(Console console) {
         console.printf("超时秒数 [300]: ");
         String input = console.readLine().trim();
@@ -214,7 +313,8 @@ public class ConfigWizard {
         }
     }
 
-    private static void writeConfigFile(Path path, String baseUrl, String apiKey, String model, String timeout) {
+    private static void writeConfigFile(Path path, String baseUrl, String apiKey, String model,
+                                        String timeout, EmbeddingConfig embConfig) {
         try {
             Files.createDirectories(path.getParent());
             try (BufferedWriter w = Files.newBufferedWriter(path)) {
@@ -242,9 +342,15 @@ public class ConfigWizard {
                 w.write("\n");
                 w.write("# --- Embedding Configuration ---\n");
                 w.write("embedding.provider=external\n");
-                w.write("embedding.base_url=" + baseUrl + "\n");
-                w.write("embedding.api_key=" + apiKey + "\n");
-                w.write("embedding.model=" + model + "\n");
+                if (embConfig != null && embConfig.useSeparateConfig()) {
+                    w.write("embedding.base_url=" + embConfig.baseUrl() + "\n");
+                    w.write("embedding.api_key=" + embConfig.apiKey() + "\n");
+                    w.write("embedding.model=" + embConfig.model() + "\n");
+                } else {
+                    w.write("embedding.base_url=" + baseUrl + "\n");
+                    w.write("embedding.api_key=" + apiKey + "\n");
+                    w.write("embedding.model=" + model + "\n");
+                }
                 w.write("embedding.dimensions=1024\n");
                 w.write("embedding.model_dir=data/models/local-small\n");
             }
@@ -305,10 +411,39 @@ public class ConfigWizard {
         String timeout = scanner.nextLine().trim();
         if (timeout.isEmpty()) timeout = "300";
 
-        writeConfigFile(configPath, baseUrl, apiKey, model, timeout);
+        // Embedding 配置
+        EmbeddingConfig embConfig = askEmbeddingConfigWithScanner(scanner, baseUrl, apiKey, model);
+
+        writeConfigFile(configPath, baseUrl, apiKey, model, timeout, embConfig);
         System.out.println("\n配置已保存到: " + configPath.toAbsolutePath());
         System.out.println("API Key 已保存到本地文件，请勿提交到 Git。\n");
 
         return configPath;
+    }
+
+    private static EmbeddingConfig askEmbeddingConfigWithScanner(Scanner scanner,
+                                                                   String llmBaseUrl, String llmApiKey, String llmModel) {
+        System.out.println("\n--- Embedding 模型配置 ---");
+        System.out.println("Embedding 模型用于知识库的向量化检索。");
+        System.out.println("是否使用独立的 Embedding API 配置？(y/n) [n]: ");
+        String choice = scanner.nextLine().trim();
+        if (choice.isEmpty() || !"y".equalsIgnoreCase(choice) && !"yes".equalsIgnoreCase(choice)) {
+            return EmbeddingConfig.sameAsLlm();
+        }
+
+        System.out.printf("Embedding Base URL [%s]: ", llmBaseUrl);
+        String embBaseUrl = scanner.nextLine().trim();
+        if (embBaseUrl.isEmpty()) embBaseUrl = llmBaseUrl;
+        if (embBaseUrl.endsWith("/")) embBaseUrl = embBaseUrl.substring(0, embBaseUrl.length() - 1);
+
+        System.out.print("Embedding API Key [使用 LLM API Key]: ");
+        String embApiKey = scanner.nextLine().trim();
+        if (embApiKey.isEmpty()) embApiKey = llmApiKey;
+
+        System.out.printf("Embedding 模型名 [%s]: ", llmModel);
+        String embModel = scanner.nextLine().trim();
+        if (embModel.isEmpty()) embModel = llmModel;
+
+        return EmbeddingConfig.separate(embBaseUrl, embApiKey, embModel);
     }
 }
