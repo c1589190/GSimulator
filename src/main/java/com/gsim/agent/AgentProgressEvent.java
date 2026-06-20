@@ -32,6 +32,7 @@ public record AgentProgressEvent(
     public static final String LLM_STREAM_STARTED = "LLM_STREAM_STARTED";
     public static final String LLM_CONTENT_DELTA = "LLM_CONTENT_DELTA";
     public static final String LLM_REASONING_DELTA = "LLM_REASONING_DELTA";
+    public static final String LLM_TOOL_CALL_DELTA = "LLM_TOOL_CALL_DELTA";
     public static final String LLM_STREAM_COMPLETED = "LLM_STREAM_COMPLETED";
     public static final String LLM_STREAM_FAILED = "LLM_STREAM_FAILED";
 
@@ -112,35 +113,47 @@ public record AgentProgressEvent(
                 "中止：" + reason, Map.of("reason", reason != null ? reason : ""));
     }
 
-    // ---- LLM 流式 factory methods ----
+    // ---- LLM 流式 factory methods (all require streamId) ----
 
-    public static AgentProgressEvent llmStreamStarted() {
+    public static AgentProgressEvent llmStreamStarted(String streamId) {
         return new AgentProgressEvent(LLM_STREAM_STARTED, 0, 0,
-                "LLM 流式输出开始", Map.of());
+                "LLM 流式输出开始",
+                Map.of("streamId", streamId != null ? streamId : ""));
     }
 
-    public static AgentProgressEvent llmContentDelta(String delta) {
+    public static AgentProgressEvent llmContentDelta(String streamId, String delta) {
         return new AgentProgressEvent(LLM_CONTENT_DELTA, 0, 0,
                 delta,
-                Map.of("channel", "content",
+                Map.of("streamId", streamId != null ? streamId : "",
+                        "channel", "content",
                         "chars", String.valueOf(delta != null ? delta.length() : 0)));
     }
 
-    public static AgentProgressEvent llmReasoningDelta(String delta) {
+    public static AgentProgressEvent llmReasoningDelta(String streamId, String delta) {
         return new AgentProgressEvent(LLM_REASONING_DELTA, 0, 0,
                 delta,
-                Map.of("channel", "reasoning",
+                Map.of("streamId", streamId != null ? streamId : "",
+                        "channel", "reasoning",
                         "chars", String.valueOf(delta != null ? delta.length() : 0)));
     }
 
-    public static AgentProgressEvent llmStreamCompleted() {
-        return new AgentProgressEvent(LLM_STREAM_COMPLETED, 0, 0,
-                "LLM 流式输出完成", Map.of());
+    public static AgentProgressEvent llmToolCallDelta(String streamId) {
+        return new AgentProgressEvent(LLM_TOOL_CALL_DELTA, 0, 0,
+                "",
+                Map.of("streamId", streamId != null ? streamId : "",
+                        "channel", "tool_call"));
     }
 
-    public static AgentProgressEvent llmStreamFailed(String error) {
+    public static AgentProgressEvent llmStreamCompleted(String streamId) {
+        return new AgentProgressEvent(LLM_STREAM_COMPLETED, 0, 0,
+                "LLM 流式输出完成",
+                Map.of("streamId", streamId != null ? streamId : ""));
+    }
+
+    public static AgentProgressEvent llmStreamFailed(String streamId, String error) {
         return new AgentProgressEvent(LLM_STREAM_FAILED, 0, 0,
                 "LLM 流式输出失败：" + (error != null ? error : "未知错误"),
-                Map.of("error", error != null ? error : ""));
+                Map.of("streamId", streamId != null ? streamId : "",
+                        "error", error != null ? error : ""));
     }
 }

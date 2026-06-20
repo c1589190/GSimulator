@@ -34,44 +34,48 @@ class AgentStreamProgressTest {
     // ---- 1. AgentProgressEvent factory 测试 ----
 
     @Test
-    @DisplayName("llmStreamStarted 生成 LLM_STREAM_STARTED 事件")
+    @DisplayName("llmStreamStarted 生成 LLM_STREAM_STARTED 事件，meta 含 streamId")
     void llmStreamStartedEvent() {
-        AgentProgressEvent event = AgentProgressEvent.llmStreamStarted();
+        AgentProgressEvent event = AgentProgressEvent.llmStreamStarted("s1");
         assertEquals(AgentProgressEvent.LLM_STREAM_STARTED, event.phase());
-        assertEquals("LLM 流式输出开始", event.detail());
+        assertEquals("s1", event.meta().get("streamId"));
     }
 
     @Test
-    @DisplayName("llmContentDelta 生成 LLM_CONTENT_DELTA 事件，meta 含 channel=content")
+    @DisplayName("llmContentDelta 生成 LLM_CONTENT_DELTA 事件，meta 含 streamId + channel=content")
     void llmContentDeltaEvent() {
-        AgentProgressEvent event = AgentProgressEvent.llmContentDelta("Hello");
+        AgentProgressEvent event = AgentProgressEvent.llmContentDelta("s1", "Hello");
         assertEquals(AgentProgressEvent.LLM_CONTENT_DELTA, event.phase());
         assertEquals("Hello", event.detail());
+        assertEquals("s1", event.meta().get("streamId"));
         assertEquals("content", event.meta().get("channel"));
         assertEquals("5", event.meta().get("chars"));
     }
 
     @Test
-    @DisplayName("llmReasoningDelta 生成 LLM_REASONING_DELTA 事件，meta 含 channel=reasoning")
+    @DisplayName("llmReasoningDelta 生成 LLM_REASONING_DELTA 事件，meta 含 streamId + channel=reasoning")
     void llmReasoningDeltaEvent() {
-        AgentProgressEvent event = AgentProgressEvent.llmReasoningDelta("正在思考...");
+        AgentProgressEvent event = AgentProgressEvent.llmReasoningDelta("s1", "正在思考...");
         assertEquals(AgentProgressEvent.LLM_REASONING_DELTA, event.phase());
         assertEquals("正在思考...", event.detail());
+        assertEquals("s1", event.meta().get("streamId"));
         assertEquals("reasoning", event.meta().get("channel"));
     }
 
     @Test
-    @DisplayName("llmStreamCompleted 生成 LLM_STREAM_COMPLETED 事件")
+    @DisplayName("llmStreamCompleted 生成 LLM_STREAM_COMPLETED 事件，meta 含 streamId")
     void llmStreamCompletedEvent() {
-        AgentProgressEvent event = AgentProgressEvent.llmStreamCompleted();
+        AgentProgressEvent event = AgentProgressEvent.llmStreamCompleted("s1");
         assertEquals(AgentProgressEvent.LLM_STREAM_COMPLETED, event.phase());
+        assertEquals("s1", event.meta().get("streamId"));
     }
 
     @Test
-    @DisplayName("llmStreamFailed 生成 LLM_STREAM_FAILED 事件，meta 含 error")
+    @DisplayName("llmStreamFailed 生成 LLM_STREAM_FAILED 事件，meta 含 streamId + error")
     void llmStreamFailedEvent() {
-        AgentProgressEvent event = AgentProgressEvent.llmStreamFailed("网络超时");
+        AgentProgressEvent event = AgentProgressEvent.llmStreamFailed("s1", "网络超时");
         assertEquals(AgentProgressEvent.LLM_STREAM_FAILED, event.phase());
+        assertEquals("s1", event.meta().get("streamId"));
         assertEquals("网络超时", event.meta().get("error"));
     }
 
@@ -272,5 +276,111 @@ class AgentStreamProgressTest {
         boolean hasFailed = capturedEvents.stream()
                 .anyMatch(e -> AgentProgressEvent.LLM_STREAM_FAILED.equals(e.phase()));
         assertTrue(hasFailed, "流式错误时应发送 LLM_STREAM_FAILED 事件");
+    }
+
+    // ---- 3. JSON fallback → registry 集成测试 ----
+
+    @Test
+    @DisplayName("JSON fallback 也更新 registry：非流式 JSON 响应 → registry snapshot 含内容")
+    void jsonFallbackUpdatesRegistry() throws Exception {
+        AgentProgressSink sink = capturedEvents::add;
+
+        // 模拟不支持 SSE 的 API — stream() 内部走 JSON fallback
+        LlmClient jsonFallbackClient = new LlmClient() {
+            @Override
+            public LlmResponse chat(LlmRequest request) {
+                return LlmResponse.success("直接 chat 响应", "test", 5);
+            }
+
+            @Override
+            public void stream(LlmRequest request, LlmStreamListener listener) {
+                // 模拟 JSON fallback 行为：发射完整 content delta 后 complete
+                listener.onStart();
+                listener.onContentDelta("JSON fallback 完整回答内容");
+                if (listener instanceof LlmStreamCollector collector) {
+                    collector.setFinalResponse(
+                            LlmResponse.success("JSON fallback 完整回答内容", "test", 10));
+                }
+                listener.onComplete();
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+        };
+
+        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
+        OrchestratorAgent agent = new OrchestratorAgent(
+                jsonFallbackClient, toolRegistry, "test-model", sink);
+        agent.setStreamRegistry(registry);
+        agent.setStreamEnabled(true);
+
+        String contextMd = "# 上下文\n测试 JSON fallback 路径。";
+        List<com.gsim.context.session.SessionMessage> history = List.of();
+        String userText = "测试 JSON fallback";
+
+        OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
+                contextMd, history, userText);
+
+        // 验证 registry 被更新（而非只更新了内部 collector）
+        // 注意：stream() 完成后 callLlm 调用 registry.complete()，
+        // 所以 activeCount 可能为 0，但 snapshot 仍在 registry 中
+
+        // 通过事件中的 streamId 查找 registry snapshot
+        boolean foundContent = false;
+        for (AgentProgressEvent event : capturedEvents) {
+            if (event.phase().equals(AgentProgressEvent.LLM_CONTENT_DELTA)) {
+                String streamId = event.meta().get("streamId");
+                LlmStreamSnapshot snap = registry.snapshot(streamId);
+                if (snap != null && snap != LlmStreamSnapshot.EMPTY
+                        && !snap.content().isEmpty()) {
+                    foundContent = true;
+                    break;
+                }
+            }
+        }
+        assertTrue(foundContent,
+                "registry 中应有包含内容的 snapshot（JSON fallback 也走 registry）");
+    }
+
+    @Test
+    @DisplayName("streamEnabled=false 时不更新 registry（走 chat 路径）")
+    void streamDisabledDoesNotUpdateRegistry() throws Exception {
+        AgentProgressSink sink = capturedEvents::add;
+
+        LlmClient chatClient = new LlmClient() {
+            @Override
+            public LlmResponse chat(LlmRequest request) {
+                return LlmResponse.success("非流式 chat 响应", "test", 5);
+            }
+
+            @Override
+            public void stream(LlmRequest request, LlmStreamListener listener) {
+                fail("streamEnabled=false 时不应调用 stream()");
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+        };
+
+        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
+        OrchestratorAgent agent = new OrchestratorAgent(
+                chatClient, toolRegistry, "test-model", sink);
+        agent.setStreamRegistry(registry);
+        agent.setStreamEnabled(false);
+
+        String contextMd = "# 上下文";
+        List<com.gsim.context.session.SessionMessage> history = List.of();
+        String userText = "hi";
+
+        OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
+                contextMd, history, userText);
+
+        // 非流式路径不应在 registry 中创建任何 stream
+        assertEquals(0, registry.activeCount(),
+                "streamEnabled=false 时 registry 应无活跃 stream");
     }
 }

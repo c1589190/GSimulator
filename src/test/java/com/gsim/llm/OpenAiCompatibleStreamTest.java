@@ -579,4 +579,146 @@ class OpenAiCompatibleStreamTest {
                         || result.errorMessage().contains("finish_action"),
                 "错误消息应说明原因，实际: " + result.errorMessage());
     }
+
+    // ======================== 8. StreamParseState 请求作用域测试 ========================
+
+    @Test
+    @DisplayName("StreamParseState 请求作用域：两次独立 stream → 互不干扰")
+    void streamStateIsRequestScoped() throws Exception {
+        ResponseBody body1 = sseBody(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"AAAA\"}}]}",
+                "",
+                "data: [DONE]"
+        );
+        ResponseBody body2 = sseBody(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"BBBB\"}}]}",
+                "",
+                "data: [DONE]"
+        );
+
+        AppConfig config = AppConfig.forTesting();
+        OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient(config);
+
+        DefaultLlmStreamCollector collector1 = new DefaultLlmStreamCollector();
+        DefaultLlmStreamCollector collector2 = new DefaultLlmStreamCollector();
+
+        // stream 1
+        LlmStreamCollector listener1 = new LlmStreamCollector() {
+            @Override public void onStart() {}
+            @Override public void onContentDelta(String text) { collector1.onContentDelta(text); }
+            @Override public void onReasoningDelta(String text) { collector1.onReasoningDelta(text); }
+            @Override public void onToolCallDelta(String text) {}
+            @Override public void onError(Throwable error) {}
+            @Override public void onComplete() {}
+            @Override public void setFinalResponse(LlmResponse r) { collector1.setFinalResponse(r); }
+            @Override public LlmResponse getFinalResponse() { return collector1.getFinalResponse(); }
+            @Override public void setReasoning(String r) { collector1.setReasoning(r); }
+            @Override public String getReasoning() { return collector1.getReasoning(); }
+            @Override public void setToolCalls(List<LlmToolCall> tcs) { collector1.setToolCalls(tcs); }
+            @Override public List<LlmToolCall> getToolCalls() { return collector1.getToolCalls(); }
+            @Override public String getFullContent() { return collector1.getFullContent(); }
+        };
+
+        // stream 2
+        LlmStreamCollector listener2 = new LlmStreamCollector() {
+            @Override public void onStart() {}
+            @Override public void onContentDelta(String text) { collector2.onContentDelta(text); }
+            @Override public void onReasoningDelta(String text) { collector2.onReasoningDelta(text); }
+            @Override public void onToolCallDelta(String text) {}
+            @Override public void onError(Throwable error) {}
+            @Override public void onComplete() {}
+            @Override public void setFinalResponse(LlmResponse r) { collector2.setFinalResponse(r); }
+            @Override public LlmResponse getFinalResponse() { return collector2.getFinalResponse(); }
+            @Override public void setReasoning(String r) { collector2.setReasoning(r); }
+            @Override public String getReasoning() { return collector2.getReasoning(); }
+            @Override public void setToolCalls(List<LlmToolCall> tcs) { collector2.setToolCalls(tcs); }
+            @Override public List<LlmToolCall> getToolCalls() { return collector2.getToolCalls(); }
+            @Override public String getFullContent() { return collector2.getFullContent(); }
+        };
+
+        // 先处理 stream 1
+        client.processSseStream(body1, listener1);
+        assertEquals("AAAA", collector1.getFullContent(),
+                "第一次 stream 应得到 AAAA");
+
+        // 再处理 stream 2
+        client.processSseStream(body2, listener2);
+        assertEquals("BBBB", collector2.getFullContent(),
+                "第二次 stream 应得到 BBBB");
+
+        // 关键断言：第一次 stream 的结果未被第二次覆盖
+        assertEquals("AAAA", collector1.getFullContent(),
+                "StreamParseState 请求作用域：第一次 stream 的结果不应被第二次覆盖");
+    }
+
+    @Test
+    @DisplayName("StreamParseState 无实例字段残留：reasoning 也不跨请求泄露")
+    void reasoningStateIsAlsoRequestScoped() throws Exception {
+        ResponseBody body1 = sseBody(
+                "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"思考1\"}}]}",
+                "",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"输出1\"}}]}",
+                "",
+                "data: [DONE]"
+        );
+        ResponseBody body2 = sseBody(
+                "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"思考2\"}}]}",
+                "",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"输出2\"}}]}",
+                "",
+                "data: [DONE]"
+        );
+
+        AppConfig config = AppConfig.forTesting();
+        OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient(config);
+
+        DefaultLlmStreamCollector c1 = new DefaultLlmStreamCollector();
+        DefaultLlmStreamCollector c2 = new DefaultLlmStreamCollector();
+
+        LlmStreamCollector l1 = new LlmStreamCollector() {
+            @Override public void onStart() {}
+            @Override public void onContentDelta(String text) { c1.onContentDelta(text); }
+            @Override public void onReasoningDelta(String text) { c1.onReasoningDelta(text); }
+            @Override public void onToolCallDelta(String text) {}
+            @Override public void onError(Throwable error) {}
+            @Override public void onComplete() {}
+            @Override public void setFinalResponse(LlmResponse r) { c1.setFinalResponse(r); }
+            @Override public LlmResponse getFinalResponse() { return c1.getFinalResponse(); }
+            @Override public void setReasoning(String r) { c1.setReasoning(r); }
+            @Override public String getReasoning() { return c1.getReasoning(); }
+            @Override public void setToolCalls(List<LlmToolCall> tcs) { c1.setToolCalls(tcs); }
+            @Override public List<LlmToolCall> getToolCalls() { return c1.getToolCalls(); }
+            @Override public String getFullContent() { return c1.getFullContent(); }
+        };
+
+        LlmStreamCollector l2 = new LlmStreamCollector() {
+            @Override public void onStart() {}
+            @Override public void onContentDelta(String text) { c2.onContentDelta(text); }
+            @Override public void onReasoningDelta(String text) { c2.onReasoningDelta(text); }
+            @Override public void onToolCallDelta(String text) {}
+            @Override public void onError(Throwable error) {}
+            @Override public void onComplete() {}
+            @Override public void setFinalResponse(LlmResponse r) { c2.setFinalResponse(r); }
+            @Override public LlmResponse getFinalResponse() { return c2.getFinalResponse(); }
+            @Override public void setReasoning(String r) { c2.setReasoning(r); }
+            @Override public String getReasoning() { return c2.getReasoning(); }
+            @Override public void setToolCalls(List<LlmToolCall> tcs) { c2.setToolCalls(tcs); }
+            @Override public List<LlmToolCall> getToolCalls() { return c2.getToolCalls(); }
+            @Override public String getFullContent() { return c2.getFullContent(); }
+        };
+
+        client.processSseStream(body1, l1);
+        client.processSseStream(body2, l2);
+
+        assertEquals("思考1", c1.getReasoning());
+        assertEquals("输出1", c1.getFullContent());
+        assertEquals("思考2", c2.getReasoning());
+        assertEquals("输出2", c2.getFullContent());
+
+        // 无交叉污染
+        assertNotEquals(c1.getReasoning(), c2.getReasoning(),
+                "两次 stream 的 reasoning 应独立");
+        assertNotEquals(c1.getFullContent(), c2.getFullContent(),
+                "两次 stream 的 content 应独立");
+    }
 }

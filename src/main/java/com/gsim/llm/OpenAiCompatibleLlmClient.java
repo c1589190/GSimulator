@@ -140,7 +140,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
     /**
      * 处理响应体：先检测首行格式（SSE 还是 JSON），然后分流处理。
-     * 不再使用 PushbackReader，改用简单的 BufferedReader + 首行回放。
+     * 每次调用创建局部 StreamParseState，避免并发串流。
      */
     void processSseStream(okhttp3.ResponseBody body,
                                   LlmStreamListener listener) throws IOException {
@@ -177,21 +177,18 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         }
         log.debug("[LLM_STREAM] firstBytesKind={}", firstBytesKind);
 
-        // 重置 SSE 缓冲区
-        sseContentBuf.setLength(0);
-        sseReasoningBuf.setLength(0);
-        sseToolCallBuf.clear();
-
         if (isSse) {
-            processSseLines(firstLine, reader, listener);
+            StreamParseState state = new StreamParseState();
+            processSseLines(firstLine, reader, listener, state);
         } else {
             processJsonFallback(firstLine, reader, listener);
         }
     }
 
-    /** 处理 SSE data: 行流。 */
+    /** 处理 SSE data: 行流。state 是局部的，每次 stream 调用独立。 */
     private void processSseLines(String firstLine, BufferedReader reader,
-                                 LlmStreamListener listener) throws IOException {
+                                 LlmStreamListener listener,
+                                 StreamParseState state) throws IOException {
         int sseLineCount = 0;
         int contentDeltaCount = 0;
         int reasoningDeltaCount = 0;
@@ -201,7 +198,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         sseLineCount++;
         String data = firstLine.substring(5).strip();
         if (!data.isEmpty() && !"[DONE]".equals(data)) {
-            DeltaCounts dc = processSseData(data, listener);
+            DeltaCounts dc = processSseData(data, listener, state);
             contentDeltaCount += dc.content;
             reasoningDeltaCount += dc.reasoning;
             toolCallDeltaCount += dc.toolCalls;
@@ -220,7 +217,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
             if ("[DONE]".equals(dataLine)) break;
 
             try {
-                DeltaCounts dc = processSseData(dataLine, listener);
+                DeltaCounts dc = processSseData(dataLine, listener, state);
                 contentDeltaCount += dc.content;
                 reasoningDeltaCount += dc.reasoning;
                 toolCallDeltaCount += dc.toolCalls;
@@ -235,7 +232,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 sseLineCount, contentDeltaCount, reasoningDeltaCount, toolCallDeltaCount);
 
         // 组装最终结果
-        finalizeStreamResult(listener);
+        finalizeStreamResult(listener, state);
     }
 
     /** 处理 JSON fallback（API 不支持 SSE，返回完整 JSON）。 */
@@ -300,9 +297,10 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     /** 单条 SSE data 的 delta 计数。 */
     private record DeltaCounts(int content, int reasoning, int toolCalls) {}
 
-    /** 处理单条 SSE data 行，返回各类型 delta 计数。 */
+    /** 处理单条 SSE data 行，返回各类型 delta 计数。使用局部 state 而非实例字段。 */
     @SuppressWarnings("unchecked")
-    private DeltaCounts processSseData(String data, LlmStreamListener listener) {
+    private DeltaCounts processSseData(String data, LlmStreamListener listener,
+                                       StreamParseState state) {
         int contentCount = 0, reasoningCount = 0, toolCallCount = 0;
 
         Map<String, Object> chunk;
@@ -328,7 +326,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         // --- content delta ---
         Object contentDelta = delta.get("content");
         if (contentDelta instanceof String s && !s.isEmpty()) {
-            sseContentBuf.append(s);
+            state.content.append(s);
             contentCount = 1;
             try {
                 listener.onContentDelta(s);
@@ -340,7 +338,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         // --- reasoning delta (兼容多种字段名) ---
         String reasoningText = extractReasoningDelta(delta);
         if (reasoningText != null && !reasoningText.isEmpty()) {
-            sseReasoningBuf.append(reasoningText);
+            state.reasoning.append(reasoningText);
             reasoningCount = 1;
             try {
                 listener.onReasoningDelta(reasoningText);
@@ -354,7 +352,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         if (tcDelta instanceof List<?> tcList && !tcList.isEmpty()) {
             for (Object tcObj : tcList) {
                 if (!(tcObj instanceof Map<?, ?> tcMap)) continue;
-                mergeToolCallDelta(sseToolCallBuf, (Map<String, Object>) tcMap);
+                mergeToolCallDelta(state.toolCalls, (Map<String, Object>) tcMap);
             }
             toolCallCount = 1;
         }
@@ -362,12 +360,12 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         return new DeltaCounts(contentCount, reasoningCount, toolCallCount);
     }
 
-    /** SSE 流结束后，组装最终结果写入 collector。 */
-    private void finalizeStreamResult(LlmStreamListener listener) {
-        List<LlmToolCall> toolCalls = assembleToolCalls(sseToolCallBuf);
+    /** SSE 流结束后，组装最终结果写入 collector。state 用完即弃。 */
+    private void finalizeStreamResult(LlmStreamListener listener, StreamParseState state) {
+        List<LlmToolCall> toolCalls = assembleToolCalls(state.toolCalls);
 
-        int finalContentChars = sseContentBuf.length();
-        int finalReasoningChars = sseReasoningBuf.length();
+        int finalContentChars = state.content.length();
+        int finalReasoningChars = state.reasoning.length();
 
         log.debug("[LLM_STREAM] finalContentChars={} finalReasoningChars={} finalToolCalls={}",
                 finalContentChars, finalReasoningChars, toolCalls.size());
@@ -387,8 +385,8 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 collector.setFinalResponse(LlmResponse.successWithToolCalls(
                         toolCalls, model, 0));
             } else {
-                String content = sseContentBuf.toString();
-                if (content.isEmpty() && sseReasoningBuf.isEmpty()) {
+                String content = state.content.toString();
+                if (content.isEmpty() && state.reasoning.isEmpty()) {
                     log.warn("SSE stream completed but no content or reasoning was collected."
                             + " The API may not support streaming."
                             + " Check your LLM provider's documentation.");
@@ -397,14 +395,9 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                         content, model, 0, true, null,
                         List.of(), "stop"));
             }
-            collector.setReasoning(sseReasoningBuf.toString());
+            collector.setReasoning(state.reasoning.toString());
             collector.setToolCalls(toolCalls);
         }
-
-        // 重置 SSE 缓冲区
-        sseContentBuf.setLength(0);
-        sseReasoningBuf.setLength(0);
-        sseToolCallBuf.clear();
 
         listener.onComplete();
     }
@@ -417,10 +410,16 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         }
     }
 
-    // SSE 流式缓冲区（实例级，支持跨 chunk 拼接）
-    private final StringBuilder sseContentBuf = new StringBuilder();
-    private final StringBuilder sseReasoningBuf = new StringBuilder();
-    private final Map<Integer, Map<String, Object>> sseToolCallBuf = new LinkedHashMap<>();
+    /**
+     * SSE 流式解析的局部状态。
+     * 每次 stream 调用创建一个新实例，避免并发串流。
+     * 不再使用 client 级实例字段。
+     */
+    static class StreamParseState {
+        final StringBuilder content = new StringBuilder();
+        final StringBuilder reasoning = new StringBuilder();
+        final Map<Integer, Map<String, Object>> toolCalls = new LinkedHashMap<>();
+    }
 
     /**
      * 从 delta 中提取 reasoning/thinking 文本。

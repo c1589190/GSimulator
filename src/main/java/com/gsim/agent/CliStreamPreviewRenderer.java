@@ -3,10 +3,10 @@ package com.gsim.agent;
 import java.io.PrintStream;
 
 /**
- * CLI 流式预览渲染器 — 在 LLM 流式输出时显示灰色框。
+ * CLI 流式预览渲染器 — 从 {@link LlmStreamSnapshot} 渲染 ANSI 灰框。
  *
- * <p>使用 ANSI 转义码实现灰色边框，实时显示 reasoning 和 content 分区。
- * 如果终端不支持 ANSI，退化为不显示灰框。
+ * <p>不再维护内部 buffer — 状态由 {@link LlmStreamStateRegistry} 管理。
+ * 每次 render 传入当前 snapshot 即可。
  *
  * <p>典型效果：
  * <pre>
@@ -21,16 +21,15 @@ import java.io.PrintStream;
  */
 public class CliStreamPreviewRenderer {
 
-    private static final String ANSI_GREY = "[90m";
-    private static final String ANSI_RESET = "[0m";
+    private static final String ANSI_GREY = "\033[90m";
+    private static final String ANSI_RESET = "\033[0m";
 
-    // 框字符
-    private static final String TL = "┌"; // ┌
-    private static final String TR = "┐"; // ┐
-    private static final String BL = "└"; // └
-    private static final String BR = "┘"; // ┘
-    private static final String H = "─";  // ─
-    private static final String V = "│";  // │
+    private static final String TL = "┌";
+    private static final String TR = "┐";
+    private static final String BL = "└";
+    private static final String BR = "┘";
+    private static final String H = "─";
+    private static final String V = "│";
 
     private static final int BOX_WIDTH = 72;
 
@@ -40,17 +39,10 @@ public class CliStreamPreviewRenderer {
     private final boolean showReasoning;
     private final boolean ansiSupported;
 
-    private final StringBuilder reasoningBuf = new StringBuilder();
-    private final StringBuilder contentBuf = new StringBuilder();
-    private boolean active = false;
+    // 上一次渲染的行数，用于清除旧框
     private int lastPrintedLines = 0;
+    private String lastStreamId = null;
 
-    /**
-     * @param out           输出流
-     * @param enabled       是否启用灰框
-     * @param maxChars      灰框内最多显示字符数
-     * @param showReasoning 是否显示 reasoning 区
-     */
     public CliStreamPreviewRenderer(PrintStream out, boolean enabled,
                                     int maxChars, boolean showReasoning) {
         this.out = out;
@@ -72,74 +64,21 @@ public class CliStreamPreviewRenderer {
     }
 
     /**
-     * 开始流式预览。
+     * 根据 snapshot 渲染灰框。
+     * 自动清除上一次渲染的内容。
      */
-    public void start() {
+    public void render(LlmStreamSnapshot snapshot) {
         if (!enabled || !ansiSupported) return;
-        active = true;
-        reasoningBuf.setLength(0);
-        contentBuf.setLength(0);
-        lastPrintedLines = 0;
-        render();
-    }
-
-    /**
-     * 追加 reasoning delta。
-     */
-    public void appendReasoning(String delta) {
-        if (!active) return;
-        reasoningBuf.append(delta);
-        truncate(reasoningBuf);
-        render();
-    }
-
-    /**
-     * 追加 content delta。
-     */
-    public void appendContent(String delta) {
-        if (!active) return;
-        contentBuf.append(delta);
-        truncate(contentBuf);
-        render();
-    }
-
-    /**
-     * 清除灰框（流式结束或失败后）。
-     */
-    public void clear() {
-        if (!active) return;
-        active = false;
-
-        // 清除灰框行
-        if (ansiSupported && lastPrintedLines > 0) {
-            // 上移光标并清除
-            for (int i = 0; i < lastPrintedLines; i++) {
-                out.print("[1A"); // 上移一行
-                out.print("[2K"); // 清除当前行
-            }
-            out.flush();
-        }
-        reasoningBuf.setLength(0);
-        contentBuf.setLength(0);
-        lastPrintedLines = 0;
-    }
-
-    /** 是否正在显示灰框。 */
-    public boolean isActive() {
-        return active;
-    }
-
-    // ---- 内部 ----
-
-    private void render() {
-        if (!active || !ansiSupported) return;
+        if (snapshot == null) snapshot = LlmStreamSnapshot.EMPTY;
 
         // 清除之前的灰框
-        if (lastPrintedLines > 0) {
-            for (int i = 0; i < lastPrintedLines; i++) {
-                out.print("[1A"); // 上移一行
-                out.print("[2K"); // 清除当前行
-            }
+        clearPreviousBox();
+
+        // 不活跃的 stream 不渲染（已完成/失败/未开始）
+        if (!snapshot.active()) {
+            lastPrintedLines = 0;
+            lastStreamId = null;
+            return;
         }
 
         int lineCount = 0;
@@ -149,35 +88,45 @@ public class CliStreamPreviewRenderer {
         out.println();
         lineCount++;
 
-        // reasoning 区
-        if (showReasoning && reasoningBuf.length() > 0) {
-            String[] reasonLines = wrapLines(reasoningBuf.toString(), BOX_WIDTH - 6);
-            for (String rl : reasonLines) {
+        String reasoning = truncate(snapshot.reasoning(), maxChars);
+        String content = truncate(snapshot.content(), maxChars);
+
+        boolean hasReasoning = reasoning != null && !reasoning.isEmpty();
+        boolean hasContent = content != null && !content.isEmpty();
+        boolean hasToolCalls = snapshot.toolCallDeltaCount() > 0;
+        boolean hasAny = hasReasoning || hasContent || hasToolCalls;
+
+        if (showReasoning && hasReasoning) {
+            for (String rl : wrapLines(reasoning, BOX_WIDTH - 6)) {
                 printGrey(V + " 思考：" + padRight(rl, BOX_WIDTH - 6) + " " + V);
                 out.println();
                 lineCount++;
             }
         }
 
-        // 分隔线（如果两个区都有内容）
-        if (showReasoning && reasoningBuf.length() > 0 && contentBuf.length() > 0) {
+        // 分隔线（两个区都有内容时）
+        if (showReasoning && hasReasoning && hasContent) {
             printGrey(V + repeat(" ", BOX_WIDTH - 2) + V);
             out.println();
             lineCount++;
         }
 
-        // content 区
-        if (contentBuf.length() > 0) {
-            String[] contentLines = wrapLines(contentBuf.toString(), BOX_WIDTH - 6);
-            for (String cl : contentLines) {
+        if (hasContent) {
+            for (String cl : wrapLines(content, BOX_WIDTH - 6)) {
                 printGrey(V + " 输出：" + padRight(cl, BOX_WIDTH - 6) + " " + V);
                 out.println();
                 lineCount++;
             }
         }
 
-        if (reasoningBuf.length() == 0 && contentBuf.length() == 0) {
+        if (!hasAny) {
+            // 三者全空 → 等待
             printGrey(V + " 等待输出……" + repeat(" ", BOX_WIDTH - 12) + V);
+            out.println();
+            lineCount++;
+        } else if (hasToolCalls && !hasReasoning && !hasContent) {
+            // 只有 tool calls → 正在选择工具
+            printGrey(V + " 正在选择工具……" + repeat(" ", BOX_WIDTH - 14) + V);
             out.println();
             lineCount++;
         }
@@ -189,6 +138,34 @@ public class CliStreamPreviewRenderer {
 
         out.flush();
         lastPrintedLines = lineCount;
+        lastStreamId = snapshot.streamId();
+    }
+
+    /**
+     * 清除灰框（流式结束后由 CliAgentProgressSink 调用）。
+     * 不再依赖内部 active 状态 — 直接擦除上次渲染。
+     */
+    public void clear(String streamId) {
+        clearPreviousBox();
+        lastPrintedLines = 0;
+        lastStreamId = null;
+    }
+
+    /** 是否启用。 */
+    public boolean isEnabled() {
+        return enabled && ansiSupported;
+    }
+
+    // ---- 内部 ----
+
+    private void clearPreviousBox() {
+        if (ansiSupported && lastPrintedLines > 0) {
+            for (int i = 0; i < lastPrintedLines; i++) {
+                out.print("\033[1A");
+                out.print("\033[2K");
+            }
+            out.flush();
+        }
     }
 
     private void printGrey(String text) {
@@ -197,14 +174,12 @@ public class CliStreamPreviewRenderer {
         }
     }
 
-    private void truncate(StringBuilder buf) {
-        if (buf.length() > maxChars) {
-            int start = buf.length() - maxChars;
-            buf.delete(0, start);
-        }
+    private String truncate(String s, int maxChars) {
+        if (s == null) return "";
+        if (s.length() <= maxChars) return s;
+        return s.substring(s.length() - maxChars);
     }
 
-    /** 简单折行：按宽度截断。 */
     private static String[] wrapLines(String text, int width) {
         if (text == null || text.isEmpty()) return new String[]{""};
         int lineCount = (text.length() + width - 1) / width;
@@ -225,25 +200,15 @@ public class CliStreamPreviewRenderer {
     private static String repeat(String s, int count) {
         if (count <= 0) return "";
         StringBuilder sb = new StringBuilder(s.length() * count);
-        for (int i = 0; i < count; i++) {
-            sb.append(s);
-        }
+        for (int i = 0; i < count; i++) sb.append(s);
         return sb.toString();
     }
 
-    /**
-     * 简单 ANSI 检测：检查 TERM 环境变量。
-     * 不依赖 System.console()（在 IDE/PTY/容器中可能返回 null）。
-     * 只要 TERM 设置且不是 "dumb" 就认为支持 ANSI。
-     */
     private static boolean detectAnsi() {
         String term = System.getenv("TERM");
         if (term == null) {
-            // TERM 未设置，尝试 System.console() 作为 fallback
             return System.console() != null;
         }
-        if ("dumb".equals(term)) return false;
-        // TERM 已设置且不是 dumb，认定支持 ANSI
-        return true;
+        return !"dumb".equals(term);
     }
 }

@@ -58,6 +58,9 @@ public class OrchestratorAgent {
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
 
+    /** LLM 流式状态注册表（每个 stream 独立状态，CLI/WebUI 并发安全）。 */
+    private volatile LlmStreamStateRegistry streamRegistry = new LlmStreamStateRegistry();
+
     /** 对话上下文历史配置（可运行时更新）。 */
     private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
 
@@ -123,6 +126,16 @@ public class OrchestratorAgent {
         this.streamEnabled = streamEnabled;
     }
 
+    /** 设置 LLM 流式状态注册表。 */
+    public void setStreamRegistry(LlmStreamStateRegistry registry) {
+        this.streamRegistry = registry != null ? registry : new LlmStreamStateRegistry();
+    }
+
+    /** 获取 LLM 流式状态注册表（供 CliAgentProgressSink 等消费者使用）。 */
+    public LlmStreamStateRegistry getStreamRegistry() {
+        return streamRegistry;
+    }
+
     /** 获取流式输出开关。 */
     public boolean isStreamEnabled() {
         return streamEnabled;
@@ -145,14 +158,19 @@ public class OrchestratorAgent {
             return llmClient.chat(request);
         }
 
-        // 流式路径
+        // 流式路径：每个 call 一个独立 streamId
+        String streamId = java.util.UUID.randomUUID().toString();
+        LlmStreamStateRegistry registry = this.streamRegistry;
+        registry.start(streamId);
+
         DefaultLlmStreamCollector collector = new DefaultLlmStreamCollector();
 
         // delta 事件计数器（用于 [ORCH_STREAM] debug）
         java.util.concurrent.atomic.AtomicInteger contentDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
         java.util.concurrent.atomic.AtomicInteger reasoningDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger toolCallDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
 
-        // 包装 collector：在收到 delta 时同步发送 AgentProgressEvent
+        // 包装 collector：delta 同时写入内部 collector、registry 和 progressSink
         LlmStreamCollector wrapped = new LlmStreamCollector() {
             private boolean started = false;
 
@@ -160,7 +178,7 @@ public class OrchestratorAgent {
             public void onStart() {
                 collector.onStart();
                 if (!started) {
-                    progressSink.onProgress(AgentProgressEvent.llmStreamStarted());
+                    progressSink.onProgress(AgentProgressEvent.llmStreamStarted(streamId));
                     started = true;
                 }
             }
@@ -169,26 +187,32 @@ public class OrchestratorAgent {
             public void onContentDelta(String text) {
                 collector.onContentDelta(text);
                 contentDeltaEvents.incrementAndGet();
-                progressSink.onProgress(AgentProgressEvent.llmContentDelta(text));
+                registry.appendContent(streamId, text);
+                progressSink.onProgress(AgentProgressEvent.llmContentDelta(streamId, text));
             }
 
             @Override
             public void onReasoningDelta(String text) {
                 collector.onReasoningDelta(text);
                 reasoningDeltaEvents.incrementAndGet();
-                progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(text));
+                registry.appendReasoning(streamId, text);
+                progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(streamId, text));
             }
 
             @Override
             public void onToolCallDelta(String text) {
                 collector.onToolCallDelta(text);
+                toolCallDeltaEvents.incrementAndGet();
+                registry.incrementToolCallDelta(streamId);
+                progressSink.onProgress(AgentProgressEvent.llmToolCallDelta(streamId));
             }
 
             @Override
             public void onError(Throwable error) {
                 collector.onError(error);
-                progressSink.onProgress(AgentProgressEvent.llmStreamFailed(
-                        error != null ? error.getMessage() : "未知错误"));
+                String errMsg = error != null ? error.getMessage() : "未知错误";
+                registry.fail(streamId, errMsg);
+                progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId, errMsg));
             }
 
             @Override
@@ -237,9 +261,11 @@ public class OrchestratorAgent {
 
             // stream() 完成后，从 collector 获取最终响应
             LlmResponse finalResponse = wrapped.getFinalResponse();
-            progressSink.onProgress(AgentProgressEvent.llmStreamCompleted());
+            registry.complete(streamId);
+            progressSink.onProgress(AgentProgressEvent.llmStreamCompleted(streamId));
 
             // [ORCH_STREAM] 汇总日志
+            LlmStreamSnapshot snap = registry.snapshot(streamId);
             int responseToolCallCount = 0;
             boolean responseHasToolCalls = false;
             int finalContentChars = 0;
@@ -248,12 +274,13 @@ public class OrchestratorAgent {
                 responseToolCallCount = responseHasToolCalls ? finalResponse.toolCalls().size() : 0;
                 finalContentChars = finalResponse.content() != null ? finalResponse.content().length() : 0;
             }
-            log.debug("[ORCH_STREAM] responseHasToolCalls={} responseToolCallCount={}"
-                            + " contentDeltaEvents={} reasoningDeltaEvents={}"
-                            + " finalContentChars={} finalParsedTools={}",
-                    responseHasToolCalls, responseToolCallCount,
-                    contentDeltaEvents.get(), reasoningDeltaEvents.get(),
-                    finalContentChars,
+            log.debug("[ORCH_STREAM] streamId={} responseHasToolCalls={} responseToolCallCount={}"
+                            + " contentDeltaEvents={} reasoningDeltaEvents={} toolCallDeltaEvents={}"
+                            + " finalContentChars={} registryContentChars={} registryReasoningChars={}"
+                            + " finalParsedTools={}",
+                    streamId, responseHasToolCalls, responseToolCallCount,
+                    contentDeltaEvents.get(), reasoningDeltaEvents.get(), toolCallDeltaEvents.get(),
+                    finalContentChars, snap.content().length(), snap.reasoning().length(),
                     responseHasToolCalls ? finalResponse.toolCalls().stream()
                             .map(LlmToolCall::name).toList() : List.of());
 
@@ -267,18 +294,19 @@ public class OrchestratorAgent {
             List<LlmToolCall> toolCalls = wrapped.getToolCalls();
 
             if (!toolCalls.isEmpty()) {
-                log.debug("[ORCH_STREAM] fallbackToolCalls={}", toolCalls.stream()
-                        .map(LlmToolCall::name).toList());
+                log.debug("[ORCH_STREAM] streamId={} fallbackToolCalls={}", streamId,
+                        toolCalls.stream().map(LlmToolCall::name).toList());
                 return LlmResponse.successWithToolCalls(toolCalls, model, 0);
             }
             if (content != null && !content.isEmpty()) {
-                log.debug("[ORCH_STREAM] fallbackContentChars={}", content.length());
+                log.debug("[ORCH_STREAM] streamId={} fallbackContentChars={}", streamId, content.length());
                 return LlmResponse.success(content, model, 0);
             }
             return LlmResponse.success("", model, 0);
         } catch (Exception e) {
             log.error("LLM stream call failed: {}", e.getMessage(), e);
-            progressSink.onProgress(AgentProgressEvent.llmStreamFailed(e.getMessage()));
+            registry.fail(streamId, e.getMessage());
+            progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId, e.getMessage()));
             return LlmResponse.failure(e.getMessage());
         }
     }

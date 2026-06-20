@@ -5,32 +5,41 @@ import java.io.PrintStream;
 /**
  * CLI 模式 AgentProgressSink 实现。
  * 格式化 AgentProgressEvent 为简短状态行打印到 System.out。
- * 支持 LLM 流式预览灰框。
+ * 支持 LLM 流式预览灰框 — 通过 LlmStreamStateRegistry 获取快照渲染。
  */
 public class CliAgentProgressSink implements AgentProgressSink {
 
     private final PrintStream out;
     private final boolean enabled;
     private final CliStreamPreviewRenderer streamRenderer;
+    private final LlmStreamStateRegistry streamRegistry;
 
     public CliAgentProgressSink(PrintStream out) {
-        this(out, true, null);
+        this(out, true, null, null);
     }
 
     public CliAgentProgressSink(PrintStream out, boolean enabled) {
-        this(out, enabled, null);
+        this(out, enabled, null, null);
+    }
+
+    public CliAgentProgressSink(PrintStream out, boolean enabled,
+                                CliStreamPreviewRenderer streamRenderer) {
+        this(out, enabled, streamRenderer, null);
     }
 
     /**
      * @param out            输出流
      * @param enabled        是否启用常规进度输出
      * @param streamRenderer LLM 流式预览渲染器（可为 null，则禁用流式预览）
+     * @param streamRegistry LLM 流式状态注册表（可为 null，从 event meta 直接读）
      */
     public CliAgentProgressSink(PrintStream out, boolean enabled,
-                                CliStreamPreviewRenderer streamRenderer) {
+                                CliStreamPreviewRenderer streamRenderer,
+                                LlmStreamStateRegistry streamRegistry) {
         this.out = out;
         this.enabled = enabled;
         this.streamRenderer = streamRenderer;
+        this.streamRegistry = streamRegistry;
     }
 
     @Override
@@ -49,29 +58,37 @@ public class CliAgentProgressSink implements AgentProgressSink {
 
     /**
      * 处理 LLM 流式事件。返回 true 表示已处理（不需要再走 format）。
+     * 从 registry 获取 snapshot 并调用 renderer.render(snapshot)。
      */
     private boolean handleStreamEvent(AgentProgressEvent event) {
         if (streamRenderer == null) return false;
 
+        String streamId = event.meta() != null ? event.meta().get("streamId") : null;
+
         return switch (event.phase()) {
             case AgentProgressEvent.LLM_STREAM_STARTED -> {
-                streamRenderer.start();
+                // renderer 在收到 delta 时才渲染，先不画（避免只有"等待"）
                 yield true;
             }
-            case AgentProgressEvent.LLM_REASONING_DELTA -> {
-                streamRenderer.appendReasoning(event.detail());
-                yield true;
-            }
-            case AgentProgressEvent.LLM_CONTENT_DELTA -> {
-                streamRenderer.appendContent(event.detail());
+            case AgentProgressEvent.LLM_CONTENT_DELTA,
+                 AgentProgressEvent.LLM_REASONING_DELTA,
+                 AgentProgressEvent.LLM_TOOL_CALL_DELTA -> {
+                LlmStreamSnapshot snapshot = getSnapshot(streamId);
+                if (snapshot == null || snapshot == LlmStreamSnapshot.EMPTY) {
+                    // DEBUG：registry 中没有对应状态
+                    out.println("[Agent] WARNING: stream " + streamId
+                            + " delta event but no snapshot in registry");
+                    yield true;
+                }
+                streamRenderer.render(snapshot);
                 yield true;
             }
             case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
-                streamRenderer.clear();
+                streamRenderer.clear(streamId);
                 yield true;
             }
             case AgentProgressEvent.LLM_STREAM_FAILED -> {
-                streamRenderer.clear();
+                streamRenderer.clear(streamId);
                 String error = event.meta().getOrDefault("error", "未知错误");
                 out.println("[Agent] LLM 流式输出失败: " + error);
                 yield true;
@@ -80,7 +97,16 @@ public class CliAgentProgressSink implements AgentProgressSink {
         };
     }
 
-    /** 格式化为简短状态行。保证长度 ≤ 120 chars。 */
+    /** 从 registry 获取 snapshot。若无 registry 则返回 EMPTY。 */
+    private LlmStreamSnapshot getSnapshot(String streamId) {
+        if (streamRegistry != null && streamId != null) {
+            LlmStreamSnapshot snap = streamRegistry.snapshot(streamId);
+            if (snap != null) return snap;
+        }
+        return LlmStreamSnapshot.EMPTY;
+    }
+
+    /** 格式化非流式事件为简短状态行。保证长度 ≤ 120 chars。 */
     static String format(AgentProgressEvent event) {
         if (event == null) return null;
         return switch (event.phase()) {
@@ -123,22 +149,22 @@ public class CliAgentProgressSink implements AgentProgressSink {
                     "[Agent] finish_action 被拒绝：" + reasonText(
                             event.meta().getOrDefault("rejectReason", ""));
             case AgentProgressEvent.FINISH_ACTION_ACCEPTED ->
-                    null; // 成功结束不额外输出
+                    null;
             case AgentProgressEvent.AGENT_PUBLIC_MESSAGE ->
-                    event.detail(); // 直接输出用户可见正文，不加调试前缀
+                    event.detail();
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
             // LLM 流式事件不应走到这里（已在 handleStreamEvent 处理）
             case AgentProgressEvent.LLM_STREAM_STARTED,
                  AgentProgressEvent.LLM_CONTENT_DELTA,
                  AgentProgressEvent.LLM_REASONING_DELTA,
+                 AgentProgressEvent.LLM_TOOL_CALL_DELTA,
                  AgentProgressEvent.LLM_STREAM_COMPLETED,
                  AgentProgressEvent.LLM_STREAM_FAILED -> null;
             default -> null;
         };
     }
 
-    /** 将拒绝原因码转为人类可读消息。 */
     static String reasonText(String reasonCode) {
         if (reasonCode == null) return "未知原因";
         return switch (reasonCode) {
@@ -146,7 +172,7 @@ public class CliAgentProgressSink implements AgentProgressSink {
                     "与其他工具同轮混用，要求模型先单独执行工具。";
             case "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT" ->
                     "声称了未经真实工具执行支持的结果。";
-            default -> reasonCode; // message validation 错误直接展示原文
+            default -> reasonCode;
         };
     }
 
