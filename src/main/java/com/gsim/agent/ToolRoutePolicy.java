@@ -145,4 +145,19 @@ public class ToolRoutePolicy {
         }
         return merged;
     }
+
+    /**
+     * 展开工具所属的所有路由组的工具集合。
+     * 当 LLM 成功使用某工具后，激活该工具所属的全部工具组，下一轮可见。
+     */
+    public static java.util.Set<String> expandToolFamily(String toolName) {
+        java.util.Set<String> expanded = new java.util.HashSet<>();
+        // 检查每个预设组，如果工具在其中，则加入该组全部工具
+        if (KNOWLEDGE_SEARCH_ALLOW.contains(toolName)) expanded.addAll(KNOWLEDGE_SEARCH_ALLOW);
+        if (KNOWLEDGE_WRITE_ALLOW.contains(toolName)) expanded.addAll(KNOWLEDGE_WRITE_ALLOW);
+        if (PLAYER_ACTION_QUERY_ALLOW.contains(toolName)) expanded.addAll(PLAYER_ACTION_QUERY_ALLOW);
+        if (SHORT_POST_REWRITE_ALLOW.contains(toolName)) expanded.addAll(SHORT_POST_REWRITE_ALLOW);
+        if (NEXT_TURN_SETTLE_ALLOW.contains(toolName)) expanded.addAll(NEXT_TURN_SETTLE_ALLOW);
+        return expanded;
+    }
 }

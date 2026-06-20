@@ -720,6 +720,26 @@ public class OrchestratorAgent {
                 "结束当前工具调用循环并返回最终回复。参数: message（必填）");
     }
 
+    /** 按允许集过滤 ToolDef 列表，保留 finish_action 兜底。 */
+    private static List<ToolDef> filterToolDefs(List<ToolDef> allDefs, java.util.Set<String> allowed) {
+        List<ToolDef> filtered = new ArrayList<>();
+        for (ToolDef def : allDefs) {
+            if (allowed.contains(def.name())) {
+                filtered.add(def);
+            }
+        }
+        // 兜底：至少保留 finish_action
+        if (filtered.isEmpty()) {
+            for (ToolDef def : allDefs) {
+                if ("finish_action".equals(def.name())) {
+                    filtered.add(def);
+                    break;
+                }
+            }
+        }
+        return filtered;
+    }
+
     /** 构建 forced tool_choice object 强制模型只调用指定工具。 */
     static Object forceToolChoice(String toolName) {
         return java.util.Map.of(
@@ -1229,6 +1249,11 @@ public class OrchestratorAgent {
         ExpectedNextStep expectedNextStep = ExpectedNextStep.CALL_TOOL;
         List<ToolDef> allToolDefs = buildToolDefs();
 
+        // 初始路由 + 可扩展允许集（随 LLM 成功激活工具组而扩张）
+        ToolRouteDecision baseRoute = routePolicy.decide(
+                userIntent, expectedNextStep, permissionConfig.defaultEnabledTools());
+        java.util.Set<String> effectiveAllowedTools = new java.util.HashSet<>(baseRoute.allowedTools());
+
         while (toolRound <= maxToolRounds) {
             // ESC 取消检查
             if (cancelRequested.get()) {
@@ -1258,8 +1283,13 @@ public class OrchestratorAgent {
             if (forcedFinishAction) {
                 roundToolDefs = List.of(buildFinishActionToolDef());
                 roundToolChoice = forceToolChoice("finish_action");
-            } else {
+            } else if (baseRoute.allToolsAllowed()) {
+                // 通配路由：不限工具
                 roundToolDefs = allToolDefs;
+                roundToolChoice = "auto";
+            } else {
+                // 按路由 + 已激活工具组过滤
+                roundToolDefs = filterToolDefs(allToolDefs, effectiveAllowedTools);
                 roundToolChoice = "auto";
             }
             log.debug("[TOOL_LOOP_TRACE] engine=runToolLoop round={} requestTools={} toolChoice={} forcedFinishAction={}",
@@ -1389,9 +1419,13 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // === 工具路由决策 ===
-            ToolRouteDecision routeDecision = routePolicy.decide(
-                    userIntent, expectedNextStep, permissionConfig.defaultEnabledTools());
+            // === 工具路由决策（基于初始路由 + 已激活工具组）===
+            ToolRouteDecision routeDecision = baseRoute.allToolsAllowed()
+                    ? baseRoute
+                    : new ToolRouteDecision(
+                            java.util.Collections.unmodifiableSet(new java.util.HashSet<>(effectiveAllowedTools)),
+                            baseRoute.routeName(),
+                            baseRoute.reason());
             ToolLoopDebug.logToolRouteDecision(log, "runToolLoop", toolRound,
                     userIntent, expectedNextStep, routeDecision, allowAllMutations);
 
@@ -1494,6 +1528,16 @@ public class OrchestratorAgent {
                     ToolCall call = new ToolCall(parsed.tool, parsed.args);
                     ToolResult result = toolRegistry.call(call);
                     toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                    // 工具执行成功后，激活该工具所属的全部工具组（下一轮可见）
+                    if (result.success() && !"finish_action".equals(parsed.tool)) {
+                        java.util.Set<String> family = ToolRoutePolicy.expandToolFamily(parsed.tool);
+                        if (!family.isEmpty()) {
+                            effectiveAllowedTools.addAll(family);
+                            log.debug("[ToolLoop] expanded allowed tools by {} → +{} tools (total={})",
+                                    parsed.tool, family.size(), effectiveAllowedTools.size());
+                        }
+                    }
 
                     // progress: 工具结果
                     if (result.success()) {
