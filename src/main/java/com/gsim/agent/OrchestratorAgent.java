@@ -138,12 +138,19 @@ public class OrchestratorAgent {
      * <p>非流式路径：直接调用 {@link LlmClient#chat}。
      */
     private LlmResponse callLlm(LlmRequest request) {
+        int requestTools = request.tools() != null ? request.tools().size() : 0;
+        log.debug("[ORCH_STREAM] streamEnabled={} requestTools={}", streamEnabled, requestTools);
+
         if (!streamEnabled) {
             return llmClient.chat(request);
         }
 
         // 流式路径
         DefaultLlmStreamCollector collector = new DefaultLlmStreamCollector();
+
+        // delta 事件计数器（用于 [ORCH_STREAM] debug）
+        java.util.concurrent.atomic.AtomicInteger contentDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicInteger reasoningDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
 
         // 包装 collector：在收到 delta 时同步发送 AgentProgressEvent
         LlmStreamCollector wrapped = new LlmStreamCollector() {
@@ -161,12 +168,14 @@ public class OrchestratorAgent {
             @Override
             public void onContentDelta(String text) {
                 collector.onContentDelta(text);
+                contentDeltaEvents.incrementAndGet();
                 progressSink.onProgress(AgentProgressEvent.llmContentDelta(text));
             }
 
             @Override
             public void onReasoningDelta(String text) {
                 collector.onReasoningDelta(text);
+                reasoningDeltaEvents.incrementAndGet();
                 progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(text));
             }
 
@@ -230,6 +239,24 @@ public class OrchestratorAgent {
             LlmResponse finalResponse = wrapped.getFinalResponse();
             progressSink.onProgress(AgentProgressEvent.llmStreamCompleted());
 
+            // [ORCH_STREAM] 汇总日志
+            int responseToolCallCount = 0;
+            boolean responseHasToolCalls = false;
+            int finalContentChars = 0;
+            if (finalResponse != null) {
+                responseHasToolCalls = finalResponse.hasApiToolCalls();
+                responseToolCallCount = responseHasToolCalls ? finalResponse.toolCalls().size() : 0;
+                finalContentChars = finalResponse.content() != null ? finalResponse.content().length() : 0;
+            }
+            log.debug("[ORCH_STREAM] responseHasToolCalls={} responseToolCallCount={}"
+                            + " contentDeltaEvents={} reasoningDeltaEvents={}"
+                            + " finalContentChars={} finalParsedTools={}",
+                    responseHasToolCalls, responseToolCallCount,
+                    contentDeltaEvents.get(), reasoningDeltaEvents.get(),
+                    finalContentChars,
+                    responseHasToolCalls ? finalResponse.toolCalls().stream()
+                            .map(LlmToolCall::name).toList() : List.of());
+
             if (finalResponse != null) {
                 return finalResponse;
             }
@@ -240,9 +267,12 @@ public class OrchestratorAgent {
             List<LlmToolCall> toolCalls = wrapped.getToolCalls();
 
             if (!toolCalls.isEmpty()) {
+                log.debug("[ORCH_STREAM] fallbackToolCalls={}", toolCalls.stream()
+                        .map(LlmToolCall::name).toList());
                 return LlmResponse.successWithToolCalls(toolCalls, model, 0);
             }
             if (content != null && !content.isEmpty()) {
+                log.debug("[ORCH_STREAM] fallbackContentChars={}", content.length());
                 return LlmResponse.success(content, model, 0);
             }
             return LlmResponse.success("", model, 0);
@@ -273,10 +303,11 @@ public class OrchestratorAgent {
 
         String finalText = null;
         int toolRound = 0;
+        List<ToolDef> toolDefs = buildToolDefs();
 
         // 3. ToolLoop
         while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse response = callLlm(request);
 
             if (!response.success()) {
@@ -285,22 +316,29 @@ public class OrchestratorAgent {
             }
 
             String content = response.content();
-            messages.add(LlmMessage.assistant(content));
+            messages.add(LlmMessage.assistant(content != null ? content : ""));
 
-            // 4. 尝试解析为 tool call
-            ParsedToolCall parsed = tryParseToolCall(content);
-            if (parsed != null) {
-                log.info("Tool call detected: {} with args: {}", parsed.tool, parsed.args);
+            // 4. 解析 tool call（API tool_calls 优先）
+            List<ParsedToolCall> allParsed = new ArrayList<>();
+            if (response.hasApiToolCalls()) {
+                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
+            }
+            if (allParsed.isEmpty()) {
+                ParsedToolCall parsed = tryParseToolCall(content);
+                if (parsed != null) allParsed.add(parsed);
+            }
 
-                ToolCall call = new ToolCall(parsed.tool, parsed.args);
-                ToolResult result = toolRegistry.call(call);
+            if (!allParsed.isEmpty()) {
+                for (ParsedToolCall parsed : allParsed) {
+                    log.info("Tool call detected: {} with args: {}", parsed.tool, parsed.args);
+                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolResult result = toolRegistry.call(call);
+                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
-
-                // 将 tool 结果追加到上下文
-                String toolResultText = formatToolResult(result);
-                messages.add(LlmMessage.user(toolResultText));
-
+                    // 将 tool 结果追加到上下文
+                    String toolResultText = formatToolResult(result);
+                    messages.add(LlmMessage.user(toolResultText));
+                }
                 toolRound++;
                 continue;
             }
@@ -317,7 +355,7 @@ public class OrchestratorAgent {
                     "你已经完成了多轮工具调用。请基于以上所有查询结果，" +
                     "写一段完整的推演总结。必须引用信息来源的路径（如 import/web/prts.wiki/...）。" +
                     "不要调用更多工具，直接输出推演结果。"));
-            LlmRequest finalRequest = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmRequest finalRequest = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse finalResponse = callLlm(finalRequest);
             if (finalResponse.success()) {
                 finalText = finalResponse.content();
@@ -806,9 +844,10 @@ public class OrchestratorAgent {
 
         String finalText = null;
         int toolRound = 0;
+        List<ToolDef> toolDefs = buildToolDefs();
 
         while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse response = callLlm(request);
 
             if (!response.success()) {
@@ -818,32 +857,43 @@ public class OrchestratorAgent {
             }
 
             String content = response.content();
-            messages.add(LlmMessage.assistant(content));
+            messages.add(LlmMessage.assistant(content != null ? content : ""));
 
-            ParsedToolCall parsed = tryParseToolCall(content);
-            if (parsed != null) {
-                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                ToolCall call = new ToolCall(parsed.tool, parsed.args);
-                ToolResult result = toolRegistry.call(call);
-                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+            // API tool_calls 优先
+            List<ParsedToolCall> allParsed = new ArrayList<>();
+            if (response.hasApiToolCalls()) {
+                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
+            }
+            if (allParsed.isEmpty()) {
+                ParsedToolCall parsed = tryParseToolCall(content);
+                if (parsed != null) allParsed.add(parsed);
+            }
 
-                StringBuilder toolResultStr = new StringBuilder();
-                toolResultStr.append("工具 ").append(parsed.tool).append(" 返回:\n");
-                if (result.success()) {
-                    for (ToolResult.Item item : result.items()) {
-                        toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                        // 只保留前 200 字符的片段摘要，防止完整内容污染上下文
-                        String snippet = item.snippet();
-                        if (snippet != null && snippet.length() > 200) {
-                            snippet = snippet.substring(0, 200) + "...";
+            if (!allParsed.isEmpty()) {
+                for (ParsedToolCall parsed : allParsed) {
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolResult result = toolRegistry.call(call);
+                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                    StringBuilder toolResultStr = new StringBuilder();
+                    toolResultStr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                    if (result.success()) {
+                        for (ToolResult.Item item : result.items()) {
+                            toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                            // 只保留前 200 字符的片段摘要，防止完整内容污染上下文
+                            String snippet = item.snippet();
+                            if (snippet != null && snippet.length() > 200) {
+                                snippet = snippet.substring(0, 200) + "...";
+                            }
+                            toolResultStr.append("  ").append(snippet).append("\n");
                         }
-                        toolResultStr.append("  ").append(snippet).append("\n");
+                    } else {
+                        toolResultStr.append("错误: ").append(result.error()).append("\n");
                     }
-                } else {
-                    toolResultStr.append("错误: ").append(result.error()).append("\n");
+                    trace.add(new MessageTrace("tool", "tool_result", toolResultStr.toString()));
+                    messages.add(LlmMessage.user(toolResultStr.toString()));
                 }
-                trace.add(new MessageTrace("tool", "tool_result", toolResultStr.toString()));
-                messages.add(LlmMessage.user(toolResultStr.toString()));
                 toolRound++;
                 continue;
             }
@@ -862,7 +912,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
-            LlmResponse finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            LlmResponse finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
             if (finalResp.success()) {
                 finalText = finalResp.content();
                 trace.add(new MessageTrace("assistant", "sim_output", finalText));
@@ -890,9 +940,10 @@ public class OrchestratorAgent {
 
         String finalText = null;
         int toolRound = 0;
+        List<ToolDef> toolDefs = buildToolDefs();
 
         while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResponse response = callLlm(request);
 
             if (!response.success()) {
@@ -900,30 +951,41 @@ public class OrchestratorAgent {
             }
 
             String content = response.content();
-            messages.add(LlmMessage.assistant(content));
+            messages.add(LlmMessage.assistant(content != null ? content : ""));
 
-            ParsedToolCall parsed = tryParseToolCall(content);
-            if (parsed != null) {
-                trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                ToolCall call = new ToolCall(parsed.tool, parsed.args);
-                ToolResult result = toolRegistry.call(call);
-                toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+            // API tool_calls 优先
+            List<ParsedToolCall> allParsed = new ArrayList<>();
+            if (response.hasApiToolCalls()) {
+                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
+            }
+            if (allParsed.isEmpty()) {
+                ParsedToolCall parsed = tryParseToolCall(content);
+                if (parsed != null) allParsed.add(parsed);
+            }
 
-                StringBuilder tr = new StringBuilder();
-                tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
-                if (result.success()) {
-                    for (ToolResult.Item item : result.items()) {
-                        tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                        // 只保留前 200 字符的片段摘要
-                        String snippet = item.snippet();
-                        if (snippet != null && snippet.length() > 200) {
-                            snippet = snippet.substring(0, 200) + "...";
+            if (!allParsed.isEmpty()) {
+                for (ParsedToolCall parsed : allParsed) {
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolResult result = toolRegistry.call(call);
+                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+
+                    StringBuilder tr = new StringBuilder();
+                    tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                    if (result.success()) {
+                        for (ToolResult.Item item : result.items()) {
+                            tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
+                            // 只保留前 200 字符的片段摘要
+                            String snippet = item.snippet();
+                            if (snippet != null && snippet.length() > 200) {
+                                snippet = snippet.substring(0, 200) + "...";
+                            }
+                            tr.append("  ").append(snippet).append("\n");
                         }
-                        tr.append("  ").append(snippet).append("\n");
-                    }
-                } else tr.append("错误: ").append(result.error());
-                trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
-                messages.add(LlmMessage.user(tr.toString()));
+                    } else tr.append("错误: ").append(result.error());
+                    trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
+                    messages.add(LlmMessage.user(tr.toString()));
+                }
                 toolRound++;
                 continue;
             }
@@ -942,7 +1004,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
-            LlmResponse fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            LlmResponse fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
             if (fr.success()) { finalText = fr.content(); trace.add(new MessageTrace("assistant", "chat_response", finalText)); }
             else return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
         }
