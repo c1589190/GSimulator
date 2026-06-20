@@ -93,7 +93,7 @@ public class NodeAgentChatService {
         // bootstrap.root.llm.enabled=true 时调用 LLM）
         boolean llmEnabled = appCtx.getConfig().isBootstrapRootLlmEnabled();
         var generator = new com.gsim.root.BootstrapWorldDraftGenerator(
-                appCtx.getLlmClient(), appCtx.getConfig().getLlmModel(), llmEnabled);
+                appCtx.getLlmManager(), appCtx.getConfig().getLlmModel(), llmEnabled);
         var draft = generator.generate(intent);
 
         String rootId = draft.rootIdSuggestion();

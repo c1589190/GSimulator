@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 达到最大轮数无 finish_action 返回错误")
 class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
         // 故意不注册 FinishActionTool，让 finish_action 调用失败

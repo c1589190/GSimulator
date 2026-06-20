@@ -5,48 +5,33 @@ import java.io.PrintStream;
 /**
  * CLI 模式 AgentProgressSink 实现。
  * 格式化 AgentProgressEvent 为简短状态行打印到 System.out。
- * 支持 LLM 流式预览灰框 — 通过 LlmStreamStateRegistry 获取快照渲染。
+ * LLM 流式内容直接 inline 打印到控制台（不换行，打字机效果）。
  */
 public class CliAgentProgressSink implements AgentProgressSink {
 
     private final PrintStream out;
     private final boolean enabled;
-    private final CliStreamPreviewRenderer streamRenderer;
-    private final LlmStreamStateRegistry streamRegistry;
+    private boolean reasoningOpen = false;
+    private boolean contentBold = false;
+
+    private static final String ANSI_GREY = "\033[90m";
+    private static final String ANSI_BOLD = "\033[1m";
+    private static final String ANSI_RESET = "\033[0m";
 
     public CliAgentProgressSink(PrintStream out) {
-        this(out, true, null, null);
+        this(out, true);
     }
 
     public CliAgentProgressSink(PrintStream out, boolean enabled) {
-        this(out, enabled, null, null);
-    }
-
-    public CliAgentProgressSink(PrintStream out, boolean enabled,
-                                CliStreamPreviewRenderer streamRenderer) {
-        this(out, enabled, streamRenderer, null);
-    }
-
-    /**
-     * @param out            输出流
-     * @param enabled        是否启用常规进度输出
-     * @param streamRenderer LLM 流式预览渲染器（可为 null，则禁用流式预览）
-     * @param streamRegistry LLM 流式状态注册表（可为 null，从 event meta 直接读）
-     */
-    public CliAgentProgressSink(PrintStream out, boolean enabled,
-                                CliStreamPreviewRenderer streamRenderer,
-                                LlmStreamStateRegistry streamRegistry) {
         this.out = out;
         this.enabled = enabled;
-        this.streamRenderer = streamRenderer;
-        this.streamRegistry = streamRegistry;
     }
 
     @Override
     public void onProgress(AgentProgressEvent event) {
         if (event == null) return;
 
-        // LLM 流式事件由 streamRenderer 处理（独立于 enabled 开关）
+        // LLM 流式事件直接 inline 打印
         if (handleStreamEvent(event)) return;
 
         if (!enabled) return;
@@ -57,82 +42,72 @@ public class CliAgentProgressSink implements AgentProgressSink {
     }
 
     /**
-     * 处理 LLM 流式事件。返回 true 表示已处理（不需要再走 format）。
-     * 优先从 registry 获取 snapshot 渲染；registry miss 时 fallback 到 event.detail 直接渲染。
+     * 处理 LLM 流式事件。返回 true 表示已处理。
+     * content 以粗体高亮打印，reasoning 以灰色 Thinking: 前缀打印。
      */
     private boolean handleStreamEvent(AgentProgressEvent event) {
-        if (streamRenderer == null) return false;
-
-        String streamId = event.meta() != null ? event.meta().get("streamId") : null;
-
         return switch (event.phase()) {
             case AgentProgressEvent.LLM_STREAM_STARTED -> {
-                // STARTED 必须渲染等待框（不依赖 registry）
-                streamRenderer.renderWaiting(streamId);
+                reasoningOpen = false;
+                contentBold = false;
+                out.print("[...] ");
+                out.flush();
                 yield true;
             }
             case AgentProgressEvent.LLM_CONTENT_DELTA -> {
-                LlmStreamSnapshot snapshot = getSnapshot(streamId);
-                if (snapshot != null && snapshot.hasAnyContent()) {
-                    streamRenderer.render(snapshot);
-                } else {
-                    // registry miss fallback：直接用 event.detail 渲染
-                    logRegistryMiss(streamId, "LLM_CONTENT_DELTA");
-                    String delta = event.detail();
-                    if (delta != null && !delta.isEmpty()) {
-                        streamRenderer.renderContentFallback(streamId, delta);
-                    }
+                if (reasoningOpen) {
+                    out.print(ANSI_RESET + "\n");
+                    out.flush();
+                    reasoningOpen = false;
+                }
+                if (!contentBold) {
+                    out.print(ANSI_BOLD);
+                    contentBold = true;
+                }
+                String delta = event.detail();
+                if (delta != null && !delta.isEmpty()) {
+                    out.print(delta);
+                    out.flush();
                 }
                 yield true;
             }
             case AgentProgressEvent.LLM_REASONING_DELTA -> {
-                LlmStreamSnapshot snapshot = getSnapshot(streamId);
-                if (snapshot != null && snapshot.hasAnyContent()) {
-                    streamRenderer.render(snapshot);
-                } else {
-                    logRegistryMiss(streamId, "LLM_REASONING_DELTA");
-                    String delta = event.detail();
-                    if (delta != null && !delta.isEmpty()) {
-                        streamRenderer.renderReasoningFallback(streamId, delta);
+                String delta = event.detail();
+                if (delta != null && !delta.isEmpty()) {
+                    if (!reasoningOpen) {
+                        out.print(ANSI_GREY + "Thinking: ");
+                        reasoningOpen = true;
                     }
+                    out.print(delta);
+                    out.flush();
                 }
                 yield true;
             }
             case AgentProgressEvent.LLM_TOOL_CALL_DELTA -> {
-                LlmStreamSnapshot snapshot = getSnapshot(streamId);
-                if (snapshot != null && snapshot.toolCallDeltaCount() > 0) {
-                    streamRenderer.render(snapshot);
-                } else {
-                    logRegistryMiss(streamId, "LLM_TOOL_CALL_DELTA");
-                    streamRenderer.renderToolChoosing(streamId);
-                }
                 yield true;
             }
             case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
-                streamRenderer.clear(streamId);
+                if (reasoningOpen || contentBold) {
+                    out.print(ANSI_RESET);
+                    reasoningOpen = false;
+                    contentBold = false;
+                }
+                out.println();
                 yield true;
             }
             case AgentProgressEvent.LLM_STREAM_FAILED -> {
-                streamRenderer.clear(streamId);
+                if (reasoningOpen || contentBold) {
+                    out.print(ANSI_RESET);
+                    reasoningOpen = false;
+                    contentBold = false;
+                }
+                out.println();
                 String error = event.meta().getOrDefault("error", "未知错误");
                 out.println("[Agent] LLM 流式输出失败: " + error);
                 yield true;
             }
             default -> false;
         };
-    }
-
-    private void logRegistryMiss(String streamId, String eventType) {
-        out.println("[STREAM_TRACE] registry miss streamId=" + streamId
-                + " event=" + eventType);
-    }
-
-    /** 从 registry 获取 snapshot。若无 registry 则返回 null（触发 fallback）。 */
-    private LlmStreamSnapshot getSnapshot(String streamId) {
-        if (streamRegistry != null && streamId != null) {
-            return streamRegistry.snapshot(streamId);
-        }
-        return null;
     }
 
     /** 格式化非流式事件为简短状态行。保证长度 ≤ 120 chars。 */
@@ -168,6 +143,8 @@ public class CliAgentProgressSink implements AgentProgressSink {
                 String error = event.meta().getOrDefault("error", "");
                 yield "[Agent] 工具失败：" + tool + (error.isBlank() ? "" : "，原因：" + error);
             }
+            case AgentProgressEvent.AWAITING_TOOL_CONFIRMATION ->
+                    "[Agent] 等待确认：" + event.detail();
             case AgentProgressEvent.AWAITING_FINISH_ACTION ->
                     "[Agent] 正在让 LLM 根据工具结果生成 finish_action……";
             case AgentProgressEvent.PLAIN_ANSWER_WITHOUT_FINISH ->
@@ -183,7 +160,6 @@ public class CliAgentProgressSink implements AgentProgressSink {
                     event.detail();
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
-            // LLM 流式事件不应走到这里（已在 handleStreamEvent 处理）
             case AgentProgressEvent.LLM_STREAM_STARTED,
                  AgentProgressEvent.LLM_CONTENT_DELTA,
                  AgentProgressEvent.LLM_REASONING_DELTA,

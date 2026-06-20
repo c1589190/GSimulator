@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("knowledge_search 后继续 ToolLoop 直到 finish_action")
 class ToolLoopContinuesAfterKnowledgeSearchUntilFinishActionTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new StubKnowledgeSearchTool());
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

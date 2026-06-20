@@ -1,12 +1,13 @@
 package com.gsim.agent;
 
 import java.io.PrintStream;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * CLI 流式预览渲染器 — 从 {@link LlmStreamSnapshot} 渲染 ANSI 灰框。
+ * CLI 流式预览渲染器 — ANSI 灰框。
  *
- * <p>不再维护内部 buffer — 状态由 {@link LlmStreamStateRegistry} 管理。
- * 每次 render 传入当前 snapshot 即可。
+ * <p>自管理每个 stream 的 content/reasoning 缓冲区，不依赖外部 registry。
  *
  * <p>典型效果：
  * <pre>
@@ -39,9 +40,20 @@ public class CliStreamPreviewRenderer {
     private final boolean showReasoning;
     private final boolean ansiSupported;
 
+    // JLine3 Terminal — 注入后用于可靠的光标控制
+    private org.jline.terminal.Terminal jlineTerminal;
+
+    // 缓存裸 PrintStream 的 PrintWriter，避免 resolveWriter() 每次 new 导致多缓冲区交错
+    private java.io.PrintWriter cachedWriter;
+
     // 上一次渲染的行数，用于清除旧框
     private int lastPrintedLines = 0;
     private String lastStreamId = null;
+
+    // 自管理：每个 stream 的内容缓冲区
+    private final Map<String, StringBuilder> contentBufs = new ConcurrentHashMap<>();
+    private final Map<String, StringBuilder> reasoningBufs = new ConcurrentHashMap<>();
+    private final Map<String, Integer> toolCallDeltaCounts = new ConcurrentHashMap<>();
 
     public CliStreamPreviewRenderer(PrintStream out, boolean enabled,
                                     int maxChars, boolean showReasoning) {
@@ -50,6 +62,11 @@ public class CliStreamPreviewRenderer {
         this.maxChars = maxChars;
         this.showReasoning = showReasoning;
         this.ansiSupported = detectAnsi();
+    }
+
+    /** 注入 JLine3 Terminal 以获得可靠的终端光标控制。 */
+    public void setJlineTerminal(org.jline.terminal.Terminal terminal) {
+        this.jlineTerminal = terminal;
     }
 
     /** 工厂方法：从 AppConfig 创建。 */
@@ -63,174 +80,83 @@ public class CliStreamPreviewRenderer {
                 config.isCliStreamPreviewShowReasoning());
     }
 
-    /** 绘制"等待输出……"框（用于 LLM_STREAM_STARTED 或空快照）。 */
+    /** 追加 content delta 并渲染灰框。 */
+    public void appendContent(String streamId, String text) {
+        if (!enabled || !ansiSupported || text == null || text.isEmpty()) return;
+        contentBufs.computeIfAbsent(streamId, k -> new StringBuilder()).append(text);
+        renderInternal(streamId);
+    }
+
+    /** 追加 reasoning delta 并渲染灰框。 */
+    public void appendReasoning(String streamId, String text) {
+        if (!enabled || !ansiSupported || !showReasoning || text == null || text.isEmpty()) return;
+        reasoningBufs.computeIfAbsent(streamId, k -> new StringBuilder()).append(text);
+        renderInternal(streamId);
+    }
+
+    /** 标记 tool_call delta 并渲染灰框。 */
+    public void markToolCallDelta(String streamId) {
+        if (!enabled || !ansiSupported) return;
+        toolCallDeltaCounts.merge(streamId, 1, Integer::sum);
+        renderInternal(streamId);
+    }
+
+    /** 绘制"等待输出……"框。 */
     public void renderWaiting(String streamId) {
         if (!enabled || !ansiSupported) return;
-        clearPreviousBox();
+        clearPreviousBox(true);
         int lineCount = 0;
         printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
-        out.println();
-        lineCount++;
+        println(); lineCount++;
         printGrey(V + " 等待输出……" + repeat(" ", BOX_WIDTH - 12) + V);
-        out.println();
-        lineCount++;
+        println(); lineCount++;
         printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
-        out.println();
-        lineCount++;
-        out.flush();
+        println(); lineCount++;
+        resolveWriter().flush();
         lastPrintedLines = lineCount;
         lastStreamId = streamId;
     }
 
-    /** registry miss fallback：直接用 delta 字符串渲染输出区。 */
-    public void renderContentFallback(String streamId, String delta) {
-        if (!enabled || !ansiSupported) return;
-        clearPreviousBox();
-        int lineCount = 0;
-        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
-        out.println();
-        lineCount++;
-        String truncated = truncate(delta, maxChars);
-        for (String cl : wrapLines(truncated, BOX_WIDTH - 6)) {
-            printGrey(V + " 输出：" + padRight(cl, BOX_WIDTH - 6) + " " + V);
-            out.println();
-            lineCount++;
-        }
-        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
-        out.println();
-        lineCount++;
-        out.flush();
-        lastPrintedLines = lineCount;
-        lastStreamId = streamId;
-    }
-
-    /** registry miss fallback：直接用 delta 字符串渲染思考区。 */
-    public void renderReasoningFallback(String streamId, String delta) {
-        if (!enabled || !ansiSupported || !showReasoning) return;
-        clearPreviousBox();
-        int lineCount = 0;
-        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
-        out.println();
-        lineCount++;
-        String truncated = truncate(delta, maxChars);
-        for (String rl : wrapLines(truncated, BOX_WIDTH - 6)) {
-            printGrey(V + " 思考：" + padRight(rl, BOX_WIDTH - 6) + " " + V);
-            out.println();
-            lineCount++;
-        }
-        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
-        out.println();
-        lineCount++;
-        out.flush();
-        lastPrintedLines = lineCount;
-        lastStreamId = streamId;
-    }
-
-    /** 绘制"正在选择工具……"框（tool_call-only 流）。 */
+    /** 绘制"正在选择工具……"框。 */
     public void renderToolChoosing(String streamId) {
         if (!enabled || !ansiSupported) return;
-        clearPreviousBox();
+        clearPreviousBox(true);
         int lineCount = 0;
         printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
-        out.println();
-        lineCount++;
+        println(); lineCount++;
         printGrey(V + " 正在选择工具……" + repeat(" ", BOX_WIDTH - 14) + V);
-        out.println();
-        lineCount++;
+        println(); lineCount++;
         printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
-        out.println();
-        lineCount++;
-        out.flush();
+        println(); lineCount++;
+        resolveWriter().flush();
         lastPrintedLines = lineCount;
         lastStreamId = streamId;
     }
 
     /**
-     * 根据 snapshot 渲染灰框。
-     * 自动清除上一次渲染的内容。
+     * 清除灰框（流式结束后调用）。
+     * 擦除旧框，清理该 stream 的所有缓冲区。
      */
-    public void render(LlmStreamSnapshot snapshot) {
-        if (!enabled || !ansiSupported) return;
-        if (snapshot == null) snapshot = LlmStreamSnapshot.EMPTY;
-
-        // 清除之前的灰框
-        clearPreviousBox();
-
-        // 不活跃且无内容的 stream 不渲染
-        if (!snapshot.active() && !snapshot.hasAnyContent()) {
-            lastPrintedLines = 0;
-            lastStreamId = null;
-            return;
-        }
-
-        int lineCount = 0;
-
-        // 顶边框
-        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
-        out.println();
-        lineCount++;
-
-        String reasoning = truncate(snapshot.reasoning(), maxChars);
-        String content = truncate(snapshot.content(), maxChars);
-
-        boolean hasReasoning = reasoning != null && !reasoning.isEmpty();
-        boolean hasContent = content != null && !content.isEmpty();
-        boolean hasToolCalls = snapshot.toolCallDeltaCount() > 0;
-        boolean hasAny = hasReasoning || hasContent || hasToolCalls;
-
-        if (showReasoning && hasReasoning) {
-            for (String rl : wrapLines(reasoning, BOX_WIDTH - 6)) {
-                printGrey(V + " 思考：" + padRight(rl, BOX_WIDTH - 6) + " " + V);
-                out.println();
-                lineCount++;
-            }
-        }
-
-        // 分隔线（两个区都有内容时）
-        if (showReasoning && hasReasoning && hasContent) {
-            printGrey(V + repeat(" ", BOX_WIDTH - 2) + V);
-            out.println();
-            lineCount++;
-        }
-
-        if (hasContent) {
-            for (String cl : wrapLines(content, BOX_WIDTH - 6)) {
-                printGrey(V + " 输出：" + padRight(cl, BOX_WIDTH - 6) + " " + V);
-                out.println();
-                lineCount++;
-            }
-        }
-
-        if (!hasAny) {
-            // 三者全空 → 等待
-            printGrey(V + " 等待输出……" + repeat(" ", BOX_WIDTH - 12) + V);
-            out.println();
-            lineCount++;
-        } else if (hasToolCalls && !hasReasoning && !hasContent) {
-            // 只有 tool calls → 正在选择工具
-            printGrey(V + " 正在选择工具……" + repeat(" ", BOX_WIDTH - 14) + V);
-            out.println();
-            lineCount++;
-        }
-
-        // 底边框
-        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
-        out.println();
-        lineCount++;
-
-        out.flush();
-        lastPrintedLines = lineCount;
-        lastStreamId = snapshot.streamId();
+    public void clear(String streamId) {
+        clearPreviousBox(false);
+        lastPrintedLines = 0;
+        lastStreamId = null;
+        // 清理缓冲区
+        contentBufs.remove(streamId);
+        reasoningBufs.remove(streamId);
+        toolCallDeltaCounts.remove(streamId);
     }
 
     /**
-     * 清除灰框（流式结束后由 CliAgentProgressSink 调用）。
-     * 不再依赖内部 active 状态 — 直接擦除上次渲染。
+     * 如果当前有活跃灰框，则清除。
+     * 不清理缓冲区（流可能还在进行中，非流事件打断后仍需恢复）。
      */
-    public void clear(String streamId) {
-        clearPreviousBox();
-        lastPrintedLines = 0;
-        lastStreamId = null;
+    public void clearIfActive() {
+        if (lastPrintedLines > 0) {
+            clearPreviousBox(false);
+            lastPrintedLines = 0;
+            lastStreamId = null;
+        }
     }
 
     /** 是否启用。 */
@@ -238,22 +164,120 @@ public class CliStreamPreviewRenderer {
         return enabled && ansiSupported;
     }
 
-    // ---- 内部 ----
+    // ---- 内部渲染 ----
 
-    private void clearPreviousBox() {
-        if (ansiSupported && lastPrintedLines > 0) {
-            for (int i = 0; i < lastPrintedLines; i++) {
-                out.print("\033[1A");
-                out.print("\033[2K");
+    private void renderInternal(String streamId) {
+        clearPreviousBox(true);
+
+        String content = getBuf(contentBufs, streamId);
+        String reasoning = getBuf(reasoningBufs, streamId);
+
+        boolean hasReasoning = showReasoning && !reasoning.isEmpty();
+        boolean hasContent = !content.isEmpty();
+        boolean hasToolCalls = toolCallDeltaCounts.getOrDefault(streamId, 0) > 0;
+        boolean hasAny = hasReasoning || hasContent || hasToolCalls;
+
+        int lineCount = 0;
+
+        // 顶边框
+        printGrey(TL + H + " LLM 正在输出 " + repeat(H, BOX_WIDTH - 13) + TR);
+        println(); lineCount++;
+
+        if (hasReasoning) {
+            for (String rl : wrapLines(truncate(reasoning, maxChars), BOX_WIDTH - 6)) {
+                printGrey(V + " 思考：" + padRight(rl, BOX_WIDTH - 6) + " " + V);
+                println(); lineCount++;
             }
-            out.flush();
         }
+
+        if (hasReasoning && hasContent) {
+            printGrey(V + repeat(" ", BOX_WIDTH - 2) + V);
+            println(); lineCount++;
+        }
+
+        if (hasContent) {
+            for (String cl : wrapLines(truncate(content, maxChars), BOX_WIDTH - 6)) {
+                printGrey(V + " 输出：" + padRight(cl, BOX_WIDTH - 6) + " " + V);
+                println(); lineCount++;
+            }
+        }
+
+        if (!hasAny) {
+            printGrey(V + " 等待输出……" + repeat(" ", BOX_WIDTH - 12) + V);
+            println(); lineCount++;
+        } else if (hasToolCalls && !hasReasoning && !hasContent) {
+            printGrey(V + " 正在选择工具……" + repeat(" ", BOX_WIDTH - 14) + V);
+            println(); lineCount++;
+        }
+
+        printGrey(BL + repeat(H, BOX_WIDTH - 2) + BR);
+        println(); lineCount++;
+
+        resolveWriter().flush();
+        lastPrintedLines = lineCount;
+        lastStreamId = streamId;
+    }
+
+    // ---- 内部 helpers ----
+
+    private static String getBuf(Map<String, StringBuilder> bufs, String id) {
+        StringBuilder sb = bufs.get(id);
+        return sb != null ? sb.toString() : "";
+    }
+
+    /**
+     * 清除旧灰框。
+     * <ol>
+     *   <li>CPL ({@code \033[NF]}) 回到旧框第一行</li>
+     *   <li>{@code \033[2K} 逐行物理擦除（不依赖后续输出宽度）</li>
+     *   <li>可选回位到框开头，供下一轮重绘使用</li>
+     * </ol>
+     *
+     * @param repositionToTop true=擦完回到框开头（供 renderInternal 原地重绘）
+     *                        false=留在框末尾下一行（供 clear/clearIfActive 后自然续写）
+     */
+    private void clearPreviousBox(boolean repositionToTop) {
+        if (lastPrintedLines <= 0) return;
+        if (!ansiSupported) return;
+
+        var writer = resolveWriter();
+        // 1. 回到旧框第一行
+        writer.print("\033[" + lastPrintedLines + "F");
+
+        // 2. 逐行擦除
+        for (int i = 0; i < lastPrintedLines; i++) {
+            writer.print("\033[2K");                          // 清除整行
+            if (i < lastPrintedLines - 1) {
+                writer.print("\033[1B");                       // 下一行
+            }
+        }
+
+        // 3. 可选：回到框开头（供 renderInternal 重绘）
+        if (repositionToTop && lastPrintedLines > 1) {
+            writer.print("\033[" + (lastPrintedLines - 1) + "F");
+        }
+        writer.flush();
     }
 
     private void printGrey(String text) {
-        if (ansiSupported) {
-            out.print(ANSI_GREY + text + ANSI_RESET);
+        if (!ansiSupported) return;
+        var w = resolveWriter();
+        w.print(ANSI_GREY + text + ANSI_RESET);
+    }
+
+    /** 统一输出通道：有 JLine Terminal 时走 terminal writer，否则走缓存的 PrintWriter。 */
+    private java.io.PrintWriter resolveWriter() {
+        if (jlineTerminal != null) {
+            return jlineTerminal.writer();
         }
+        if (cachedWriter == null) {
+            cachedWriter = new java.io.PrintWriter(out, true);
+        }
+        return cachedWriter;
+    }
+
+    private void println() {
+        resolveWriter().println();
     }
 
     private String truncate(String s, int maxChars) {

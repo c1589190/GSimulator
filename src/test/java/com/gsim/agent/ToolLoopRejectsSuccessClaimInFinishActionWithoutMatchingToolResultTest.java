@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 拒绝无工具支撑的 finish_action 成功宣称")
 class ToolLoopRejectsSuccessClaimInFinishActionWithoutMatchingToolResultTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new StubSaveTool());
         toolRegistry.register(new StubBranchNextTurnTool());

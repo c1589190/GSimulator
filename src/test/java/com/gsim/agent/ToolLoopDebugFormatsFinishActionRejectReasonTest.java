@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -55,7 +55,7 @@ class ToolLoopDebugFormatsFinishActionRejectReasonTest {
     @Test
     @DisplayName("finish_action 被接受时日志包含 finishAccepted=true")
     void acceptedFinishActionLogsFinishAcceptedTrue() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"任务完成。\"}}");
 
@@ -81,7 +81,7 @@ class ToolLoopDebugFormatsFinishActionRejectReasonTest {
     @Test
     @DisplayName("finish_action 被拒绝时日志包含 rejectReason")
     void rejectedFinishActionLogsRejectReason() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         // Round 1: finish_action with "[工具调用已执行]" banned marker → rejected
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"[工具调用已执行] 任务完成。\"}}");
@@ -120,7 +120,7 @@ class ToolLoopDebugFormatsFinishActionRejectReasonTest {
     @Test
     @DisplayName("claims 拒绝时日志包含 claim 和 requiredTool")
     void claimsRejectionLogsClaimAndRequiredTool() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         // Round 1: finish_action claiming "已保存" but no save tool was called → rejected
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"已保存 settlement。\"}}");
@@ -153,7 +153,7 @@ class ToolLoopDebugFormatsFinishActionRejectReasonTest {
     @Test
     @DisplayName("所有 FINISH_ACTION VALIDATION 日志包含 loop 和 round")
     void validationLogContainsLoopAndRound() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"完成。\"}}");
 

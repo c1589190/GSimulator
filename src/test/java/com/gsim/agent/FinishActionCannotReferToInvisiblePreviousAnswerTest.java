@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("finish_action 不能引用不可见的上轮答复")
 class FinishActionCannotReferToInvisiblePreviousAnswerTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

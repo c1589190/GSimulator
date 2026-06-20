@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -60,7 +60,7 @@ class ToolLoopDebugFormatsToolExtractionSummaryTest {
     @Test
     @DisplayName("工具提取日志包含 toolCallCount, tools, containsFinishAction")
     void toolExtractionLogContainsSummaryFields() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"knowledge_upsert\",\"args\":{\"key\":\"test\",\"content\":\"v\"}}");
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"已写入。\"}}");
@@ -92,7 +92,7 @@ class ToolLoopDebugFormatsToolExtractionSummaryTest {
     @Test
     @DisplayName("[工具结果] marker 污染时标记 suspectToolSyntax")
     void suspectToolSyntaxFlaggedWhenFakeToolResultInContent() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("好的，任务已完成。\n[工具结果] echo: success\n请继续。");
         fakeLlm.addResponse("让我再看看...");
 
@@ -127,7 +127,7 @@ class ToolLoopDebugFormatsToolExtractionSummaryTest {
     @Test
     @DisplayName("finish_action 工具调用时 containsFinishAction=true")
     void finishActionSetsContainsFinishActionTrue() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"任务完成。\"}}");
 

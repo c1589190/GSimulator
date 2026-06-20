@@ -16,18 +16,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证 FakeLlmClient 模拟的 API tool_calls 响应被正确解析并执行。
+ * 验证 FakeLlmManager 模拟的 API tool_calls 响应被正确解析并执行。
  */
 @DisplayName("API tool_calls 响应解析并执行")
 class OpenAiLlmClientParsesApiToolCallsTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");

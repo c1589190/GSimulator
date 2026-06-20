@@ -2,7 +2,7 @@ package com.gsim.agent;
 
 import com.gsim.chroma.RetrievalPlan;
 import com.gsim.chroma.RetrievalQuery;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.task.TaskContext;
 
 import java.util.List;
@@ -13,10 +13,10 @@ import java.util.Map;
  */
 public class KnowledgeRouterAgent {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
 
-    public KnowledgeRouterAgent(LlmClient llmClient) {
-        this.llmClient = llmClient;
+    public KnowledgeRouterAgent(LlmManager llmManager) {
+        this.llmManager = llmManager;
     }
 
     /**

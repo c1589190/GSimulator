@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -61,7 +61,7 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
     @Test
     @DisplayName("LLM 响应日志包含 rawChars 和 rawPreview")
     void llmResponseLogContainsRawCharsAndPreview() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"任务完成。\"}}");
 
@@ -94,7 +94,7 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
     @Test
     @DisplayName("LLM 响应超过 2000 字符时截断并标记 truncated")
     void longLlmResponseIsTruncated() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         StringBuilder sb = new StringBuilder();
         sb.append("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"");
@@ -127,7 +127,7 @@ class ToolLoopDebugFormatsLlmResponsePreviewTest {
     @Test
     @DisplayName("所有 ToolLoop 段都使用统一的 TOOL_LOOP 前缀")
     void allSectionsUseUnifiedPrefix() {
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"完成。\"}}");
 

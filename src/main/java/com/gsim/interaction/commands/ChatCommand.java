@@ -24,7 +24,7 @@ public class ChatCommand implements InteractionCommand {
 
     @Override public InteractionResult execute(String[] args, InteractionSession session) {
         // 检查 LLM 是否可用
-        if (session.getLlmClient() == null || !session.getLlmClient().isAvailable()) {
+        if (session.getLlmManager() == null || !session.getLlmManager().isAvailable()) {
             return InteractionResult.fail(
                     "LLM is not configured.\n"
                             + "Run /config init to set up your LLM, or /config status to see current config.");

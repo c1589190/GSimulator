@@ -13,7 +13,7 @@ import com.gsim.context.summary.BranchPathSummaryRenderer;
 import com.gsim.context.summary.NodeSummaryStore;
 import com.gsim.data.DataManager;
 import com.gsim.interaction.commands.*;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,13 +33,13 @@ class UnifiedAgentEntryTest {
     @TempDir
     Path tempDir;
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private InteractionSession session;
     private NodeAgentChatService chatService;
 
     @BeforeEach
     void setUp() throws Exception {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         fakeLlm.setNextResponse("测试推演回复内容。");
 
         AppConfig config = AppConfig.forTesting();

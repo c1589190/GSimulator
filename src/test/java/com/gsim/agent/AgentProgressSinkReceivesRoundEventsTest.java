@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,14 +18,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("AgentProgressSink 接收轮次事件")
 class AgentProgressSinkReceivesRoundEventsTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private CapturingProgressSink sink;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         sink = new CapturingProgressSink();

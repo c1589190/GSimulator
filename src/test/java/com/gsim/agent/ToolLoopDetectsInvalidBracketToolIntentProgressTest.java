@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,14 +17,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 检测非法方括号意图并发送进度事件")
 class ToolLoopDetectsInvalidBracketToolIntentProgressTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private CapturingProgressSink sink;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         sink = new CapturingProgressSink();

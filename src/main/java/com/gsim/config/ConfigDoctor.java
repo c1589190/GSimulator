@@ -1,11 +1,11 @@
 package com.gsim.config;
 
 import com.gsim.app.AppConfig;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
-import com.gsim.llm.LlmResponse;
-import com.gsim.llm.OpenAiLlmClient;
+import com.gsim.llm.LlmResult;
+import com.gsim.llm.ProviderConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -70,9 +70,11 @@ public class ConfigDoctor {
 
         // 使用短 timeout
         int testTimeout = Math.min(timeoutSeconds, 10);
-        OpenAiLlmClient client = new OpenAiLlmClient(baseUrl, apiKey, model, 0.0, testTimeout);
+        LlmManager llmManager = new LlmManager(ProviderConfig.generic(
+                "test", baseUrl, apiKey, model, 0.0, testTimeout));
 
-        if (!client.isAvailable()) {
+        if (!llmManager.isAvailable()) {
+            llmManager.close();
             return "❌ LLM 客户端不可用（配置不完整）。";
         }
 
@@ -81,7 +83,7 @@ public class ConfigDoctor {
                     model,
                     List.of(new LlmMessage("user", "Say \"OK\" and nothing else.")),
                     0.0, 10);
-            LlmResponse resp = client.chat(req);
+            LlmResult resp = llmManager.chat(req);
 
             if (resp.success()) {
                 return "✅ LLM 连通正常 (model=" + model + ", tokens=" + resp.tokensUsed() + ")";
@@ -90,6 +92,8 @@ public class ConfigDoctor {
             }
         } catch (Exception e) {
             return "❌ LLM 连接异常: " + e.getMessage();
+        } finally {
+            llmManager.close();
         }
     }
 
@@ -99,7 +103,6 @@ public class ConfigDoctor {
         String version = System.getProperty("java.version");
         int major;
         try {
-            // Handle versions like "21.0.1", "1.8.0_202", "17"
             if (version.startsWith("1.")) {
                 major = Integer.parseInt(version.split("\\.")[1]);
             } else {

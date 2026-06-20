@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -22,14 +22,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Agent 不得在结算保存失败时进入下一回合 (finish_action)")
 class AgentDoesNotEnterNextTurnIfSettlementSaveFailsTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
     private AtomicBoolean nextTurnCalled;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         nextTurnCalled = new AtomicBoolean(false);
 

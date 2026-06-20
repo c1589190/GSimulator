@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Agent 结算后进入下一回合完整流程")
 class AgentSettlementThenNextTurnUsesSaveLastResponseAndBranchNextTurnTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
     private AtomicReference<String> savedSettlement;
@@ -33,7 +33,7 @@ class AgentSettlementThenNextTurnUsesSaveLastResponseAndBranchNextTurnTest {
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         savedSettlement = new AtomicReference<>("");
         nextTurnCalled = new AtomicReference<>(false);

@@ -44,6 +44,7 @@ public class ConsoleInteractionAdapter {
     private NodeAgentChatService chatService;
     private ChatCommand chatCommand;
     private MessagesCommand messagesCommand;
+    private boolean streamEnabled = false;
 
     public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session) {
         this(manager, session, () -> null);
@@ -116,12 +117,25 @@ public class ConsoleInteractionAdapter {
         return Path.of(System.getProperty("user.home"), ".gsim_history");
     }
 
+    /** 暴露 JLine3 Terminal（供需要直接操作终端的光标控制组件使用）。 */
+    public org.jline.terminal.Terminal getJlineTerminal() {
+        if (lineReader != null) {
+            return lineReader.getTerminal();
+        }
+        return null;
+    }
+
     /** 注入对话服务（在注册命令后调用）。 */
     public void setChatService(NodeAgentChatService chatService, ChatCommand chatCommand,
                                MessagesCommand messagesCommand) {
         this.chatService = chatService;
         this.chatCommand = chatCommand;
         this.messagesCommand = messagesCommand;
+    }
+
+    /** 设置流式输出模式。流式开启时，LLM 回复已在流式过程中直接输出，无需再次打印。 */
+    public void setStreamEnabled(boolean streamEnabled) {
+        this.streamEnabled = streamEnabled;
     }
 
     /** 生成动态 prompt。 */
@@ -163,8 +177,13 @@ public class ConsoleInteractionAdapter {
                 if (!cleaned.startsWith("/") && chatService != null) {
                     try {
                         String reply = chatService.chat(cleaned);
-                        out.println(reply);
-                        out.println();
+                        if (streamEnabled) {
+                            // 流式模式下回复内容已在过程中直接输出，只需收尾换行
+                            out.println();
+                        } else {
+                            out.println(reply);
+                            out.println();
+                        }
                     } catch (Exception e) {
                         log.error("Chat error: {}", e.getMessage(), e);
                         out.println("[ERROR] Chat failed: " + e.getMessage());
@@ -223,7 +242,9 @@ public class ConsoleInteractionAdapter {
     }
 
     private void displayResult(InteractionResult result) {
-        if (result.displayText() != null && !result.displayText().isBlank()) out.println(result.displayText());
+        if (!streamEnabled) {
+            if (result.displayText() != null && !result.displayText().isBlank()) out.println(result.displayText());
+        }
         if (result.errors() != null && !result.errors().isEmpty())
             for (String err : result.errors()) out.println("[ERROR] " + err);
         out.println();

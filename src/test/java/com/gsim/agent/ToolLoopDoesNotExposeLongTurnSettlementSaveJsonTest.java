@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -22,13 +22,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 不暴露长篇结算 save JSON (finish_action)")
 class ToolLoopDoesNotExposeLongTurnSettlementSaveJsonTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new StubSaveLastResponseTool());
         toolRegistry.register(new StubBranchNextTurnTool());
@@ -156,7 +156,7 @@ class ToolLoopDoesNotExposeLongTurnSettlementSaveJsonTest {
     void draftIsCleanSettlementText() {
         // 用自己的 agent + stub，通过 Supplier 延迟捕获工具执行时的 draft
         var capturedDraft = new java.util.concurrent.atomic.AtomicReference<String>();
-        var localFakeLlm = new FakeLlmClient();
+        var localFakeLlm = new FakeLlmManager();
         var localRegistry = new ToolRegistry();
 
         // 注册会捕获 draft 的 SaveLastResponse stub（Supplier 延迟求值）

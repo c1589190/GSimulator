@@ -6,16 +6,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 测试 AgentProgressEvent 流式事件 + OrchestratorAgent 流式集成。
- * 使用 FakeLlmClient 配合自定义 stream() 实现模拟流式行为。
+ * 使用 FakeLlmManager 配合自定义 submit() 实现模拟流式行为。
  */
 @DisplayName("Agent 流式进度事件测试")
 class AgentStreamProgressTest {
@@ -26,7 +26,6 @@ class AgentStreamProgressTest {
     @BeforeEach
     void setUp() {
         toolRegistry = new ToolRegistry();
-        // 注册 finish_action 和 console_print（ToolLoop 需要）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         capturedEvents = new CopyOnWriteArrayList<>();
     }
@@ -86,39 +85,24 @@ class AgentStreamProgressTest {
     void orchestratorEmitsContentAndReasoningDelta() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        // 创建 FakeLlmClient，重写 stream() 以模拟流式输出
-        FakeLlmClient fakeLlm = new FakeLlmClient();
-        LlmClient streamingClient = new LlmClient() {
+        // 创建 FakeLlmManager，重写 submit() 以模拟流式输出
+        FakeLlmManager fakeLlm = new FakeLlmManager() {
             @Override
-            public LlmResponse chat(LlmRequest request) {
-                return fakeLlm.chat(request);
-            }
-
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                listener.onStart();
-                listener.onReasoningDelta("分析玩家行动中...");
-                listener.onContentDelta("这是");
-                listener.onContentDelta("测试输出");
-                // 组装最终响应
-                if (listener instanceof LlmStreamCollector collector) {
-                    collector.setFinalResponse(LlmResponse.success("这是测试输出", "test", 10));
-                    collector.setReasoning("分析玩家行动中...");
-                }
-                listener.onComplete();
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
+            public LlmCall submit(LlmRequest request) {
+                String callId = "sim-" + UUID.randomUUID().toString().substring(0, 8);
+                StreamPool pool = new StreamPool(callId);
+                pool.onReasoningDelta("分析玩家行动中...");
+                pool.onContentDelta("这是");
+                pool.onContentDelta("测试输出");
+                pool.onComplete(LlmResult.success("这是测试输出", "test", 10));
+                return new LlmCall(callId, pool);
             }
         };
 
         OrchestratorAgent agent = new OrchestratorAgent(
-                streamingClient, toolRegistry, "test-model", sink);
+                fakeLlm, toolRegistry, "test-model", sink);
         agent.setStreamEnabled(true);
 
-        // 使用 chatWithContextSession 触发 LLM 调用
         String contextMd = "# 上下文\n这是一个测试场景。";
         List<com.gsim.context.session.SessionMessage> history = List.of();
         String userText = "测试输入";
@@ -147,29 +131,19 @@ class AgentStreamProgressTest {
     void streamDisabledFallsBackToChat() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        FakeLlmClient fakeLlm = new FakeLlmClient();
-        // 模拟流式（但 streamEnabled=false 时不会调用）
-        LlmClient client = new LlmClient() {
-            @Override
-            public LlmResponse chat(LlmRequest request) {
-                return LlmResponse.success("非流式响应", "test", 5);
-            }
-
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                // 不应该被调用
-                fail("streamEnabled=false 时不应调用 stream()");
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
-            }
-        };
+        // 使用标准 FakeLlmManager（走 chat 路径）
+        FakeLlmManager fakeLlm = new FakeLlmManager();
+        // 不设置任何响应 — chat 路径下 addResponse 会被 chat() 消费
+        // 但是 OrchestratorAgent 的 ToolLoop 需要被触发...
+        // 使用 addToolCallsResponse 让 finish_action 被正确消费
+        fakeLlm.addToolCallsResponse(List.of(
+                new LlmToolCall("call_1", "finish_action",
+                        Map.of("status", "success", "message", "非流式响应"))
+        ));
 
         OrchestratorAgent agent = new OrchestratorAgent(
-                client, toolRegistry, "test-model", sink);
-        agent.setStreamEnabled(false); // 显式关闭
+                fakeLlm, toolRegistry, "test-model", sink);
+        agent.setStreamEnabled(false);
 
         String contextMd = "# 上下文\n测试。";
         List<com.gsim.context.session.SessionMessage> history = List.of();
@@ -189,41 +163,22 @@ class AgentStreamProgressTest {
     void streamCompleteToolCallsStillWork() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        FakeLlmClient fakeLlm = new FakeLlmClient();
-        LlmClient streamingClient = new LlmClient() {
+        FakeLlmManager fakeLlm = new FakeLlmManager() {
             @Override
-            public LlmResponse chat(LlmRequest request) {
-                return fakeLlm.chat(request);
-            }
-
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                listener.onStart();
+            public LlmCall submit(LlmRequest request) {
+                String callId = "tc-" + UUID.randomUUID().toString().substring(0, 8);
+                StreamPool pool = new StreamPool(callId);
                 // 模拟 tool_calls 流式（不发送 content delta）
-                if (listener instanceof LlmStreamCollector collector) {
-                    collector.setToolCalls(List.of(
-                            new LlmToolCall("call_1", "finish_action",
-                                    Map.of("message", "流式完成的回复",
-                                           "status", "success"))
-                    ));
-                    collector.setFinalResponse(LlmResponse.successWithToolCalls(
-                            List.of(new LlmToolCall("call_1", "finish_action",
-                                    Map.of("message", "流式完成的回复",
-                                           "status", "success"))),
-                            "test", 5));
-                }
-                listener.onToolCallDelta("tool:finish_action");
-                listener.onComplete();
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
+                LlmToolCall tc = new LlmToolCall("call_1", "finish_action",
+                        Map.of("message", "流式完成的回复", "status", "success"));
+                pool.onToolCallDelta(0, "finish_action", tc.arguments().toString());
+                pool.onComplete(LlmResult.withToolCalls(List.of(tc), "test", 5));
+                return new LlmCall(callId, pool);
             }
         };
 
         OrchestratorAgent agent = new OrchestratorAgent(
-                streamingClient, toolRegistry, "test-model", sink);
+                fakeLlm, toolRegistry, "test-model", sink);
         agent.setStreamEnabled(true);
 
         String contextMd = "# 上下文\n测试 tool call。";
@@ -233,8 +188,7 @@ class AgentStreamProgressTest {
         OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
                 contextMd, history, userText);
 
-        // 验证 ToolLoop 正确处理了 finish_action
-        assertTrue(result.success(), "流式 tool_calls 应被正确处理");
+        assertTrue(result.success(), "流式 tool_calls 应被正确处理: " + result.errorMessage());
         assertNotNull(result.finalText());
     }
 
@@ -243,27 +197,18 @@ class AgentStreamProgressTest {
     void streamFailureSendsFailedEvent() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        LlmClient failingClient = new LlmClient() {
+        FakeLlmManager failingLlm = new FakeLlmManager() {
             @Override
-            public LlmResponse chat(LlmRequest request) {
-                return LlmResponse.failure("chat error");
-            }
-
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                listener.onStart();
-                listener.onError(new RuntimeException("模拟流式错误"));
-                listener.onComplete();
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
+            public LlmCall submit(LlmRequest request) {
+                String callId = "err-" + UUID.randomUUID().toString().substring(0, 8);
+                StreamPool pool = new StreamPool(callId);
+                pool.onError("模拟流式错误");
+                return new LlmCall(callId, pool);
             }
         };
 
         OrchestratorAgent agent = new OrchestratorAgent(
-                failingClient, toolRegistry, "test-model", sink);
+                failingLlm, toolRegistry, "test-model", sink);
         agent.setStreamEnabled(true);
 
         String contextMd = "# 测试";
@@ -278,42 +223,24 @@ class AgentStreamProgressTest {
         assertTrue(hasFailed, "流式错误时应发送 LLM_STREAM_FAILED 事件");
     }
 
-    // ---- 3. JSON fallback → registry 集成测试 ----
-
     @Test
-    @DisplayName("JSON fallback 也更新 registry：非流式 JSON 响应 → registry snapshot 含内容")
-    void jsonFallbackUpdatesRegistry() throws Exception {
+    @DisplayName("非流式 JSON 响应 — submit 完成")
+    void jsonFallbackStreamComplete() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        // 模拟不支持 SSE 的 API — stream() 内部走 JSON fallback
-        LlmClient jsonFallbackClient = new LlmClient() {
+        FakeLlmManager jsonLlm = new FakeLlmManager() {
             @Override
-            public LlmResponse chat(LlmRequest request) {
-                return LlmResponse.success("直接 chat 响应", "test", 5);
-            }
-
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                // 模拟 JSON fallback 行为：发射完整 content delta 后 complete
-                listener.onStart();
-                listener.onContentDelta("JSON fallback 完整回答内容");
-                if (listener instanceof LlmStreamCollector collector) {
-                    collector.setFinalResponse(
-                            LlmResponse.success("JSON fallback 完整回答内容", "test", 10));
-                }
-                listener.onComplete();
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
+            public LlmCall submit(LlmRequest request) {
+                String callId = "json-" + UUID.randomUUID().toString().substring(0, 8);
+                StreamPool pool = new StreamPool(callId);
+                pool.onContentDelta("JSON fallback 完整回答内容");
+                pool.onComplete(LlmResult.success("JSON fallback 完整回答内容", "test", 10));
+                return new LlmCall(callId, pool);
             }
         };
 
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
         OrchestratorAgent agent = new OrchestratorAgent(
-                jsonFallbackClient, toolRegistry, "test-model", sink);
-        agent.setStreamRegistry(registry);
+                jsonLlm, toolRegistry, "test-model", sink);
         agent.setStreamEnabled(true);
 
         String contextMd = "# 上下文\n测试 JSON fallback 路径。";
@@ -323,53 +250,24 @@ class AgentStreamProgressTest {
         OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
                 contextMd, history, userText);
 
-        // 验证 registry 被更新（而非只更新了内部 collector）
-        // 注意：stream() 完成后 callLlm 调用 registry.complete()，
-        // 所以 activeCount 可能为 0，但 snapshot 仍在 registry 中
-
-        // 通过事件中的 streamId 查找 registry snapshot
-        boolean foundContent = false;
-        for (AgentProgressEvent event : capturedEvents) {
-            if (event.phase().equals(AgentProgressEvent.LLM_CONTENT_DELTA)) {
-                String streamId = event.meta().get("streamId");
-                LlmStreamSnapshot snap = registry.snapshot(streamId);
-                if (snap != null && snap != LlmStreamSnapshot.EMPTY
-                        && !snap.content().isEmpty()) {
-                    foundContent = true;
-                    break;
-                }
-            }
-        }
-        assertTrue(foundContent,
-                "registry 中应有包含内容的 snapshot（JSON fallback 也走 registry）");
+        boolean hasContentDelta = capturedEvents.stream()
+                .anyMatch(e -> AgentProgressEvent.LLM_CONTENT_DELTA.equals(e.phase()));
+        assertTrue(hasContentDelta, "JSON fallback 也应产生 content delta 事件");
     }
 
     @Test
-    @DisplayName("streamEnabled=false 时不更新 registry（走 chat 路径）")
-    void streamDisabledDoesNotUpdateRegistry() throws Exception {
+    @DisplayName("streamEnabled=false 时不产生流式事件")
+    void streamDisabledNoStreamEvents() throws Exception {
         AgentProgressSink sink = capturedEvents::add;
 
-        LlmClient chatClient = new LlmClient() {
-            @Override
-            public LlmResponse chat(LlmRequest request) {
-                return LlmResponse.success("非流式 chat 响应", "test", 5);
-            }
+        FakeLlmManager fakeLlm = new FakeLlmManager();
+        fakeLlm.addToolCallsResponse(List.of(
+                new LlmToolCall("call_chat", "finish_action",
+                        Map.of("status", "success", "message", "非流式 chat 响应"))
+        ));
 
-            @Override
-            public void stream(LlmRequest request, LlmStreamListener listener) {
-                fail("streamEnabled=false 时不应调用 stream()");
-            }
-
-            @Override
-            public boolean isAvailable() {
-                return true;
-            }
-        };
-
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
         OrchestratorAgent agent = new OrchestratorAgent(
-                chatClient, toolRegistry, "test-model", sink);
-        agent.setStreamRegistry(registry);
+                fakeLlm, toolRegistry, "test-model", sink);
         agent.setStreamEnabled(false);
 
         String contextMd = "# 上下文";
@@ -379,8 +277,8 @@ class AgentStreamProgressTest {
         OrchestratorAgent.ChatResult result = agent.chatWithContextSession(
                 contextMd, history, userText);
 
-        // 非流式路径不应在 registry 中创建任何 stream
-        assertEquals(0, registry.activeCount(),
-                "streamEnabled=false 时 registry 应无活跃 stream");
+        boolean hasStreamEvent = capturedEvents.stream()
+                .anyMatch(e -> e.phase().startsWith("LLM_STREAM"));
+        assertFalse(hasStreamEvent, "streamEnabled=false 时不应有流式事件");
     }
 }

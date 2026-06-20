@@ -23,8 +23,8 @@ import com.gsim.knowledge.scope.ScopedKnowledgeStoreFactory;
 import com.gsim.knowledge.search.KnowledgeSearchService;
 import com.gsim.knowledge.store.SQLiteKnowledgeStore;
 import com.gsim.knowledge.tool.KnowledgeToolFactory;
-import com.gsim.llm.LlmClient;
-import com.gsim.llm.OpenAiLlmClient;
+import com.gsim.llm.LlmManager;
+import com.gsim.llm.ProviderConfig;
 import com.gsim.storage.DataPaths;
 import com.gsim.tool.LocalFileSearchService;
 import com.gsim.tool.ToolRegistry;
@@ -47,7 +47,7 @@ public class ApplicationContext {
     private final CampaignService campaignService;
     private final TurnService turnService;
     private final PlayerActionService playerActionService;
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
     private final ToolRegistry toolRegistry;
     private final InteractionContext interactionContext;
     private final InteractionSession interactionSession;
@@ -83,12 +83,13 @@ public class ApplicationContext {
 
         // LLM — 只有配置完整时才创建真正的客户端
         if (config.isLlmConfigured()) {
-            this.llmClient = new OpenAiLlmClient(
+            this.llmManager = new LlmManager(ProviderConfig.generic(
+                    "custom",
                     config.getLlmBaseUrl(), config.getLlmApiKey(),
                     config.getLlmModel(), config.getLlmTemperature(),
-                    config.getLlmTimeoutSeconds());
+                    config.getLlmTimeoutSeconds()));
         } else {
-            this.llmClient = null;
+            this.llmManager = null;
         }
 
         // Tool 系统
@@ -112,7 +113,7 @@ public class ApplicationContext {
         this.interactionSession = new InteractionSession(
                 interactionContext, config,
                 campaignService, turnService, playerActionService,
-                toolRegistry, llmClient);
+                toolRegistry, llmManager);
         this.interactionManager = new InteractionManager();
 
         // 事件系统
@@ -214,7 +215,7 @@ public class ApplicationContext {
     public CampaignService getCampaignService() { return campaignService; }
     public TurnService getTurnService() { return turnService; }
     public PlayerActionService getPlayerActionService() { return playerActionService; }
-    public LlmClient getLlmClient() { return llmClient; }
+    public LlmManager getLlmManager() { return llmManager; }
     public ToolRegistry getToolRegistry() { return toolRegistry; }
     public InteractionContext getInteractionContext() { return interactionContext; }
     public InteractionSession getInteractionSession() { return interactionSession; }
@@ -278,8 +279,8 @@ public class ApplicationContext {
      * 关闭所有资源：LLM client、embedding model、knowledge stores、event bus、API server。
      */
     public void shutdown() {
-        if (llmClient instanceof OpenAiLlmClient openAi) {
-            openAi.close();
+        if (llmManager != null) {
+            llmManager.close();
         }
         if (embeddingModel instanceof ExternalEmbeddingModel ext) {
             ext.close();

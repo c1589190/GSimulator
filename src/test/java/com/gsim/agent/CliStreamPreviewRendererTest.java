@@ -11,9 +11,11 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CliStreamPreviewRenderer 单元测试（重构后 — 基于 LlmStreamSnapshot 渲染）。
+ * CliStreamPreviewRenderer 单元测试（自管理缓冲区，无外部 registry）。
+ * 重构后 sink 不再持有 renderer — renderer 纯独立使用。
+ * sink 集成测试改为验证直接 inline 打印行为。
  */
-@DisplayName("CLI 流式预览渲染器测试")
+@DisplayName("CLI 流式预览渲染器 + sink inline 打印测试")
 class CliStreamPreviewRendererTest {
 
     private ByteArrayOutputStream baos;
@@ -28,70 +30,44 @@ class CliStreamPreviewRendererTest {
         renderer = new CliStreamPreviewRenderer(ps, true, 3000, true);
     }
 
-    // ---- snapshot rendering ----
+    // ---- renderWaiting ----
 
     @Test
-    @DisplayName("空 snapshot → 输出包含等待提示")
-    void emptySnapshotShowsWaiting() {
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "", "", 0, 0, 0, true, false, null);
-        renderer.render(snap);
+    @DisplayName("renderWaiting 输出灰框「等待输出……」")
+    void renderWaitingShowsWaitingBox() {
+        renderer.renderWaiting("s1");
         String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("等待输出"), "空快照应显示等待，实际: " + output);
+        assertTrue(output.contains("等待输出"), "renderWaiting 应显示等待，实际: " + output);
     }
 
+    // ---- appendContent ----
+
     @Test
-    @DisplayName("只有 content → 输出区显示内容")
-    void contentOnlySnapshotShowsContent() {
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "", "阿道芙进入学校", 0, 2, 0, true, false, null);
-        renderer.render(snap);
+    @DisplayName("appendContent → 输出区显示内容")
+    void appendContentShowsContent() {
+        renderer.appendContent("s1", "阿道芙进入学校");
         String output = baos.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("阿道芙进入学校"), "应显示 content，实际: " + output);
     }
 
+    // ---- appendReasoning ----
+
     @Test
-    @DisplayName("只有 reasoning → 思考区显示内容")
-    void reasoningOnlySnapshotShowsReasoning() {
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "正在分析玩家行动...", "", 2, 0, 0, true, false, null);
-        renderer.render(snap);
+    @DisplayName("appendReasoning → 思考区显示内容")
+    void appendReasoningShowsReasoning() {
+        renderer.appendReasoning("s1", "正在分析玩家行动...");
         String output = baos.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("正在分析玩家行动"), "应显示 reasoning，实际: " + output);
     }
 
+    // ---- markToolCallDelta ----
+
     @Test
-    @DisplayName("只有 toolCallDelta > 0 → 显示正在选择工具")
-    void toolCallOnlySnapshotShowsChoosingTool() {
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "", "", 0, 0, 3, true, false, null);
-        renderer.render(snap);
+    @DisplayName("markToolCallDelta → 显示正在选择工具")
+    void toolCallDeltaShowsChoosingTool() {
+        renderer.markToolCallDelta("s1");
         String output = baos.toString(StandardCharsets.UTF_8);
         assertTrue(output.contains("正在选择工具"), "应有工具选择提示，实际: " + output);
-    }
-
-    @Test
-    @DisplayName("completed snapshot → 不渲染（clear 应在事件处理中调用）")
-    void completedSnapshotDoesNotRender() {
-        // completed 且无内容 → 不渲染
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "", "", 0, 0, 0, false, true, null);
-        renderer.render(snap);
-        String output = baos.toString(StandardCharsets.UTF_8);
-        // inactive 且无内容的快照不应渲染
-        assertTrue(output.isEmpty(), "inactive 无内容快照不应渲染，实际: " + output);
-    }
-
-    @Test
-    @DisplayName("disabled 模式下不输出任何内容")
-    void disabledRendererDoesNothing() {
-        CliStreamPreviewRenderer disabled = new CliStreamPreviewRenderer(
-                ps, false, 3000, true);
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "r", "c", 1, 1, 0, true, false, null);
-        disabled.render(snap);
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.isEmpty(), "disabled 模式不应有输出");
     }
 
     // ---- clear ----
@@ -102,8 +78,23 @@ class CliStreamPreviewRendererTest {
         assertDoesNotThrow(() -> {
             renderer.clear("s1");
             renderer.clear("s2");
-            renderer.clear(null);
+            renderer.clearIfActive();
         });
+    }
+
+    // ---- clearIfActive ----
+
+    @Test
+    @DisplayName("无活跃框时 clearIfActive 不抛异常")
+    void clearIfActiveWhenNothingActive() {
+        assertDoesNotThrow(() -> renderer.clearIfActive());
+    }
+
+    @Test
+    @DisplayName("有活跃内容后 clearIfActive 清除灰框")
+    void clearIfActiveClearsActiveBox() {
+        renderer.appendContent("s1", "hello");
+        renderer.clearIfActive();
     }
 
     // ---- maxChars truncation ----
@@ -115,67 +106,87 @@ class CliStreamPreviewRendererTest {
         for (int i = 0; i < 5000; i++) longText.append("x");
         longText.append("END");
 
-        LlmStreamSnapshot snap = new LlmStreamSnapshot(
-                "s1", "", longText.toString(), 0, 1, 0, true, false, null);
-        renderer.render(snap);
+        renderer.appendContent("s1", longText.toString());
         String output = baos.toString(StandardCharsets.UTF_8);
-        // 应只包含末尾 3000 字符（含 "END"）
         assertTrue(output.contains("END"), "截断后应保留末尾，实际: " + output.substring(Math.max(0, output.length() - 100)));
     }
 
-    // ---- CliAgentProgressSink + registry 集成 ----
+    // ---- disabled mode ----
 
     @Test
-    @DisplayName("CliAgentProgressSink 流式事件 → 从 registry 取 snapshot 渲染")
-    void sinkRoutesStreamEventsToRenderer() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        ByteArrayOutputStream renderOut = new ByteArrayOutputStream();
-        PrintStream renderPs = new PrintStream(renderOut, true, StandardCharsets.UTF_8);
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(renderPs, true, 3000, true);
+    @DisplayName("disabled 模式下不输出任何内容")
+    void disabledRendererDoesNothing() {
+        ByteArrayOutputStream disabledBaos = new ByteArrayOutputStream();
+        PrintStream disabledPs = new PrintStream(disabledBaos, true, StandardCharsets.UTF_8);
+        CliStreamPreviewRenderer disabled = new CliStreamPreviewRenderer(disabledPs, false, 3000, true);
 
-        CliAgentProgressSink sink = new CliAgentProgressSink(
-                ps, true, r, registry);
+        disabled.renderWaiting("s1");
+        disabled.appendContent("s1", "content");
+        disabled.appendReasoning("s1", "reasoning");
+        disabled.markToolCallDelta("s1");
 
-        String sid = "test-stream-1";
-        registry.start(sid);
+        String output = disabledBaos.toString(StandardCharsets.UTF_8);
+        assertTrue(output.isEmpty(), "disabled 模式不应有输出，实际: " + output);
+    }
 
-        // content delta → registry + render
-        registry.appendContent(sid, "Hello");
-        sink.onProgress(AgentProgressEvent.llmContentDelta(sid, "Hello"));
-        String output = renderOut.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("Hello"), "renderer 应显示 content: " + output);
+    // ---- CliAgentProgressSink inline 打印集成测试 ----
 
-        registry.complete(sid);
-        sink.onProgress(AgentProgressEvent.llmStreamCompleted(sid));
+    @Test
+    @DisplayName("LLM_STREAM_STARTED 通过 sink → 直接输出 [...] 前缀")
+    void sinkPrintsStartMarkerOnStreamStarted() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
+        sink.onProgress(AgentProgressEvent.llmStreamStarted("sid-wait"));
+
+        String output = baos.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("[...]"), "sink 应将 STARTED 转为 [...] 前缀，实际: " + output);
     }
 
     @Test
-    @DisplayName("CliAgentProgressSink 流式失败 → clear + 打印错误")
-    void sinkClearsAndPrintsErrorOnStreamFailed() {
+    @DisplayName("LLM_CONTENT_DELTA 通过 sink → 粗体高亮直接打印 delta")
+    void sinkPrintsContentDeltaDirectly() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
+
+        sink.onProgress(AgentProgressEvent.llmStreamStarted("s1"));
+        baos.reset();
+
+        sink.onProgress(AgentProgressEvent.llmContentDelta("s1", "粗体输出内容"));
+        String output = baos.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("粗体输出内容"), "sink 应直接打印 delta: " + output);
+        assertTrue(output.contains("\033[1m"), "首个 content 应以粗体 ANSI 开头: " + output);
+    }
+
+    @Test
+    @DisplayName("COMPLETED 关闭粗体 ANSI，恢复正常文字")
+    void completedResetsBoldAnsi() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
+
+        sink.onProgress(AgentProgressEvent.llmStreamStarted("s1"));
+        sink.onProgress(AgentProgressEvent.llmContentDelta("s1", "content"));
+        baos.reset();
+
+        sink.onProgress(AgentProgressEvent.llmStreamCompleted("s1"));
+        String output = baos.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("\033[0m"), "COMPLETED 应关闭粗体 ANSI");
+    }
+
+    @Test
+    @DisplayName("LLM_STREAM_FAILED 通过 sink → 打印错误（无 renderer 参与）")
+    void sinkPrintsErrorOnStreamFailedWithoutRenderer() {
         ByteArrayOutputStream errBaos = new ByteArrayOutputStream();
         PrintStream errPs = new PrintStream(errBaos, true, StandardCharsets.UTF_8);
+        CliAgentProgressSink sink = new CliAgentProgressSink(errPs, true);
 
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        String sid = "test-fail-1";
-        registry.start(sid);
-
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(
-                errPs, true, r, registry);
-
-        sink.onProgress(AgentProgressEvent.llmStreamFailed(sid, "连接超时"));
+        sink.onProgress(AgentProgressEvent.llmStreamFailed("test-fail", "连接超时"));
 
         String errOutput = errBaos.toString(StandardCharsets.UTF_8);
-        assertTrue(errOutput.contains("LLM 流式输出失败"),
-                "应打印失败信息，实际: " + errOutput);
         assertTrue(errOutput.contains("连接超时"),
                 "应包含错误详情，实际: " + errOutput);
     }
 
     @Test
-    @DisplayName("CliAgentProgressSink 无 renderer 时流式事件不崩溃")
-    void sinkWithoutRendererDoesNotCrashOnStreamEvents() {
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, null, null);
+    @DisplayName("流式事件不抛异常（防御性）")
+    void sinkHandlesAllStreamEventsWithoutException() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
 
         assertDoesNotThrow(() -> {
             sink.onProgress(AgentProgressEvent.llmStreamStarted("x"));
@@ -218,123 +229,59 @@ class CliStreamPreviewRendererTest {
                 AgentProgressEvent.finishAccepted(1, 32)));
     }
 
-    // ===== Test 2: CliStreamStartedShowsWaitingBoxTest =====
+    @Test
+    @DisplayName("REASONING_DELTA 以灰色 Thinking: 前缀直接打印")
+    void reasoningDeltaPrintsWithGreyThinkingPrefix() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
+
+        sink.onProgress(AgentProgressEvent.llmStreamStarted("s1"));
+        baos.reset();
+
+        // 第一个 reasoning delta 应有 Thinking: 前缀 + 灰色
+        sink.onProgress(AgentProgressEvent.llmReasoningDelta("s1", "分析中……"));
+        String first = baos.toString(StandardCharsets.UTF_8);
+        assertTrue(first.contains("Thinking:"), "首个 reasoning 应有 Thinking: 前缀: " + first);
+        assertTrue(first.contains("\033[90m"), "应有灰色 ANSI 开始码: " + first);
+        baos.reset();
+
+        // 第二个 reasoning delta 不应重复 Thinking: 前缀
+        sink.onProgress(AgentProgressEvent.llmReasoningDelta("s1", "继续分析"));
+        String second = baos.toString(StandardCharsets.UTF_8);
+        assertFalse(second.contains("Thinking:"), "后续 reasoning 不应重复前缀: " + second);
+        assertTrue(second.contains("继续分析"), "应继续打印内容: " + second);
+    }
 
     @Test
-    @DisplayName("LLM_STREAM_STARTED 事件 → renderWaiting 输出灰框「等待输出……」")
-    void streamStartedRendersWaitingBox() {
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
+    @DisplayName("REASONING_DELTA 结束后 COMPLETED 关闭 ANSI 灰色")
+    void reasoningClosedOnStreamCompleted() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
 
-        // 模拟 handleStreamEvent 中的 STARTED 处理
-        r.renderWaiting("test-stream");
+        sink.onProgress(AgentProgressEvent.llmStreamStarted("s1"));
+        sink.onProgress(AgentProgressEvent.llmReasoningDelta("s1", "思考内容"));
+        baos.reset();
 
+        sink.onProgress(AgentProgressEvent.llmStreamCompleted("s1"));
         String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("等待输出"),
-                "STARTED 应渲染等待框，实际: " + output);
+        assertTrue(output.contains("\033[0m"), "COMPLETED 时应关闭 ANSI 灰色");
     }
 
-    @Test
-    @DisplayName("LLM_STREAM_STARTED 通过 sink → handleStreamEvent → renderWaiting")
-    void sinkRoutesStreamStartedToWaitingBox() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
-        sink.onProgress(AgentProgressEvent.llmStreamStarted("sid-wait"));
-
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("等待输出"),
-                "sink 应将 STARTED 转为 waiting 框，实际: " + output);
-    }
-
-    // ===== Test 3: CliStreamDeltaRegistryMissFallbackTest =====
+    // ---- 完整 inline 打印序列 ----
 
     @Test
-    @DisplayName("registry miss → renderContentFallback 用 event.detail 直接渲染")
-    void registryMissFallbackToEventDetailForContent() {
-        // 不预先调用 registry.start() — 模拟 registry miss
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
-        // CONTENT_DELTA without prior start → registry miss → fallback
-        sink.onProgress(AgentProgressEvent.llmContentDelta("unknown-stream", "fallback内容"));
-
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("fallback内容"),
-                "registry miss 时应 fallback 到 event.detail 渲染，实际: " + output);
-        assertTrue(output.contains("[STREAM_TRACE]"),
-                "registry miss 时应输出 STREAM_TRACE 日志，实际: " + output);
-    }
-
-    @Test
-    @DisplayName("registry miss → renderReasoningFallback 用 event.detail 直接渲染")
-    void registryMissFallbackToEventDetailForReasoning() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
-        sink.onProgress(AgentProgressEvent.llmReasoningDelta("unknown-stream", "思考中……"));
-
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("思考中……"),
-                "reasoning fallback 应显示内容，实际: " + output);
-    }
-
-    @Test
-    @DisplayName("registry miss → renderToolChoosing 显示「正在选择工具……」")
-    void registryMissFallbackToToolChoosingForToolCall() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
-        sink.onProgress(AgentProgressEvent.llmToolCallDelta("unknown-stream"));
-
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("正在选择工具"),
-                "tool_call fallback 应显示选择工具提示，实际: " + output);
-    }
-
-    @Test
-    @DisplayName("registry miss 时不抛异常（防御性）")
-    void registryMissDoesNotThrow() {
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, null);
-
-        assertDoesNotThrow(() -> {
-            sink.onProgress(AgentProgressEvent.llmStreamStarted("x"));
-            sink.onProgress(AgentProgressEvent.llmContentDelta("x", "test"));
-            sink.onProgress(AgentProgressEvent.llmReasoningDelta("x", "think"));
-            sink.onProgress(AgentProgressEvent.llmToolCallDelta("x"));
-            sink.onProgress(AgentProgressEvent.llmStreamCompleted("x"));
-        });
-    }
-
-    // ===== Test 8: StartedDeltaCompletedRenderSequenceTest =====
-
-    @Test
-    @DisplayName("完整渲染序列：STARTED → CONTENT_DELTA → COMPLETED → clear")
-    void fullRenderSequenceFromStartToComplete() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
+    @DisplayName("完整 inline 序列：STARTED → CONTENT_DELTA → COMPLETED")
+    void fullInlineSequenceFromStartToComplete() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
         String sid = "full-seq";
 
-        // 1. STARTED — 模拟 Orchestrator 已调用 registry.start()
-        registry.start(sid);
+        // 1. STARTED
         sink.onProgress(AgentProgressEvent.llmStreamStarted(sid));
         String afterStarted = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(afterStarted.contains("等待输出"),
-                "STARTED 后应有等待框: " + afterStarted);
+        assertTrue(afterStarted.contains("[...]"), "STARTED 后应有 [...] 前缀: " + afterStarted);
         baos.reset();
 
         // 2. CONTENT_DELTA x3
-        registry.appendContent(sid, "第一段，");
         sink.onProgress(AgentProgressEvent.llmContentDelta(sid, "第一段，"));
-        registry.appendContent(sid, "第二段，");
         sink.onProgress(AgentProgressEvent.llmContentDelta(sid, "第二段，"));
-        registry.appendContent(sid, "第三段。");
         sink.onProgress(AgentProgressEvent.llmContentDelta(sid, "第三段。"));
 
         String afterDeltas = baos.toString(StandardCharsets.UTF_8);
@@ -342,68 +289,79 @@ class CliStreamPreviewRendererTest {
                 "delta 后应显示内容: " + afterDeltas);
         baos.reset();
 
-        // 3. COMPLETED — clear 灰框
-        registry.complete(sid);
+        // 3. COMPLETED
         sink.onProgress(AgentProgressEvent.llmStreamCompleted(sid));
-
-        // verify registry state
-        LlmStreamSnapshot snap = registry.snapshot(sid);
-        assertFalse(snap.active(), "完成后 stream 不应活跃");
-        assertTrue(snap.completed(), "完成后 stream 应标记 completed");
-        assertEquals("第一段，第二段，第三段。", snap.content(),
-                "registry snapshot 应包含完整累积内容");
-        assertEquals(3, snap.contentDeltaCount(), "应有 3 次 content delta");
+        // 换行追加 — 验证不抛异常
+        assertDoesNotThrow(() -> {});
     }
 
     @Test
-    @DisplayName("渲染序列含 reasoning：STARTED → REASONING_DELTA → CONTENT_DELTA → COMPLETED")
-    void renderSequenceWithReasoningBeforeContent() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
+    @DisplayName("inline 序列含 reasoning：STARTED → REASONING_DELTA → CONTENT_DELTA")
+    void inlineSequenceWithReasoningBeforeContent() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
         String sid = "reasoning-seq";
 
-        registry.start(sid);
         sink.onProgress(AgentProgressEvent.llmStreamStarted(sid));
 
-        // Reasoning first
-        registry.appendReasoning(sid, "分析玩家意图……");
+        // Reasoning first — 应以灰色 Thinking: 前缀打印
         sink.onProgress(AgentProgressEvent.llmReasoningDelta(sid, "分析玩家意图……"));
 
         String afterReasoning = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(afterReasoning.contains("分析玩家意图"),
-                "reasoning 应显示，实际: " + afterReasoning);
+        assertTrue(afterReasoning.contains("Thinking:"), "reasoning 应以 Thinking: 前缀打印，实际: " + afterReasoning);
+        assertTrue(afterReasoning.contains("\033[90m"), "reasoning 应有灰色 ANSI，实际: " + afterReasoning);
+        assertTrue(afterReasoning.contains("分析玩家意图"), "reasoning 应直接打印内容，实际: " + afterReasoning);
         baos.reset();
 
-        // Then content
-        registry.appendContent(sid, "最终答复");
+        // Then content — 应先关闭 reasoning 灰色并换行
         sink.onProgress(AgentProgressEvent.llmContentDelta(sid, "最终答复"));
 
         String afterContent = baos.toString(StandardCharsets.UTF_8);
-        assertTrue(afterContent.contains("最终答复"),
-                "content 应显示，实际: " + afterContent);
+        assertTrue(afterContent.contains("\033[0m"), "切换到 content 时应重置 ANSI");
+        assertTrue(afterContent.contains("最终答复"), "content 应直接打印，实际: " + afterContent);
     }
 
     @Test
-    @DisplayName("COMPLETED 后 clear 不清空 registry（registry 由 Orchestrator 管理生命周期）")
-    void clearDoesNotRemoveFromRegistry() {
-        LlmStreamStateRegistry registry = new LlmStreamStateRegistry();
-        CliStreamPreviewRenderer r = new CliStreamPreviewRenderer(ps, true, 3000, true);
-        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true, r, registry);
-
+    @DisplayName("COMPLETED 后 renderer 缓冲区被清空（独立于 sink）")
+    void clearRemovesBuffersAfterComplete() {
         String sid = "clear-test";
-        registry.start(sid);
-        registry.appendContent(sid, "data");
+        renderer.appendContent(sid, "hello world");
+        renderer.clear(sid);
 
-        // 真实流程：Orchestrator 先 complete registry，再发 COMPLETED 事件给 sink
-        registry.complete(sid);
-        sink.onProgress(AgentProgressEvent.llmStreamCompleted(sid));
+        // clear 后重新 append 不应包含旧内容
+        ByteArrayOutputStream baos2 = new ByteArrayOutputStream();
+        PrintStream ps2 = new PrintStream(baos2, true, StandardCharsets.UTF_8);
+        CliStreamPreviewRenderer r2 = new CliStreamPreviewRenderer(ps2, true, 3000, true);
 
-        LlmStreamSnapshot snap = registry.snapshot(sid);
-        assertFalse(snap.active(), "completed 后 registry 中 stream 不应活跃");
-        assertTrue(snap.completed(), "completed 后 stream 应标记 completed");
-        // content 仍在（completed 不删除数据）
-        assertFalse(snap.content().isEmpty(), "content 应保留在 registry");
+        r2.appendContent(sid, "fresh内容");
+        String output = baos2.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("fresh内容"), "clear 后新 append 应正常渲染");
+        assertFalse(output.contains("hello world"), "clear 后不应包含旧内容");
+    }
+
+    // ---- renderer 独立于 sink 运行 ----
+
+    @Test
+    @DisplayName("renderer 灰框输出与 sink 无关（独立渲染）")
+    void rendererOperatesIndependentlyOfSink() {
+        // renderer 独立渲染灰框
+        renderer.renderWaiting("stream-1");
+        ps.flush();
+        assertTrue(baos.toString().contains("\033[90m"), "渲染后应有 ANSI 灰框输出");
+
+        // sink 处理非流式事件 — 不再清除灰框
+        var sink = new CliAgentProgressSink(ps, true);
+        var event = AgentProgressEvent.plainAnswerWithoutFinish(2, 10);
+        sink.onProgress(event);
+
+        String output = baos.toString();
+        assertTrue(output.contains("[Agent]"), "非流式事件后应格式化 [Agent] 行");
+    }
+
+    @Test
+    @DisplayName("无 renderer 时非流式事件也正常处理")
+    void nonStreamEventsNormalWithoutRenderer() {
+        CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
+        var event = AgentProgressEvent.plainAnswerWithoutFinish(2, 10);
+        assertDoesNotThrow(() -> sink.onProgress(event));
     }
 }

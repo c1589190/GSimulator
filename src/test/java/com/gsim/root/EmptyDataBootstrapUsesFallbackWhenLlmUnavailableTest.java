@@ -1,7 +1,7 @@
 package com.gsim.root;
 
 import com.gsim.data.DataManager;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,7 +41,7 @@ class EmptyDataBootstrapUsesFallbackWhenLlmUnavailableTest {
         Files.createDirectories(dataRoot);
         DataManager dm = new DataManager(dataRoot);
 
-        FakeLlmClient fakeLlm = new FakeLlmClient();
+        FakeLlmManager fakeLlm = new FakeLlmManager();
         fakeLlm.setAvailable(false); // LLM 不可用
 
         var intent = BootstrapIntentParser.parse("帮我建一个罗马尼亚1876开局", true);

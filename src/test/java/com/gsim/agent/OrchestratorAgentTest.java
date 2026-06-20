@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.campaign.PlayerAction;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.LocalFileSearchService;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.WikiSearchTool;
@@ -19,12 +19,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * OrchestratorAgent 测试 — 使用 FakeLlmClient，不访问外网。
+ * OrchestratorAgent 测试 — 使用 FakeLlmManager，不访问外网。
  */
 @DisplayName("OrchestratorAgent")
 class OrchestratorAgentTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent orchestrator;
 
@@ -49,7 +49,7 @@ class OrchestratorAgentTest {
                 精英干员包括阿米娅、凯尔希、煌等。
                 """);
 
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         LocalFileSearchService searchService = new LocalFileSearchService(wikiDir);
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new WikiSearchTool(searchService));
@@ -94,7 +94,7 @@ class OrchestratorAgentTest {
     }
 
     @Test
-    @DisplayName("FakeLlmClient 直接返回文本时应产出最终结果")
+    @DisplayName("FakeLlmManager 直接返回文本时应产出最终结果")
     void testRun_PlainTextResponse() {
         fakeLlm.setNextResponse("## 推演结果\n\n罗德岛具备军事价值。");
 
@@ -108,7 +108,7 @@ class OrchestratorAgentTest {
     }
 
     @Test
-    @DisplayName("FakeLlmClient 返回 tool call JSON 时应执行工具并继续")
+    @DisplayName("FakeLlmManager 返回 tool call JSON 时应执行工具并继续")
     void testRun_ToolCallThenText() {
         fakeLlm.addResponse(
                 "{\"tool\":\"wiki_search\",\"args\":{\"query\":\"罗德岛\"}}");

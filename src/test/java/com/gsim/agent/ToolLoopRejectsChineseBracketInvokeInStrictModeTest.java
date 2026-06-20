@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,13 +18,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 拒绝中文方括号工具调用")
 class ToolLoopRejectsChineseBracketInvokeInStrictModeTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");

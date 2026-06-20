@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 从混合自然语言+fenced JSON 中提取 tool call")
 class ToolLoopExecutesMixedNaturalLanguageAndFencedToolCallTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new SimulationContentAppendTool());
         toolRegistry.register(new BranchCreateChildTool());

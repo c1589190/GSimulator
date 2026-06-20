@@ -2,7 +2,7 @@ package com.gsim.agent;
 
 import com.gsim.agent.tool.ConsolePrintTool;
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,14 +19,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ConsolePrint 在 ToolLoop 中可见")
 class ConsolePrintVisibleInCliIntegrationTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private List<AgentProgressEvent> capturedEvents;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
 
         capturedEvents = new ArrayList<>();

@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 拒绝伪造的 [工具结果] 和 {key=value}")
 class ToolLoopRejectsFakeBracketToolResultWithoutRealToolCallTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

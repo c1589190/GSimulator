@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmRequest;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.ToolRegistry;
@@ -21,13 +21,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("CONTEXT_LOAD debug 显示上下文拆分")
 class ToolLoopContextLoadDebugShowsContextPartsTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         agent = new OrchestratorAgent(fakeLlm, toolRegistry, "test-model");

@@ -8,17 +8,17 @@ import com.gsim.util.JsonUtils;
  */
 public class JsonLlmService {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
 
-    public JsonLlmService(LlmClient llmClient) {
-        this.llmClient = llmClient;
+    public JsonLlmService(LlmManager llmManager) {
+        this.llmManager = llmManager;
     }
 
     /**
      * 调用 LLM 并解析为指定类型的 JSON 对象。
      */
     public <T> T callForJson(LlmRequest request, Class<T> clazz) {
-        LlmResponse response = llmClient.chat(request);
+        LlmResult response = llmManager.chat(request);
         if (!response.success()) {
             throw new RuntimeException("LLM call failed: " + response.errorMessage());
         }
@@ -29,7 +29,7 @@ public class JsonLlmService {
      * 调用 LLM 并发回纯文本（不做 JSON 解析）。
      */
     public String callForText(LlmRequest request) {
-        LlmResponse response = llmClient.chat(request);
+        LlmResult response = llmManager.chat(request);
         if (!response.success()) {
             throw new RuntimeException("LLM call failed: " + response.errorMessage());
         }

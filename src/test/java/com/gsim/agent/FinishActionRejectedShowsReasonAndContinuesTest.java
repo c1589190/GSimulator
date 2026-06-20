@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,14 +19,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("finish_action 拒绝后显原因并继续")
 class FinishActionRejectedShowsReasonAndContinuesTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private CapturingProgressSink sink;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         sink = new CapturingProgressSink();

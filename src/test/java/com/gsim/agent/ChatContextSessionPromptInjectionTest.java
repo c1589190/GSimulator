@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.context.session.SessionMessage;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
 import com.gsim.tool.AgentTool;
@@ -25,13 +25,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Chat ContextSession Prompt Injection")
 class ChatContextSessionPromptInjectionTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent orchestrator;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
 
         // 注册 knowledge tools（模拟真实 ToolRegistry）

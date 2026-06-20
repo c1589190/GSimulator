@@ -1,9 +1,9 @@
 package com.gsim.root;
 
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
-import com.gsim.llm.LlmResponse;
+import com.gsim.llm.LlmResult;
 import com.gsim.resource.ResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +21,7 @@ import java.util.List;
 public class BootstrapWorldDraftGenerator {
     private static final Logger log = LoggerFactory.getLogger(BootstrapWorldDraftGenerator.class);
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
     private final String model;
     private final boolean llmEnabled;
 
@@ -29,12 +29,12 @@ public class BootstrapWorldDraftGenerator {
      * 二参构造函数（源码兼容，默认走 deterministic fallback）。
      * 如需 LLM bootstrap，请使用三参构造并传入 llmEnabled=true。
      */
-    public BootstrapWorldDraftGenerator(LlmClient llmClient, String model) {
-        this(llmClient, model, false);
+    public BootstrapWorldDraftGenerator(LlmManager llmManager, String model) {
+        this(llmManager, model, false);
     }
 
-    public BootstrapWorldDraftGenerator(LlmClient llmClient, String model, boolean llmEnabled) {
-        this.llmClient = llmClient;
+    public BootstrapWorldDraftGenerator(LlmManager llmManager, String model, boolean llmEnabled) {
+        this.llmManager = llmManager;
         this.model = model;
         this.llmEnabled = llmEnabled;
     }
@@ -60,7 +60,7 @@ public class BootstrapWorldDraftGenerator {
      * 仅当配置显式开启 bootstrap.root.llm.enabled=true 时才调用 LLM。
      */
     public BootstrapWorldDraft generate(BootstrapIntentParser.BootstrapIntent intent) {
-        if (llmEnabled && llmClient != null && llmClient.isAvailable()) {
+        if (llmEnabled && llmManager != null && llmManager.isAvailable()) {
             try {
                 return generateWithLlm(intent);
             } catch (Exception e) {
@@ -93,7 +93,7 @@ public class BootstrapWorldDraftGenerator {
         LlmRequest request = new LlmRequest(model,
                 List.of(LlmMessage.system(prompt)),
                 0.3, 2048);
-        LlmResponse response = llmClient.chat(request);
+        LlmResult response = llmManager.chat(request);
 
         if (!response.success()) {
             log.warn("LLM bootstrap draft call failed: {}", response.errorMessage());

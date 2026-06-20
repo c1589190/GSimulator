@@ -2,7 +2,7 @@ package com.gsim.agent;
 
 import com.gsim.campaign.PlayerAction;
 import com.gsim.chroma.EvidenceBundle;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 
 import java.util.List;
 
@@ -11,10 +11,10 @@ import java.util.List;
  */
 public class PlayerActionAnalyzerAgent {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
 
-    public PlayerActionAnalyzerAgent(LlmClient llmClient) {
-        this.llmClient = llmClient;
+    public PlayerActionAnalyzerAgent(LlmManager llmManager) {
+        this.llmManager = llmManager;
     }
 
     /**

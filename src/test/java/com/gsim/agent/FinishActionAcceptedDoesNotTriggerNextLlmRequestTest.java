@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
@@ -22,13 +22,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("finish_action accepted 后不触发下一轮 LLM 请求")
 class FinishActionAcceptedDoesNotTriggerNextLlmRequestTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
         toolRegistry.register(new StubTool("player_action_list", "查询玩家行动。"));

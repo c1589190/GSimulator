@@ -80,7 +80,7 @@ public class SessionManager {
                 ctx.getTurnService(),
                 ctx.getPlayerActionService(),
                 ctx.getToolRegistry(),
-                ctx.getLlmClient()
+                ctx.getLlmManager()
         );
     }
 }

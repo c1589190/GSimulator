@@ -8,7 +8,7 @@ import com.gsim.context.BranchContextRenderer;
 import com.gsim.context.session.ContextSessionManager;
 import com.gsim.context.session.ContextSessionStore;
 import com.gsim.data.DataManager;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class CliControlCharInputTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private NodeAgentChatService chatService;
 
     @BeforeEach
@@ -33,7 +33,7 @@ class CliControlCharInputTest {
         DataManager dm = new DataManager(dataRoot);
         dm.init();
 
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         fakeLlm.setNextResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"正常回复。\"}}");
         ToolRegistry tools = new ToolRegistry();

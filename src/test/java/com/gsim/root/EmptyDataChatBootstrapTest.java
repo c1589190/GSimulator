@@ -9,7 +9,7 @@ import com.gsim.context.BranchContextRenderer;
 import com.gsim.context.session.ContextSessionManager;
 import com.gsim.context.session.ContextSessionStore;
 import com.gsim.data.DataManager;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

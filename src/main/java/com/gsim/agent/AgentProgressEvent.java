@@ -20,6 +20,7 @@ public record AgentProgressEvent(
     public static final String TOOL_EXECUTING = "TOOL_EXECUTING";
     public static final String TOOL_SUCCESS = "TOOL_SUCCESS";
     public static final String TOOL_FAILED = "TOOL_FAILED";
+    public static final String AWAITING_TOOL_CONFIRMATION = "AWAITING_TOOL_CONFIRMATION";
     public static final String AWAITING_FINISH_ACTION = "AWAITING_FINISH_ACTION";
     public static final String PLAIN_ANSWER_WITHOUT_FINISH = "PLAIN_ANSWER_WITHOUT_FINISH";
     public static final String INVALID_BRACKET_INTENT = "INVALID_BRACKET_INTENT";
@@ -70,6 +71,12 @@ public record AgentProgressEvent(
                                                  String toolName, String error) {
         return new AgentProgressEvent(TOOL_FAILED, round, maxRounds,
                 "工具失败：" + toolName, Map.of("tool", toolName, "error", error != null ? error : ""));
+    }
+
+    public static AgentProgressEvent awaitingToolConfirmation(int round, int maxRounds,
+                                                              String toolName) {
+        return new AgentProgressEvent(AWAITING_TOOL_CONFIRMATION, round, maxRounds,
+                toolName, Map.of("tool", toolName != null ? toolName : ""));
     }
 
     public static AgentProgressEvent awaitingFinishAction(int round, int maxRounds) {

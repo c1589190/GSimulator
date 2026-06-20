@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.agent.tool.ConsolePrintTool;
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.tool.ToolRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,14 +21,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("console_print 与 finish_action 同轮混用被拒绝")
 class ConsolePrintAndFinishActionSameRoundRejectedTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private CapturingProgressSink progressSink;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         progressSink = new CapturingProgressSink();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new ConsolePrintTool(progressSink));

@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 
 import java.util.List;
 
@@ -9,10 +9,10 @@ import java.util.List;
  */
 public class WriterAgent {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
 
-    public WriterAgent(LlmClient llmClient) {
-        this.llmClient = llmClient;
+    public WriterAgent(LlmManager llmManager) {
+        this.llmManager = llmManager;
     }
 
     /**

@@ -8,16 +8,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 流式 ToolLoop 集成测试。
- * 验证 stream() 路径下 API 原生 tool_calls 被正确消费，
+ * 验证 submit() 路径下 API 原生 tool_calls 被正确消费，
  * finish_action 正常结束 ToolLoop，no-finish_action reprompt 正常工作。
  */
 @DisplayName("流式 ToolLoop 集成测试")
@@ -28,47 +28,40 @@ class StreamingToolLoopIntegrationTest {
     private OrchestratorAgent agent;
 
     /**
-     * 模拟流式响应的 FakeLlmClient。
-     * 覆盖 stream() 以正确设置 finalResponse + tool_calls + delta 事件。
+     * 模拟流式响应的 FakeLlmManager。
+     * 覆盖 submit() 以正确设置 finalResponse + tool_calls + delta 事件。
      */
-    private static class StreamingFakeClient extends FakeLlmClient {
+    private static class StreamingFakeClient extends FakeLlmManager {
         private volatile Runnable streamHook;
 
         void setStreamHook(Runnable hook) { this.streamHook = hook; }
 
         @Override
-        public void stream(LlmRequest request, LlmStreamListener listener) {
-            listener.onStart();
+        public LlmCall submit(LlmRequest request) {
+            LlmResult response = chat(request);  // chat() already captures to capturedRequests
+            String callId = "fake-" + UUID.randomUUID().toString().substring(0, 8);
+            StreamPool pool = new StreamPool(callId);
+
             if (streamHook != null) streamHook.run();
 
-            LlmResponse response = chat(request);
-
-            if (response.success()) {
-                // Emit content delta
-                if (response.content() != null && !response.content().isEmpty()) {
-                    listener.onContentDelta(response.content());
-                }
+            if (response.success() && response.content() != null && !response.content().isEmpty()) {
+                pool.onContentDelta(response.content());
             }
 
             if (response.hasApiToolCalls()) {
-                for (LlmToolCall tc : response.toolCalls()) {
-                    listener.onToolCallDelta("tool:" + tc.name());
+                for (int i = 0; i < response.toolCalls().size(); i++) {
+                    var tc = response.toolCalls().get(i);
+                    pool.onToolCallDelta(i, tc.name(), tc.arguments().toString());
                 }
-                if (listener instanceof LlmStreamCollector c) {
-                    c.setToolCalls(response.toolCalls());
-                    c.setFinalResponse(LlmResponse.successWithToolCalls(
-                            response.toolCalls(), "test-model", 0));
-                }
+                pool.onComplete(LlmResult.withToolCalls(
+                        response.toolCalls(), "test-model", 0));
+            } else if (response.success()) {
+                pool.onComplete(response);
             } else {
-                if (listener instanceof LlmStreamCollector c) {
-                    c.setFinalResponse(response);
-                }
+                pool.onComplete(response);
             }
 
-            if (!response.success()) {
-                listener.onError(new RuntimeException(response.errorMessage()));
-            }
-            listener.onComplete();
+            return new LlmCall(callId, pool);
         }
     }
 
@@ -108,7 +101,6 @@ class StreamingToolLoopIntegrationTest {
         assertEquals(1, result.toolCalls().size());
         assertEquals("finish_action", result.toolCalls().get(0).tool());
         assertEquals("完成", result.finalText());
-        // 确保没有进入"普通文本没 finish_action"路径
         assertFalse(result.errorMessage() != null
                         && result.errorMessage().contains("no tool calls"),
                 "不应进入 no-finish_action 路径");
@@ -128,7 +120,6 @@ class StreamingToolLoopIntegrationTest {
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "请求");
 
-        // 检查捕获的请求
         List<LlmRequest> requests = llmClient.getCapturedRequests();
         assertFalse(requests.isEmpty(), "应至少发起一次 LLM 请求");
         LlmRequest req = requests.get(0);
@@ -158,7 +149,6 @@ class StreamingToolLoopIntegrationTest {
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "结束");
 
-        // 只应发起 1 次请求（finish_action accepted 后不再请求 LLM）
         assertEquals(1, llmClient.getRequestCount(),
                 "finish_action accepted 后应只发起 1 次请求，实际: " + llmClient.getRequestCount());
     }
@@ -168,9 +158,7 @@ class StreamingToolLoopIntegrationTest {
     @Test
     @DisplayName("4. 流式返回普通 content（无 tool_calls）→ reprompt → 下一轮必须调用 finish_action")
     void noFinishActionRepromptAfterStreamingContent() {
-        // R1: 普通文本（无 tool_calls）
         llmClient.addResponse("这是完整的报名表内容，包含了所有细节……");
-        // R2: 收到 reprompt 后调用 finish_action
         llmClient.addToolCallsResponse(List.of(
                 new LlmToolCall("call_4", "finish_action",
                         Map.of("status", "success", "message", "这是完整的报名表内容……"))
@@ -185,7 +173,6 @@ class StreamingToolLoopIntegrationTest {
         assertEquals(2, llmClient.getRequestCount(),
                 "应发起 2 次请求（R1 rejected + R2 accepted）");
 
-        // 最终输出来自 finish_action.message
         assertEquals("这是完整的报名表内容……", result.finalText());
     }
 
@@ -211,7 +198,6 @@ class StreamingToolLoopIntegrationTest {
         assertTrue(requestTools > 0,
                 "requestTools 应 > 0，实际: " + requestTools);
 
-        // 工具列表应包含核心工具
         List<String> toolNames = req.tools().stream().map(ToolDef::name).toList();
         assertTrue(toolNames.contains("finish_action"), "应包含 finish_action");
         assertTrue(toolNames.contains("console_print"), "应包含 console_print");

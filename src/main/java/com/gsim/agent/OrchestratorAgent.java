@@ -5,13 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.campaign.PlayerAction;
 import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.context.session.SessionMessage;
-import com.gsim.llm.DefaultLlmStreamCollector;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmCall;
+import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
-import com.gsim.llm.LlmResponse;
-import com.gsim.llm.LlmStreamCollector;
+import com.gsim.llm.LlmResult;
 import com.gsim.llm.LlmToolCall;
+import com.gsim.llm.StreamPool;
 import com.gsim.llm.ToolDef;
 import com.gsim.resource.PromptResourceManager;
 import com.gsim.resource.ResourceManager;
@@ -43,7 +43,7 @@ public class OrchestratorAgent {
     private static final Logger log = LoggerFactory.getLogger(OrchestratorAgent.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
     private final ToolRegistry toolRegistry;
     private final String model;
     private final AgentProgressSink progressSink;
@@ -58,39 +58,36 @@ public class OrchestratorAgent {
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
 
-    /** LLM 流式状态注册表（每个 stream 独立状态，CLI/WebUI 并发安全）。 */
-    private volatile LlmStreamStateRegistry streamRegistry = new LlmStreamStateRegistry();
-
     /** 对话上下文历史配置（可运行时更新）。 */
     private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
 
     /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
     private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
 
-    public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model) {
-        this(llmClient, toolRegistry, model, AgentProgressSink.NOOP);
+    public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
+        this(llmManager, toolRegistry, model, AgentProgressSink.NOOP);
     }
 
-    public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
+    public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
                              AgentProgressSink progressSink) {
-        this(llmClient, toolRegistry, model, progressSink, null);
+        this(llmManager, toolRegistry, model, progressSink, null);
     }
 
-    public OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
+    public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
                              AgentProgressSink progressSink,
                              ToolPermissionGate permissionGate) {
-        this(llmClient, toolRegistry, model, progressSink != null ? progressSink : AgentProgressSink.NOOP,
+        this(llmManager, toolRegistry, model, progressSink != null ? progressSink : AgentProgressSink.NOOP,
                 new ToolRoutePolicy(), new ToolExecutionPolicy(),
                 permissionGate, new ToolPermissionConfig());
     }
 
-    OrchestratorAgent(LlmClient llmClient, ToolRegistry toolRegistry, String model,
+    OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
                        AgentProgressSink progressSink,
                        ToolRoutePolicy routePolicy,
                        ToolExecutionPolicy executionPolicy,
                        ToolPermissionGate permissionGate,
                        ToolPermissionConfig permissionConfig) {
-        this.llmClient = llmClient;
+        this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
         this.progressSink = progressSink != null ? progressSink : AgentProgressSink.NOOP;
@@ -126,16 +123,6 @@ public class OrchestratorAgent {
         this.streamEnabled = streamEnabled;
     }
 
-    /** 设置 LLM 流式状态注册表。 */
-    public void setStreamRegistry(LlmStreamStateRegistry registry) {
-        this.streamRegistry = registry != null ? registry : new LlmStreamStateRegistry();
-    }
-
-    /** 获取 LLM 流式状态注册表（供 CliAgentProgressSink 等消费者使用）。 */
-    public LlmStreamStateRegistry getStreamRegistry() {
-        return streamRegistry;
-    }
-
     /** 获取流式输出开关。 */
     public boolean isStreamEnabled() {
         return streamEnabled;
@@ -144,170 +131,91 @@ public class OrchestratorAgent {
     /**
      * 调用 LLM — 根据 streamEnabled 配置选择流式或非流式路径。
      *
-     * <p>流式路径：通过 {@link LlmClient#stream} 实时接收 delta，
+     * <p>流式路径：通过 {@link LlmManager#submit} 异步提交，轮询 {@link StreamPool}
      * 同时将 delta 作为 {@link AgentProgressEvent} 发送给 progressSink（CLI 灰框预览）。
-     * 流式结束后组装完整 {@link LlmResponse}，语义与 chat() 完全一致。
+     * 流式结束后通过 {@link LlmCall#await} 获取完整 {@link LlmResult}，语义与 chat() 完全一致。
      *
-     * <p>非流式路径：直接调用 {@link LlmClient#chat}。
+     * <p>非流式路径：直接调用 {@link LlmManager#chat}。
      */
-    private LlmResponse callLlm(LlmRequest request) {
+    private LlmResult callLlm(LlmRequest request) {
         int requestTools = request.tools() != null ? request.tools().size() : 0;
         log.debug("[ORCH_STREAM] streamEnabled={} requestTools={}", streamEnabled, requestTools);
 
         if (!streamEnabled) {
-            return llmClient.chat(request);
+            return llmManager.chat(request);
         }
 
-        // 流式路径：每个 call 一个独立 streamId
-        String streamId = java.util.UUID.randomUUID().toString();
-        LlmStreamStateRegistry registry = this.streamRegistry;
-        registry.start(streamId);
+        // 流式路径：submit → 轮询 pool → await 结果
+        LlmCall call = llmManager.submit(request);
+        StreamPool pool = call.pool();
+        String streamId = pool.streamId();
 
-        DefaultLlmStreamCollector collector = new DefaultLlmStreamCollector();
+        progressSink.onProgress(AgentProgressEvent.llmStreamStarted(streamId));
 
-        // delta 事件计数器（用于 [ORCH_STREAM] debug）
-        java.util.concurrent.atomic.AtomicInteger contentDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
-        java.util.concurrent.atomic.AtomicInteger reasoningDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
-        java.util.concurrent.atomic.AtomicInteger toolCallDeltaEvents = new java.util.concurrent.atomic.AtomicInteger(0);
+        String lastContent = "";
+        String lastReasoning = "";
+        try {
+            while (!pool.isComplete()) {
+                String content = pool.getContent();
+                if (!content.equals(lastContent)) {
+                    // 发送增量 delta
+                    String delta = content.substring(lastContent.length());
+                    lastContent = content;
+                    if (!delta.isEmpty()) {
+                        progressSink.onProgress(AgentProgressEvent.llmContentDelta(streamId, delta));
+                    }
+                }
+                String reasoning = pool.getReasoning();
+                if (!reasoning.equals(lastReasoning)) {
+                    String delta = reasoning.substring(lastReasoning.length());
+                    lastReasoning = reasoning;
+                    if (!delta.isEmpty()) {
+                        progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(streamId, delta));
+                    }
+                }
+                // yield to background thread
+                Thread.sleep(50);
+            }
 
-        // 包装 collector：delta 同时写入内部 collector、registry 和 progressSink
-        LlmStreamCollector wrapped = new LlmStreamCollector() {
-            private boolean started = false;
-
-            @Override
-            public void onStart() {
-                collector.onStart();
-                if (!started) {
-                    progressSink.onProgress(AgentProgressEvent.llmStreamStarted(streamId));
-                    started = true;
+            // pool 已完成 — 发送可能遗留的 delta（处理 pool 在 while 之前就已完成的情况）
+            String content = pool.getContent();
+            if (!content.equals(lastContent)) {
+                String delta = content.substring(lastContent.length());
+                if (!delta.isEmpty()) {
+                    progressSink.onProgress(AgentProgressEvent.llmContentDelta(streamId, delta));
+                }
+            }
+            String reasoning = pool.getReasoning();
+            if (!reasoning.equals(lastReasoning)) {
+                String delta = reasoning.substring(lastReasoning.length());
+                if (!delta.isEmpty()) {
+                    progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(streamId, delta));
                 }
             }
 
-            @Override
-            public void onContentDelta(String text) {
-                collector.onContentDelta(text);
-                contentDeltaEvents.incrementAndGet();
-                registry.appendContent(streamId, text);
-                progressSink.onProgress(AgentProgressEvent.llmContentDelta(streamId, text));
+            LlmResult result = call.await(100); // pool 已完成，立即返回
+            if (result.success()) {
+                progressSink.onProgress(AgentProgressEvent.llmStreamCompleted(streamId));
+            } else {
+                progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId,
+                        result.errorMessage() != null ? result.errorMessage() : "unknown"));
             }
 
-            @Override
-            public void onReasoningDelta(String text) {
-                collector.onReasoningDelta(text);
-                reasoningDeltaEvents.incrementAndGet();
-                registry.appendReasoning(streamId, text);
-                progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(streamId, text));
-            }
+            // [STREAM_TRACE] 汇总
+            log.info("[STREAM_TRACE] completed streamId={} contentDeltaEvents={} reasoningDeltaEvents={}"
+                            + " toolCallDeltaEvents={} finalContentChars={} responseToolCalls={}",
+                    streamId,
+                    pool.eventCount(StreamPool.EventType.CONTENT),
+                    pool.eventCount(StreamPool.EventType.REASONING),
+                    pool.eventCount(StreamPool.EventType.TOOL_CALL_DELTA),
+                    result.content() != null ? result.content().length() : 0,
+                    result.hasApiToolCalls() ? result.toolCalls().size() : 0);
 
-            @Override
-            public void onToolCallDelta(String text) {
-                collector.onToolCallDelta(text);
-                toolCallDeltaEvents.incrementAndGet();
-                registry.incrementToolCallDelta(streamId);
-                progressSink.onProgress(AgentProgressEvent.llmToolCallDelta(streamId));
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                collector.onError(error);
-                String errMsg = error != null ? error.getMessage() : "未知错误";
-                registry.fail(streamId, errMsg);
-                progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId, errMsg));
-            }
-
-            @Override
-            public void onComplete() {
-                collector.onComplete();
-            }
-
-            @Override
-            public void setFinalResponse(LlmResponse response) {
-                collector.setFinalResponse(response);
-            }
-
-            @Override
-            public LlmResponse getFinalResponse() {
-                return collector.getFinalResponse();
-            }
-
-            @Override
-            public void setReasoning(String reasoning) {
-                collector.setReasoning(reasoning);
-            }
-
-            @Override
-            public String getReasoning() {
-                return collector.getReasoning();
-            }
-
-            @Override
-            public void setToolCalls(List<LlmToolCall> toolCalls) {
-                collector.setToolCalls(toolCalls);
-            }
-
-            @Override
-            public List<LlmToolCall> getToolCalls() {
-                return collector.getToolCalls();
-            }
-
-            @Override
-            public String getFullContent() {
-                return collector.getFullContent();
-            }
-        };
-
-        try {
-            llmClient.stream(request, wrapped);
-
-            // stream() 完成后，从 collector 获取最终响应
-            LlmResponse finalResponse = wrapped.getFinalResponse();
-            registry.complete(streamId);
-            progressSink.onProgress(AgentProgressEvent.llmStreamCompleted(streamId));
-
-            // [ORCH_STREAM] 汇总日志
-            LlmStreamSnapshot snap = registry.snapshot(streamId);
-            int responseToolCallCount = 0;
-            boolean responseHasToolCalls = false;
-            int finalContentChars = 0;
-            if (finalResponse != null) {
-                responseHasToolCalls = finalResponse.hasApiToolCalls();
-                responseToolCallCount = responseHasToolCalls ? finalResponse.toolCalls().size() : 0;
-                finalContentChars = finalResponse.content() != null ? finalResponse.content().length() : 0;
-            }
-            log.debug("[ORCH_STREAM] streamId={} responseHasToolCalls={} responseToolCallCount={}"
-                            + " contentDeltaEvents={} reasoningDeltaEvents={} toolCallDeltaEvents={}"
-                            + " finalContentChars={} registryContentChars={} registryReasoningChars={}"
-                            + " finalParsedTools={}",
-                    streamId, responseHasToolCalls, responseToolCallCount,
-                    contentDeltaEvents.get(), reasoningDeltaEvents.get(), toolCallDeltaEvents.get(),
-                    finalContentChars, snap.content().length(), snap.reasoning().length(),
-                    responseHasToolCalls ? finalResponse.toolCalls().stream()
-                            .map(LlmToolCall::name).toList() : List.of());
-
-            if (finalResponse != null) {
-                return finalResponse;
-            }
-
-            // fallback：如果 collector 没收到最终响应（兼容未设置 setFinalResponse 的场景），
-            // 从 collector 手动组装
-            String content = wrapped.getFullContent();
-            List<LlmToolCall> toolCalls = wrapped.getToolCalls();
-
-            if (!toolCalls.isEmpty()) {
-                log.debug("[ORCH_STREAM] streamId={} fallbackToolCalls={}", streamId,
-                        toolCalls.stream().map(LlmToolCall::name).toList());
-                return LlmResponse.successWithToolCalls(toolCalls, model, 0);
-            }
-            if (content != null && !content.isEmpty()) {
-                log.debug("[ORCH_STREAM] streamId={} fallbackContentChars={}", streamId, content.length());
-                return LlmResponse.success(content, model, 0);
-            }
-            return LlmResponse.success("", model, 0);
+            return result;
         } catch (Exception e) {
             log.error("LLM stream call failed: {}", e.getMessage(), e);
-            registry.fail(streamId, e.getMessage());
             progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId, e.getMessage()));
-            return LlmResponse.failure(e.getMessage());
+            return LlmResult.failure(e.getMessage());
         }
     }
 
@@ -336,7 +244,7 @@ public class OrchestratorAgent {
         // 3. ToolLoop
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = callLlm(request);
+            LlmResult response = callLlm(request);
 
             if (!response.success()) {
                 log.error("LLM call failed: {}", response.errorMessage());
@@ -384,7 +292,7 @@ public class OrchestratorAgent {
                     "写一段完整的推演总结。必须引用信息来源的路径（如 import/web/prts.wiki/...）。" +
                     "不要调用更多工具，直接输出推演结果。"));
             LlmRequest finalRequest = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse finalResponse = callLlm(finalRequest);
+            LlmResult finalResponse = callLlm(finalRequest);
             if (finalResponse.success()) {
                 finalText = finalResponse.content();
                 messages.add(LlmMessage.assistant(finalText));
@@ -899,7 +807,7 @@ public class OrchestratorAgent {
 
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = callLlm(request);
+            LlmResult response = callLlm(request);
 
             if (!response.success()) {
                 String err = "LLM 调用失败: " + response.errorMessage();
@@ -963,7 +871,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
-            LlmResponse finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
+            LlmResult finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
             if (finalResp.success()) {
                 finalText = finalResp.content();
                 trace.add(new MessageTrace("assistant", "sim_output", finalText));
@@ -995,7 +903,7 @@ public class OrchestratorAgent {
 
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = callLlm(request);
+            LlmResult response = callLlm(request);
 
             if (!response.success()) {
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
@@ -1055,7 +963,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
-            LlmResponse fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
+            LlmResult fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
             if (fr.success()) { finalText = fr.content(); trace.add(new MessageTrace("assistant", "chat_response", finalText)); }
             else return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
         }
@@ -1179,6 +1087,104 @@ public class OrchestratorAgent {
         return result;
     }
 
+    // ---- meaningful content detection ----
+
+    /**
+     * 判断 assistant content 是否为有意义的回复内容。
+     *
+     * <p>以下视为无效占位内容（provider 未生成实际输出）：
+     * <ul>
+     *   <li>null、空字符串、纯空白</li>
+     *   <li>字面量: "null", "NULL", "undefined", "JsonNull" 及其大小写变体</li>
+     *   <li>空 JSON: "{}", "[]{@code }"</li>
+     * </ul>
+     *
+     * <p>注意：包含这些词的正常内容（如 "这个字段是 null"）不误杀 —
+     * 只在 trim 后完全等于这些占位值时判无效。
+     */
+    static boolean isMeaningfulAssistantContent(String content) {
+        if (content == null) return false;
+        String t = content.strip();
+        if (t.isEmpty()) return false;
+        return switch (t) {
+            case "null", "NULL", "Null",
+                 "undefined", "UNDEFINED", "Undefined",
+                 "JsonNull", "jsonNull", "JSONNULL",
+                 "{}", "[]" -> false;
+            default -> true;
+        };
+    }
+
+    // ---- auto-wrap helper ----
+
+    /**
+     * forced finish_action 阶段无 tool_calls 时，尝试用当前或上一轮纯文本包装 finish_action。
+     * 优先级：
+     * <ol>
+     *   <li>R2 currentContent meaningful → source=current_forced_content</li>
+     *   <li>R1 pendingPlainContent meaningful → source=previous_plain_answer</li>
+     *   <li>两者均无 meaningful content → NO_MEANINGFUL_CONTENT abort</li>
+     * </ol>
+     */
+    private AutoWrapResult tryAutoWrapForcedFinishAction(
+            String currentContent,
+            String pendingPlainContent,
+            List<ToolCallRecord> toolCalls,
+            int round,
+            int maxRounds) {
+        String source;
+        String message;
+
+        if (isMeaningfulAssistantContent(currentContent)) {
+            source = "current_forced_content";
+            message = currentContent.strip();
+        } else if (isMeaningfulAssistantContent(pendingPlainContent)) {
+            source = "previous_plain_answer";
+            message = pendingPlainContent;
+        } else {
+            return new AutoWrapResult(false, null, null,
+                    "NO_MEANINGFUL_CONTENT: currentContent=" + previewForDiagnostic(currentContent)
+                            + " pendingPlainContent=" + previewForDiagnostic(pendingPlainContent));
+        }
+
+        String msgErr = validateFinishActionMessage(message);
+        if (msgErr != null) {
+            return new AutoWrapResult(false, null, null, msgErr);
+        }
+
+        String claimErr = validateFinishActionClaims(message, toolCalls);
+        if (claimErr != null) {
+            return new AutoWrapResult(false, null, null, claimErr);
+        }
+
+        log.debug("[TOOL_LOOP_TRACE] forced finish_action returned empty/no tool_calls; auto-wrapping source={} chars={}",
+                source, message.length());
+        progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(round, maxRounds));
+
+        return new AutoWrapResult(true, message, source, null);
+    }
+
+    private record AutoWrapResult(boolean success, String message, String source, String error) {}
+
+    /** 为诊断日志生成安全的 content 预览（≤60 chars）。 */
+    private static String previewForDiagnostic(String s) {
+        if (s == null) return "<null>";
+        if (s.isBlank()) return "<blank>";
+        String t = s.strip();
+        if (t.length() <= 60) return t;
+        return t.substring(0, 57) + "...";
+    }
+
+    /** auto-wrap action label for debug logging。 */
+    private static String wrapActionLabel(AutoWrapResult wrap) {
+        if (wrap.success()) return "autoWrap_" + wrap.source();
+        if (wrap.error() == null) return "retry";
+        String e = wrap.error();
+        if (e.startsWith("NO_MEANINGFUL_CONTENT")) return "autoWrap_skipped_no_meaningful_content";
+        if (e.startsWith("NO_CONTENT")) return "abort_no_content";
+        return "retry_validation_failed";
+    }
+
     /** 公共 tool-loop（chat 模式）。 */
     private ChatResult runToolLoop(List<LlmMessage> messages,
                                     List<MessageTrace> trace,
@@ -1240,7 +1246,7 @@ public class OrchestratorAgent {
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, roundToolDefs, roundToolChoice);
-            LlmResponse response = callLlm(request);
+            LlmResult response = callLlm(request);
 
             if (!response.success()) {
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
@@ -1253,7 +1259,7 @@ public class OrchestratorAgent {
             messages.add(LlmMessage.assistant(content != null ? content : ""));
 
             // DEBUG: LLM response preview
-            ToolLoopDebug.logLlmResponse(log, "runToolLoop", toolRound, content,
+            ToolLoopDebug.logLlmResult(log, "runToolLoop", toolRound, content,
                     apiToolCallCount, finishReason);
 
             // 缓存 draft
@@ -1289,16 +1295,66 @@ public class OrchestratorAgent {
             ToolLoopDebug.logToolExtraction(log, "runToolLoop", toolRound, allParsed,
                     apiToolCallCount, textFallbackCount, toolSource, content);
 
-            // === Auto-wrap: forced finish_action 阶段 LLM 仍返回普通文本 → 包裹为 finish_action ===
-            if (forcedFinishAction && allParsed.isEmpty() && content != null && !content.isBlank()) {
-                log.debug("[TOOL_LOOP_TRACE] forced finish_action returned plain content; auto-wrapping round={} chars={}",
-                        toolRound, content.length());
-                progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
-                        toolRound, maxToolRounds));
-                ParsedToolCall autoWrapped = new ParsedToolCall("finish_action",
-                        java.util.Map.of("message", content.strip(), "status", "success"));
-                allParsed = List.of(autoWrapped);
-                toolSource = ToolLoopDebug.ToolCallSource.TEXT_FALLBACK;
+            // === Forced finish_action 诊断 ===
+            if (forcedFinishAction) {
+                int reasoningChars = 0; // LlmResult 不单独携带 reasoning
+                int pendingChars = lastPlainContent != null ? lastPlainContent.length() : 0;
+                String preview = content != null && !content.isBlank()
+                        ? (content.length() > 80 ? content.substring(0, 80) + "..." : content)
+                        : "(empty)";
+                log.debug("[TOOL_LOOP_TRACE] forcedFinishAction=true");
+                log.debug("[TOOL_LOOP_TRACE] forced.response.success={}", response.success());
+                log.debug("[TOOL_LOOP_TRACE] forced.response.hasApiToolCalls={}", response.hasApiToolCalls());
+                log.debug("[TOOL_LOOP_TRACE] forced.response.toolCallCount={}", apiToolCallCount);
+                log.debug("[TOOL_LOOP_TRACE] forced.response.contentChars={}", content != null ? content.length() : 0);
+                log.debug("[TOOL_LOOP_TRACE] forced.response.contentBlank={}", content == null || content.isBlank());
+                log.debug("[TOOL_LOOP_TRACE] forced.response.reasoningChars={}", reasoningChars);
+                log.debug("[TOOL_LOOP_TRACE] forced.parsedTextToolCalls={}", allParsed.size());
+                log.debug("[TOOL_LOOP_TRACE] forced.pendingPlainContentChars={}", pendingChars);
+                log.debug("[TOOL_LOOP_TRACE] forced.response.preview={}", preview);
+            }
+
+            // === Auto-wrap: forced finish_action 阶段无 tool_calls → 尝试包装 ===
+            if (forcedFinishAction && allParsed.isEmpty()) {
+                AutoWrapResult wrap = tryAutoWrapForcedFinishAction(
+                        content, lastPlainContent, toolCalls, toolRound, maxToolRounds);
+                log.debug("[TOOL_LOOP_TRACE] forced.action={}", wrapActionLabel(wrap));
+                if (wrap.success()) {
+                    toolCalls.add(new ToolCallRecord("finish_action",
+                            java.util.Map.of("message", wrap.message(), "status", "success"),
+                            ToolResult.ok("finish_action", List.of(
+                                    new ToolResult.Item("finish_action: success (auto-wrap " + wrap.source() + ")",
+                                            "finish_action", wrap.message(), 1.0)))));
+                    finalText = wrap.message();
+                    trace.add(new MessageTrace("assistant", "chat_response", finalText));
+                    ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound, true, null, null, null, null);
+                    ToolLoopDebug.logFinalText(log, "runToolLoop", "finish_action(auto-wrap)", finalText);
+                    lastAssistantDraft.set(finalText);
+                    return new ChatResult(true, finalText, toolCalls, trace, null);
+                }
+                if (wrap.error() != null && (wrap.error().startsWith("NO_CONTENT")
+                        || wrap.error().startsWith("NO_MEANINGFUL_CONTENT"))) {
+                    String errMsg = "[错误] forced finish_action returned no meaningful content; "
+                            + "currentContent=" + previewForDiagnostic(content)
+                            + ", pendingPlainContent=" + previewForDiagnostic(lastPlainContent)
+                            + "。请检查 LLM provider 是否正确支持 tool_choice=forced 和 finish_action 工具调用。";
+                    log.warn("[TOOL_LOOP_TRACE] forced.action=autoWrap_skipped_no_meaningful_content; {}", errMsg);
+                    trace.add(new MessageTrace("system", "error", errMsg));
+                    ToolLoopDebug.logNoToolAbort(log, "runToolLoop", toolRound,
+                            "forced_auto_wrap_no_meaningful_content", 0);
+                    ToolLoopDebug.logFinalText(log, "runToolLoop", "auto_wrap_no_meaningful_content_abort", errMsg);
+                    return new ChatResult(false, errMsg, toolCalls, trace,
+                            "Agent forced finish_action phase had no meaningful content to wrap");
+                }
+                // 验证失败 → reprompt 让 LLM 重试
+                String reprompt = wrap.error() + "\n请重新调用 finish_action 并修正以上问题。";
+                messages.add(LlmMessage.user(reprompt));
+                trace.add(new MessageTrace("system", "finish_rejected",
+                        "auto-wrap validation failed: " + wrap.error()));
+                progressSink.onProgress(AgentProgressEvent.finishRejected(
+                        toolRound, maxToolRounds, reasonFromMessageError(wrap.error())));
+                toolRound++;
+                continue;
             }
 
             // === 工具路由决策 ===
@@ -1377,6 +1433,10 @@ public class OrchestratorAgent {
 
                     if (execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
                         if (permissionGate != null) {
+                            // 确认门前清除灰框，避免残留内容与确认框混叠
+                            progressSink.onProgress(AgentProgressEvent.awaitingToolConfirmation(
+                                    toolRound, maxToolRounds, parsed.tool));
+
                             ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
                                     parsed.tool, execDecision.category(),
                                     execDecision.reason(), parsed.args,
@@ -1515,10 +1575,17 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮
+            // 普通无工具轮（forced finish_action 已在上面 auto-wrap 处理所有分支）
             consecutiveInvalidToolIntent = 0;
 
-            // === 普通无工具轮（forced finish_action 已在上面 auto-wrap 处理）===
+            // forced finish_action 阶段不应到达此处 — auto-wrap 已处理所有路径
+            if (forcedFinishAction) {
+                String errMsg = "[系统错误] forced finish_action 阶段进入了普通无工具处理路径。"
+                        + "auto-wrap 应已处理所有分支。";
+                trace.add(new MessageTrace("system", "error", errMsg));
+                return new ChatResult(false, errMsg, toolCalls, trace, errMsg);
+            }
+
             {
                 consecutiveNoToolRounds++;
                 ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
@@ -1542,7 +1609,7 @@ public class OrchestratorAgent {
                     String reminder = "你刚才生成了普通答复，但没有调用 finish_action，因此该答复没有展示给用户。\n"
                             + "下一轮系统只允许你调用 finish_action。\n"
                             + "必须把完整最终答复放入 finish_action.message。\n"
-                            + "禁止使用“以上”“如上”“刚才”“已生成”“前文”等引用不可见内容的词语。\n"
+                            + "禁止使用「以上」「如上」「刚才」「已生成」「前文」等引用不可见内容的词语。\n"
                             + "上一轮的答复内容如下，请改写为自包含的 finish_action.message：\n\n"
                             + lastPlainContent;
                     messages.add(LlmMessage.user(reminder));
@@ -1634,7 +1701,7 @@ public class OrchestratorAgent {
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = callLlm(request);
+            LlmResult response = callLlm(request);
 
             if (!response.success()) {
                 String err = "LLM 调用失败: " + response.errorMessage();
@@ -1648,7 +1715,7 @@ public class OrchestratorAgent {
 
             messages.add(LlmMessage.assistant(content != null ? content : ""));
 
-            ToolLoopDebug.logLlmResponse(log, "runSimToolLoop", toolRound, content,
+            ToolLoopDebug.logLlmResult(log, "runSimToolLoop", toolRound, content,
                     apiToolCallCount, finishReason);
 
             // 缓存 draft

@@ -16,7 +16,7 @@ public final class ToolLoopDebug {
 
     // ---- LLM response ----
 
-    static void logLlmResponse(Logger log, String loopName, int round,
+    static void logLlmResult(Logger log, String loopName, int round,
                                 String content, int apiToolCallCount, String finishReason) {
         if (!log.isDebugEnabled()) return;
         int len = content != null ? content.length() : 0;

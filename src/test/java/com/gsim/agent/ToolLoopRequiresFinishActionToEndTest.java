@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.llm.FakeLlmClient;
+import com.gsim.llm.FakeLlmManager;
 import com.gsim.llm.LlmRequest;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
@@ -23,13 +23,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ToolLoop 必须显式 finish_action 才能结束")
 class ToolLoopRequiresFinishActionToEndTest {
 
-    private FakeLlmClient fakeLlm;
+    private FakeLlmManager fakeLlm;
     private ToolRegistry toolRegistry;
     private OrchestratorAgent agent;
 
     @BeforeEach
     void setUp() {
-        fakeLlm = new FakeLlmClient();
+        fakeLlm = new FakeLlmManager();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new EchoTool());
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());

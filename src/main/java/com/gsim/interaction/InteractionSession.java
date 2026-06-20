@@ -4,7 +4,7 @@ import com.gsim.app.AppConfig;
 import com.gsim.campaign.CampaignService;
 import com.gsim.campaign.TurnService;
 import com.gsim.campaign.PlayerActionService;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.tool.ToolRegistry;
 
 /**
@@ -18,7 +18,7 @@ public class InteractionSession {
     private final TurnService turnService;
     private final PlayerActionService playerActionService;
     private final ToolRegistry toolRegistry;
-    private final LlmClient llmClient;
+    private final LlmManager llmClient;
 
     public InteractionSession(
             InteractionContext context,
@@ -36,7 +36,7 @@ public class InteractionSession {
             TurnService turnService,
             PlayerActionService playerActionService,
             ToolRegistry toolRegistry,
-            LlmClient llmClient) {
+            LlmManager llmClient) {
         this.context = context;
         this.config = config;
         this.campaignService = campaignService;
@@ -70,7 +70,7 @@ public class InteractionSession {
         return toolRegistry;
     }
 
-    public LlmClient getLlmClient() {
+    public LlmManager getLlmManager() {
         return llmClient;
     }
 }

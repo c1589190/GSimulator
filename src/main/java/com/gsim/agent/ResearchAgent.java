@@ -3,7 +3,7 @@ package com.gsim.agent;
 import com.gsim.crawler.SearchPlan;
 import com.gsim.crawler.SearchProvider;
 import com.gsim.crawler.ResearchDocument;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.task.TaskContext;
 
 import java.util.List;
@@ -13,11 +13,11 @@ import java.util.List;
  */
 public class ResearchAgent {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
     private final SearchProvider searchProvider;
 
-    public ResearchAgent(LlmClient llmClient, SearchProvider searchProvider) {
-        this.llmClient = llmClient;
+    public ResearchAgent(LlmManager llmManager, SearchProvider searchProvider) {
+        this.llmManager = llmManager;
         this.searchProvider = searchProvider;
     }
 

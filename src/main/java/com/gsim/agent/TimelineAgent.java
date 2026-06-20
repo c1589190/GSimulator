@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.gsim.chroma.EvidenceBundle;
-import com.gsim.llm.LlmClient;
+import com.gsim.llm.LlmManager;
 import com.gsim.timeline.TimelineEvent;
 
 import java.util.List;
@@ -11,10 +11,10 @@ import java.util.List;
  */
 public class TimelineAgent {
 
-    private final LlmClient llmClient;
+    private final LlmManager llmManager;
 
-    public TimelineAgent(LlmClient llmClient) {
-        this.llmClient = llmClient;
+    public TimelineAgent(LlmManager llmManager) {
+        this.llmManager = llmManager;
     }
 
     /**
