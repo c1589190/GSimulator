@@ -259,4 +259,14 @@ public class NodeAgentChatService {
         return store.listMessages(branchId);
     }
 
+    /** 取消当前正在运行的 LLM 对话（ESC 中断）。 */
+    public void cancelCurrentChat() {
+        orchestrator.cancel();
+    }
+
+    /** 清除取消标志（新一轮对话开始前调用）。 */
+    public void resetCancel() {
+        orchestrator.resetCancel();
+    }
+
 }

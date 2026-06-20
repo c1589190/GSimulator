@@ -26,6 +26,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -63,6 +64,9 @@ public class OrchestratorAgent {
 
     /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
     private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
+
+    /** ESC 取消标志。由 ConsoleInteractionAdapter 在检测到 ESC 时设置，ToolLoop 各检查点读取。 */
+    private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
     public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
         this(llmManager, toolRegistry, model, AgentProgressSink.NOOP);
@@ -128,6 +132,21 @@ public class OrchestratorAgent {
         return streamEnabled;
     }
 
+    /** 设置取消标志（ESC 中断当前 ToolLoop）。 */
+    public void cancel() {
+        cancelRequested.set(true);
+    }
+
+    /** 清除取消标志（新一轮对话开始前）。 */
+    public void resetCancel() {
+        cancelRequested.set(false);
+    }
+
+    /** 查询是否已请求取消。 */
+    public boolean isCancelRequested() {
+        return cancelRequested.get();
+    }
+
     /**
      * 调用 LLM — 根据 streamEnabled 配置选择流式或非流式路径。
      *
@@ -175,6 +194,13 @@ public class OrchestratorAgent {
                 }
                 // yield to background thread
                 Thread.sleep(50);
+
+                // ESC 取消检查
+                if (cancelRequested.get()) {
+                    log.info("[ORCH_STREAM] cancelled by user (ESC)");
+                    progressSink.onProgress(AgentProgressEvent.llmStreamFailed(streamId, "用户取消"));
+                    return LlmResult.failure("cancelled");
+                }
             }
 
             // pool 已完成 — 发送可能遗留的 delta（处理 pool 在 while 之前就已完成的情况）
@@ -1204,6 +1230,12 @@ public class OrchestratorAgent {
         List<ToolDef> allToolDefs = buildToolDefs();
 
         while (toolRound <= maxToolRounds) {
+            // ESC 取消检查
+            if (cancelRequested.get()) {
+                log.info("[ToolLoop] cancelled by user (ESC) at round {}", toolRound);
+                return new ChatResult(false, "[已取消]", toolCalls, trace, "cancelled");
+            }
+
             // context load debug
             ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, allToolDefs, contextMeta);
 
@@ -1676,6 +1708,12 @@ public class OrchestratorAgent {
         List<ToolDef> toolDefs = buildToolDefs();
 
         while (toolRound <= maxToolRounds) {
+            // ESC 取消检查
+            if (cancelRequested.get()) {
+                log.info("[SimToolLoop] cancelled by user (ESC) at round {}", toolRound);
+                return new SimResult("[已取消]", toolCalls, trace);
+            }
+
             // context load debug
             ToolLoopDebug.logContextLoad(log, "runSimToolLoop", toolRound, messages, toolDefs, contextMeta);
 

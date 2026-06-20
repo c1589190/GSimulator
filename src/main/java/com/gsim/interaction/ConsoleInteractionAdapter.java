@@ -20,6 +20,7 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -173,21 +174,53 @@ public class ConsoleInteractionAdapter {
                     continue;
                 }
 
-                // 非 / 开头 → 对话模式
+                // 非 / 开头 → 对话模式（虚拟线程 + ESC 轮询取消）
                 if (!cleaned.startsWith("/") && chatService != null) {
+                    chatService.resetCancel();
+
+                    var replyRef = new AtomicReference<String>();
+                    var chatDone = new AtomicBoolean(false);
+
+                    Thread chatThread = Thread.ofVirtual().start(() -> {
+                        try {
+                            replyRef.set(chatService.chat(cleaned));
+                        } catch (Exception e) {
+                            log.error("Chat error: {}", e.getMessage(), e);
+                            replyRef.set("[ERROR] Chat failed: " + e.getMessage());
+                        } finally {
+                            chatDone.set(true);
+                        }
+                    });
+
                     try {
-                        String reply = chatService.chat(cleaned);
+                        while (!chatDone.get()) {
+                            if (System.in.available() > 0) {
+                                int b = System.in.read();
+                                if (b == 0x1B) { // ESC
+                                    chatService.cancelCurrentChat();
+                                    out.println("\n[已取消]");
+                                    break;
+                                }
+                            }
+                            Thread.sleep(100);
+                        }
+                        chatThread.join(3000);
+                    } catch (InterruptedException e) {
+                        chatService.cancelCurrentChat();
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        // 排空 stdin 残留字节（多次 ESC、方向键等），防止污染后续 readLine()
+                        drainStdin();
+                    }
+
+                    String reply = replyRef.get();
+                    if (reply != null) {
                         if (streamEnabled) {
-                            // 流式模式下回复内容已在过程中直接输出，只需收尾换行
                             out.println();
                         } else {
                             out.println(reply);
                             out.println();
                         }
-                    } catch (Exception e) {
-                        log.error("Chat error: {}", e.getMessage(), e);
-                        out.println("[ERROR] Chat failed: " + e.getMessage());
-                        out.println();
                     }
                     continue;
                 }
@@ -239,6 +272,17 @@ public class ConsoleInteractionAdapter {
         out.println();
         out.println("输入 /help 查看可用命令，直接输入文本与 Agent 对话，/exit 退出。");
         out.println();
+    }
+
+    /** 排空 stdin 缓冲区中的残留字节，防止污染后续 JLine readLine()。 */
+    private void drainStdin() {
+        try {
+            while (System.in.available() > 0) {
+                System.in.read();
+            }
+        } catch (IOException ignored) {
+            // best-effort
+        }
     }
 
     private void displayResult(InteractionResult result) {
