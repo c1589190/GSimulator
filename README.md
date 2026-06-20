@@ -248,4 +248,9 @@ mvn test    # 1314 tests
 
 ## 许可证
 
-内部项目
+GSimulator — 多 Agent 推演工作流引擎
+Copyright (C) 2026 ConstantinXIV
+
+本项目基于 **GNU General Public License v3.0** (GPL 3.0) 发布，详见 [LICENSE](./LICENSE) 文件。
+
+GPL 3.0 是强 copyleft 许可证：你可以自由使用、修改和分发本项目，但任何衍生作品也必须以 GPL 3.0 开源。
