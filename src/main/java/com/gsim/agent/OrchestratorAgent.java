@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.campaign.PlayerAction;
 import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.context.session.SessionMessage;
+import com.gsim.llm.DefaultLlmStreamCollector;
 import com.gsim.llm.LlmClient;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
 import com.gsim.llm.LlmResponse;
+import com.gsim.llm.LlmStreamCollector;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.llm.ToolDef;
 import com.gsim.resource.PromptResourceManager;
@@ -52,6 +54,9 @@ public class OrchestratorAgent {
 
     /** Agent ToolLoop 最大工具轮数（默认 32，≥1，可由 setter 注入覆盖）。 */
     private volatile int maxToolRounds = 32;
+
+    /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
+    private volatile boolean streamEnabled = false;
 
     /** 对话上下文历史配置（可运行时更新）。 */
     private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
@@ -113,6 +118,141 @@ public class OrchestratorAgent {
         return maxToolRounds;
     }
 
+    /** 设置是否使用 LLM 流式输出（由 AppConfig 注入）。 */
+    public void setStreamEnabled(boolean streamEnabled) {
+        this.streamEnabled = streamEnabled;
+    }
+
+    /** 获取流式输出开关。 */
+    public boolean isStreamEnabled() {
+        return streamEnabled;
+    }
+
+    /**
+     * 调用 LLM — 根据 streamEnabled 配置选择流式或非流式路径。
+     *
+     * <p>流式路径：通过 {@link LlmClient#stream} 实时接收 delta，
+     * 同时将 delta 作为 {@link AgentProgressEvent} 发送给 progressSink（CLI 灰框预览）。
+     * 流式结束后组装完整 {@link LlmResponse}，语义与 chat() 完全一致。
+     *
+     * <p>非流式路径：直接调用 {@link LlmClient#chat}。
+     */
+    private LlmResponse callLlm(LlmRequest request) {
+        if (!streamEnabled) {
+            return llmClient.chat(request);
+        }
+
+        // 流式路径
+        DefaultLlmStreamCollector collector = new DefaultLlmStreamCollector();
+
+        // 包装 collector：在收到 delta 时同步发送 AgentProgressEvent
+        LlmStreamCollector wrapped = new LlmStreamCollector() {
+            private boolean started = false;
+
+            @Override
+            public void onStart() {
+                collector.onStart();
+                if (!started) {
+                    progressSink.onProgress(AgentProgressEvent.llmStreamStarted());
+                    started = true;
+                }
+            }
+
+            @Override
+            public void onContentDelta(String text) {
+                collector.onContentDelta(text);
+                progressSink.onProgress(AgentProgressEvent.llmContentDelta(text));
+            }
+
+            @Override
+            public void onReasoningDelta(String text) {
+                collector.onReasoningDelta(text);
+                progressSink.onProgress(AgentProgressEvent.llmReasoningDelta(text));
+            }
+
+            @Override
+            public void onToolCallDelta(String text) {
+                collector.onToolCallDelta(text);
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                collector.onError(error);
+                progressSink.onProgress(AgentProgressEvent.llmStreamFailed(
+                        error != null ? error.getMessage() : "未知错误"));
+            }
+
+            @Override
+            public void onComplete() {
+                collector.onComplete();
+            }
+
+            @Override
+            public void setFinalResponse(LlmResponse response) {
+                collector.setFinalResponse(response);
+            }
+
+            @Override
+            public LlmResponse getFinalResponse() {
+                return collector.getFinalResponse();
+            }
+
+            @Override
+            public void setReasoning(String reasoning) {
+                collector.setReasoning(reasoning);
+            }
+
+            @Override
+            public String getReasoning() {
+                return collector.getReasoning();
+            }
+
+            @Override
+            public void setToolCalls(List<LlmToolCall> toolCalls) {
+                collector.setToolCalls(toolCalls);
+            }
+
+            @Override
+            public List<LlmToolCall> getToolCalls() {
+                return collector.getToolCalls();
+            }
+
+            @Override
+            public String getFullContent() {
+                return collector.getFullContent();
+            }
+        };
+
+        try {
+            llmClient.stream(request, wrapped);
+
+            // stream() 完成后，从 collector 获取最终响应
+            LlmResponse finalResponse = wrapped.getFinalResponse();
+            progressSink.onProgress(AgentProgressEvent.llmStreamCompleted());
+
+            if (finalResponse != null) {
+                return finalResponse;
+            }
+
+            // fallback：如果 collector 没收到最终响应（兼容未设置 setFinalResponse 的场景），
+            // 从 collector 手动组装
+            String content = wrapped.getFullContent();
+            List<LlmToolCall> toolCalls = wrapped.getToolCalls();
+
+            if (!toolCalls.isEmpty()) {
+                return LlmResponse.successWithToolCalls(toolCalls, model, 0);
+            }
+            if (content != null && !content.isEmpty()) {
+                return LlmResponse.success(content, model, 0);
+            }
+            return LlmResponse.success("", model, 0);
+        } catch (Exception e) {
+            log.error("LLM stream call failed: {}", e.getMessage(), e);
+            progressSink.onProgress(AgentProgressEvent.llmStreamFailed(e.getMessage()));
+            return LlmResponse.failure(e.getMessage());
+        }
+    }
+
     /**
      * 执行推演运行。
      *
@@ -137,7 +277,7 @@ public class OrchestratorAgent {
         // 3. ToolLoop
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
-            LlmResponse response = llmClient.chat(request);
+            LlmResponse response = callLlm(request);
 
             if (!response.success()) {
                 log.error("LLM call failed: {}", response.errorMessage());
@@ -178,7 +318,7 @@ public class OrchestratorAgent {
                     "写一段完整的推演总结。必须引用信息来源的路径（如 import/web/prts.wiki/...）。" +
                     "不要调用更多工具，直接输出推演结果。"));
             LlmRequest finalRequest = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
-            LlmResponse finalResponse = llmClient.chat(finalRequest);
+            LlmResponse finalResponse = callLlm(finalRequest);
             if (finalResponse.success()) {
                 finalText = finalResponse.content();
                 messages.add(LlmMessage.assistant(finalText));
@@ -669,7 +809,7 @@ public class OrchestratorAgent {
 
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
-            LlmResponse response = llmClient.chat(request);
+            LlmResponse response = callLlm(request);
 
             if (!response.success()) {
                 String err = "LLM 调用失败: " + response.errorMessage();
@@ -722,7 +862,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
-            LlmResponse finalResp = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            LlmResponse finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
             if (finalResp.success()) {
                 finalText = finalResp.content();
                 trace.add(new MessageTrace("assistant", "sim_output", finalText));
@@ -753,7 +893,7 @@ public class OrchestratorAgent {
 
         while (toolRound < maxToolRounds) {
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048);
-            LlmResponse response = llmClient.chat(request);
+            LlmResponse response = callLlm(request);
 
             if (!response.success()) {
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
@@ -802,7 +942,7 @@ public class OrchestratorAgent {
 
         if (finalText == null) {
             messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
-            LlmResponse fr = llmClient.chat(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
+            LlmResponse fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048));
             if (fr.success()) { finalText = fr.content(); trace.add(new MessageTrace("assistant", "chat_response", finalText)); }
             else return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
         }
@@ -969,7 +1109,7 @@ public class OrchestratorAgent {
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = llmClient.chat(request);
+            LlmResponse response = callLlm(request);
 
             if (!response.success()) {
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
@@ -1327,7 +1467,7 @@ public class OrchestratorAgent {
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
             LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResponse response = llmClient.chat(request);
+            LlmResponse response = callLlm(request);
 
             if (!response.success()) {
                 String err = "LLM 调用失败: " + response.errorMessage();

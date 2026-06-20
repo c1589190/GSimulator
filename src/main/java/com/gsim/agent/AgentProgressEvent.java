@@ -28,6 +28,13 @@ public record AgentProgressEvent(
     public static final String AGENT_PUBLIC_MESSAGE = "AGENT_PUBLIC_MESSAGE";
     public static final String ABORTED = "ABORTED";
 
+    // ---- LLM 流式阶段 ----
+    public static final String LLM_STREAM_STARTED = "LLM_STREAM_STARTED";
+    public static final String LLM_CONTENT_DELTA = "LLM_CONTENT_DELTA";
+    public static final String LLM_REASONING_DELTA = "LLM_REASONING_DELTA";
+    public static final String LLM_STREAM_COMPLETED = "LLM_STREAM_COMPLETED";
+    public static final String LLM_STREAM_FAILED = "LLM_STREAM_FAILED";
+
     // ---- factory methods ----
 
     public static AgentProgressEvent contextLoaded(int round, int maxRounds,
@@ -103,5 +110,37 @@ public record AgentProgressEvent(
     public static AgentProgressEvent aborted(int round, int maxRounds, String reason) {
         return new AgentProgressEvent(ABORTED, round, maxRounds,
                 "中止：" + reason, Map.of("reason", reason != null ? reason : ""));
+    }
+
+    // ---- LLM 流式 factory methods ----
+
+    public static AgentProgressEvent llmStreamStarted() {
+        return new AgentProgressEvent(LLM_STREAM_STARTED, 0, 0,
+                "LLM 流式输出开始", Map.of());
+    }
+
+    public static AgentProgressEvent llmContentDelta(String delta) {
+        return new AgentProgressEvent(LLM_CONTENT_DELTA, 0, 0,
+                delta,
+                Map.of("channel", "content",
+                        "chars", String.valueOf(delta != null ? delta.length() : 0)));
+    }
+
+    public static AgentProgressEvent llmReasoningDelta(String delta) {
+        return new AgentProgressEvent(LLM_REASONING_DELTA, 0, 0,
+                delta,
+                Map.of("channel", "reasoning",
+                        "chars", String.valueOf(delta != null ? delta.length() : 0)));
+    }
+
+    public static AgentProgressEvent llmStreamCompleted() {
+        return new AgentProgressEvent(LLM_STREAM_COMPLETED, 0, 0,
+                "LLM 流式输出完成", Map.of());
+    }
+
+    public static AgentProgressEvent llmStreamFailed(String error) {
+        return new AgentProgressEvent(LLM_STREAM_FAILED, 0, 0,
+                "LLM 流式输出失败：" + (error != null ? error : "未知错误"),
+                Map.of("error", error != null ? error : ""));
     }
 }

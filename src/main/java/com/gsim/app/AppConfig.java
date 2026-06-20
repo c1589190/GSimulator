@@ -64,6 +64,15 @@ public class AppConfig {
     /** Agent ToolLoop 最大工具轮数（≥1，默认 32）。 */
     private final int agentToolLoopMaxRounds;
 
+    /** LLM 流式输出开关（默认 true）。 */
+    private final boolean llmStreamEnabled;
+    /** CLI 流式预览开关（默认 true）。 */
+    private final boolean cliStreamPreviewEnabled;
+    /** CLI 流式预览灰框最大字符数（默认 3000）。 */
+    private final int cliStreamPreviewMaxChars;
+    /** CLI 流式预览是否显示 reasoning（默认 true）。 */
+    private final boolean cliStreamPreviewShowReasoning;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -124,6 +133,14 @@ public class AppConfig {
         // Agent ToolLoop 配置（下限 1，无上限）
         this.agentToolLoopMaxRounds = Math.max(1,
                 parseInt(result.get("agent.tool_loop.max_rounds"), 32));
+
+        // LLM 流式 + CLI 预览配置
+        this.llmStreamEnabled = parseBoolean(result.get("llm.stream.enabled"), true);
+        this.cliStreamPreviewEnabled = parseBoolean(result.get("cli.stream.preview.enabled"), true);
+        this.cliStreamPreviewMaxChars = clamp(
+                parseInt(result.get("cli.stream.preview.max_chars"), 3000), 100, 100000);
+        this.cliStreamPreviewShowReasoning = parseBoolean(
+                result.get("cli.stream.preview.show_reasoning"), true);
     }
 
     // ---- Getters ----
@@ -190,6 +207,15 @@ public class AppConfig {
     public int getAgentToolLoopMaxRounds() {
         return agentToolLoopMaxRounds;
     }
+
+    /** LLM 流式输出是否启用（默认 true）。 */
+    public boolean isLlmStreamEnabled() { return llmStreamEnabled; }
+    /** CLI 流式预览是否启用（默认 true）。 */
+    public boolean isCliStreamPreviewEnabled() { return cliStreamPreviewEnabled; }
+    /** CLI 流式预览灰框最大字符数（默认 3000）。 */
+    public int getCliStreamPreviewMaxChars() { return cliStreamPreviewMaxChars; }
+    /** CLI 流式预览是否显示 reasoning（默认 true）。 */
+    public boolean isCliStreamPreviewShowReasoning() { return cliStreamPreviewShowReasoning; }
 
     /** 获取当前生效的配置文件路径。 */
     public Path getConfigPath() {

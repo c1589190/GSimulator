@@ -243,6 +243,10 @@ public class ConfigLoader {
             case "GSIM_CONTEXT_SESSION_HISTORY_TURNS" -> "context.session.history.turns";
             case "GSIM_CONTEXT_SESSION_MESSAGE_MAX_CHARS" -> "context.session.message.max_chars";
             case "GSIM_AGENT_TOOL_LOOP_MAX_ROUNDS" -> "agent.tool_loop.max_rounds";
+            case "GSIM_LLM_STREAM_ENABLED" -> "llm.stream.enabled";
+            case "GSIM_CLI_STREAM_PREVIEW_ENABLED" -> "cli.stream.preview.enabled";
+            case "GSIM_CLI_STREAM_PREVIEW_MAX_CHARS" -> "cli.stream.preview.max_chars";
+            case "GSIM_CLI_STREAM_PREVIEW_SHOW_REASONING" -> "cli.stream.preview.show_reasoning";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -286,6 +290,11 @@ public class ConfigLoader {
         defaults.put("context.session.message.max_chars", "4000");
 
         defaults.put("agent.tool_loop.max_rounds", "32");
+
+        defaults.put("llm.stream.enabled", "true");
+        defaults.put("cli.stream.preview.enabled", "true");
+        defaults.put("cli.stream.preview.max_chars", "3000");
+        defaults.put("cli.stream.preview.show_reasoning", "true");
 
         return defaults;
     }

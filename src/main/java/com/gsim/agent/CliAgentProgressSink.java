@@ -5,28 +5,79 @@ import java.io.PrintStream;
 /**
  * CLI 模式 AgentProgressSink 实现。
  * 格式化 AgentProgressEvent 为简短状态行打印到 System.out。
+ * 支持 LLM 流式预览灰框。
  */
 public class CliAgentProgressSink implements AgentProgressSink {
 
     private final PrintStream out;
     private final boolean enabled;
+    private final CliStreamPreviewRenderer streamRenderer;
 
     public CliAgentProgressSink(PrintStream out) {
-        this(out, true);
+        this(out, true, null);
     }
 
     public CliAgentProgressSink(PrintStream out, boolean enabled) {
+        this(out, enabled, null);
+    }
+
+    /**
+     * @param out            输出流
+     * @param enabled        是否启用常规进度输出
+     * @param streamRenderer LLM 流式预览渲染器（可为 null，则禁用流式预览）
+     */
+    public CliAgentProgressSink(PrintStream out, boolean enabled,
+                                CliStreamPreviewRenderer streamRenderer) {
         this.out = out;
         this.enabled = enabled;
+        this.streamRenderer = streamRenderer;
     }
 
     @Override
     public void onProgress(AgentProgressEvent event) {
+        if (event == null) return;
+
+        // LLM 流式事件由 streamRenderer 处理（独立于 enabled 开关）
+        if (handleStreamEvent(event)) return;
+
         if (!enabled) return;
         String line = format(event);
         if (line != null && !line.isBlank()) {
             out.println(line);
         }
+    }
+
+    /**
+     * 处理 LLM 流式事件。返回 true 表示已处理（不需要再走 format）。
+     */
+    private boolean handleStreamEvent(AgentProgressEvent event) {
+        if (streamRenderer == null) return false;
+
+        return switch (event.phase()) {
+            case AgentProgressEvent.LLM_STREAM_STARTED -> {
+                streamRenderer.start();
+                yield true;
+            }
+            case AgentProgressEvent.LLM_REASONING_DELTA -> {
+                streamRenderer.appendReasoning(event.detail());
+                yield true;
+            }
+            case AgentProgressEvent.LLM_CONTENT_DELTA -> {
+                streamRenderer.appendContent(event.detail());
+                yield true;
+            }
+            case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
+                streamRenderer.clear();
+                yield true;
+            }
+            case AgentProgressEvent.LLM_STREAM_FAILED -> {
+                streamRenderer.clear();
+                String error = event.meta().getOrDefault("error", "未知错误");
+                out.println("[Agent] LLM 流式输出失败: " + error);
+                yield true;
+            }
+            default -> false;
+        };
     }
 
     /** 格式化为简短状态行。保证长度 ≤ 120 chars。 */
@@ -77,6 +128,12 @@ public class CliAgentProgressSink implements AgentProgressSink {
                     event.detail(); // 直接输出用户可见正文，不加调试前缀
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
+            // LLM 流式事件不应走到这里（已在 handleStreamEvent 处理）
+            case AgentProgressEvent.LLM_STREAM_STARTED,
+                 AgentProgressEvent.LLM_CONTENT_DELTA,
+                 AgentProgressEvent.LLM_REASONING_DELTA,
+                 AgentProgressEvent.LLM_STREAM_COMPLETED,
+                 AgentProgressEvent.LLM_STREAM_FAILED -> null;
             default -> null;
         };
     }

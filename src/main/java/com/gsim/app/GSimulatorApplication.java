@@ -188,7 +188,8 @@ public class GSimulatorApplication {
         }
 
         // Orchestrator + Chat（CLI 模式默认开启进度输出 + 写入确认）
-        var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(System.out);
+        var streamRenderer = com.gsim.agent.CliStreamPreviewRenderer.fromConfig(config, System.out);
+        var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(System.out, true, streamRenderer);
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmClient(), toolRegistry, config.getLlmModel(),
                 cliProgressSink,
@@ -197,6 +198,7 @@ public class GSimulatorApplication {
                 config.getContextSessionHistoryTurns(),
                 config.getContextSessionMessageMaxChars()));
         orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
+        orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
 
         // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
