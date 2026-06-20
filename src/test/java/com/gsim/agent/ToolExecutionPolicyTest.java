@@ -10,18 +10,16 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ToolExecutionPolicy 执行前门禁单元测试。
+ * ToolExecutionPolicy 执行前门禁单元测试（v2：不再需要 ExpectedNextStep）。
  */
 @DisplayName("工具执行前门禁")
 class ToolExecutionPolicyTest {
 
     private ToolExecutionPolicy policy;
-    private ToolPermissionConfig permConfig;
 
     @BeforeEach
     void setUp() {
         policy = new ToolExecutionPolicy();
-        permConfig = new ToolPermissionConfig();
     }
 
     // ========== READ_ONLY → ALLOW ==========
@@ -29,11 +27,11 @@ class ToolExecutionPolicyTest {
     @Test
     @DisplayName("READ_ONLY 工具直接放行")
     void readOnlyToolAllowed() {
-        var route = new ToolRoutePolicy().decide(
-                UserIntent.GENERAL, ExpectedNextStep.CALL_TOOL,
-                permConfig.defaultEnabledTools());
+        var route = new ToolRouteDecision(
+                Set.of("root_status", "finish_action"),
+                "GROUP_BASED", "test");
         var dec = policy.validateBeforeExecute(
-                "root_status", Map.of(), route, ExpectedNextStep.CALL_TOOL, false);
+                "root_status", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
         assertTrue(dec.allowedByRoute());
     }
@@ -45,7 +43,7 @@ class ToolExecutionPolicyTest {
                 Set.of("player_action_list", "finish_action"),
                 "PLAYER_ACTION_QUERY", "test");
         var dec = policy.validateBeforeExecute(
-                "player_action_list", Map.of(), route, ExpectedNextStep.CALL_TOOL, false);
+                "player_action_list", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -58,7 +56,7 @@ class ToolExecutionPolicyTest {
                 Set.of("knowledge_upsert", "finish_action"),
                 "KNOWLEDGE_WRITE", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, ExpectedNextStep.CALL_TOOL, false);
+                "knowledge_upsert", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
         assertEquals(ToolCategory.MUTATING, dec.category());
     }
@@ -70,7 +68,7 @@ class ToolExecutionPolicyTest {
                 Set.of("knowledge_upsert", "finish_action"),
                 "KNOWLEDGE_WRITE", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, ExpectedNextStep.CALL_TOOL, true);
+                "knowledge_upsert", Map.of(), route, true);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -83,20 +81,31 @@ class ToolExecutionPolicyTest {
                 Set.of("knowledge_delete", "finish_action"),
                 "KNOWLEDGE_WRITE", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_delete", Map.of(), route, ExpectedNextStep.CALL_TOOL, true);
+                "knowledge_delete", Map.of(), route, true);
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
         assertEquals(ToolCategory.DESTRUCTIVE, dec.category());
     }
 
-    // ========== CONTROL (finish_action) → ALLOW ==========
+    // ========== CONTROL (finish_action, activate_tool_groups) → ALLOW ==========
 
     @Test
     @DisplayName("finish_action 直接放行")
     void finishActionAllowed() {
         var route = new ToolRouteDecision(
-                Set.of("finish_action"), "FINISH_ACTION_STEP", "test");
+                Set.of("finish_action"), "GROUP_BASED", "test");
         var dec = policy.validateBeforeExecute(
-                "finish_action", Map.of(), route, ExpectedNextStep.FINISH_ACTION, false);
+                "finish_action", Map.of(), route, false);
+        assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
+    }
+
+    @Test
+    @DisplayName("activate_tool_groups 直接放行")
+    void activateToolGroupsAllowed() {
+        var route = new ToolRouteDecision(
+                Set.of("activate_tool_groups", "finish_action"),
+                "GROUP_BASED", "test");
+        var dec = policy.validateBeforeExecute(
+                "activate_tool_groups", Map.of("groups", "[\"player_action\"]"), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -109,22 +118,9 @@ class ToolExecutionPolicyTest {
                 Set.of("player_action_list", "finish_action"),
                 "PLAYER_ACTION_QUERY", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, ExpectedNextStep.CALL_TOOL, false);
+                "knowledge_upsert", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.REJECT, dec.decision());
         assertFalse(dec.allowedByRoute());
-    }
-
-    // ========== FINISH_ACTION 阶段拒绝 ==========
-
-    @Test
-    @DisplayName("FINISH_ACTION 阶段调用业务工具 → REJECT")
-    void businessToolRejectedInFinishActionStep() {
-        var route = new ToolRouteDecision(
-                Set.of("finish_action"), "FINISH_ACTION_STEP",
-                "当前阶段已获得足够工具结果");
-        var dec = policy.validateBeforeExecute(
-                "root_status", Map.of(), route, ExpectedNextStep.FINISH_ACTION, false);
-        assertEquals(ToolExecutionDecisionType.REJECT, dec.decision());
     }
 
     // ========== 通配路由跳过工具名检查 ==========
@@ -135,7 +131,7 @@ class ToolExecutionPolicyTest {
         var route = ToolRouteDecision.wildcard(
                 Set.of("finish_action"), "GENERAL", "通配路由");
         var dec = policy.validateBeforeExecute(
-                "unknown_tool", Map.of(), route, ExpectedNextStep.CALL_TOOL, false);
+                "unknown_tool", Map.of(), route, false);
         // 未知工具默认 MUTATING → NEED_CONFIRMATION
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
     }

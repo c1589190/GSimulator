@@ -1,6 +1,5 @@
 package com.gsim.agent;
 
-import com.gsim.agent.tool.ConsolePrintTool;
 import com.gsim.agent.tool.FinishActionTool;
 import com.gsim.llm.*;
 import com.gsim.tool.ToolRegistry;
@@ -70,7 +69,6 @@ class StreamingToolLoopIntegrationTest {
         llmClient = new StreamingFakeClient();
         toolRegistry = new ToolRegistry();
         toolRegistry.register(new FinishActionTool());
-        toolRegistry.register(new ConsolePrintTool(event -> {}));
 
         var recorder = new CopyOnWriteArrayList<String>();
         AgentProgressSink sink = event -> {
@@ -200,6 +198,6 @@ class StreamingToolLoopIntegrationTest {
 
         List<String> toolNames = req.tools().stream().map(ToolDef::name).toList();
         assertTrue(toolNames.contains("finish_action"), "应包含 finish_action");
-        assertTrue(toolNames.contains("console_print"), "应包含 console_print");
+        // console_print 已移除，不再验证
     }
 }

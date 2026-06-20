@@ -14,10 +14,10 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证：第一轮普通答复内容被吞后，第二轮 finish_action.message
- * 必须包含完整正文，不能只是"以上是模板"式的空引用。
+ * 验证：第一轮普通答复已展示给用户但未调用 finish_action 时，
+ * 第二轮 finish_action.message 必须包含完整正文，不能只是"以上是模板"式的空引用。
  */
-@DisplayName("finish_action 不能引用不可见的上轮答复")
+@DisplayName("finish_action 不能空引用上轮答复")
 class FinishActionCannotReferToInvisiblePreviousAnswerTest {
 
     private FakeLlmManager fakeLlm;
@@ -34,7 +34,7 @@ class FinishActionCannotReferToInvisiblePreviousAnswerTest {
     }
 
     @Test
-    @DisplayName("第一轮完整答复被吞 → reprompt 要求完整重写 → 第二轮必须包含完整正文")
+    @DisplayName("第一轮普通答复已展示 → reprompt 要求完整重写 → 第二轮必须包含完整正文")
     void fullContentMustBeInFinishActionAfterReprompt() {
         // 第一轮：生成了完整报名表，但没有 finish_action
         String fullTemplate = """
@@ -67,9 +67,9 @@ class FinishActionCannotReferToInvisiblePreviousAnswerTest {
     }
 
     @Test
-    @DisplayName("reprompt 确保模型收到 '用户看不到上一轮' 的警告")
-    void repromptWarnsModelAboutInvisiblePreviousAnswer() {
-        // 第一轮：完整长答复
+    @DisplayName("reprompt 提醒模型普通答复已展示但需 finish_action 结束")
+    void repromptRemindsModelToUseFinishActionAfterPlainAnswer() {
+        // 第一轮：完整长答复（已展示给用户，但仍需 finish_action）
         fakeLlm.addResponse("这是完整的模板和表格内容……（长文本）");
 
         // 第二轮：finish_action
@@ -80,19 +80,19 @@ class FinishActionCannotReferToInvisiblePreviousAnswerTest {
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "生成一个模板");
 
-        // 检查第二轮 LLM request 中包含了 "没有展示给用户" 的提醒
+        // 检查第二轮 LLM request 中包含了 finish_action 提醒
         var requests = fakeLlm.getCapturedRequests();
         assertTrue(requests.size() >= 2,
                 "Should have at least 2 LLM requests");
 
-        // 第二轮 request 的 messages 应包含纠错提醒
+        // 第二轮 request 的 messages 应包含 finish_action 结束提醒
         String secondRequestMessages = requests.get(1).messages().stream()
                 .map(Object::toString)
                 .reduce("", (a, b) -> a + b);
         assertTrue(
-                secondRequestMessages.contains("没有展示给用户")
-                        || secondRequestMessages.contains("用户看不到"),
-                "Second request should warn model about invisible content: "
+                secondRequestMessages.contains("请调用 finish_action")
+                        || secondRequestMessages.contains("activate_tool_groups"),
+                "Second request should remind model to call finish_action: "
                         + secondRequestMessages);
     }
 

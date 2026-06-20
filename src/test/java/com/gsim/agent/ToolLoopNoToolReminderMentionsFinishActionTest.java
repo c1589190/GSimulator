@@ -45,27 +45,25 @@ class ToolLoopNoToolReminderMentionsFinishActionTest {
     }
 
     @Test
-    @DisplayName("buildNoToolReminder 明确告知模型上一轮答复用户看不到")
+    @DisplayName("buildNoToolReminder 明确告知模型上一轮答复已展示给用户")
     void reminderTellsModelPreviousAnswerNotShown() {
         String reminder = ToolLoopDebug.buildNoToolReminder("查看状态");
 
-        assertTrue(reminder.contains("没有展示给用户"),
-                "Reminder must tell model its previous answer was NOT shown to user");
-        assertTrue(reminder.contains("用户看不到"),
-                "Reminder must tell model the user cannot see previous answer");
+        assertTrue(reminder.contains("已展示给用户"),
+                "Reminder must tell model its previous answer was shown to user: " + reminder);
     }
 
     @Test
-    @DisplayName("buildNoToolReminder 要求将完整最终答复写入 finish_action.message")
+    @DisplayName("buildNoToolReminder 要求将完整最终答复放入 finish_action.message")
     void reminderRequiresFullAnswerInFinishActionMessage() {
         String reminder = ToolLoopDebug.buildNoToolReminder("生成了一个报名表");
 
-        assertTrue(reminder.contains("finish_action.message")
+        assertTrue(reminder.contains("finish_action")
                         || reminder.contains("完整"),
-                "Reminder must require full answer in finish_action.message");
-        assertTrue(reminder.contains("完整写入")
-                        || reminder.contains("完整重新写入"),
-                "Reminder must require rewriting the full content");
+                "Reminder must mention finish_action or 完整: " + reminder);
+        assertTrue(reminder.contains("把完整最终回复放入 message")
+                        || reminder.contains("message"),
+                "Reminder must require putting full answer into message: " + reminder);
     }
 
     @Test

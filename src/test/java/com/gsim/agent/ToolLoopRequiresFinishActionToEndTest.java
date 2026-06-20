@@ -95,10 +95,10 @@ class ToolLoopRequiresFinishActionToEndTest {
                 "echo + finish_action = 2 tool calls (reminder round has no tool)");
     }
 
-    // ===== Test 4: 第二轮的 tools 只包含 finish_action，且 tool_choice 被强制 =====
+    // ===== Test 4: R1 纯文本 → R2 正常（不再强制 tool_choice）=====
 
     @Test
-    @DisplayName("R1 纯文本 → R2 强制 finish_action → 验证 R2 只有 finish_action 工具且 tool_choice 被强制")
+    @DisplayName("R1 纯文本 → R2 保留全部工具且 tool_choice=auto（不再强制 finish_action）")
     void secondRoundHasOnlyFinishActionWithForcedToolChoice() {
         fakeLlm.addResponse("当前系统状态正常。");
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
@@ -112,49 +112,45 @@ class ToolLoopRequiresFinishActionToEndTest {
         assertEquals(1, result.toolCalls().size());
         assertEquals("finish_action", result.toolCalls().get(0).tool());
 
-        // 验证 R2 request 属性
+        // 验证 R1 和 R2 request 属性
         var requests = fakeLlm.getCapturedRequests();
         assertTrue(requests.size() >= 2, "至少 2 轮 LLM 请求");
 
         LlmRequest r1 = requests.get(0);
         LlmRequest r2 = requests.get(1);
 
-        // R1: 默认 tools（全部工具），tool_choice = "auto"
-        assertTrue(r1.tools().size() > 1, "R1 应包含全部工具");
+        // R1: 包含注册的工具（echo + finish_action 至少 2 个），tool_choice = "auto"
+        assertTrue(r1.tools().size() >= 2,
+                "R1 应包含 echo + finish_action 工具: " + r1.tools().stream().map(ToolDef::name).toList());
         assertEquals("auto", r1.toolChoice());
 
-        // R2: 只有 finish_action，tool_choice 被强制
-        assertEquals(1, r2.tools().size(), "R2 只有 finish_action 一个工具");
-        assertEquals("finish_action", r2.tools().get(0).name());
-
-        // tool_choice 是 forced object: {type: "function", function: {name: "finish_action"}}
-        assertInstanceOf(Map.class, r2.toolChoice(),
-                "R2 tool_choice 应为 forced object (Map)");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> tc = (Map<String, Object>) r2.toolChoice();
-        assertEquals("function", tc.get("type"));
-        @SuppressWarnings("unchecked")
-        Map<String, String> fn = (Map<String, String>) tc.get("function");
-        assertEquals("finish_action", fn.get("name"));
+        // R2: 保留全部工具（不再强制只有 finish_action），tool_choice = "auto"
+        assertTrue(r2.tools().size() >= 2,
+                "R2 应保留全部工具: " + r2.tools().stream().map(ToolDef::name).toList());
+        assertEquals("auto", r2.toolChoice(),
+                "R2 tool_choice 应为 auto（不再强制）");
     }
 
-    // ===== Test 5: forced finish_action 轮仍返回纯文本 → auto-wrap =====
+    // ===== Test 5: 连续 3 轮纯文本 → 提前中止（不再 auto-wrap）=====
 
     @Test
-    @DisplayName("R1 纯文本 → R2 forced finish_action 仍返回纯文本 → auto-wrap 为 finish_action.message")
+    @DisplayName("连续 3 轮纯文本 → 第 3 轮触发中止（不再 auto-wrap）")
     void autoWrapPlainContentWhenForcedFinishActionRoundStillReturnsPlainText() {
         fakeLlm.addResponse("第一轮纯文本。");
-        fakeLlm.addResponse("第二轮仍然是纯文本回复。");
+        fakeLlm.addResponse("第二轮纯文本。");
+        fakeLlm.addResponse("第三轮纯文本。");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "test");
 
-        assertTrue(result.success(), "auto-wrap 应成功结束");
-        assertEquals(1, result.toolCalls().size(),
-                "应记录 1 个 tool call（auto-wrapped finish_action）");
-        assertEquals("finish_action", result.toolCalls().get(0).tool());
-        assertEquals("第二轮仍然是纯文本回复。", result.finalText());
+        assertFalse(result.success(),
+                "连续 3 轮纯文本应触发中止，不再 auto-wrap");
+        assertTrue(result.errorMessage() != null
+                        && result.errorMessage().contains("no tool calls"),
+                "错误消息应提到连续无工具轮数: " + result.errorMessage());
+        assertEquals(0, result.toolCalls().size(),
+                "不应有任何工具调用记录");
     }
 
     // ===== Stub =====

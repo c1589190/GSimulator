@@ -84,19 +84,20 @@ class AgentCurrentTurnActionRecordQueryReturnsResultTest {
     }
 
     @Test
-    @DisplayName("纯自然语言回应 → R1 触发 forced finish_action → R2 auto-wrap 成功")
+    @DisplayName("纯自然语言回应 → R1 显示给用户 → R2 finish_action 结束")
     void plainTextResponseToActionQueryIsRejected() {
-        // Round 1: 纯 NL → 触发 forcedFinishAction
+        // Round 1: 纯 NL → 显示给用户 → 提醒
         fakeLlm.addResponse("当前回合有 3 条玩家行动记录: ...");
-        // Round 2: 仍纯 NL → auto-wrap 为 finish_action
-        fakeLlm.addResponse("还需要再看看...");
+        // Round 2: 收到提醒后调用 finish_action
+        fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
+                + "\"message\":\"当前回合有 3 条玩家行动记录：act001, act002, act003\"}}");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0002\n",
                 List.of(), "确认一下第二回合有没有玩家行动记录");
 
         assertTrue(result.success(),
-                "R2 纯文本应被 auto-wrap 为 finish_action 并成功结束");
+                "R2 finish_action 应成功结束: " + result.errorMessage());
         assertEquals(1, result.toolCalls().size());
         assertEquals("finish_action", result.toolCalls().get(0).tool());
     }

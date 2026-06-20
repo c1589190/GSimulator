@@ -14,10 +14,10 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证连续 2 轮无工具调用后 ToolLoop 提前中止，
- * 不再烧满 maxToolRounds（可配置，默认 8）。
+ * 验证连续 3 轮无工具调用后 ToolLoop 提前中止。
+ * 容忍度从 v1 的 2 轮提升到 3 轮。
  */
-@DisplayName("ToolLoop 连续 2 轮无工具提前中止")
+@DisplayName("ToolLoop 连续 3 轮无工具提前中止")
 class ToolLoopNoToolRoundsStopsAfterTwoTest {
 
     private FakeLlmManager fakeLlm;
@@ -33,33 +33,36 @@ class ToolLoopNoToolRoundsStopsAfterTwoTest {
     }
 
     @Test
-    @DisplayName("连续 2 轮纯自然语言 → R1 触发 forced finish_action → R2 auto-wrap 成功")
+    @DisplayName("连续 3 轮纯文本 → 第 3 轮触发提前中止")
     void stopsAfterTwoConsecutiveNoToolRounds() {
-        // Round 1: 纯自然语言 → 触发 forcedFinishAction
+        // Round 1: 纯文本 → 显示给用户 → 提醒
         fakeLlm.addResponse("正在处理中...");
-        // Round 2: 又是纯自然语言 → 被 auto-wrap 为 finish_action("还需要再看看...")
+        // Round 2: 又是纯文本 → 显示给用户 → 第 2 次提醒
         fakeLlm.addResponse("还需要再看看...");
+        // Round 3: 第 3 次纯文本 → 连续无工具轮数达到上限 → ABORT
+        fakeLlm.addResponse("还是不确定...");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行一个任务");
 
-        assertTrue(result.success(),
-                "R2 纯文本应被 auto-wrap 为 finish_action 并成功");
-        assertEquals(1, result.toolCalls().size(),
-                "应记录 1 个 auto-wrapped finish_action");
-        assertEquals("finish_action", result.toolCalls().get(0).tool());
-        assertEquals("还需要再看看...", result.finalText());
+        assertFalse(result.success(),
+                "连续 3 轮纯文本无工具应触发中止");
+        assertTrue(result.errorMessage() != null
+                        && result.errorMessage().contains("no tool calls"),
+                "错误消息应提到连续无工具轮数: " + result.errorMessage());
+        assertEquals(0, result.toolCalls().size(),
+                "不应有任何工具调用记录");
     }
 
     @Test
-    @DisplayName("echo → 纯文本(forcedFinishAction) → finish_action 成功结束")
+    @DisplayName("echo → 纯文本 → 纯文本 → finish_action 成功（工具调用重置计数器）")
     void toolCallResetsConsecutiveCounter() {
         // Round 1: echo 工具 → consecutiveNoToolRounds 重置为 0
         fakeLlm.addResponse("{\"tool\":\"echo\",\"args\":{\"message\":\"r1\"}}");
-        // Round 2: 纯自然语言 → 触发 forcedFinishAction
+        // Round 2: 纯文本 → 提醒（consecutiveNoToolRounds=1）
         fakeLlm.addResponse("做了些事情...");
-        // Round 3: forced finish_action 阶段，返回 finish_action 结束
+        // Round 3: finish_action → 正常结束
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","
                 + "\"message\":\"所有操作已完成。\"}}");
 
@@ -69,7 +72,7 @@ class ToolLoopNoToolRoundsStopsAfterTwoTest {
                 List.of(), "测试");
 
         assertTrue(result.success(),
-                "echo + forced finish_action + finish_action JSON = 应成功");
+                "echo + 一次纯文本提醒 + finish_action JSON = 应成功结束");
         assertEquals(2, result.toolCalls().size(),
                 "1 echo + 1 finish_action = 2 tool calls");
         assertEquals("echo", result.toolCalls().get(0).tool());
@@ -77,9 +80,9 @@ class ToolLoopNoToolRoundsStopsAfterTwoTest {
     }
 
     @Test
-    @DisplayName("finish_action 前有一次无工具提醒不中止（仅1次无工具不触发中止）")
+    @DisplayName("finish_action 前有 1~2 次无工具提醒不中止（3 轮触发中止）")
     void singleNoToolRoundDoesNotAbort() {
-        // Round 1: 纯自然语言（第 1 次）
+        // Round 1: 纯文本（第 1 次）
         fakeLlm.addResponse("正在了解情况...");
         // Round 2: finish_action（收到提醒后按下）
         fakeLlm.addResponse("{\"tool\":\"finish_action\",\"args\":{\"status\":\"success\","

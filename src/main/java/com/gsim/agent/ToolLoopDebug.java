@@ -539,23 +539,19 @@ public final class ToolLoopDebug {
 
     static String buildNoToolReminder(String userInput) {
         String base = "你没有调用任何工具，也没有调用 finish_action。\n\n"
-                + "重要提醒：你刚才生成了普通答复，但因为没有调用 finish_action，"
-                + "该答复没有展示给用户。用户看不到你刚才写的内容。\n\n"
+                + "你的纯文本回复已展示给用户。\n\n"
                 + "规则：\n"
-                + "1. 如果任务需要查询/写入/保存/切换，请先调用对应业务工具。\n"
-                + "2. 如有长模板、报名表、草稿等需要用户看到的阶段性内容，请先调用 console_print 输出到公屏，"
-                + "然后调用 finish_action 结束。\n"
-                + "3. 如果任务已经可以直接回答，请调用 finish_action，并把完整最终回复放入 message。\n"
-                + "4. 不要直接用普通自然语言结束。\n"
-                + "5. 不要输出 [工具调用已执行]、[工具结果] 或 raw JSON。\n"
-                + "6. 如果你刚才写了模板、表格、名单、设定草稿、报名表或任何正文，"
-                + "必须完整重新写入 finish_action.message。\n"
-                + "7. 禁止使用\"以上\"\"如上\"\"刚才\"\"已生成\"\"前文\"等引用不可见内容的表达。";
+                + "1. 如果任务已经可以直接回答，请调用 finish_action，并把完整最终回复放入 message，"
+                + "在 summary 中简要总结你做了什么。\n"
+                + "2. 如果任务需要查询/写入/保存/切换，请先调用 activate_tool_groups 激活所需的工具组，"
+                + "再调用对应业务工具。\n"
+                + "3. 不要直接用普通自然语言结束而不调用 finish_action。\n"
+                + "4. 不要输出 [工具调用已执行]、[工具结果] 或 raw JSON。\n"
+                + "5. 禁止使用\"以上\"\"如上\"\"刚才\"\"已生成\"\"前文\"等引用不可见内容的表达。";
 
         if (isPlayerActionQuery(userInput)) {
             base += "\n\n用户正在询问玩家行动记录。"
-                    + "请调用 player_action_list 查询当前 activeBranch，"
-                    + "然后调用 finish_action 返回结果。";
+                    + "请调用 finish_action 返回结果。";
         }
 
         return base;

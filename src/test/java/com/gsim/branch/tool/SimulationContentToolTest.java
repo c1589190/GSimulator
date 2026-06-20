@@ -76,7 +76,8 @@ public class SimulationContentToolTest {
         ToolResult result = appendTool.execute(call);
 
         assertTrue(result.success(), "append should succeed but got: " + result.error());
-        assertEquals(1, result.items().size());
+        assertEquals(2, result.items().size(),
+                "应该有 2 个 item：metadata + simulation_content_text");
 
         String snippet = result.items().get(0).snippet();
         assertTrue(snippet.contains("sim0001"), "should contain simId sim0001: " + snippet);

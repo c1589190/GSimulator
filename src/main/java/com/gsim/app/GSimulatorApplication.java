@@ -2,6 +2,8 @@ package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
 import com.gsim.branch.BranchAnalysisTool;
+import com.gsim.compact.ContextCompactor;
+import com.gsim.compact.ToolResultCompactor;
 import com.gsim.branch.BranchAnalyzer;
 import com.gsim.chat.BranchMessageStore;
 import com.gsim.interaction.ConsoleInteractionAdapter;
@@ -190,15 +192,38 @@ public class GSimulatorApplication {
         // Orchestrator + Chat（CLI 模式默认开启进度输出 + 写入确认）
         var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(
                 System.out, true);
+
+        // 工具组管理器（每轮对话重置，激活不跨轮保留）
+        var toolGroupManager = new com.gsim.agent.ToolGroupManager();
+
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmManager(), toolRegistry, config.getLlmModel(),
                 cliProgressSink,
-                new com.gsim.agent.CliToolPermissionGate());
+                new com.gsim.agent.CliToolPermissionGate(),
+                toolGroupManager);
         orchestrator.setContextHistoryConfig(new OrchestratorAgent.ContextHistoryConfig(
                 config.getContextSessionHistoryTurns(),
                 config.getContextSessionMessageMaxChars()));
         orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
         orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
+
+        // ---- Compact 子系统 ----
+        if (config.isCompactEnabled() && ctx.getLlmManager() != null) {
+            var compactor = new ContextCompactor(ctx.getLlmManager(), config, cliProgressSink);
+            var toolResultCompactor = new ToolResultCompactor(
+                    ctx.getLlmManager(),
+                    config.getCompactToolResultThreshold(),
+                    config.getCompactLlmModel(),
+                    config.getCompactLlmTemperature(),
+                    cliProgressSink);
+            orchestrator.setToolResultCompactor(toolResultCompactor);
+            orchestrator.setToolResultThreshold(config.getCompactToolResultThreshold());
+
+            // 注册 /compact 命令（仅在有 ContextSessionManager 时可用）
+            if (ctxSessionManager != null) {
+                manager.registerCommand(new CompactCommand(ctxSessionManager, compactor, orchestrator));
+            }
+        }
 
         // 通知 CLI adapter 流式模式（流式内容已在过程中直接输出）
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
@@ -206,8 +231,8 @@ public class GSimulatorApplication {
         // 注册控制流工具：finish_action（Agent 必须调用此工具才能结束每轮对话）
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
 
-        // 注册可见输出工具：console_print（Agent 向用户公屏输出长模板/草稿）
-        toolRegistry.register(new com.gsim.agent.tool.ConsolePrintTool(cliProgressSink));
+        // 注册工具组激活工具：activate_tool_groups（Agent 按需激活工具组）
+        toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
 
         chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator,
                 ctxSessionManager, dataRoot, ctx);

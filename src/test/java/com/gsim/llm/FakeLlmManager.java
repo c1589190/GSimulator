@@ -60,7 +60,7 @@ public class FakeLlmManager extends LlmManager {
     /** 队列一个同时包含内容和 API tool_calls 的响应（模拟 LLM 返回文本 + 原生 tool_calls）。 */
     public void addResponse(String text, List<LlmToolCall> toolCalls) {
         responseQueue.add(new LlmResult(text, "", model, 0, true, null,
-                toolCalls != null ? List.copyOf(toolCalls) : List.of(), "tool_calls"));
+                toolCalls != null ? List.copyOf(toolCalls) : List.of(), "tool_calls", false));
     }
 
     /** 设置 isAvailable() 的返回值。 */

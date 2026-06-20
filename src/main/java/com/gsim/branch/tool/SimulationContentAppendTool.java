@@ -91,6 +91,9 @@ public class SimulationContentAppendTool implements AgentTool {
                     new ToolResult.Item(title, simId,
                             "simId=" + simId + " branchId=" + branchId + " filePath=" + filePath
                                     + " type=" + type + " status=" + status + revInfo,
+                            1.0),
+                    new ToolResult.Item("simulation_content_text", "",
+                            "# " + title + "\n\n" + content,
                             1.0)));
         } catch (Exception e) {
             log.error("simulation_content_append failed: {}", e.getMessage());

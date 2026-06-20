@@ -1,6 +1,5 @@
 package com.gsim.agent;
 
-import com.gsim.agent.tool.ConsolePrintTool;
 import com.gsim.agent.tool.FinishActionTool;
 import com.gsim.llm.ToolDef;
 import org.junit.jupiter.api.DisplayName;
@@ -47,34 +46,6 @@ class ToolDefStrictSchemaTest {
         Map<String, Object> messageProp = properties.get("message");
         assertEquals("string", messageProp.get("type"),
                 "message property type 应为 string");
-    }
-
-    // ===== Test 7: ConsolePrintToolDefSchemaTest =====
-
-    @Test
-    @DisplayName("ConsolePrintTool.getParameters() 返回严格 schema，required 含 message，additionalProperties=false")
-    void consolePrintToolDefSchema() {
-        ConsolePrintTool tool = new ConsolePrintTool(null);
-        Map<String, Object> params = tool.getParameters();
-
-        assertNotNull(params, "getParameters() 不应返回 null");
-        assertEquals("object", params.get("type"),
-                "top-level type 应为 object");
-        assertEquals(false, params.get("additionalProperties"),
-                "additionalProperties 应为 false");
-
-        @SuppressWarnings("unchecked")
-        java.util.List<String> required = (java.util.List<String>) params.get("required");
-        assertNotNull(required, "required 数组不应为 null");
-        assertTrue(required.contains("message"),
-                "required 应包含 message，实际: " + required);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Map<String, Object>> properties =
-                (Map<String, Map<String, Object>>) params.get("properties");
-        assertNotNull(properties, "properties 不应为 null");
-        assertTrue(properties.containsKey("message"),
-                "properties 应包含 message key");
     }
 
     // ===== 额外：验证 ToolDef 包装后 schema 不丢失 =====

@@ -140,7 +140,8 @@ public class StreamPool {
                 result.success(),
                 result.errorMessage(),
                 merged,
-                result.finishReason()
+                result.finishReason(),
+                result.contextLengthExceeded()
         );
         finalResult.set(mergedResult);
 
@@ -153,7 +154,12 @@ public class StreamPool {
         complete = true;
         success = false;
         errorMessage = message;
-        finalResult.set(LlmResult.failure(message));
+        if (message != null && message.startsWith("CONTEXT_LENGTH_EXCEEDED:")) {
+            finalResult.set(LlmResult.contextLengthExceeded(
+                    message.substring("CONTEXT_LENGTH_EXCEEDED:".length()).strip()));
+        } else {
+            finalResult.set(LlmResult.failure(message));
+        }
         events.add(new PoolEvent(EventType.ERROR, message, System.currentTimeMillis()));
         completionLatch.countDown();
     }

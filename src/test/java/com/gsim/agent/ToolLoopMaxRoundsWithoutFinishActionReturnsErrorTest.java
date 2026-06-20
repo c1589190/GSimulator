@@ -35,25 +35,29 @@ class ToolLoopMaxRoundsWithoutFinishActionReturnsErrorTest {
     }
 
     @Test
-    @DisplayName("R1 纯文本 → forced finish_action → R2 auto-wrap 成功（不会烧到 5 轮）")
+    @DisplayName("连续 3 轮纯文本 → 提前中止（不再 auto-wrap，不会烧到 5 轮）")
     void fiveRoundsOfPlainTextReturnsError() {
         agent.setMaxToolRounds(5);
-        // R1: 纯文本 → 触发 forcedFinishAction
+        // R1: 纯文本 → 显示给用户 → 提醒
         fakeLlm.addResponse("正在处理...");
-        // R2: 仍纯文本 → auto-wrap 为 finish_action → 成功
+        // R2: 又是纯文本 → 第 2 次提醒
         fakeLlm.addResponse("还需要更多信息...");
+        // R3: 第 3 次纯文本 → 连续无工具上限 → ABORT
+        fakeLlm.addResponse("还是没结果...");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "执行复杂任务");
 
-        assertTrue(result.success(),
-                "R2 纯文本应被 auto-wrap 为 finish_action 并成功结束");
-        assertEquals("还需要更多信息...", result.finalText());
-        assertEquals(1, result.toolCalls().size());
-        assertEquals("finish_action", result.toolCalls().get(0).tool());
-        assertEquals(2, fakeLlm.getRequestCount(),
-                "只有 2 轮（1 forced + 1 auto-wrap）");
+        assertFalse(result.success(),
+                "连续 3 轮纯文本无工具应触发中止");
+        assertTrue(result.errorMessage() != null
+                        && result.errorMessage().contains("no tool calls"),
+                "错误消息应提到连续无工具轮数: " + result.errorMessage());
+        assertEquals(0, result.toolCalls().size(),
+                "不应有任何工具调用记录");
+        assertEquals(3, fakeLlm.getRequestCount(),
+                "只有 3 轮（全部无工具 → 提醒 → 中止）");
     }
 
     @Test

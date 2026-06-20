@@ -151,7 +151,7 @@ class SseParser {
         pool.onComplete(new LlmResult(
                 pool.getContent(), pool.getReasoning(),
                 model, 0, true, null,
-                pool.getToolCalls(), "stop"));
+                pool.getToolCalls(), "stop", false));
     }
 
     // ---- JSON fallback 路径（非流式响应） ----
@@ -236,7 +236,7 @@ class SseParser {
                 result = LlmResult.withToolCalls(toolCalls, model, tokensUsed);
             } else {
                 result = new LlmResult(content, reasoning, model, tokensUsed, true, null,
-                        List.of(), finishReason);
+                        List.of(), finishReason, false);
             }
             pool.onComplete(result);
 

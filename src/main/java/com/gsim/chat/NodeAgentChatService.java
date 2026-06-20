@@ -194,6 +194,9 @@ public class NodeAgentChatService {
                 .filter(m -> !m.id().equals(smUser.id()))
                 .toList();
 
+        // 每轮对话前重置工具组激活状态（激活不跨轮保留）
+        orchestrator.groupManager().reset();
+
         result = orchestrator.chatWithContextSession(baseMarkdown, historyMsgs, userText, contextMeta);
 
         if (!result.success()) {

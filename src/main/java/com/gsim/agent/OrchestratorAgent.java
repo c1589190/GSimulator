@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.campaign.PlayerAction;
 import com.gsim.chat.ToolPollutionFilter;
+import com.gsim.compact.ToolResultCompactor;
 import com.gsim.context.session.SessionMessage;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
@@ -52,6 +53,7 @@ public class OrchestratorAgent {
     private final ToolExecutionPolicy executionPolicy;
     private final ToolPermissionGate permissionGate;
     private final ToolPermissionConfig permissionConfig;
+    private final ToolGroupManager groupManager;
 
     /** Agent ToolLoop 最大工具轮数（默认 32，≥1，可由 setter 注入覆盖）。 */
     private volatile int maxToolRounds = 32;
@@ -68,6 +70,16 @@ public class OrchestratorAgent {
     /** ESC 取消标志。由 ConsoleInteractionAdapter 在检测到 ESC 时设置，ToolLoop 各检查点读取。 */
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
+    /** 工具结果溢出保护（null = 未启用）。 */
+    private volatile ToolResultCompactor toolResultCompactor;
+    /** 工具结果压缩阈值（字符数，默认 3000）。 */
+    private volatile int toolResultThreshold = 3000;
+
+    /** 返回工具组管理器（供 NodeAgentChatService 和测试使用）。 */
+    public ToolGroupManager groupManager() {
+        return groupManager;
+    }
+
     public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
         this(llmManager, toolRegistry, model, AgentProgressSink.NOOP);
     }
@@ -82,7 +94,18 @@ public class OrchestratorAgent {
                              ToolPermissionGate permissionGate) {
         this(llmManager, toolRegistry, model, progressSink != null ? progressSink : AgentProgressSink.NOOP,
                 new ToolRoutePolicy(), new ToolExecutionPolicy(),
-                permissionGate, new ToolPermissionConfig());
+                permissionGate, new ToolPermissionConfig(),
+                ToolGroupManager.createWithAllGroupsActivated());
+    }
+
+    public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
+                             AgentProgressSink progressSink,
+                             ToolPermissionGate permissionGate,
+                             ToolGroupManager groupManager) {
+        this(llmManager, toolRegistry, model, progressSink != null ? progressSink : AgentProgressSink.NOOP,
+                new ToolRoutePolicy(), new ToolExecutionPolicy(),
+                permissionGate, new ToolPermissionConfig(),
+                groupManager);
     }
 
     OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
@@ -91,6 +114,17 @@ public class OrchestratorAgent {
                        ToolExecutionPolicy executionPolicy,
                        ToolPermissionGate permissionGate,
                        ToolPermissionConfig permissionConfig) {
+        this(llmManager, toolRegistry, model, progressSink, routePolicy, executionPolicy,
+                permissionGate, permissionConfig, ToolGroupManager.createWithAllGroupsActivated());
+    }
+
+    OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model,
+                       AgentProgressSink progressSink,
+                       ToolRoutePolicy routePolicy,
+                       ToolExecutionPolicy executionPolicy,
+                       ToolPermissionGate permissionGate,
+                       ToolPermissionConfig permissionConfig,
+                       ToolGroupManager groupManager) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
@@ -99,6 +133,7 @@ public class OrchestratorAgent {
         this.executionPolicy = executionPolicy != null ? executionPolicy : new ToolExecutionPolicy();
         this.permissionGate = permissionGate;
         this.permissionConfig = permissionConfig != null ? permissionConfig : new ToolPermissionConfig();
+        this.groupManager = groupManager != null ? groupManager : new ToolGroupManager();
     }
 
     /** 返回最近一次 assistant 输出草稿，用于工具保存。可能为空字符串。 */
@@ -130,6 +165,16 @@ public class OrchestratorAgent {
     /** 获取流式输出开关。 */
     public boolean isStreamEnabled() {
         return streamEnabled;
+    }
+
+    /** 注入工具结果压缩器（null = 不启用工具结果溢出保护）。 */
+    public void setToolResultCompactor(ToolResultCompactor compactor) {
+        this.toolResultCompactor = compactor;
+    }
+
+    /** 设置工具结果压缩阈值（字符数，默认 3000）。 */
+    public void setToolResultThreshold(int threshold) {
+        this.toolResultThreshold = Math.max(500, threshold);
     }
 
     /** 设置取消标志（ESC 中断当前 ToolLoop）。 */
@@ -273,6 +318,11 @@ public class OrchestratorAgent {
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
+                if (response.isContextLengthExceeded()) {
+                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
+                    return new RunResult(hint, toolCalls);
+                }
                 log.error("LLM call failed: {}", response.errorMessage());
                 return new RunResult("LLM 调用失败: " + response.errorMessage(), toolCalls);
             }
@@ -299,6 +349,9 @@ public class OrchestratorAgent {
 
                     // 将 tool 结果追加到上下文
                     String toolResultText = formatToolResult(result);
+                    if (toolResultCompactor != null && toolResultText.length() > toolResultThreshold) {
+                        toolResultText = toolResultCompactor.compactIfNeeded(toolResultText);
+                    }
                     messages.add(LlmMessage.user(toolResultText));
                 }
                 toolRound++;
@@ -358,21 +411,10 @@ public class OrchestratorAgent {
     }
 
     /**
-     * 从 ToolRegistry 生成当前可用工具目录。
-     * 包含所有已注册工具的 name 和 description。
+     * 从 ToolGroupManager 生成工具组目录 prompt（含组名、描述、成员工具、激活说明）。
      */
     private String generateToolCatalog() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## 已注册工具 (Registered Tools)\n\n");
-        for (var entry : toolRegistry.all().entrySet()) {
-            sb.append("- **").append(entry.getKey()).append("**: ")
-                    .append(entry.getValue().description()).append("\n");
-        }
-        sb.append("\n调用格式：{\"tool\":\"<工具名>\",\"args\":{\"<参数名>\":\"<参数值>\"}}。");
-        sb.append("工具执行后你会收到 [TOOL_RESULT]...[/TOOL_RESULT] 格式的反馈，");
-        sb.append("这是内部数据不是最终输出，你必须基于它继续推理并用自然语言回答用户。");
-        sb.append("不要把工具结果原文回显。\n");
-        return sb.toString();
+        return groupManager.generateGroupCatalogPrompt();
     }
 
     private String buildUserPrompt(List<PlayerAction> playerActions, String instruction, String turnInfo) {
@@ -707,24 +749,11 @@ public class OrchestratorAgent {
         return defs;
     }
 
-    /** 只构建 finish_action 的 ToolDef（用于 forced finish_action 阶段）。 */
-    private ToolDef buildFinishActionToolDef() {
-        var tool = toolRegistry.all().get("finish_action");
-        if (tool != null) {
-            var params = tool.getParameters();
-            return params != null
-                    ? new ToolDef(tool.name(), tool.description(), params)
-                    : new ToolDef(tool.name(), tool.description());
-        }
-        return new ToolDef("finish_action",
-                "结束当前工具调用循环并返回最终回复。参数: message（必填）");
-    }
-
-    /** 按允许集过滤 ToolDef 列表，保留 finish_action 兜底。 */
+    /** 按允许集过滤 ToolDef 列表，保留 finish_action 兜底。未归组工具（如测试自定义工具）始终包含。 */
     private static List<ToolDef> filterToolDefs(List<ToolDef> allDefs, java.util.Set<String> allowed) {
         List<ToolDef> filtered = new ArrayList<>();
         for (ToolDef def : allDefs) {
-            if (allowed.contains(def.name())) {
+            if (allowed.contains(def.name()) || !ToolGroup.isKnownTool(def.name())) {
                 filtered.add(def);
             }
         }
@@ -738,13 +767,6 @@ public class OrchestratorAgent {
             }
         }
         return filtered;
-    }
-
-    /** 构建 forced tool_choice object 强制模型只调用指定工具。 */
-    static Object forceToolChoice(String toolName) {
-        return java.util.Map.of(
-                "type", "function",
-                "function", java.util.Map.of("name", toolName));
     }
 
     /** 将 API tool_calls 转为内部 ParsedToolCall 列表。 */
@@ -856,6 +878,12 @@ public class OrchestratorAgent {
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
+                if (response.isContextLengthExceeded()) {
+                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
+                    trace.add(new MessageTrace("system", "error", hint));
+                    return new SimResult(hint, toolCalls, trace);
+                }
                 String err = "LLM 调用失败: " + response.errorMessage();
                 trace.add(new MessageTrace("system", "error", err));
                 return new SimResult(err, toolCalls, trace);
@@ -896,8 +924,12 @@ public class OrchestratorAgent {
                     } else {
                         toolResultStr.append("错误: ").append(result.error()).append("\n");
                     }
-                    trace.add(new MessageTrace("tool", "tool_result", toolResultStr.toString()));
-                    messages.add(LlmMessage.user(toolResultStr.toString()));
+                    String toolResultStrFinal = toolResultStr.toString();
+                    trace.add(new MessageTrace("tool", "tool_result", toolResultStrFinal));
+                    if (toolResultCompactor != null && toolResultStrFinal.length() > toolResultThreshold) {
+                        toolResultStrFinal = toolResultCompactor.compactIfNeeded(toolResultStrFinal);
+                    }
+                    messages.add(LlmMessage.user(toolResultStrFinal));
                 }
                 toolRound++;
                 continue;
@@ -952,6 +984,11 @@ public class OrchestratorAgent {
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
+                if (response.isContextLengthExceeded()) {
+                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
+                    return new ChatResult(false, hint, toolCalls, trace, response.errorMessage());
+                }
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
             }
 
@@ -988,8 +1025,12 @@ public class OrchestratorAgent {
                             tr.append("  ").append(snippet).append("\n");
                         }
                     } else tr.append("错误: ").append(result.error());
-                    trace.add(new MessageTrace("tool", "tool_result", tr.toString()));
-                    messages.add(LlmMessage.user(tr.toString()));
+                    String trFinal = tr.toString();
+                    trace.add(new MessageTrace("tool", "tool_result", trFinal));
+                    if (toolResultCompactor != null && trFinal.length() > toolResultThreshold) {
+                        trFinal = toolResultCompactor.compactIfNeeded(trFinal);
+                    }
+                    messages.add(LlmMessage.user(trFinal));
                 }
                 toolRound++;
                 continue;
@@ -1076,6 +1117,7 @@ public class OrchestratorAgent {
         messages.add(LlmMessage.user(userText));
         trace.add(new MessageTrace("user", "chat_user", userText));
 
+        // 工具组激活状态由调用方管理（NodeAgentChatService 负责 reset）
         return runToolLoop(messages, trace, toolCalls, false, contextMeta, userText);
     }
 
@@ -1129,6 +1171,7 @@ public class OrchestratorAgent {
         messages.add(LlmMessage.user(userMsg));
         trace.add(new MessageTrace("user", "sim_input", userMsg));
 
+        // 工具组激活状态由调用方管理
         SimResult result = runSimToolLoop(messages, trace, toolCalls, AgentContextMeta.empty(), simNote);
         return result;
     }
@@ -1161,77 +1204,9 @@ public class OrchestratorAgent {
         };
     }
 
-    // ---- auto-wrap helper ----
+    // ---- auto-wrap helper (REMOVED — no longer needed with simplified plain text handling) ----
 
-    /**
-     * forced finish_action 阶段无 tool_calls 时，尝试用当前或上一轮纯文本包装 finish_action。
-     * 优先级：
-     * <ol>
-     *   <li>R2 currentContent meaningful → source=current_forced_content</li>
-     *   <li>R1 pendingPlainContent meaningful → source=previous_plain_answer</li>
-     *   <li>两者均无 meaningful content → NO_MEANINGFUL_CONTENT abort</li>
-     * </ol>
-     */
-    private AutoWrapResult tryAutoWrapForcedFinishAction(
-            String currentContent,
-            String pendingPlainContent,
-            List<ToolCallRecord> toolCalls,
-            int round,
-            int maxRounds) {
-        String source;
-        String message;
-
-        if (isMeaningfulAssistantContent(currentContent)) {
-            source = "current_forced_content";
-            message = currentContent.strip();
-        } else if (isMeaningfulAssistantContent(pendingPlainContent)) {
-            source = "previous_plain_answer";
-            message = pendingPlainContent;
-        } else {
-            return new AutoWrapResult(false, null, null,
-                    "NO_MEANINGFUL_CONTENT: currentContent=" + previewForDiagnostic(currentContent)
-                            + " pendingPlainContent=" + previewForDiagnostic(pendingPlainContent));
-        }
-
-        String msgErr = validateFinishActionMessage(message);
-        if (msgErr != null) {
-            return new AutoWrapResult(false, null, null, msgErr);
-        }
-
-        String claimErr = validateFinishActionClaims(message, toolCalls);
-        if (claimErr != null) {
-            return new AutoWrapResult(false, null, null, claimErr);
-        }
-
-        log.debug("[TOOL_LOOP_TRACE] forced finish_action returned empty/no tool_calls; auto-wrapping source={} chars={}",
-                source, message.length());
-        progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(round, maxRounds));
-
-        return new AutoWrapResult(true, message, source, null);
-    }
-
-    private record AutoWrapResult(boolean success, String message, String source, String error) {}
-
-    /** 为诊断日志生成安全的 content 预览（≤60 chars）。 */
-    private static String previewForDiagnostic(String s) {
-        if (s == null) return "<null>";
-        if (s.isBlank()) return "<blank>";
-        String t = s.strip();
-        if (t.length() <= 60) return t;
-        return t.substring(0, 57) + "...";
-    }
-
-    /** auto-wrap action label for debug logging。 */
-    private static String wrapActionLabel(AutoWrapResult wrap) {
-        if (wrap.success()) return "autoWrap_" + wrap.source();
-        if (wrap.error() == null) return "retry";
-        String e = wrap.error();
-        if (e.startsWith("NO_MEANINGFUL_CONTENT")) return "autoWrap_skipped_no_meaningful_content";
-        if (e.startsWith("NO_CONTENT")) return "abort_no_content";
-        return "retry_validation_failed";
-    }
-
-    /** 公共 tool-loop（chat 模式）。 */
+    /** 公共 tool-loop（chat 模式）— v2 工具组路由。 */
     private ChatResult runToolLoop(List<LlmMessage> messages,
                                     List<MessageTrace> trace,
                                     List<ToolCallRecord> toolCalls,
@@ -1243,16 +1218,7 @@ public class OrchestratorAgent {
         int consecutiveNoToolRounds = 0;
         int consecutiveInvalidToolIntent = 0;
         boolean allowAllMutations = false;
-        boolean forcedFinishAction = false;
-        String lastPlainContent = null;
-        UserIntent userIntent = UserIntent.infer(userText);
-        ExpectedNextStep expectedNextStep = ExpectedNextStep.CALL_TOOL;
         List<ToolDef> allToolDefs = buildToolDefs();
-
-        // 初始路由 + 可扩展允许集（随 LLM 成功激活工具组而扩张）
-        ToolRouteDecision baseRoute = routePolicy.decide(
-                userIntent, expectedNextStep, permissionConfig.defaultEnabledTools());
-        java.util.Set<String> effectiveAllowedTools = new java.util.HashSet<>(baseRoute.allowedTools());
 
         while (toolRound <= maxToolRounds) {
             // ESC 取消检查
@@ -1261,41 +1227,16 @@ public class OrchestratorAgent {
                 return new ChatResult(false, "[已取消]", toolCalls, trace, "cancelled");
             }
 
+            // 每轮动态计算当前允许的工具集（基于激活的工具组）
+            java.util.Set<String> currentAllowedTools = groupManager.computeAllowedTools();
+            List<ToolDef> roundToolDefs = filterToolDefs(allToolDefs, currentAllowedTools);
+            Object roundToolChoice = "auto";
+
             // context load debug
-            ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, allToolDefs, contextMeta);
+            ToolLoopDebug.logContextLoad(log, "runToolLoop", toolRound, messages, roundToolDefs, contextMeta);
 
-            // task brief
-            String lastToolName = !toolCalls.isEmpty()
-                    ? toolCalls.get(toolCalls.size() - 1).tool() : null;
-            boolean lastToolSuccess = !toolCalls.isEmpty()
-                    && toolCalls.get(toolCalls.size() - 1).result().success();
-            boolean hasToolResult = !toolCalls.isEmpty();
-            java.util.List<String> expectedTools = forcedFinishAction
-                    ? java.util.List.of("finish_action")
-                    : (toolRound == 1 ? java.util.List.of() : java.util.List.of("finish_action"));
-            ToolLoopDebug.logTaskBrief(log, "runToolLoop", toolRound,
-                    userIntent, expectedNextStep,
-                    lastToolName, lastToolSuccess, expectedTools);
-
-            // 每轮动态构造 tools：forced finish_action 阶段只给 finish_action
-            List<ToolDef> roundToolDefs;
-            Object roundToolChoice;
-            if (forcedFinishAction) {
-                roundToolDefs = List.of(buildFinishActionToolDef());
-                roundToolChoice = forceToolChoice("finish_action");
-            } else if (baseRoute.allToolsAllowed()) {
-                // 通配路由：不限工具
-                roundToolDefs = allToolDefs;
-                roundToolChoice = "auto";
-            } else {
-                // 按路由 + 已激活工具组过滤
-                roundToolDefs = filterToolDefs(allToolDefs, effectiveAllowedTools);
-                roundToolChoice = "auto";
-            }
-            log.debug("[TOOL_LOOP_TRACE] engine=runToolLoop round={} requestTools={} toolChoice={} forcedFinishAction={}",
-                    toolRound, roundToolDefs.size(),
-                    roundToolChoice instanceof String ? roundToolChoice : "forced:" + ((java.util.Map<?,?>)roundToolChoice).get("function"),
-                    forcedFinishAction);
+            log.debug("[TOOL_LOOP_TRACE] engine=runToolLoop round={} requestTools={} activeGroups={}",
+                    toolRound, roundToolDefs.size(), groupManager.activeGroupKeys());
 
             // progress: 上下文加载完毕
             int totalMessageChars = 0;
@@ -1307,10 +1248,16 @@ public class OrchestratorAgent {
             // progress: 等待 LLM
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, roundToolDefs, roundToolChoice);
+            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048,
+                    roundToolDefs, roundToolChoice);
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
+                if (response.isContextLengthExceeded()) {
+                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
+                    return new ChatResult(false, hint, toolCalls, trace, response.errorMessage());
+                }
                 return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
             }
 
@@ -1331,7 +1278,7 @@ public class OrchestratorAgent {
             }
             ToolLoopDebug.logCleanedDraft(log, "runToolLoop", toolRound, strippedForDraft);
 
-            // === 优先级 1: API 原生 tool_calls（主路径）===
+            // === 优先级 1: API 原生 tool_calls ===
             List<ParsedToolCall> allParsed;
             ToolLoopDebug.ToolCallSource toolSource;
             int textFallbackCount = 0;
@@ -1357,78 +1304,6 @@ public class OrchestratorAgent {
             ToolLoopDebug.logToolExtraction(log, "runToolLoop", toolRound, allParsed,
                     apiToolCallCount, textFallbackCount, toolSource, content);
 
-            // === Forced finish_action 诊断 ===
-            if (forcedFinishAction) {
-                int reasoningChars = 0; // LlmResult 不单独携带 reasoning
-                int pendingChars = lastPlainContent != null ? lastPlainContent.length() : 0;
-                String preview = content != null && !content.isBlank()
-                        ? (content.length() > 80 ? content.substring(0, 80) + "..." : content)
-                        : "(empty)";
-                log.debug("[TOOL_LOOP_TRACE] forcedFinishAction=true");
-                log.debug("[TOOL_LOOP_TRACE] forced.response.success={}", response.success());
-                log.debug("[TOOL_LOOP_TRACE] forced.response.hasApiToolCalls={}", response.hasApiToolCalls());
-                log.debug("[TOOL_LOOP_TRACE] forced.response.toolCallCount={}", apiToolCallCount);
-                log.debug("[TOOL_LOOP_TRACE] forced.response.contentChars={}", content != null ? content.length() : 0);
-                log.debug("[TOOL_LOOP_TRACE] forced.response.contentBlank={}", content == null || content.isBlank());
-                log.debug("[TOOL_LOOP_TRACE] forced.response.reasoningChars={}", reasoningChars);
-                log.debug("[TOOL_LOOP_TRACE] forced.parsedTextToolCalls={}", allParsed.size());
-                log.debug("[TOOL_LOOP_TRACE] forced.pendingPlainContentChars={}", pendingChars);
-                log.debug("[TOOL_LOOP_TRACE] forced.response.preview={}", preview);
-            }
-
-            // === Auto-wrap: forced finish_action 阶段无 tool_calls → 尝试包装 ===
-            if (forcedFinishAction && allParsed.isEmpty()) {
-                AutoWrapResult wrap = tryAutoWrapForcedFinishAction(
-                        content, lastPlainContent, toolCalls, toolRound, maxToolRounds);
-                log.debug("[TOOL_LOOP_TRACE] forced.action={}", wrapActionLabel(wrap));
-                if (wrap.success()) {
-                    toolCalls.add(new ToolCallRecord("finish_action",
-                            java.util.Map.of("message", wrap.message(), "status", "success"),
-                            ToolResult.ok("finish_action", List.of(
-                                    new ToolResult.Item("finish_action: success (auto-wrap " + wrap.source() + ")",
-                                            "finish_action", wrap.message(), 1.0)))));
-                    finalText = wrap.message();
-                    trace.add(new MessageTrace("assistant", "chat_response", finalText));
-                    ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound, true, null, null, null, null);
-                    ToolLoopDebug.logFinalText(log, "runToolLoop", "finish_action(auto-wrap)", finalText);
-                    lastAssistantDraft.set(finalText);
-                    return new ChatResult(true, finalText, toolCalls, trace, null);
-                }
-                if (wrap.error() != null && (wrap.error().startsWith("NO_CONTENT")
-                        || wrap.error().startsWith("NO_MEANINGFUL_CONTENT"))) {
-                    String errMsg = "[错误] forced finish_action returned no meaningful content; "
-                            + "currentContent=" + previewForDiagnostic(content)
-                            + ", pendingPlainContent=" + previewForDiagnostic(lastPlainContent)
-                            + "。请检查 LLM provider 是否正确支持 tool_choice=forced 和 finish_action 工具调用。";
-                    log.warn("[TOOL_LOOP_TRACE] forced.action=autoWrap_skipped_no_meaningful_content; {}", errMsg);
-                    trace.add(new MessageTrace("system", "error", errMsg));
-                    ToolLoopDebug.logNoToolAbort(log, "runToolLoop", toolRound,
-                            "forced_auto_wrap_no_meaningful_content", 0);
-                    ToolLoopDebug.logFinalText(log, "runToolLoop", "auto_wrap_no_meaningful_content_abort", errMsg);
-                    return new ChatResult(false, errMsg, toolCalls, trace,
-                            "Agent forced finish_action phase had no meaningful content to wrap");
-                }
-                // 验证失败 → reprompt 让 LLM 重试
-                String reprompt = wrap.error() + "\n请重新调用 finish_action 并修正以上问题。";
-                messages.add(LlmMessage.user(reprompt));
-                trace.add(new MessageTrace("system", "finish_rejected",
-                        "auto-wrap validation failed: " + wrap.error()));
-                progressSink.onProgress(AgentProgressEvent.finishRejected(
-                        toolRound, maxToolRounds, reasonFromMessageError(wrap.error())));
-                toolRound++;
-                continue;
-            }
-
-            // === 工具路由决策（基于初始路由 + 已激活工具组）===
-            ToolRouteDecision routeDecision = baseRoute.allToolsAllowed()
-                    ? baseRoute
-                    : new ToolRouteDecision(
-                            java.util.Collections.unmodifiableSet(new java.util.HashSet<>(effectiveAllowedTools)),
-                            baseRoute.routeName(),
-                            baseRoute.reason());
-            ToolLoopDebug.logToolRouteDecision(log, "runToolLoop", toolRound,
-                    userIntent, expectedNextStep, routeDecision, allowAllMutations);
-
             if (!allParsed.isEmpty()) {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
@@ -1436,26 +1311,30 @@ public class OrchestratorAgent {
                             toolRound, maxToolRounds, parsed.tool));
                 }
 
-                // === 检查 finish_action 是否与其他工具同轮混用 ===
-                boolean hasFinishAction = allParsed.stream().anyMatch(p -> "finish_action".equals(p.tool));
-                boolean hasOtherTool = allParsed.stream().anyMatch(p -> !"finish_action".equals(p.tool));
-                if (hasFinishAction && hasOtherTool) {
-                    // 不执行任何工具，直接打回模型重写
+                // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
+                int finishActionIdx = -1;
+                for (int i = 0; i < allParsed.size(); i++) {
+                    if ("finish_action".equals(allParsed.get(i).tool())) {
+                        finishActionIdx = i;
+                        break;
+                    }
+                }
+                if (finishActionIdx >= 0 && finishActionIdx < allParsed.size() - 1) {
+                    // finish_action 不是最后一个 → REJECT
                     String toolsList = allParsed.stream()
                             .map(ParsedToolCall::tool)
                             .collect(java.util.stream.Collectors.joining(", "));
                     progressSink.onProgress(AgentProgressEvent.finishRejected(
-                            toolRound, maxToolRounds, "FINISH_ACTION_WITH_OTHER_TOOLS"));
-                    String rejection = "[系统] finish_action 必须是本轮唯一工具调用。"
-                            + "检测到同时包含 finish_action 和其他工具（" + toolsList + "）。"
-                            + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
-                            + "\n禁止: [tool_a, finish_action]"
-                            + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
+                            toolRound, maxToolRounds, "FINISH_ACTION_NOT_LAST"));
+                    String rejection = "[系统] finish_action 必须出现在工具调用的最末尾。"
+                            + "检测到 finish_action 后面还有工具调用（" + toolsList + "）。"
+                            + "请把 finish_action 调到最后。"
+                            + "\n正确: [other_tools..., finish_action]";
                     messages.add(LlmMessage.system(rejection));
                     trace.add(new MessageTrace("system", "finish_rejected",
-                            "FINISH_ACTION_WITH_OTHER_TOOLS"));
-                    ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
-                            "runToolLoop", toolRound, allParsed);
+                            "FINISH_ACTION_NOT_LAST"));
+                    log.debug("[ToolLoop] finish_action not last in round={}, tools={}",
+                            toolRound, toolsList);
                     toolRound++;
                     continue;
                 }
@@ -1466,6 +1345,13 @@ public class OrchestratorAgent {
                 boolean finishActionSeen = false;
                 String finishMessage = null;
                 String finishStatus = null;
+                String finishSummary = null;
+
+                // 构建 routeDecision 用于执行策略校验
+                ToolRouteDecision routeDecision = new ToolRouteDecision(
+                        java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(currentAllowedTools)),
+                        "GROUP_BASED",
+                        "工具组路由：默认工具 + 已激活组");
 
                 for (ParsedToolCall parsed : allParsed) {
                     String callSource = toolSource == ToolLoopDebug.ToolCallSource.API_TOOL_CALLS
@@ -1481,7 +1367,7 @@ public class OrchestratorAgent {
                     // === 执行前门禁：路由 + 分类 + 确认 ===
                     ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
                             parsed.tool, parsed.args, routeDecision,
-                            expectedNextStep, allowAllMutations);
+                            allowAllMutations);
                     ToolLoopDebug.logToolExecutionPolicy(log, "runToolLoop", toolRound,
                             parsed.tool, execDecision);
 
@@ -1499,7 +1385,6 @@ public class OrchestratorAgent {
 
                     if (execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
                         if (permissionGate != null) {
-                            // 确认门前清除灰框，避免残留内容与确认框混叠
                             progressSink.onProgress(AgentProgressEvent.awaitingToolConfirmation(
                                     toolRound, maxToolRounds, parsed.tool));
 
@@ -1529,16 +1414,6 @@ public class OrchestratorAgent {
                     ToolResult result = toolRegistry.call(call);
                     toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
 
-                    // 工具执行成功后，激活该工具所属的全部工具组（下一轮可见）
-                    if (result.success() && !"finish_action".equals(parsed.tool)) {
-                        java.util.Set<String> family = ToolRoutePolicy.expandToolFamily(parsed.tool);
-                        if (!family.isEmpty()) {
-                            effectiveAllowedTools.addAll(family);
-                            log.debug("[ToolLoop] expanded allowed tools by {} → +{} tools (total={})",
-                                    parsed.tool, family.size(), effectiveAllowedTools.size());
-                        }
-                    }
-
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
@@ -1548,7 +1423,11 @@ public class OrchestratorAgent {
                                 toolRound, maxToolRounds, parsed.tool, result.error()));
                     }
 
-                    messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                    String toolFeedback = buildToolResultFeedback(parsed.tool, result);
+                    if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
+                        toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
+                    }
+                    messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool + " success=" + result.success()));
                     ToolLoopDebug.logToolResult(log, "runToolLoop", toolRound,
@@ -1556,12 +1435,26 @@ public class OrchestratorAgent {
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
+                    // 推演内容工具成功 → 黄字回显正文
+                    if (result.success()) {
+                        for (ToolResult.Item item : result.items()) {
+                            if ("simulation_content_text".equals(item.title())) {
+                                progressSink.onProgress(AgentProgressEvent.publicMessage(
+                                        "\033[33m" + item.snippet() + "\033[0m"));
+                                break;
+                            }
+                        }
+                    }
+
                     if ("finish_action".equals(parsed.tool) && result.success()) {
                         finishActionSeen = true;
                         for (ToolResult.Item item : result.items()) {
-                            finishMessage = item.snippet();
-                            finishStatus = item.title();
-                            break;
+                            if ("finish_action_summary".equals(item.title())) {
+                                finishSummary = item.snippet();
+                            } else {
+                                finishMessage = item.snippet();
+                                finishStatus = item.title();
+                            }
                         }
                     }
                 }
@@ -1572,13 +1465,18 @@ public class OrchestratorAgent {
                 }
 
                 if (finishActionSeen && finishMessage != null) {
+                    // 输出 summary（蓝色高亮）
+                    if (finishSummary != null && !finishSummary.isBlank()) {
+                        progressSink.onProgress(AgentProgressEvent.publicMessage(
+                                "\033[34m" + finishSummary + "\033[0m"));
+                    }
+
                     ToolLoopDebug.logFinishAction(log, "runToolLoop", toolRound,
                             finishStatus, finishMessage,
                             finishMessage != null ? finishMessage.length() : 0);
 
                     String validationError = validateFinishActionMessage(finishMessage);
                     if (validationError != null) {
-                        // progress: finish_action 被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
                                 toolRound, maxToolRounds,
                                 reasonFromMessageError(validationError)));
@@ -1592,7 +1490,6 @@ public class OrchestratorAgent {
                     }
                     String claimError = validateFinishActionClaims(finishMessage, toolCalls);
                     if (claimError != null) {
-                        // progress: finish_action 声明被拒绝
                         progressSink.onProgress(AgentProgressEvent.finishRejected(
                                 toolRound, maxToolRounds, "CLAIM_WITHOUT_SUPPORTING_TOOL_RESULT"));
                         messages.add(LlmMessage.user(claimError));
@@ -1622,10 +1519,8 @@ public class OrchestratorAgent {
 
             // === 无工具调用处理 ===
             if (toolSource == ToolLoopDebug.ToolCallSource.INVALID_TOOL_INTENT) {
-                // progress: 非法工具调用格式
                 progressSink.onProgress(AgentProgressEvent.invalidBracketIntent(
                         toolRound, maxToolRounds));
-                // 非法工具意图：打回重写，不计入连续无工具轮
                 consecutiveInvalidToolIntent++;
                 ToolLoopDebug.logInvalidToolIntent(log, "runToolLoop", toolRound,
                         consecutiveInvalidToolIntent, content);
@@ -1651,51 +1546,19 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮（forced finish_action 已在上面 auto-wrap 处理所有分支）
+            // 普通无工具轮：纯文本直接显示给用户 + 轻量提醒
             consecutiveInvalidToolIntent = 0;
-
-            // forced finish_action 阶段不应到达此处 — auto-wrap 已处理所有路径
-            if (forcedFinishAction) {
-                String errMsg = "[系统错误] forced finish_action 阶段进入了普通无工具处理路径。"
-                        + "auto-wrap 应已处理所有分支。";
-                trace.add(new MessageTrace("system", "error", errMsg));
-                return new ChatResult(false, errMsg, toolCalls, trace, errMsg);
-            }
-
             {
                 consecutiveNoToolRounds++;
                 ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
 
-                // finish intent detection: 模型是否想结束但没合法 finish_action?
-                var finishIntent = ToolLoopDebug.detectFinishIntent(
-                        apiToolCallCount, textFallbackCount, false,
-                        strippedForDraft, false);
-                if (finishIntent == ToolLoopDebug.FinishIntent.PLAIN_ANSWER_WITHOUT_FINISH) {
-                    progressSink.onProgress(AgentProgressEvent.plainAnswerWithoutFinish(
-                            toolRound, maxToolRounds));
+                // 纯文本显示给用户
+                if (content != null && !content.isBlank()) {
+                    progressSink.onProgress(AgentProgressEvent.publicMessage(content.strip()));
                 }
 
-                // 第一轮无工具 → 触发 forced finish_action
-                if (!forcedFinishAction && consecutiveNoToolRounds == 1 && content != null && !content.isBlank()) {
-                    forcedFinishAction = true;
-                    lastPlainContent = content.strip();
-                    log.debug("[TOOL_LOOP_TRACE] round={} plain text detected, enabling forced finish_action nextRound={}",
-                            toolRound, toolRound + 1);
-
-                    String reminder = "你刚才生成了普通答复，但没有调用 finish_action，因此该答复没有展示给用户。\n"
-                            + "下一轮系统只允许你调用 finish_action。\n"
-                            + "必须把完整最终答复放入 finish_action.message。\n"
-                            + "禁止使用「以上」「如上」「刚才」「已生成」「前文」等引用不可见内容的词语。\n"
-                            + "上一轮的答复内容如下，请改写为自包含的 finish_action.message：\n\n"
-                            + lastPlainContent;
-                    messages.add(LlmMessage.user(reminder));
-                    trace.add(new MessageTrace("system", "forced_finish_action",
-                            "plain text detected, forcing finish_action next round"));
-                    toolRound++;
-                    continue;
-                }
-
-                if (consecutiveNoToolRounds >= 2) {
+                // 连续 3 轮无工具 → abort（比 v1 更宽容）
+                if (consecutiveNoToolRounds >= 3) {
                     String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
                     trace.add(new MessageTrace("system", "error", errMsg));
                     ToolLoopDebug.logNoToolAbort(log, "runToolLoop", toolRound,
@@ -1706,11 +1569,14 @@ public class OrchestratorAgent {
                                     + " consecutive rounds");
                 }
 
-                String reminder = ToolLoopDebug.buildNoToolReminder(
-                        lastUserMessage(messages));
+                // 轻量提醒：可调用 finish_action 结束，将摘要放入 summary
+                String reminder = "你没有调用任何工具。如果你已经完成了用户请求，请调用 finish_action 结束本轮，"
+                        + "并在 summary 字段中简要总结你做了什么。\n"
+                        + "如果还需要查询/写入/操作，请先调用 activate_tool_groups 激活所需的工具组，"
+                        + "再调用对应业务工具。";
                 messages.add(LlmMessage.user(reminder));
-                trace.add(new MessageTrace("system", "finish_required",
-                        "no tool call found, reminding to use finish_action"));
+                trace.add(new MessageTrace("system", "finish_reminder",
+                        "no tool call found, light reminder to use finish_action or activate groups"));
                 toolRound++;
                 continue;
             }
@@ -1786,6 +1652,12 @@ public class OrchestratorAgent {
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
+                if (response.isContextLengthExceeded()) {
+                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
+                    trace.add(new MessageTrace("system", "error", hint));
+                    return new SimResult(hint, toolCalls, trace);
+                }
                 String err = "LLM 调用失败: " + response.errorMessage();
                 trace.add(new MessageTrace("system", "error", err));
                 return new SimResult(err, toolCalls, trace);
@@ -1838,25 +1710,26 @@ public class OrchestratorAgent {
                             toolRound, maxToolRounds, parsed.tool));
                 }
 
-                // === 检查 finish_action 是否与其他工具同轮混用 ===
-                boolean hasFinishActionSim = allParsed.stream().anyMatch(p -> "finish_action".equals(p.tool));
-                boolean hasOtherToolSim = allParsed.stream().anyMatch(p -> !"finish_action".equals(p.tool));
-                if (hasFinishActionSim && hasOtherToolSim) {
+                // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
+                int finishActionIdxSim = -1;
+                for (int i = 0; i < allParsed.size(); i++) {
+                    if ("finish_action".equals(allParsed.get(i).tool())) {
+                        finishActionIdxSim = i;
+                        break;
+                    }
+                }
+                if (finishActionIdxSim >= 0 && finishActionIdxSim < allParsed.size() - 1) {
                     String toolsListSim = allParsed.stream()
                             .map(ParsedToolCall::tool)
                             .collect(java.util.stream.Collectors.joining(", "));
                     progressSink.onProgress(AgentProgressEvent.finishRejected(
-                            toolRound, maxToolRounds, "FINISH_ACTION_WITH_OTHER_TOOLS"));
-                    String rejectionSim = "[系统] finish_action 必须是本轮唯一工具调用。"
-                            + "检测到同时包含 finish_action 和其他工具（" + toolsListSim + "）。"
-                            + "请先单独执行非 finish_action 工具，收到工具结果后，再在下一轮单独调用 finish_action。"
-                            + "\n禁止: [tool_a, finish_action]"
-                            + "\n正确: 第一轮 [tool_a] → 第二轮 [finish_action]";
+                            toolRound, maxToolRounds, "FINISH_ACTION_NOT_LAST"));
+                    String rejectionSim = "[系统] finish_action 必须出现在工具调用的最末尾。"
+                            + "检测到 finish_action 后面还有工具调用（" + toolsListSim + "）。"
+                            + "请把 finish_action 调到最后。";
                     messages.add(LlmMessage.system(rejectionSim));
                     trace.add(new MessageTrace("system", "finish_rejected",
-                            "FINISH_ACTION_WITH_OTHER_TOOLS"));
-                    ToolLoopDebug.logFinishActionWithOtherToolsRejected(log,
-                            "runSimToolLoop", toolRound, allParsed);
+                            "FINISH_ACTION_NOT_LAST"));
                     toolRound++;
                     continue;
                 }
@@ -1867,6 +1740,7 @@ public class OrchestratorAgent {
                 boolean finishActionSeen = false;
                 String finishMessage = null;
                 String finishStatus = null;
+                String finishSummary = null;
 
                 for (ParsedToolCall parsed : allParsed) {
                     String callSource = toolSource == ToolLoopDebug.ToolCallSource.API_TOOL_CALLS
@@ -1892,7 +1766,11 @@ public class OrchestratorAgent {
                                 toolRound, maxToolRounds, parsed.tool, result.error()));
                     }
 
-                    messages.add(LlmMessage.user(buildToolResultFeedback(parsed.tool, result)));
+                    String toolFeedback = buildToolResultFeedback(parsed.tool, result);
+                    if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
+                        toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
+                    }
+                    messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool + " success=" + result.success()));
                     ToolLoopDebug.logToolResult(log, "runSimToolLoop", toolRound,
@@ -1900,17 +1778,36 @@ public class OrchestratorAgent {
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
+                    // 推演内容工具成功 → 黄字回显正文
+                    if (result.success()) {
+                        for (ToolResult.Item item : result.items()) {
+                            if ("simulation_content_text".equals(item.title())) {
+                                progressSink.onProgress(AgentProgressEvent.publicMessage(
+                                        "\033[33m" + item.snippet() + "\033[0m"));
+                                break;
+                            }
+                        }
+                    }
+
                     if ("finish_action".equals(parsed.tool) && result.success()) {
                         finishActionSeen = true;
                         for (ToolResult.Item item : result.items()) {
-                            finishMessage = item.snippet();
-                            finishStatus = item.title();
-                            break;
+                            if ("finish_action_summary".equals(item.title())) {
+                                finishSummary = item.snippet();
+                            } else {
+                                finishMessage = item.snippet();
+                                finishStatus = item.title();
+                            }
                         }
                     }
                 }
 
                 if (finishActionSeen && finishMessage != null) {
+                    // 输出 summary（蓝色高亮）
+                    if (finishSummary != null && !finishSummary.isBlank()) {
+                        progressSink.onProgress(AgentProgressEvent.publicMessage(
+                                "\033[34m" + finishSummary + "\033[0m"));
+                    }
                     ToolLoopDebug.logFinishAction(log, "runSimToolLoop", toolRound,
                             finishStatus, finishMessage,
                             finishMessage != null ? finishMessage.length() : 0);
@@ -1989,7 +1886,12 @@ public class OrchestratorAgent {
             consecutiveInvalidToolIntent = 0;
             ToolLoopDebug.logNoToolRound(log, "runSimToolLoop", toolRound, consecutiveNoToolRounds);
 
-            if (consecutiveNoToolRounds >= 2) {
+            // 纯文本显示给用户
+            if (content != null && !content.isBlank()) {
+                progressSink.onProgress(AgentProgressEvent.publicMessage(content.strip()));
+            }
+
+            if (consecutiveNoToolRounds >= 3) {
                 String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
                 trace.add(new MessageTrace("system", "error", errMsg));
                 ToolLoopDebug.logNoToolAbort(log, "runSimToolLoop", toolRound,
@@ -1998,8 +1900,8 @@ public class OrchestratorAgent {
                 return new SimResult(errMsg, toolCalls, trace);
             }
 
-            String reminder = ToolLoopDebug.buildNoToolReminder(
-                    lastUserMessage(messages));
+            String reminder = "你没有调用任何工具。如果已完成任务，请调用 finish_action 结束本轮，"
+                    + "并在 summary 中简要总结。如果还需要操作，请先调用 activate_tool_groups 激活工具组。";
             messages.add(LlmMessage.user(reminder));
             trace.add(new MessageTrace("system", "finish_required",
                     "no tool call found, reminding to use finish_action"));

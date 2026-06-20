@@ -67,8 +67,12 @@ class Provider {
         try (Response response = httpClient.newCall(httpRequest).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
             if (!response.isSuccessful()) {
-                String err = "HTTP " + response.code() + ": " + responseBody;
+                String errBody = responseBody;
+                String err = "HTTP " + response.code() + ": " + errBody;
                 log.error("[LLM] chat failed: {}", err);
+                if (isContextLengthError(errBody)) {
+                    return LlmResult.contextLengthExceeded(err);
+                }
                 return LlmResult.failure(err);
             }
             return parseNonStreamResponse(responseBody);
@@ -106,7 +110,11 @@ class Provider {
         try (Response response = httpClient.newCall(httpRequest).execute()) {
             if (!response.isSuccessful()) {
                 String errBody = response.body() != null ? response.body().string() : "";
-                pool.onError("HTTP " + response.code() + ": " + errBody);
+                if (isContextLengthError(errBody)) {
+                    pool.onError("CONTEXT_LENGTH_EXCEEDED:" + errBody);
+                } else {
+                    pool.onError("HTTP " + response.code() + ": " + errBody);
+                }
                 return;
             }
 
@@ -246,6 +254,9 @@ class Provider {
                 String errMsg = errorNode.has("message")
                         ? errorNode.get("message").asText()
                         : errorNode.toString();
+                if (isContextLengthError(errMsg)) {
+                    return LlmResult.contextLengthExceeded(errMsg);
+                }
                 return LlmResult.failure(errMsg);
             }
 
@@ -302,12 +313,30 @@ class Provider {
                 return LlmResult.withToolCalls(toolCalls, config.model(), tokensUsed);
             }
             return new LlmResult(content, reasoning, config.model(), tokensUsed, true, null,
-                    List.of(), finishReason);
+                    List.of(), finishReason, false);
 
         } catch (Exception e) {
             log.error("Failed to parse LLM response: {}", e.getMessage());
             return LlmResult.failure("Failed to parse response: " + e.getMessage());
         }
+    }
+
+    /** 检测错误消息是否与上下文长度超限相关。 */
+    static boolean isContextLengthError(String message) {
+        if (message == null) return false;
+        String lower = message.toLowerCase();
+        return lower.contains("context_length")
+                || lower.contains("context length")
+                || lower.contains("maximum context")
+                || lower.contains("max context")
+                || lower.contains("too long")
+                || lower.contains("reduce the length")
+                || lower.contains("请求长度超过")
+                || lower.contains("上下文长度")
+                || lower.contains("上下文过长")
+                || lower.contains("超出上下文")
+                || (lower.contains("413") && lower.contains("request entity too large"))
+                || (lower.contains("400") && (lower.contains("token") && lower.contains("truncat")));
     }
 
     @SuppressWarnings("unchecked")

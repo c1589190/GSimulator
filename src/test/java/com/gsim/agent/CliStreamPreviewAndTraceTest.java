@@ -96,11 +96,21 @@ class CliStreamPreviewAndTraceTest {
     @DisplayName("submit 产生 0 个 content delta 但最终有 content → STREAM_TRACE 正确对照")
     void streamTraceReportsZeroDeltaButFinalContent() {
         var noDeltaLlm = new FakeLlmManager() {
+            private int callCount = 0;
             @Override
             public LlmCall submit(LlmRequest request) {
                 String callId = "fake-" + UUID.randomUUID().toString().substring(0, 8);
                 StreamPool pool = new StreamPool(callId);
-                pool.onComplete(LlmResult.success("最终内容", "test-model", 5));
+                callCount++;
+                if (callCount == 1) {
+                    pool.onComplete(LlmResult.success("最终内容", "test-model", 5));
+                } else {
+                    // R2: finish_action 结束
+                    pool.onComplete(LlmResult.withToolCalls(
+                            List.of(new com.gsim.llm.LlmToolCall("fc", "finish_action",
+                                    java.util.Map.of("status", "success", "message", "最终内容"))),
+                            "test-model", 0));
+                }
                 return new LlmCall(callId, pool);
             }
         };
@@ -116,7 +126,7 @@ class CliStreamPreviewAndTraceTest {
                 List.of(), "查询状态");
 
         assertTrue(result.success(),
-                "stream 无 delta 但最终有 content → auto-wrap 使用最终内容: " + result.errorMessage());
+                "R2 finish_action 应成功: " + result.errorMessage());
         assertEquals("最终内容", result.finalText());
     }
 
@@ -140,7 +150,11 @@ class CliStreamPreviewAndTraceTest {
                     pool.onComplete(r);
                     return new LlmCall(callId, pool);
                 }
-                pool.onComplete(LlmResult.success("", "test-model", 0));
+                // R2: finish_action 使用 R1 pendingPlainContent
+                pool.onComplete(LlmResult.withToolCalls(
+                        List.of(new com.gsim.llm.LlmToolCall("fc", "finish_action",
+                                java.util.Map.of("status", "success", "message", "说话"))),
+                        "test-model", 0));
                 return new LlmCall(callId, pool);
             }
         };
@@ -158,9 +172,9 @@ class CliStreamPreviewAndTraceTest {
                 List.of(), "说话");
 
         assertTrue(result.success(),
-                "R2 0 delta 0 content → 应用 R1 pendingPlainContent 兜底: " + result.errorMessage());
+                "R2 finish_action 应成功: " + result.errorMessage());
         assertEquals("说话", result.finalText(),
-                "finalText 应为 R1 pendingPlainContent");
+                "finalText 应为 finish_action message (R1 pendingPlainContent)");
     }
 
     @Test
@@ -198,12 +212,21 @@ class CliStreamPreviewAndTraceTest {
     @DisplayName("submit 有 deltas + 有 finalContent → 正确组装")
     void streamTraceFullDeltasAndContent() {
         var normalStreamLlm = new FakeLlmManager() {
+            private int callCount = 0;
             @Override
             public LlmCall submit(LlmRequest request) {
                 String callId = "fake-" + UUID.randomUUID().toString().substring(0, 8);
                 StreamPool pool = new StreamPool(callId);
-                pool.onContentDelta("部分内容");
-                pool.onComplete(LlmResult.success("部分内容", "test-model", 10));
+                callCount++;
+                if (callCount == 1) {
+                    pool.onContentDelta("部分内容");
+                    pool.onComplete(LlmResult.success("部分内容", "test-model", 10));
+                } else {
+                    pool.onComplete(LlmResult.withToolCalls(
+                            List.of(new com.gsim.llm.LlmToolCall("fc", "finish_action",
+                                    java.util.Map.of("status", "success", "message", "部分内容"))),
+                            "test-model", 10));
+                }
                 return new LlmCall(callId, pool);
             }
         };
@@ -219,7 +242,7 @@ class CliStreamPreviewAndTraceTest {
                 List.of(), "查询");
 
         assertTrue(result.success(),
-                "stream 有 delta 有 content → auto-wrap 成功: " + result.errorMessage());
+                "R2 finish_action 应成功: " + result.errorMessage());
         assertEquals("部分内容", result.finalText());
     }
 
@@ -227,12 +250,21 @@ class CliStreamPreviewAndTraceTest {
     @DisplayName("submit fallback 组装 content → 匹配 ToolLoop 看到的 content")
     void streamTraceFinalContentMatchesToolLoopContent() {
         var fallbackLlm = new FakeLlmManager() {
+            private int callCount = 0;
             @Override
             public LlmCall submit(LlmRequest request) {
                 String callId = "fake-" + UUID.randomUUID().toString().substring(0, 8);
                 StreamPool pool = new StreamPool(callId);
-                pool.onContentDelta("真实回复内容");
-                pool.onComplete(LlmResult.success("真实回复内容", "test-model", 10));
+                callCount++;
+                if (callCount == 1) {
+                    pool.onContentDelta("真实回复内容");
+                    pool.onComplete(LlmResult.success("真实回复内容", "test-model", 10));
+                } else {
+                    pool.onComplete(LlmResult.withToolCalls(
+                            List.of(new com.gsim.llm.LlmToolCall("fc", "finish_action",
+                                    java.util.Map.of("status", "success", "message", "真实回复内容"))),
+                            "test-model", 10));
+                }
                 return new LlmCall(callId, pool);
             }
         };
@@ -248,7 +280,7 @@ class CliStreamPreviewAndTraceTest {
                 List.of(), "说话");
 
         assertTrue(result.success(),
-                "fallback 组装 content → auto-wrap 成功: " + result.errorMessage());
+                "R2 finish_action 应成功: " + result.errorMessage());
         assertEquals("真实回复内容", result.finalText(),
                 "finalText 应匹配 delta 内容");
     }

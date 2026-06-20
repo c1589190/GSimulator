@@ -103,22 +103,26 @@ class ToolLoopFinalTextSourceIsFinishActionTest {
     }
 
     @Test
-    @DisplayName("无显式 finish_action → R1 纯文本触发 forced finish_action → R2 auto-wrap 成功")
+    @DisplayName("连续 3 轮纯文本无工具 → 提前中止（不再 auto-wrap）")
     void withoutFinishActionReturnsError() {
-        // R1: 纯文本 → 触发 forcedFinishAction
+        // R1: 纯文本 → 显示给用户 → 提醒
         fakeLlm.addResponse("系统状态正常。");
-        // R2: 仍返回纯文本 → 被 auto-wrap 为 finish_action
+        // R2: 又是纯文本 → 显示给用户 → 第 2 次提醒
         fakeLlm.addResponse("一切就绪。");
+        // R3: 还是纯文本 → 第 3 次连续无工具 → ABORT
+        fakeLlm.addResponse("没有更多操作。");
 
         var result = agent.chatWithContextSession(
                 "# Base\nbranch: branch.b0000-start\n",
                 List.of(), "检查状态");
 
-        assertTrue(result.success(),
-                "R2 纯文本应被 auto-wrap 为 finish_action 并成功结束");
-        assertEquals("一切就绪。", result.finalText());
-        assertEquals(1, result.toolCalls().size());
-        assertEquals("finish_action", result.toolCalls().get(0).tool());
+        assertFalse(result.success(),
+                "连续 3 轮纯文本无工具应触发中止");
+        assertTrue(result.errorMessage() != null
+                        && result.errorMessage().contains("no tool calls"),
+                "错误消息应提到连续无工具轮数: " + result.errorMessage());
+        assertEquals(0, result.toolCalls().size(),
+                "不应有任何工具调用记录");
     }
 
     // ===== Stubs =====

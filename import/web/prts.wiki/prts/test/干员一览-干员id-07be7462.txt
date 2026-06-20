@@ -1,6 +1,6 @@
 # 干员一览/干员id
 Source URL: https://m.prts.wiki/w/%E5%B9%B2%E5%91%98%E4%B8%80%E8%A7%88%2F%E5%B9%B2%E5%91%98id
-Fetched At: 2026-06-18 21:27:28
+Fetched At: 2026-06-21 00:16:34
 Site: prts.wiki
 Crawler: mediawiki-batch-allpages
 Collection Hint: world_lore

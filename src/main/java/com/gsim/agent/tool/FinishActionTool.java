@@ -48,10 +48,21 @@ public class FinishActionTool implements AgentTool {
     @Override
     public java.util.Map<String, Object> getParameters() {
         java.util.Map<String, java.util.Map<String, Object>> props = new java.util.LinkedHashMap<>();
+        props.put("status", java.util.Map.of(
+                "type", "string",
+                "enum", java.util.List.of("success", "partial", "failed", "needs_user_input"),
+                "description", "本轮操作状态：success（全部完成）、partial（部分完成）、failed（执行失败）、"
+                        + "needs_user_input（需要用户补充信息/做出选择）。"));
         props.put("message", java.util.Map.of(
                 "type", "string",
-                "description", "最终展示给用户的完整回复正文。必须自包含，不得使用「以上」「如上」「刚才」「前文」等引用不可见内容。"));
-        return com.gsim.llm.ToolDef.strictSchema(props, java.util.List.of("message"));
+                "description", "最终展示给用户的完整回复正文。必须自包含，"
+                        + "不得使用「以上」「如上」「刚才」「前文」等引用不可见内容。"));
+        props.put("summary", java.util.Map.of(
+                "type", "string",
+                "description", "本轮操作的简短摘要（可选，但强烈建议提供）。"
+                        + "一句话总结你做了什么，用蓝色高亮显示在终端上供用户快速浏览。"));
+        return com.gsim.llm.ToolDef.strictSchema(props,
+                java.util.List.of("status", "message"));
     }
 
     @Override
@@ -72,10 +83,17 @@ public class FinishActionTool implements AgentTool {
             return ToolResult.fail(NAME, "message 不能为空。请提供给用户的最终自然语言回复。");
         }
 
-        return ToolResult.ok(NAME, List.of(
-                new ToolResult.Item("finish_action: " + status,
-                        NAME,
-                        message,
-                        1.0)));
+        var items = new java.util.ArrayList<ToolResult.Item>();
+        items.add(new ToolResult.Item("finish_action: " + status,
+                NAME,
+                message,
+                1.0));
+        if (!summary.isBlank()) {
+            items.add(new ToolResult.Item("finish_action_summary",
+                    NAME,
+                    summary,
+                    0.5));
+        }
+        return ToolResult.ok(NAME, items);
     }
 }

@@ -247,6 +247,11 @@ public class ConfigLoader {
             case "GSIM_CLI_STREAM_PREVIEW_ENABLED" -> "cli.stream.preview.enabled";
             case "GSIM_CLI_STREAM_PREVIEW_MAX_CHARS" -> "cli.stream.preview.max_chars";
             case "GSIM_CLI_STREAM_PREVIEW_SHOW_REASONING" -> "cli.stream.preview.show_reasoning";
+            case "GSIM_COMPACT_ENABLED" -> "compact.enabled";
+            case "GSIM_COMPACT_LLM_MODEL" -> "compact.llm.model";
+            case "GSIM_COMPACT_LLM_TEMPERATURE" -> "compact.llm.temperature";
+            case "GSIM_COMPACT_TOOL_RESULT_THRESHOLD" -> "compact.tool_result.threshold";
+            case "GSIM_COMPACT_SUMMARY_MAX_CHARS" -> "compact.summary.max_chars";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -295,6 +300,12 @@ public class ConfigLoader {
         defaults.put("cli.stream.preview.enabled", "true");
         defaults.put("cli.stream.preview.max_chars", "3000");
         defaults.put("cli.stream.preview.show_reasoning", "true");
+
+        defaults.put("compact.enabled", "true");
+        defaults.put("compact.llm.model", "");
+        defaults.put("compact.llm.temperature", "0.1");
+        defaults.put("compact.tool_result.threshold", "3000");
+        defaults.put("compact.summary.max_chars", "2000");
 
         return defaults;
     }

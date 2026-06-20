@@ -17,9 +17,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证 finish_action 与其他工具同轮混用时被拒绝。
+ * 验证 finish_action 与其他工具同轮混用规则：
+ * finish_action 必须出现在工具调用的最末尾，否则被拒绝。
  */
-@DisplayName("finish_action 同轮混用被拒绝")
+@DisplayName("finish_action 必须出现在末尾")
 class FinishActionWithOtherToolsInSameRoundIsRejectedTest {
 
     private FakeLlmManager fakeLlm;
@@ -38,19 +39,14 @@ class FinishActionWithOtherToolsInSameRoundIsRejectedTest {
     }
 
     @Test
-    @DisplayName("[player_action_list, finish_action] 同轮 → 全部拒绝，不执行任何工具")
-    void mixedToolsInSameRoundRejectedWithZeroExecution() {
-        // R1: API tool_calls 同时包含 player_action_list 和 finish_action
+    @DisplayName("[player_action_list, finish_action] 同轮 → finish_action 在末尾 → 全部执行")
+    void finishActionLastInSameRoundAllowed() {
+        // R1: API tool_calls [player_action_list, finish_action] — finish 在末尾 ✓
         fakeLlm.addToolCallsResponse(List.of(
                 new LlmToolCall("call_001", "player_action_list",
                         Map.of("branchId", "branch.b0000-start")),
                 new LlmToolCall("call_002", "finish_action",
-                        Map.of("status", "success", "message", "查询完毕。"))
-        ));
-        // R2: 重写（仅 finish_action）
-        fakeLlm.addToolCallsResponse(List.of(
-                new LlmToolCall("call_003", "finish_action",
-                        Map.of("status", "success", "message", "先查再报：当前回合暂无行动记录。"))
+                        Map.of("status", "success", "message", "查询完毕：当前回合暂无行动记录。"))
         ));
 
         var result = agent.chatWithContextSession(
@@ -58,36 +54,28 @@ class FinishActionWithOtherToolsInSameRoundIsRejectedTest {
                 List.of(), "查看玩家行动");
 
         assertTrue(result.success(),
-                "Should recover after mixed-tool rejection: " + result.errorMessage());
-
-        // R1 没有任何工具被执行
-        List<AgentProgressEvent> rejectedEvents = sink.events.stream()
-                .filter(e -> AgentProgressEvent.FINISH_ACTION_REJECTED.equals(e.phase()))
-                .toList();
-        assertFalse(rejectedEvents.isEmpty(),
-                "Should have FINISH_ACTION_REJECTED event for mixed tools");
-        assertTrue(rejectedEvents.get(0).detail().contains("FINISH_ACTION_WITH_OTHER_TOOLS"),
-                "Reject reason should be FINISH_ACTION_WITH_OTHER_TOOLS: " + rejectedEvents.get(0).detail());
-
-        // R2 只执行了 finish_action（player_action_list 未执行）
-        assertEquals(1, result.toolCalls().size(),
-                "Only the valid finish_action from R2 should be executed");
-        assertEquals("finish_action", result.toolCalls().get(0).tool());
+                "finish_action 在末尾应成功结束: " + result.errorMessage());
+        assertEquals(2, result.toolCalls().size(),
+                "两个工具都应被执行");
+        assertEquals("player_action_list", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
+        assertEquals("查询完毕：当前回合暂无行动记录。", result.finalText());
     }
 
     @Test
-    @DisplayName("[echo, finish_action] API 同轮 → 混用拒绝")
-    void apiMixedToolsRejected() {
+    @DisplayName("[finish_action, echo] 同轮 → finish_action 不在末尾 → 拒绝")
+    void finishActionNotLastRejected() {
         toolRegistry.register(new EchoTool());
-        // R1: echo + finish_action 同轮混用
+        // R1: [finish_action, echo] — finish 不在末尾 → REJECT
         fakeLlm.addToolCallsResponse(List.of(
-                new LlmToolCall("call_001", "echo", Map.of("message", "hello")),
-                new LlmToolCall("call_002", "finish_action",
-                        Map.of("status", "success", "message", "done."))
+                new LlmToolCall("call_001", "finish_action",
+                        Map.of("status", "success", "message", "done.")),
+                new LlmToolCall("call_002", "echo", Map.of("message", "hello"))
         ));
-        // R2: 仅 finish_action
+        // R2: 重写 — [echo, finish_action] — finish 在末尾 ✓
         fakeLlm.addToolCallsResponse(List.of(
-                new LlmToolCall("call_003", "finish_action",
+                new LlmToolCall("call_003", "echo", Map.of("message", "hello")),
+                new LlmToolCall("call_004", "finish_action",
                         Map.of("status", "success", "message", "done correctly."))
         ));
 
@@ -96,15 +84,35 @@ class FinishActionWithOtherToolsInSameRoundIsRejectedTest {
                 List.of(), "测试");
 
         assertTrue(result.success(),
-                "Should recover: " + result.errorMessage());
-        // R1 工具全部未执行，只有 R2 的 finish_action
+                "R2 重写后 finish_action 在末尾应成功: " + result.errorMessage());
+        // R1 全部未执行，R2 执行了 echo + finish_action
+        assertEquals(2, result.toolCalls().size(),
+                "R2 的 echo 和 finish_action 都应被执行");
+        assertEquals("echo", result.toolCalls().get(0).tool());
+        assertEquals("finish_action", result.toolCalls().get(1).tool());
+
+        // 验证 R1 触发了 FINISH_ACTION_NOT_LAST 拒绝事件
+        boolean hasNotLastReject = sink.events.stream()
+                .anyMatch(e -> AgentProgressEvent.FINISH_ACTION_REJECTED.equals(e.phase())
+                        && e.detail().contains("FINISH_ACTION_NOT_LAST"));
+        assertTrue(hasNotLastReject, "Should emit FINISH_ACTION_NOT_LAST rejection event");
+    }
+
+    @Test
+    @DisplayName("[finish_action] 单独调用 → 正常结束")
+    void finishActionAloneAllowed() {
+        fakeLlm.addToolCallsResponse(List.of(
+                new LlmToolCall("call_001", "finish_action",
+                        Map.of("status", "success", "message", "操作完成。"))
+        ));
+
+        var result = agent.chatWithContextSession(
+                "# Base\nbranch: branch.b0000-start\n",
+                List.of(), "测试");
+
+        assertTrue(result.success());
         assertEquals(1, result.toolCalls().size());
         assertEquals("finish_action", result.toolCalls().get(0).tool());
-
-        boolean hasMixedReject = sink.events.stream()
-                .anyMatch(e -> AgentProgressEvent.FINISH_ACTION_REJECTED.equals(e.phase())
-                        && e.detail().contains("FINISH_ACTION_WITH_OTHER_TOOLS"));
-        assertTrue(hasMixedReject, "Should emit FINISH_ACTION_WITH_OTHER_TOOLS rejection event");
     }
 
     // ===== Stubs =====

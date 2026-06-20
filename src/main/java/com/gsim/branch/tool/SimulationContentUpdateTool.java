@@ -71,8 +71,14 @@ public class SimulationContentUpdateTool implements AgentTool {
             if (newSummary != null) sb.append(" summary_updated=true");
             if (newStatus != null) sb.append(" status=").append(newStatus);
 
-            return ToolResult.ok(NAME, List.of(
-                    new ToolResult.Item(simId, branchId, sb.toString(), 1.0)));
+            var items = new java.util.ArrayList<ToolResult.Item>();
+            items.add(new ToolResult.Item(simId, branchId, sb.toString(), 1.0));
+            if (newContent != null && !newContent.isBlank()) {
+                String title = newTitle != null ? newTitle : simId;
+                items.add(new ToolResult.Item("simulation_content_text", "",
+                        "# " + title + "\n\n" + newContent, 1.0));
+            }
+            return ToolResult.ok(NAME, items);
         } catch (Exception e) {
             String msg = e.getMessage();
             if (msg != null && msg.contains("SIM_CONTENT_NOT_FOUND")) {

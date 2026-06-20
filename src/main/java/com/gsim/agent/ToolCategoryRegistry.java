@@ -70,11 +70,12 @@ public class ToolCategoryRegistry {
             Map.entry("knowledge_delete", ToolCategory.DESTRUCTIVE),
 
             // === CONTROL ===
-            Map.entry("finish_action", ToolCategory.CONTROL)
+            Map.entry("finish_action", ToolCategory.CONTROL),
+            Map.entry("activate_tool_groups", ToolCategory.CONTROL)
     );
 
     /** 已知的 CONTROL 工具名集合 */
-    private static final Set<String> CONTROL_TOOLS = Set.of("finish_action");
+    private static final Set<String> CONTROL_TOOLS = Set.of("finish_action", "activate_tool_groups");
 
     /**
      * 返回工具的分类。未知工具默认返回 MUTATING（保守策略：不假执行未知写入工具）。

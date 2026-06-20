@@ -73,6 +73,17 @@ public class AppConfig {
     /** CLI 流式预览是否显示 reasoning（默认 true）。 */
     private final boolean cliStreamPreviewShowReasoning;
 
+    /** 是否启用 compact/压缩功能（默认 true）。 */
+    private final boolean compactEnabled;
+    /** 压缩用模型名（空=复用主 LLM model）。 */
+    private final String compactLlmModel;
+    /** 压缩用温度（默认 0.1）。 */
+    private final double compactLlmTemperature;
+    /** 工具结果压缩阈值（字符数，默认 3000）。 */
+    private final int compactToolResultThreshold;
+    /** 压缩摘要注入上下文的最大字符数（默认 2000）。 */
+    private final int compactSummaryMaxChars;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -141,6 +152,15 @@ public class AppConfig {
                 parseInt(result.get("cli.stream.preview.max_chars"), 3000), 100, 100000);
         this.cliStreamPreviewShowReasoning = parseBoolean(
                 result.get("cli.stream.preview.show_reasoning"), true);
+
+        // Compact 配置
+        this.compactEnabled = parseBoolean(result.get("compact.enabled"), true);
+        this.compactLlmModel = result.get("compact.llm.model");
+        this.compactLlmTemperature = parseDouble(result.get("compact.llm.temperature"), 0.1);
+        this.compactToolResultThreshold = Math.max(500,
+                parseInt(result.get("compact.tool_result.threshold"), 3000));
+        this.compactSummaryMaxChars = clamp(
+                parseInt(result.get("compact.summary.max_chars"), 2000), 200, 10000);
     }
 
     // ---- Getters ----
@@ -216,6 +236,17 @@ public class AppConfig {
     public int getCliStreamPreviewMaxChars() { return cliStreamPreviewMaxChars; }
     /** CLI 流式预览是否显示 reasoning（默认 true）。 */
     public boolean isCliStreamPreviewShowReasoning() { return cliStreamPreviewShowReasoning; }
+
+    /** 是否启用 compact/压缩功能（默认 true）。 */
+    public boolean isCompactEnabled() { return compactEnabled; }
+    /** 压缩用模型名（空=复用主 LLM model）。 */
+    public String getCompactLlmModel() { return compactLlmModel; }
+    /** 压缩用温度（默认 0.1）。 */
+    public double getCompactLlmTemperature() { return compactLlmTemperature; }
+    /** 工具结果压缩阈值（字符数，默认 3000）。 */
+    public int getCompactToolResultThreshold() { return compactToolResultThreshold; }
+    /** 压缩摘要注入上下文的最大字符数（默认 2000）。 */
+    public int getCompactSummaryMaxChars() { return compactSummaryMaxChars; }
 
     /** 获取当前生效的配置文件路径。 */
     public Path getConfigPath() {
