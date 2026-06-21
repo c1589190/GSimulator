@@ -4,6 +4,7 @@ import com.gsim.app.ApplicationContext;
 import com.gsim.webui.handlers.ChatHandler;
 import com.gsim.webui.handlers.PageHandler;
 import com.gsim.webui.handlers.StaticHandler;
+import com.gsim.webui.handlers.TimelineHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +27,12 @@ public class WebUiServer {
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
+    private TimelineHandler timelineHandler;
 
     public WebUiServer(WebUiConfig config, ApplicationContext ctx) {
         this.config = config;
         this.ctx = ctx;
+        this.timelineHandler = new TimelineHandler(ctx);
     }
 
     public void forceEnable() {
@@ -59,6 +62,7 @@ public class WebUiServer {
         server.createContext("/static", new StaticHandler());
         PageHandler pageHandler = new PageHandler(ctx);
         server.createContext("/chat", new ChatHandler(ctx, pageHandler));
+        server.createContext("/timeline", timelineHandler);
         server.createContext("/", pageHandler);
     }
 

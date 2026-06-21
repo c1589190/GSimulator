@@ -1,0 +1,23 @@
+<div class="p-2 bg-gray-800 rounded" th:if="${id != null}">
+    <div class="font-bold terminal-green" th:text="${name}">Node Name</div>
+    <div class="mt-1 space-y-1">
+        <div>ID: <span class="text-gray-400" th:text="${id}">—</span></div>
+        <div>Turn: <span class="text-gray-400" th:text="${turn}">0</span></div>
+        <div>世界时间: <span class="text-gray-400" th:text="${worldTime}">?</span></div>
+        <div>状态: <span class="text-gray-400" th:text="${status}">active</span></div>
+        <div>更新: <span class="text-gray-400" th:text="${updated}">—</span></div>
+    </div>
+    <div class="mt-2 flex gap-2" th:if="${!isActive}">
+        <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
+                hx-post="/timeline/activate"
+                hx-vals='{"branchId":"[[${id}]]"}'
+                hx-swap="none"
+                hx-on::after-request="location.reload()">
+            切换到此分支
+        </button>
+    </div>
+    <div class="text-xs text-green-400 mt-1" th:if="${isActive}">✔ 当前活动分支</div>
+</div>
+<div class="text-gray-600 text-xs" th:if="${id == null}">
+    点击节点查看详情
+</div>
