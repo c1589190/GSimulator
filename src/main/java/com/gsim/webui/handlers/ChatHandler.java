@@ -62,21 +62,34 @@ public class ChatHandler implements HttpHandler {
                 sendError(exchange, 404, "Unknown chat endpoint");
             }
         } catch (Exception e) {
-            sendError(exchange, 500, "Internal error: " + e.getMessage());
+            System.err.println("[ChatHandler] Error handling " + method + " " + path + ": " + e.getMessage());
+            e.printStackTrace();
+            sendError(exchange, 500, "Internal server error");
         }
     }
 
     private void handleSend(HttpExchange exchange) throws IOException {
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        Map<String, Object> req = JsonUtils.fromJson(body,
-                new TypeReference<Map<String, Object>>() {});
-        String message = (String) req.getOrDefault("message", "");
+        String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+
+        String message;
+        String sessionId;
+
+        if (contentType != null && contentType.startsWith("application/x-www-form-urlencoded")) {
+            Map<String, String> form = parseFormEncoded(body);
+            message = form.getOrDefault("message", "");
+            sessionId = form.getOrDefault("sessionId", "default");
+        } else {
+            Map<String, Object> req = JsonUtils.fromJson(body,
+                    new TypeReference<Map<String, Object>>() {});
+            message = (String) req.getOrDefault("message", "");
+            sessionId = (String) req.getOrDefault("sessionId", "default");
+        }
+
         if (message.isBlank()) {
             sendError(exchange, 400, "message is required");
             return;
         }
-
-        String sessionId = (String) req.getOrDefault("sessionId", "default");
 
         // 通过 ApiManager 的 TaskManager 创建任务
         TaskManager tm = ctx.getApiManager().getTaskManager();
@@ -169,6 +182,20 @@ public class ChatHandler implements HttpHandler {
     }
 
     // ---- helpers ----
+
+    private static Map<String, String> parseFormEncoded(String body) {
+        Map<String, String> params = new LinkedHashMap<>();
+        if (body == null || body.isBlank()) return params;
+        for (String pair : body.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+                params.put(key, value);
+            }
+        }
+        return params;
+    }
 
     private static void sendJson(HttpExchange exchange, int status, Object data) throws IOException {
         byte[] bytes = JsonUtils.toJsonCompact(data).getBytes(StandardCharsets.UTF_8);

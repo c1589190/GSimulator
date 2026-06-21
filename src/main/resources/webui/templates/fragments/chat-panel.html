@@ -1,8 +1,7 @@
 <div class="flex flex-col h-full">
     <div class="text-sm font-bold terminal-green mb-2">&#x1F4AC; Agent 对话</div>
     <!-- 分支上下文条 -->
-    <div id="chat-context" class="text-xs text-gray-500 mb-2 px-2 py-1 bg-gray-800 rounded"
-         hx-get="/chat/context" hx-trigger="load" hx-swap="innerHTML">
+    <div id="chat-context" class="text-xs text-gray-500 mb-2 px-2 py-1 bg-gray-800 rounded">
         分支: —
     </div>
     <!-- 消息列表 -->
@@ -13,7 +12,7 @@
     <form id="chat-form" class="flex gap-2"
           hx-post="/chat/send"
           hx-target="#chat-messages"
-          hx-swap="beforeend"
+          hx-swap="none"
           hx-on::after-request="handleChatResponse(event)">
         <input type="text" name="message" id="chat-input"
                placeholder="输入消息..." autocomplete="off"
@@ -26,6 +25,23 @@
 </div>
 
 <script>
+    // 加载分支上下文
+    (function loadChatContext() {
+        fetch('/chat/context')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var el = document.getElementById('chat-context');
+                if (!el) return;
+                var parts = [];
+                if (data.activeWorld) parts.push('世界: ' + data.activeWorld);
+                if (data.activeBranchId) parts.push('分支: ' + data.activeBranchId);
+                el.textContent = parts.length > 0 ? parts.join(' | ') : '分支: --';
+            })
+            .catch(function() {
+                // 静默失败，保留占位文本
+            });
+    })();
+
     // 处理发送响应 — 连接 SSE 流
     function handleChatResponse(event) {
         const response = JSON.parse(event.detail.xhr.responseText);
@@ -83,7 +99,7 @@
         });
 
         evtSource.addEventListener('tool_done', function(e) {
-            const data = JSON.parse(e.data);
+            const _data = JSON.parse(e.data);
             const cards = toolsEl.querySelectorAll('.tool-card');
             const last = cards[cards.length - 1];
             if (last) {
@@ -94,7 +110,7 @@
         });
 
         evtSource.addEventListener('tool_error', function(e) {
-            const data = JSON.parse(e.data);
+            const _data = JSON.parse(e.data);
             const cards = toolsEl.querySelectorAll('.tool-card');
             const last = cards[cards.length - 1];
             if (last) {
