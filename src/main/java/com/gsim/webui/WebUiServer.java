@@ -2,6 +2,7 @@ package com.gsim.webui;
 
 import com.gsim.app.ApplicationContext;
 import com.gsim.webui.handlers.ChatHandler;
+import com.gsim.webui.handlers.KnowledgeHandler;
 import com.gsim.webui.handlers.PageHandler;
 import com.gsim.webui.handlers.StaticHandler;
 import com.gsim.webui.handlers.TimelineHandler;
@@ -61,6 +62,7 @@ public class WebUiServer {
         PageHandler pageHandler = new PageHandler(ctx);
         server.createContext("/chat", new ChatHandler(ctx, pageHandler));
         server.createContext("/timeline", new TimelineHandler(ctx, pageHandler));
+        server.createContext("/knowledge", new KnowledgeHandler(ctx, pageHandler));
         server.createContext("/", pageHandler);
     }
 

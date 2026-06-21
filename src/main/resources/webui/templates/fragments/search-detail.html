@@ -1,0 +1,12 @@
+<div class="mt-2 p-3 bg-gray-800 rounded border border-gray-600">
+    <div class="font-bold terminal-green text-sm" th:text="${title}">Title</div>
+    <div class="text-xs text-gray-500 mt-1">
+        Chunk: <span th:text="${chunkId}">—</span>
+        | Doc: <span th:text="${docId}">—</span>
+        | Collection: <span th:text="${collection}">—</span>
+    </div>
+    <div class="mt-2 text-xs text-gray-300 whitespace-pre-wrap max-h-60 overflow-y-auto"
+         th:text="${text}">Content</div>
+    <button class="mt-2 text-xs text-gray-500 hover:text-gray-300"
+            onclick="this.parentElement.remove()">× 关闭</button>
+</div>

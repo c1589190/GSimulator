@@ -1,0 +1,23 @@
+<div>
+    <div class="text-gray-400 mb-1">
+        搜索 "<span th:text="${query}">q</span>"
+        (<span th:text="${mode}">keyword</span>)
+        — <span th:text="${count}">0</span> 条结果
+    </div>
+    <div class="space-y-2" th:if="${count > 0}">
+        <div th:each="r : ${results}" class="p-2 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
+             th:attr="hx-get='/knowledge/detail?id=' + ${r.chunkId}"
+             hx-target="#search-detail-panel" hx-swap="innerHTML">
+            <div class="font-bold text-gray-300" th:text="${r.title}">Title</div>
+            <div class="text-gray-500 mt-1" th:text="${r.snippet}">Snippet</div>
+            <div class="flex justify-between mt-1">
+                <span class="text-gray-600" th:text="${r.collection}">collection</span>
+                <span class="text-green-400" th:text="${r.score}">0.0</span>
+            </div>
+        </div>
+    </div>
+    <div class="text-gray-600" th:if="${count == 0}">
+        无结果
+    </div>
+    <div id="search-detail-panel" class="mt-2"></div>
+</div>
