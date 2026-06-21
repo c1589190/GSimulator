@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSimulator — 推演工作台</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4/dist/ext/sse.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        body { background-color: #111827; color: #e5e7eb; }
+        .panel { background-color: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; }
+        .terminal-green { color: #34d399; }
+        .bg-terminal { background-color: #34d399; }
+        .input-area { background-color: #111827; border: 1px solid #4b5563; }
+        .input-area:focus { border-color: #34d399; outline: none; }
+        .msg-user { background-color: #1e3a5f; }
+        .msg-assistant { background-color: #1f2937; }
+        .tool-card { background-color: #1a1a2e; border-left: 3px solid #f59e0b; }
+        .tool-card.success { border-left-color: #34d399; }
+        .tool-card.error { border-left-color: #ef4444; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 40; }
+        .sidebar { display: none; position: fixed; top: 0; left: 0; width: 16rem; height: 100%; background: #1f2937; z-index: 50; padding: 1rem; }
+        @media (min-width: 768px) {
+            .mobile-only { display: none !important; }
+            .sidebar-overlay, .sidebar { display: none !important; }
+            .desktop-panel { display: block !important; }
+        }
+        @media (max-width: 767px) {
+            .desktop-panel { display: none !important; }
+            .mobile-panel.active { display: block !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col" hx-ext="sse">
+
+    <!-- ===== 顶栏 ===== -->
+    <header class="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+        <div class="flex items-center gap-3">
+            <button class="mobile-only text-gray-400 hover:text-green-400 text-xl"
+                    onclick="toggleSidebar()">&#9776;</button>
+            <h1 class="text-lg font-bold terminal-green">GSimulator</h1>
+        </div>
+        <div class="text-xs text-gray-500">
+            <span>世界: <span th:text="${activeWorld}">—</span></span>
+            <span class="ml-4">分支: <span th:text="${activeBranchId}">—</span></span>
+        </div>
+    </header>
+
+    <!-- ===== 移动端侧边栏 ===== -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div id="sidebar" class="sidebar">
+        <button class="text-gray-400 hover:text-white mb-6" onclick="toggleSidebar()">&times; 关闭</button>
+        <nav class="flex flex-col gap-2">
+            <button onclick="switchMobilePanel('chat')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F4AC; Agent 对话</button>
+            <button onclick="switchMobilePanel('timeline')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F333; 时间线分支</button>
+            <button onclick="switchMobilePanel('knowledge')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F50D; 知识库</button>
+        </nav>
+    </div>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="flex-1 flex overflow-hidden">
+        <!-- 桌面版三栏 -->
+        <div class="hidden md:flex w-full gap-2 p-2">
+            <div id="desktop-timeline" class="w-1/4 panel p-3 overflow-y-auto">
+                <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-gray-500 text-sm">加载中...</div>
+                </div>
+            </div>
+            <div id="desktop-chat" class="w-2/4 panel p-3 flex flex-col">
+                <div hx-get="/chat" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-gray-500 text-sm">加载中...</div>
+                </div>
+            </div>
+            <div id="desktop-knowledge" class="w-1/4 panel p-3 overflow-y-auto">
+                <div hx-get="/knowledge" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-gray-500 text-sm">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 移动版单面板 -->
+        <div class="md:hidden w-full p-2">
+            <div id="mobile-chat" class="mobile-panel active panel p-3 h-full">
+                <div hx-get="/chat" hx-trigger="load" hx-swap="innerHTML"></div>
+            </div>
+            <div id="mobile-timeline" class="mobile-panel panel p-3 h-full hidden">
+                <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML"></div>
+            </div>
+            <div id="mobile-knowledge" class="mobile-panel panel p-3 h-full hidden">
+                <div hx-get="/knowledge" hx-trigger="load" hx-swap="innerHTML"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
