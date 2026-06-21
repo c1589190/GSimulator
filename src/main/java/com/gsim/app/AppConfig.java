@@ -84,6 +84,11 @@ public class AppConfig {
     /** 压缩摘要注入上下文的最大字符数（默认 2000）。 */
     private final int compactSummaryMaxChars;
 
+    // WebUI 配置
+    private final String webUiHost;
+    private final int webUiPort;
+    private final boolean webUiEnabled;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -161,6 +166,11 @@ public class AppConfig {
                 parseInt(result.get("compact.tool_result.threshold"), 3000));
         this.compactSummaryMaxChars = clamp(
                 parseInt(result.get("compact.summary.max_chars"), 2000), 200, 10000);
+
+        // WebUI 配置
+        this.webUiHost = isBlank(result.get("webui.host")) ? "127.0.0.1" : result.get("webui.host");
+        this.webUiPort = parseInt(result.get("webui.port"), 8711);
+        this.webUiEnabled = parseBoolean(result.get("webui.enabled"), false);
     }
 
     // ---- Getters ----
@@ -247,6 +257,10 @@ public class AppConfig {
     public int getCompactToolResultThreshold() { return compactToolResultThreshold; }
     /** 压缩摘要注入上下文的最大字符数（默认 2000）。 */
     public int getCompactSummaryMaxChars() { return compactSummaryMaxChars; }
+
+    public String getWebUiHost() { return webUiHost; }
+    public int getWebUiPort() { return webUiPort; }
+    public boolean isWebUiEnabled() { return webUiEnabled; }
 
     /** 获取当前生效的配置文件路径。 */
     public Path getConfigPath() {
