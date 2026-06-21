@@ -34,7 +34,7 @@ public class CompactApiHandler implements HttpHandler {
         }
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
             InteractionResult result = ctx.getInteractionManager().handle("/compact", session);
 
             BaseApiHandler.sendOk(exchange, result.success() ? "Context compacted" : "Compact failed",

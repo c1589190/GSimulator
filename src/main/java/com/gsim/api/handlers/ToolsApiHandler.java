@@ -93,7 +93,7 @@ public class ToolsApiHandler implements HttpHandler {
             return;
         }
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/tool wiki_search " + query, session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "Search completed" : "Search failed",

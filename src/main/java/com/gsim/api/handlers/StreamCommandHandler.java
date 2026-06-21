@@ -81,15 +81,8 @@ public class StreamCommandHandler implements HttpHandler {
             // 5. 等待任务完成（最长 5 分钟）
             taskManager.waitForCompletion(taskId, 300_000);
 
-            // 6. 确保发送 done 事件
-            var finalTask = taskManager.getTask(taskId);
-            Map<String, Object> doneData = new LinkedHashMap<>();
-            doneData.put("sessionId", sessionId);
-            doneData.put("taskId", taskId);
-            if (finalTask != null) {
-                doneData.put("status", finalTask.status().name());
-            }
-            sse.writeEvent("done", doneData);
+            // done 事件由 TaskManager.executeTask() finally 块通过 EventBus 统一发布，
+            // 此处不再重复写入，避免 SSE 流中出现两条 done。
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             sse.writeEvent("error", Map.of("message", "Interrupted", "taskId", taskId));

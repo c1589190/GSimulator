@@ -54,7 +54,7 @@ class StreamCommandHandlerCompatibilityTest {
     @Test
     @DisplayName("旧 /api/command/stream 仍可用并返回 SSE 流")
     void oldStreamEndpointShouldStillWork() throws Exception {
-        CommandRequest req = new CommandRequest("s1", "/status");
+        CommandRequest req = CommandRequest.of("s1", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command/stream", reqJson);
@@ -70,7 +70,7 @@ class StreamCommandHandlerCompatibilityTest {
     @Test
     @DisplayName("旧 /api/command/stream 应包含命令事件")
     void oldStreamShouldContainCommandEvents() throws Exception {
-        CommandRequest req = new CommandRequest("s1", "/status");
+        CommandRequest req = CommandRequest.of("s1", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command/stream", reqJson);
@@ -90,7 +90,7 @@ class StreamCommandHandlerCompatibilityTest {
     @Test
     @DisplayName("流式接口应正确关闭连接")
     void streamShouldCloseCleanly() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command/stream", reqJson);

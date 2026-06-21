@@ -113,6 +113,30 @@ public class PlayerActionService {
     }
 
     /**
+     * 清空指定 campaign + turn 的行动，并写入空列表到磁盘。
+     *
+     * @param campaignId campaign ID
+     * @param turnId     turn ID
+     */
+    public void clearActions(String campaignId, String turnId) {
+        lock.writeLock().lock();
+        try {
+            actions.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
+        // 保存空数组到磁盘，覆盖原文件
+        try {
+            Path dir = dataPaths.turnDir(campaignId, turnId);
+            Files.createDirectories(dir);
+            String json = "[]";
+            Files.writeString(dataPaths.actionsFile(campaignId, turnId), json);
+        } catch (IOException e) {
+            log.error("Failed to clear actions on disk: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
      * 是否有未结算的行动。
      */
     public boolean hasActions() {

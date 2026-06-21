@@ -3,6 +3,8 @@ package com.gsim.api;
 import com.gsim.api.handlers.*;
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 /**
@@ -30,82 +32,96 @@ public class ApiRouter {
      */
     public void registerAll() {
         // 状态
-        server.createContext("/api/status", new StatusApiHandler(ctx));
+        register("/api/status", new StatusApiHandler(ctx));
 
         // 帮助 — 列出所有命令
-        server.createContext("/api/help", new HelpApiHandler(ctx));
+        register("/api/help", new HelpApiHandler(ctx));
 
         // 当前位置信息
-        server.createContext("/api/where", new WhereApiHandler(ctx, sessionManager));
+        register("/api/where", new WhereApiHandler(ctx, sessionManager));
 
         // 命令（旧接口，保留兼容）
-        server.createContext("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
-        server.createContext("/api/command/stream",
+        register("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
+        register("/api/command/stream",
                 new StreamCommandHandler(ctx, eventBus, sessionManager, taskManager));
 
         // 任务 API（新接口，推荐使用）
-        server.createContext("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
+        register("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
 
         // Campaign / Turn / Action
-        server.createContext("/api/campaigns", new CampaignsApiHandler(ctx, eventBus));
+        register("/api/campaigns", new CampaignsApiHandler(ctx, eventBus));
 
         // Import
-        server.createContext("/api/import", new ImportApiHandler(ctx, eventBus));
+        register("/api/import", new ImportApiHandler(ctx, eventBus));
 
         // SearchDB
-        server.createContext("/api/searchdb", new SearchDbApiHandler(ctx, eventBus, sessionManager));
+        register("/api/searchdb", new SearchDbApiHandler(ctx, eventBus, sessionManager));
 
         // Logs & Outputs
-        server.createContext("/api/logs", new LogsOutputsApiHandler(ctx));
-        server.createContext("/api/outputs", new LogsOutputsApiHandler(ctx));
+        register("/api/logs", new LogsOutputsApiHandler(ctx));
+        register("/api/outputs", new LogsOutputsApiHandler(ctx));
 
         // Branches
-        server.createContext("/api/branches", new BranchesApiHandler(ctx, eventBus, sessionManager));
+        register("/api/branches", new BranchesApiHandler(ctx, eventBus, sessionManager));
 
         // 配置管理
-        server.createContext("/api/config", new ConfigApiHandler(ctx, sessionManager));
+        register("/api/config", new ConfigApiHandler(ctx, sessionManager));
 
         // 知识库
-        server.createContext("/api/knowledge", new KnowledgeApiHandler(ctx));
+        register("/api/knowledge", new KnowledgeApiHandler(ctx));
 
         // Embedding
-        server.createContext("/api/embedding", new EmbeddingApiHandler(ctx));
+        register("/api/embedding", new EmbeddingApiHandler(ctx));
 
         // 数据管理
-        server.createContext("/api/data", new DataApiHandler(ctx, sessionManager));
+        register("/api/data", new DataApiHandler(ctx, sessionManager));
 
         // 技能
-        server.createContext("/api/skills", new SkillsApiHandler(ctx, sessionManager));
+        register("/api/skills", new SkillsApiHandler(ctx, sessionManager));
 
         // 经验
-        server.createContext("/api/experiences", new ExperiencesApiHandler(ctx, sessionManager));
+        register("/api/experiences", new ExperiencesApiHandler(ctx, sessionManager));
 
         // 玩家档案
-        server.createContext("/api/players", new PlayersApiHandler(ctx, sessionManager));
+        register("/api/players", new PlayersApiHandler(ctx, sessionManager));
 
         // 手动保存
-        server.createContext("/api/save", new SaveApiHandler(ctx, sessionManager));
+        register("/api/save", new SaveApiHandler(ctx, sessionManager));
 
         // 压缩上下文
-        server.createContext("/api/compact", new CompactApiHandler(ctx, sessionManager));
+        register("/api/compact", new CompactApiHandler(ctx, sessionManager));
 
         // 硬约束（Pins）
-        server.createContext("/api/pins", new PinsApiHandler(ctx, sessionManager));
+        register("/api/pins", new PinsApiHandler(ctx, sessionManager));
 
         // 消息历史
-        server.createContext("/api/messages", new MessagesApiHandler(ctx, sessionManager));
+        register("/api/messages", new MessagesApiHandler(ctx, sessionManager));
 
         // 根节点工作区
-        server.createContext("/api/roots", new RootsApiHandler(ctx, sessionManager));
+        register("/api/roots", new RootsApiHandler(ctx, sessionManager));
 
         // 工具
-        server.createContext("/api/tools", new ToolsApiHandler(ctx, sessionManager));
+        register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
 
         // Context (new)
-        server.createContext("/api/context",
+        register("/api/context",
                 new ContextApiHandler(ctx.getContextSessionManager(),
                         ctx.getBranchContextRenderer(),
                         ctx.getDataManager(),
                         ctx.getSessionManager()));
+    }
+
+    /**
+     * 注册 handler，自动包装 CORS 预检处理。
+     * 对 OPTIONS 请求返回 204 + CORS headers，其他请求委托给真实 handler。
+     */
+    private void register(String path, HttpHandler handler) {
+        server.createContext(path, exchange -> {
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                com.gsim.api.handlers.BaseApiHandler.handlePreflight(exchange);
+            } else {
+                handler.handle(exchange);
+            }
+        });
     }
 }

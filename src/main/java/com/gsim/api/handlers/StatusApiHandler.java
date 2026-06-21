@@ -58,6 +58,7 @@ public class StatusApiHandler implements HttpHandler {
 
     static void sendResponse(HttpExchange exchange, int statusCode, ApiResponse response) throws IOException {
         byte[] body = response.toJson().getBytes(StandardCharsets.UTF_8);
+        BaseApiHandler.addCorsHeaders(exchange);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
         exchange.sendResponseHeaders(statusCode, body.length);
         exchange.getResponseBody().write(body);

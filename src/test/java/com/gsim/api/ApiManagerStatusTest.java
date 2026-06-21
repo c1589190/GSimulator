@@ -85,7 +85,7 @@ class ApiManagerStatusTest {
     @Test
     @DisplayName("POST /api/command 应返回结果")
     void shouldExecuteCommand() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command", reqJson);
@@ -99,7 +99,7 @@ class ApiManagerStatusTest {
     @Test
     @DisplayName("POST /api/command 无效命令应返回错误")
     void shouldReturnErrorForInvalidCommand() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/invalid_cmd_xyz");
+        CommandRequest req = CommandRequest.of("default", "/invalid_cmd_xyz");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command", reqJson);
@@ -125,7 +125,7 @@ class ApiManagerStatusTest {
     @Test
     @DisplayName("POST /api/command/stream 应返回 SSE 流")
     void shouldReturnSseStream() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command/stream", reqJson);

@@ -51,7 +51,7 @@ public class ApiResponse {
             map.put("data", data.isEmpty() ? null : data);
             map.put("error", null);
         } else {
-            map.put("data", null);
+            map.put("data", data.isEmpty() ? null : data);
             map.put("error", error != null ? error : ApiError.of("Unknown error"));
         }
         return JsonUtils.toJson(map);

@@ -19,11 +19,12 @@ import java.util.Map;
  *
  * <p>路由：
  * <ul>
- *   <li>POST /api/tasks            — 创建任务</li>
- *   <li>GET  /api/tasks            — 列出所有任务</li>
- *   <li>GET  /api/tasks/{taskId}         — 查询任务状态</li>
- *   <li>GET  /api/tasks/{taskId}/events  — SSE 订阅任务事件</li>
- *   <li>POST /api/tasks/{taskId}/cancel  — 取消任务</li>
+ *   <li>POST /api/tasks              — 创建任务（支持 autoStart=false）</li>
+ *   <li>GET  /api/tasks              — 列出所有任务</li>
+ *   <li>GET  /api/tasks/{taskId}           — 查询任务状态</li>
+ *   <li>POST /api/tasks/{taskId}/start     — 启动 PENDING 任务</li>
+ *   <li>GET  /api/tasks/{taskId}/events    — SSE 订阅任务事件</li>
+ *   <li>POST /api/tasks/{taskId}/cancel    — 取消任务</li>
  * </ul>
  */
 public class TasksApiHandler implements HttpHandler {
@@ -86,11 +87,13 @@ public class TasksApiHandler implements HttpHandler {
         String sessionId = request.sessionId();
         sessionManager.getOrCreateSession(sessionId); // 确保 session 存在
 
-        ApiTask task = taskManager.createCommandTask(sessionId, request.command());
+        boolean autoStart = request.autoStart() != null ? request.autoStart() : true;
+        ApiTask task = taskManager.createCommandTask(sessionId, request.command(), autoStart);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("taskId", task.taskId());
         data.put("status", task.status().name());
+        data.put("autoStart", autoStart);
 
         BaseApiHandler.sendJson(exchange, 201, ApiResponse.ok("Task created", data));
     }
@@ -130,8 +133,41 @@ public class TasksApiHandler implements HttpHandler {
         switch (sub) {
             case "events" -> handleTaskEvents(exchange, taskId);
             case "cancel" -> handleTaskCancel(exchange, method, taskId);
+            case "start" -> handleTaskStart(exchange, method, taskId);
             default -> BaseApiHandler.sendNotFound(exchange, "Unknown sub-resource: " + sub);
         }
+    }
+
+    /**
+     * POST /api/tasks/{taskId}/start — 启动 PENDING 任务。
+     */
+    private void handleTaskStart(HttpExchange exchange, String method, String taskId) throws IOException {
+        if (!"POST".equalsIgnoreCase(method)) {
+            BaseApiHandler.sendError(exchange, 405, "Method not allowed. Use POST.");
+            return;
+        }
+
+        ApiTask task = taskManager.getTask(taskId);
+        if (task == null) {
+            BaseApiHandler.sendJson(exchange, 404, ApiResponse.fail("Task not found: " + taskId, "NOT_FOUND"));
+            return;
+        }
+
+        if (task.status() != ApiTaskStatus.PENDING) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("taskId", taskId);
+            data.put("currentStatus", task.status().name());
+            BaseApiHandler.sendJson(exchange, 400,
+                    ApiResponse.fail("Task is not PENDING: " + task.status(), data));
+            return;
+        }
+
+        taskManager.executePendingTask(taskId);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("taskId", taskId);
+        data.put("status", "RUNNING");
+        BaseApiHandler.sendJson(exchange, 200, ApiResponse.ok("Task started", data));
     }
 
     private void handleTaskEvents(HttpExchange exchange, String taskId) throws IOException {
@@ -155,25 +191,17 @@ public class TasksApiHandler implements HttpHandler {
         eventBus.subscribe(sink);
 
         try {
-            // 如果任务已经是终态，直接发送已有的事件摘要
+            // 如果任务已经是终态，发送 task 当前状态作为摘要
             ApiTask task = taskManager.getTask(taskId);
             if (task != null && isTerminal(task.status())) {
-                // 发送 task 当前状态作为 result
                 sse.writeEvent("task_status", JsonUtils.toJsonCompact(buildTaskSummary(task)));
             }
 
             // 等待任务完成（最长 5 分钟）
             taskManager.waitForCompletion(taskId, 300_000);
 
-            // 确保发送 done 事件（如果后台线程尚未发布）
-            task = taskManager.getTask(taskId);
-            if (task != null) {
-                Map<String, Object> doneData = new LinkedHashMap<>();
-                doneData.put("sessionId", task.sessionId());
-                doneData.put("taskId", taskId);
-                doneData.put("status", task.status().name());
-                sse.writeEvent("done", doneData);
-            }
+            // done 事件由 TaskManager.executeTask() finally 块通过 EventBus 统一发布，
+            // 此处不再重复写入，避免 SSE 流中出现两条 done。
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             sse.writeEvent("error", Map.of("message", "Interrupted", "taskId", taskId));

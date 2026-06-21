@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   或
  *   command_started → log* → command_error → done
  * </pre>
+ *
+ * <p>done 事件仅由 executeTask() 的 finally 块发布一次。
  */
 public class TaskManager {
 
@@ -50,13 +52,17 @@ public class TaskManager {
     }
 
     /**
-     * 创建命令任务并开始后台执行。
+     * 创建命令任务。
      *
      * @param sessionId 会话 ID
      * @param command   命令字符串
-     * @return 创建的任务（状态为 PENDING 或 RUNNING）
+     * @param autoStart 是否自动启动（false 则只创建 PENDING 任务）
+     * @return 创建的任务
      */
-    public ApiTask createCommandTask(String sessionId, String command) {
+    public ApiTask createCommandTask(String sessionId, String command, boolean autoStart) {
+        if (!autoStart) {
+            return reserveTask(sessionId, command);
+        }
         String taskId = IdGenerator.taskId();
         ApiTask task = ApiTask.createPending(taskId, sessionId, command);
         tasks.put(taskId, task);
@@ -67,6 +73,13 @@ public class TaskManager {
         Thread.startVirtualThread(() -> executeTask(task));
 
         return task;
+    }
+
+    /**
+     * 创建命令任务并立即开始后台执行（向后兼容）。
+     */
+    public ApiTask createCommandTask(String sessionId, String command) {
+        return createCommandTask(sessionId, command, true);
     }
 
     /**
@@ -120,6 +133,7 @@ public class TaskManager {
 
     /**
      * 取消任务（标记取消，不强杀线程）。
+     * 发布 command_error 事件通知客户端，done 由 executeTask finally 统一发布。
      */
     public boolean cancelTask(String taskId) {
         ApiTask task = tasks.get(taskId);
@@ -135,7 +149,7 @@ public class TaskManager {
             tasks.put(taskId, cancelled);
             eventBus.publish(GSimEvent.of(task.sessionId(), taskId, "command_error",
                     Map.of("error", "Task cancelled")));
-            eventBus.publish(GSimEvent.of(task.sessionId(), taskId, "done", Map.of()));
+            // done 由 executeTask() finally 统一发布，此处不重复
             log.info("Task cancelled: {}", taskId);
             return true;
         }
@@ -163,7 +177,7 @@ public class TaskManager {
     }
 
     /**
-     * 在后台线程中执行任务。
+     * 检查任务是否已被取消（检查 Map 中的最新状态）。
      */
     private boolean isCancelled(String taskId) {
         ApiTask task = tasks.get(taskId);
@@ -214,6 +228,9 @@ public class TaskManager {
             // 发布 result 事件
             eventBus.publish(GSimEvent.of(sessionId, taskId, "result", resultData));
 
+            // 写入最终状态前检查是否已被取消
+            if (isCancelled(taskId)) return;
+
             if (result.success()) {
                 // 标记 DONE
                 ApiTask done = new ApiTask(
@@ -247,10 +264,12 @@ public class TaskManager {
                         Map.of("error", e.getMessage())));
             }
         } finally {
+            // done 仅在此处发布一次
             if (!isCancelled(taskId)) {
                 eventBus.publish(GSimEvent.of(sessionId, taskId, "done", Map.of()));
             }
-            log.info("Task {} finished: {}", taskId, tasks.get(taskId).status());
+            ApiTask finalTask = tasks.get(taskId);
+            log.info("Task {} finished: {}", taskId, finalTask != null ? finalTask.status() : "unknown");
         }
     }
 

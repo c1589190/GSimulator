@@ -183,7 +183,7 @@ public class ConfigApiHandler implements HttpHandler {
         }
 
         // 通过 InteractionManager 调用 /config set
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/config set " + key + " " + value, session);
 
         if (result.success()) {

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Campaign / Turn / PlayerAction CRUD API handler。
@@ -142,15 +143,29 @@ public class CampaignsApiHandler implements HttpHandler {
         String body = BaseApiHandler.readBody(exchange);
         CreateCampaignRequest req = JsonBodyParser.parse(body, CreateCampaignRequest.class);
         var cs = ctx.getCampaignService();
-        // 尝试加载，如果不存在则使用 getOrCreateDefault
-        var loaded = cs.load(req.name());
-        Campaign c;
-        if (loaded.isPresent()) {
-            c = loaded.get();
+
+        String name = (req.name() != null && !req.name().isBlank()) ? req.name() : null;
+
+        // 如果请求中有 name，先检查是否已存在同名 campaign
+        if (name != null) {
+            var loaded = cs.load(name);
+            if (loaded.isPresent()) {
+                // 已存在，返回 409 Conflict
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("campaign", campaignToMap(loaded.get()));
+                data.put("message", "Campaign already exists: " + name);
+                BaseApiHandler.sendJson(exchange, 409,
+                        ApiResponse.fail("Campaign already exists: " + name, data));
+                return;
+            }
+            // 不存在，用请求的 name 创建
+            Campaign c = cs.createNamed(name);
+            BaseApiHandler.sendOk(exchange, "Campaign created", Map.of("campaign", campaignToMap(c)));
         } else {
-            c = cs.getOrCreateDefault();
+            // 无 name，使用默认行为
+            Campaign c = cs.getOrCreateDefault();
+            BaseApiHandler.sendOk(exchange, "Campaign created", Map.of("campaign", campaignToMap(c)));
         }
-        BaseApiHandler.sendOk(exchange, "Campaign created", Map.of("campaign", campaignToMap(c)));
     }
 
     private void handleGetCampaign(HttpExchange exchange, String campaignId) throws IOException {
@@ -178,12 +193,33 @@ public class CampaignsApiHandler implements HttpHandler {
     // ---- Turn ----
 
     private void handleListTurns(HttpExchange exchange, String campaignId) throws IOException {
-        Turn current = ctx.getTurnService().getCurrentTurn().orElse(null);
+        // 从 Campaign 记录的 turnIds 列表读取所有 turn
+        var cs = ctx.getCampaignService();
+        var loaded = cs.load(campaignId);
         List<Map<String, Object>> list = new ArrayList<>();
-        if (current != null) {
-            list.add(turnToMap(current));
+
+        if (loaded.isPresent()) {
+            Campaign campaign = loaded.get();
+            List<String> turnIds = campaign.turnIds();
+            if (turnIds != null && !turnIds.isEmpty()) {
+                TurnService ts = ctx.getTurnService();
+                for (String tid : turnIds) {
+                    var t = ts.load(campaignId, tid);
+                    t.ifPresent(turn -> list.add(turnToMap(turn)));
+                }
+            }
         }
-        BaseApiHandler.sendOk(exchange, "Turns retrieved", Map.of("turns", list));
+
+        // 回退：如果 turnIds 为空，返回当前内存中的 turn
+        if (list.isEmpty()) {
+            Turn current = ctx.getTurnService().getCurrentTurn().orElse(null);
+            if (current != null) {
+                list.add(turnToMap(current));
+            }
+        }
+
+        BaseApiHandler.sendOk(exchange, "Turns retrieved",
+                Map.of("turns", list, "count", list.size()));
     }
 
     private void handleCreateTurn(HttpExchange exchange, String campaignId) throws IOException {
@@ -239,8 +275,10 @@ public class CampaignsApiHandler implements HttpHandler {
     }
 
     private void handleClearActions(HttpExchange exchange, String campaignId, String turnId) throws IOException {
-        ctx.getPlayerActionService().clearActions();
-        BaseApiHandler.sendOk(exchange, "Actions cleared");
+        // 使用 campaignId + turnId 参数，确保操作的是正确的 actions
+        ctx.getPlayerActionService().clearActions(campaignId, turnId);
+        BaseApiHandler.sendOk(exchange, "Actions cleared",
+                Map.of("campaignId", campaignId, "turnId", turnId));
     }
 
     // ---- Serialization helpers ----

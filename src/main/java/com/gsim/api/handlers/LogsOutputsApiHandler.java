@@ -69,14 +69,18 @@ public class LogsOutputsApiHandler implements HttpHandler {
             BaseApiHandler.sendOk(exchange, "Logs retrieved", Map.of("files", files, "logDir", logDir.toString()));
         } else {
             // GET /api/logs/{taskId}
-            String taskId = segs[0];
-            Path logFile = logDir.resolve(taskId + ".json");
+            String rawTaskId = segs[0];
+            if (!isValidTaskId(rawTaskId)) {
+                BaseApiHandler.sendError(exchange, 400, "Invalid taskId: " + rawTaskId);
+                return;
+            }
+            Path logFile = logDir.resolve(rawTaskId + ".json");
             if (Files.exists(logFile)) {
                 String content = Files.readString(logFile);
                 BaseApiHandler.sendOk(exchange, "Log found",
-                        Map.of("taskId", taskId, "content", content, "path", logFile.toString()));
+                        Map.of("taskId", rawTaskId, "content", content, "path", logFile.toString()));
             } else {
-                BaseApiHandler.sendNotFound(exchange, "Log not found: " + taskId);
+                BaseApiHandler.sendNotFound(exchange, "Log not found: " + rawTaskId);
             }
         }
     }
@@ -91,20 +95,35 @@ public class LogsOutputsApiHandler implements HttpHandler {
             BaseApiHandler.sendOk(exchange, "Outputs retrieved", Map.of("files", files, "outputDir", outputDir.toString()));
         } else {
             // GET /api/outputs/{taskId}
-            String taskId = segs[0];
+            String rawTaskId = segs[0];
+            if (!isValidTaskId(rawTaskId)) {
+                BaseApiHandler.sendError(exchange, 400, "Invalid taskId: " + rawTaskId);
+                return;
+            }
             // 尝试 .md 或 .json 扩展名
-            Path outputFile = outputDir.resolve(taskId + ".md");
+            Path outputFile = outputDir.resolve(rawTaskId + ".md");
             if (!Files.exists(outputFile)) {
-                outputFile = outputDir.resolve(taskId + ".json");
+                outputFile = outputDir.resolve(rawTaskId + ".json");
             }
             if (Files.exists(outputFile)) {
                 String content = Files.readString(outputFile);
                 BaseApiHandler.sendOk(exchange, "Output found",
-                        Map.of("taskId", taskId, "content", content, "path", outputFile.toString()));
+                        Map.of("taskId", rawTaskId, "content", content, "path", outputFile.toString()));
             } else {
-                BaseApiHandler.sendNotFound(exchange, "Output not found: " + taskId);
+                BaseApiHandler.sendNotFound(exchange, "Output not found: " + rawTaskId);
             }
         }
+    }
+
+    /**
+     * 校验 taskId 格式：只允许字母、数字、连字符和下划线。
+     * 拒绝含路径分隔符、..、空格的输入，防止路径穿越。
+     */
+    private static boolean isValidTaskId(String taskId) {
+        if (taskId == null || taskId.isBlank()) return false;
+        if (taskId.contains("/") || taskId.contains("\\")) return false;
+        if (taskId.contains("..")) return false;
+        return taskId.matches("[a-zA-Z0-9_-]+");
     }
 
     private List<Map<String, Object>> listFiles(Path dir) {

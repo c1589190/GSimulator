@@ -153,7 +153,7 @@ public class DataApiHandler implements HttpHandler {
         Object rawName = reqMap != null ? reqMap.get("name") : null;
         String name = rawName != null ? rawName.toString() : "";
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data world create " + name, session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "World created" : "World creation failed",
@@ -171,7 +171,7 @@ public class DataApiHandler implements HttpHandler {
         Object rawName = reqMap != null ? reqMap.get("name") : null;
         String name = rawName != null ? rawName.toString() : "";
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data world switch " + name, session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "World switched" : "World switch failed",
@@ -211,7 +211,7 @@ public class DataApiHandler implements HttpHandler {
         Object rawWorldTime = reqMap != null ? reqMap.get("worldTime") : null;
         String worldTime = rawWorldTime != null ? rawWorldTime.toString() : "";
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         String cmd = "/data branch create " + name;
         if (!worldTime.isBlank()) cmd += " " + worldTime;
         InteractionResult result = ctx.getInteractionManager().handle(cmd, session);
@@ -231,7 +231,7 @@ public class DataApiHandler implements HttpHandler {
         Object rawBranchId = reqMap != null ? reqMap.get("branchId") : null;
         String branchId = rawBranchId != null ? rawBranchId.toString() : "";
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data branch switch " + branchId, session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "Branch switched" : "Branch switch failed",
@@ -291,7 +291,7 @@ public class DataApiHandler implements HttpHandler {
         Object rawText = reqMap != null ? reqMap.get("text") : null;
         String text = rawText != null ? rawText.toString() : "";
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data input " + text, session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "Input appended" : "Input append failed",
@@ -299,7 +299,7 @@ public class DataApiHandler implements HttpHandler {
     }
 
     private void handleClearInput(HttpExchange exchange) throws IOException {
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data input clear", session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "Input cleared" : "Input clear failed",
@@ -413,7 +413,7 @@ public class DataApiHandler implements HttpHandler {
             return;
         }
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data reload", session);
 
         BaseApiHandler.sendOk(exchange, result.success() ? "Data reloaded" : "Reload failed",

@@ -87,7 +87,7 @@ public class SearchDbApiHandler implements HttpHandler {
         eventBus.publish(GSimEvent.of("api", "search_progress",
                 Map.of("message", "Searching: " + q + " (mode=" + mode + ")")));
 
-        Map<String, Object> data = doSearch(q, topK, mode);
+        Map<String, Object> data = doSearch(q, topK, mode, exchange);
         BaseApiHandler.sendOk(exchange, "Search completed", data);
     }
 
@@ -106,11 +106,11 @@ public class SearchDbApiHandler implements HttpHandler {
         eventBus.publish(GSimEvent.of("api", "search_progress",
                 Map.of("message", "Searching: " + req.query() + " (mode=" + mode + ")")));
 
-        Map<String, Object> data = doSearch(req.query(), topK, mode);
+        Map<String, Object> data = doSearch(req.query(), topK, mode, exchange);
         BaseApiHandler.sendOk(exchange, "Search completed", data);
     }
 
-    private Map<String, Object> doSearch(String query, int topK, String mode) {
+    private Map<String, Object> doSearch(String query, int topK, String mode, HttpExchange exchange) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("query", query);
         data.put("topK", topK);
@@ -159,7 +159,8 @@ public class SearchDbApiHandler implements HttpHandler {
 
         // 2. 如果知识库无结果，尝试本地文件搜索（wiki txt）
         if (results.isEmpty()) {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            String sid = BaseApiHandler.resolveSessionId(exchange);
+            InteractionSession session = sessionManager.getOrCreateSession(sid);
             InteractionResult result = ctx.getInteractionManager().handle("/tool wiki_search " + query, session);
             if (result.success()) {
                 List<Map<String, Object>> fileResults = new ArrayList<>();

@@ -40,7 +40,7 @@ public class MessagesApiHandler implements HttpHandler {
         }
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
             String[] segs = BaseApiHandler.pathSegments(exchange, PREFIX);
 
             InteractionResult result;

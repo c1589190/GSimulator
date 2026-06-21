@@ -29,6 +29,12 @@ public class SseWriter {
      */
     public void sendHeaders() throws IOException {
         if (headersSent) return;
+        // CORS headers for SSE (browser EventSource needs them)
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods",
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers",
+                "Content-Type, Authorization, X-GSim-Session-Id");
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
         exchange.getResponseHeaders().set("Connection", "keep-alive");

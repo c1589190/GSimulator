@@ -130,7 +130,7 @@ public class BranchesApiHandler implements HttpHandler {
         String body = BaseApiHandler.readBody(exchange);
         CreateBranchRequest req = JsonBodyParser.parse(body, CreateBranchRequest.class);
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         String cmd = "/data branch create " + req.name();
         if (req.description() != null && !req.description().isBlank()) {
             cmd += " " + req.description();
@@ -148,7 +148,7 @@ public class BranchesApiHandler implements HttpHandler {
     // ---- Branch detail / activate ----
 
     private void handleGetBranch(HttpExchange exchange, String branchId) throws IOException {
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/branch analyze " + branchId, session);
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -160,7 +160,7 @@ public class BranchesApiHandler implements HttpHandler {
     }
 
     private void handleActivateBranch(HttpExchange exchange, String branchId) throws IOException {
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         InteractionResult result = ctx.getInteractionManager().handle("/data branch switch " + branchId, session);
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -216,7 +216,7 @@ public class BranchesApiHandler implements HttpHandler {
         String body = BaseApiHandler.readBody(exchange);
         CreateNodeRequest req = JsonBodyParser.parse(body, CreateNodeRequest.class);
 
-        InteractionSession session = sessionManager.getOrCreateSession("default");
+        InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
         String cmd = "/nextturn " + req.label();
         if (req.type() != null && !req.type().isBlank()) {
             cmd += " " + req.type();

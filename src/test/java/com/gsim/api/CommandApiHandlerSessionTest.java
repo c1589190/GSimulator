@@ -54,7 +54,7 @@ class CommandApiHandlerSessionTest {
     @Test
     @DisplayName("旧 /api/command 仍可用")
     void oldCommandEndpointShouldStillWork() throws Exception {
-        CommandRequest req = new CommandRequest("s1", "/status");
+        CommandRequest req = CommandRequest.of("s1", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command", reqJson);
@@ -68,8 +68,8 @@ class CommandApiHandlerSessionTest {
     @Test
     @DisplayName("两个 session 使用不同 sessionId 不共享 InteractionContext")
     void twoSessionsShouldHaveSeparateContexts() throws Exception {
-        CommandRequest req1 = new CommandRequest("session-a", "/status");
-        CommandRequest req2 = new CommandRequest("session-b", "/status");
+        CommandRequest req1 = CommandRequest.of("session-a", "/status");
+        CommandRequest req2 = CommandRequest.of("session-b", "/status");
 
         HttpURLConnection conn1 = post("/api/command", JsonUtils.toJson(req1));
         HttpURLConnection conn2 = post("/api/command", JsonUtils.toJson(req2));
@@ -89,7 +89,7 @@ class CommandApiHandlerSessionTest {
     @Test
     @DisplayName("sessionId default 应自动创建")
     void defaultSessionShouldBeAutoCreated() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         HttpURLConnection conn = post("/api/command", JsonUtils.toJson(req));
 
         assertEquals(200, conn.getResponseCode());
@@ -101,7 +101,7 @@ class CommandApiHandlerSessionTest {
     @Test
     @DisplayName("无效命令应返回错误")
     void invalidCommandShouldReturnError() throws Exception {
-        CommandRequest req = new CommandRequest("s1", "/invalid_cmd_xyz");
+        CommandRequest req = CommandRequest.of("s1", "/invalid_cmd_xyz");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/command", reqJson);

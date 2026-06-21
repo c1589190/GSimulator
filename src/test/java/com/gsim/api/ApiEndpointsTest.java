@@ -473,6 +473,57 @@ class ApiEndpointsTest {
         assertTrue(response.body().contains("files"), "outputs 应包含 files");
     }
 
+    // ========== CORS ==========
+
+    @Test
+    @Order(39)
+    @DisplayName("OPTIONS /api/tasks — CORS 预检")
+    void testCorsPreflight() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/tasks"))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .timeout(Duration.ofSeconds(5))
+                .build();
+        HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+        assertEquals(204, response.statusCode());
+        assertTrue(response.headers().firstValue("Access-Control-Allow-Origin").isPresent());
+    }
+
+    // ========== Campaign 语义 ==========
+
+    @Test
+    @Order(40)
+    @DisplayName("POST /api/campaigns 应使用请求的 name 创建 campaign")
+    void testCampaignCreateWithName() throws Exception {
+        HttpResponse<String> response = post("/api/campaigns",
+                "{\"name\":\"test-campaign-42\"}");
+        assertEquals(200, response.statusCode());
+        String body = response.body();
+        assertTrue(body.contains("test-campaign-42"),
+                "campaign 应包含请求的 name: " + body);
+    }
+
+    // ========== 路径穿越防护 ==========
+
+    @Test
+    @Order(41)
+    @DisplayName("GET /api/logs/../etc 应拒绝路径穿越")
+    void testLogsRejectPathTraversal() throws Exception {
+        HttpResponse<String> response = get("/api/logs/..%2Fetc");
+        // 应返回 400（无效 taskId）而非尝试读取文件
+        assertTrue(response.statusCode() >= 400,
+                "路径穿越应返回 >= 400: " + response.statusCode());
+    }
+
+    @Test
+    @Order(42)
+    @DisplayName("GET /api/outputs/../../../etc 应拒绝路径穿越")
+    void testOutputsRejectPathTraversal() throws Exception {
+        HttpResponse<String> response = get("/api/outputs/..%2F..%2F..%2Fetc");
+        assertTrue(response.statusCode() >= 400,
+                "路径穿越应返回 >= 400: " + response.statusCode());
+    }
+
     // ====== helpers ======
 
     private HttpResponse<String> get(String path) throws Exception {

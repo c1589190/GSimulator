@@ -34,7 +34,7 @@ public class WhereApiHandler implements HttpHandler {
         }
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
             InteractionResult result = ctx.getInteractionManager().handle("/where", session);
 
             BaseApiHandler.sendOk(exchange, result.message(),

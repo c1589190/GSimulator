@@ -58,7 +58,7 @@ class TasksApiHandlerTest {
     @Test
     @DisplayName("POST /api/tasks 应创建任务并返回 taskId")
     void shouldCreateTask() throws Exception {
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn = post("/api/tasks", reqJson);
@@ -85,7 +85,7 @@ class TasksApiHandlerTest {
     @DisplayName("GET /api/tasks 应返回任务列表")
     void shouldListTasks() throws Exception {
         // 创建并等待完成
-        CommandRequest req = new CommandRequest("default", "/status");
+        CommandRequest req = CommandRequest.of("default", "/status");
         String reqJson = JsonUtils.toJson(req);
 
         HttpURLConnection conn1 = post("/api/tasks", reqJson);
@@ -169,6 +169,102 @@ class TasksApiHandlerTest {
         String body = readBody(conn);
         Map<?, ?> result = JsonUtils.fromJson(body, Map.class);
         assertEquals(true, result.get("success"));
+    }
+
+    @Test
+    @DisplayName("POST /api/tasks autoStart=false 应返回 PENDING 状态")
+    void shouldCreatePendingTaskWithAutoStartFalse() throws Exception {
+        String reqJson = "{\"sessionId\":\"default\",\"command\":\"/status\",\"autoStart\":false}";
+
+        HttpURLConnection conn = post("/api/tasks", reqJson);
+        assertEquals(201, conn.getResponseCode());
+
+        String body = readBody(conn);
+        Map<?, ?> result = JsonUtils.fromJson(body, Map.class);
+        assertEquals(true, result.get("success"));
+        Map<?, ?> data = (Map<?, ?>) result.get("data");
+        assertEquals("PENDING", data.get("status"));
+        assertEquals(false, data.get("autoStart"));
+        assertNotNull(data.get("taskId"));
+    }
+
+    @Test
+    @DisplayName("POST /api/tasks/{taskId}/start 应启动 PENDING 任务")
+    void shouldStartPendingTask() throws Exception {
+        // 创建 PENDING 任务
+        ApiTask task = taskManager.reserveTask("default", "/status");
+
+        // 启动
+        HttpURLConnection conn = post("/api/tasks/" + task.taskId() + "/start", "");
+        assertEquals(200, conn.getResponseCode());
+
+        String body = readBody(conn);
+        Map<?, ?> result = JsonUtils.fromJson(body, Map.class);
+        assertEquals(true, result.get("success"));
+
+        // 等待完成
+        taskManager.waitForCompletion(task.taskId(), 10000);
+        ApiTask finalTask = taskManager.getTask(task.taskId());
+        assertNotNull(finalTask);
+        assertTrue(finalTask.status() == ApiTaskStatus.DONE
+                || finalTask.status() == ApiTaskStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("POST /api/tasks/{taskId}/start 对非 PENDING 任务应返回 400")
+    void shouldReturn400ForStartNonPendingTask() throws Exception {
+        // 创建并自动启动
+        ApiTask task = taskManager.createCommandTask("default", "/status");
+        taskManager.waitForCompletion(task.taskId(), 10000);
+
+        // 尝试再次启动
+        HttpURLConnection conn = post("/api/tasks/" + task.taskId() + "/start", "");
+        assertEquals(400, conn.getResponseCode());
+    }
+
+    @Test
+    @DisplayName("cancel 后任务状态应保持 CANCELLED")
+    void shouldKeepCancelledStatus() throws Exception {
+        // 使用 reserveTask 创建 PENDING 任务
+        ApiTask task = taskManager.reserveTask("default", "/status");
+
+        // 取消
+        taskManager.cancelTask(task.taskId());
+
+        // 验证状态
+        ApiTask cancelled = taskManager.getTask(task.taskId());
+        assertNotNull(cancelled);
+        assertEquals(ApiTaskStatus.CANCELLED, cancelled.status());
+    }
+
+    @Test
+    @DisplayName("SSE 流中 done 不应重复")
+    void shouldNotDuplicateDoneEvent() throws Exception {
+        ApiTask task = taskManager.reserveTask("default", "/status");
+        String taskId = task.taskId();
+
+        // 先订阅 SSE
+        HttpURLConnection conn = get("/api/tasks/" + taskId + "/events");
+        assertEquals(200, conn.getResponseCode());
+        assertEquals("text/event-stream; charset=utf-8",
+                conn.getHeaderField("Content-Type"));
+
+        // 启动任务
+        taskManager.executePendingTask(taskId);
+        taskManager.waitForCompletion(taskId, 10000);
+
+        // 读取 SSE 内容
+        String body = readBody(conn);
+
+        // 统计 done 事件出现次数
+        int doneCount = 0;
+        for (String line : body.split("\n")) {
+            if (line.trim().equals("event: done")) {
+                doneCount++;
+            }
+        }
+        // done 应只出现一次（由 TaskManager finally 块发布）
+        assertTrue(doneCount <= 1, "Expected at most 1 done event, got " + doneCount);
     }
 
     // ---- helpers ----

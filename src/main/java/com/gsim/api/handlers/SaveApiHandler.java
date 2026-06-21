@@ -34,7 +34,7 @@ public class SaveApiHandler implements HttpHandler {
         }
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
             InteractionResult result = ctx.getInteractionManager().handle("/save", session);
 
             BaseApiHandler.sendOk(exchange, result.success() ? "State saved" : "Save failed",

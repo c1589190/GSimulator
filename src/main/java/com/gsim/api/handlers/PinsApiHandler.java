@@ -36,7 +36,7 @@ public class PinsApiHandler implements HttpHandler {
         String method = exchange.getRequestMethod().toUpperCase();
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
 
             if ("GET".equals(method)) {
                 InteractionResult result = ctx.getInteractionManager().handle("/pin list", session);

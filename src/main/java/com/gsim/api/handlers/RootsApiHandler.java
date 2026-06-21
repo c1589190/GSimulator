@@ -42,7 +42,7 @@ public class RootsApiHandler implements HttpHandler {
         String[] segs = BaseApiHandler.pathSegments(exchange, PREFIX);
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
 
             if (segs.length == 0) {
                 if ("GET".equals(method)) {

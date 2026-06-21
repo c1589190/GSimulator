@@ -53,6 +53,21 @@ public class CampaignService {
     }
 
     /**
+     * 创建一个指定名称的 campaign。
+     *
+     * @param name campaign 名称
+     * @return 新创建的 campaign
+     */
+    public Campaign createNamed(String name) {
+        String id = IdGenerator.campaignId();
+        Campaign c = new Campaign(id, name, timeProvider.now(), null, List.of());
+        currentCampaign = c;
+        saveToDisk(c);
+        log.info("Created campaign: {} ({})", id, name);
+        return c;
+    }
+
+    /**
      * 列出所有已保存的 campaign。
      */
     public List<Campaign> listAll() {

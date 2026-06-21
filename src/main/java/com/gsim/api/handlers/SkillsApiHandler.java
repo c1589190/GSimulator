@@ -44,7 +44,7 @@ public class SkillsApiHandler implements HttpHandler {
         }
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession("default");
+            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
 
             if (segs.length == 0) {
                 // 检查是否有 ?q= 查询参数

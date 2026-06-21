@@ -72,6 +72,16 @@ public class ImportApiHandler implements HttpHandler {
         ImportManager importManager = new ImportManager(config, null);
         ImportResult result = importManager.doImport();
 
+        // 检查 pipeline 是否实际连接
+        if (result.logPath() != null && result.logPath().startsWith("IMPORT_PIPELINE_NOT_IMPLEMENTED")) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("message", result.logPath());
+            data.put("summary", result.summary());
+            BaseApiHandler.sendJson(exchange, 501,
+                    ApiResponse.fail("Import pipeline not connected to KnowledgeStore", data));
+            return;
+        }
+
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("totalFiles", result.totalFiles());
         data.put("successCount", result.successCount());
