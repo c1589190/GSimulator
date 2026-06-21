@@ -128,18 +128,43 @@ class SseParser {
                     String name = null;
                     String argsChunk = null;
 
+                    // 标准 OpenAI: function.name + function.arguments
                     JsonNode fnNode = tcNode.get("function");
                     if (fnNode != null) {
                         JsonNode nameNode = fnNode.get("name");
                         if (nameNode != null && !nameNode.isNull()) {
-                            name = nameNode.asText();
+                            String rawName = nameNode.asText();
+                            if (!rawName.isEmpty()) name = rawName;
                         }
                         JsonNode argsNode = fnNode.get("arguments");
                         if (argsNode != null && !argsNode.isNull()) {
                             argsChunk = argsNode.asText();
                         }
                     }
-                    pool.onToolCallDelta(index, name, argsChunk);
+
+                    // DeepSeek/其他变体: name 直接在 tcNode 上
+                    if (name == null) {
+                        JsonNode nameNode = tcNode.get("name");
+                        if (nameNode != null && !nameNode.isNull()) {
+                            name = nameNode.asText();
+                        }
+                    }
+
+                    // 变体: type 字段作为工具名
+                    if (name == null) {
+                        JsonNode typeNode = tcNode.get("type");
+                        if (typeNode != null && !typeNode.isNull()
+                                && "function".equals(typeNode.asText())) {
+                            // type=function 时才尝试从 id 提取名称（不理想但优于空）
+                        }
+                    }
+
+                    if (name != null || argsChunk != null) {
+                        pool.onToolCallDelta(index, name, argsChunk);
+                    } else {
+                        // 无法解析的 tool_call delta，记录原始 JSON 用于调试
+                        log.warn("Unparseable tool_call delta (index={}): {}", index, tcNode.toString());
+                    }
                 }
             }
         } catch (Exception e) {

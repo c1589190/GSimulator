@@ -238,6 +238,9 @@ public class ConfigLoader {
             case "API_HOST" -> "api.host";
             case "API_PORT" -> "api.port";
             case "API_ENABLED" -> "api.enabled";
+            case "WEBUI_HOST" -> "webui.host";
+            case "WEBUI_PORT" -> "webui.port";
+            case "WEBUI_ENABLED" -> "webui.enabled";
             case "EMBEDDING_PROVIDER" -> "embedding.provider";
             case "EMBEDDING_BASE_URL" -> "embedding.base_url";
             case "EMBEDDING_API_KEY" -> "embedding.api_key";

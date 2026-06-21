@@ -1,5 +1,6 @@
 package com.gsim.api;
 
+import com.gsim.agent.EventBusAgentProgressSink;
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
 import com.gsim.event.GSimEvent;
@@ -210,6 +211,8 @@ public class TaskManager {
             eventBus.publish(GSimEvent.of(sessionId, taskId, "log",
                     Map.of("message", "Executing: " + command)));
 
+            // 绑定当前 taskId 到线程，供 EventBusAgentProgressSink 使用
+            EventBusAgentProgressSink.bindTask(sessionId, taskId);
             InteractionResult result = manager.handle(command, session);
 
             // 构建结果数据
@@ -264,6 +267,8 @@ public class TaskManager {
                         Map.of("error", e.getMessage())));
             }
         } finally {
+            // 清理 ThreadLocal 绑定
+            EventBusAgentProgressSink.unbindTask();
             // done 仅在此处发布一次
             if (!isCancelled(taskId)) {
                 eventBus.publish(GSimEvent.of(sessionId, taskId, "done", Map.of()));

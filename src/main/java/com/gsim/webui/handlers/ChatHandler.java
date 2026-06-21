@@ -6,6 +6,9 @@ import com.gsim.api.ApiTaskStatus;
 import com.gsim.api.SseWriter;
 import com.gsim.api.TaskManager;
 import com.gsim.app.ApplicationContext;
+import com.gsim.chat.BranchMessage;
+import com.gsim.chat.BranchMessageStore;
+import com.gsim.data.DataManager;
 import com.gsim.event.EventBus;
 import com.gsim.event.FilteredEventSink;
 import com.gsim.event.GSimEvent;
@@ -15,6 +18,9 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -52,10 +58,14 @@ public class ChatHandler implements HttpHandler {
                 handleSend(exchange);
             } else if (path.equals("/chat/stream") && "GET".equals(method)) {
                 handleStream(exchange);
+            } else if (path.equals("/chat/cancel") && "POST".equals(method)) {
+                handleCancel(exchange);
             } else if (path.equals("/chat/messages") && "GET".equals(method)) {
                 handleMessages(exchange);
             } else if (path.equals("/chat/context") && "GET".equals(method)) {
                 handleContext(exchange);
+            } else if (path.equals("/chat/context-bar") && "GET".equals(method)) {
+                handleContextBar(exchange);
             } else {
                 HandlerUtils.sendError(exchange, 404, "Unknown chat endpoint");
             }
@@ -98,6 +108,23 @@ public class ChatHandler implements HttpHandler {
         result.put("streamUrl", "/chat/stream?taskId=" + task.taskId());
         result.put("status", task.status().name());
 
+        HandlerUtils.sendJson(exchange, 200, result);
+    }
+
+    private void handleCancel(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String taskId = HandlerUtils.getQueryParam(query, "taskId");
+        if (taskId == null || taskId.isBlank()) {
+            HandlerUtils.sendError(exchange, 400, "taskId query param required");
+            return;
+        }
+
+        TaskManager tm = ctx.getApiManager().getTaskManager();
+        boolean cancelled = tm.cancelTask(taskId);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("taskId", taskId);
+        result.put("cancelled", cancelled);
         HandlerUtils.sendJson(exchange, 200, result);
     }
 
@@ -156,15 +183,72 @@ public class ChatHandler implements HttpHandler {
     }
 
     private void handleMessages(HttpExchange exchange) throws IOException {
-        // 返回当前分支的消息列表
         var dm = ctx.getDataManager();
-        if (dm == null) {
-            HandlerUtils.sendJson(exchange, 200, Map.of("messages", List.of()));
+        if (dm == null || dm.getActiveBranch() == null) {
+            HandlerUtils.sendHtml(exchange, 200,
+                    "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>");
             return;
         }
-        // 简化：返回空列表，实际消息在模板中通过 hx-get 加载
-        HandlerUtils.sendJson(exchange, 200, Map.of("messages", List.of(), "branchId",
-                dm.getActiveBranch() != null ? dm.getActiveBranch() : ""));
+
+        try {
+            Path dataRoot = dm.getDataRoot();
+            BranchMessageStore store = new BranchMessageStore(dm, dataRoot);
+            List<BranchMessage> messages = store.listMessages(dm.getActiveBranch());
+
+            if (messages.isEmpty()) {
+                HandlerUtils.sendHtml(exchange, 200,
+                        "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>");
+                return;
+            }
+
+            StringBuilder html = new StringBuilder();
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm")
+                    .withZone(ZoneId.of("Asia/Shanghai"));
+
+            for (BranchMessage msg : messages) {
+                String role = msg.role();
+                String type = msg.type();
+                String content = msg.content();
+                if (content == null || content.isBlank()) continue;
+
+                // 跳过纯工具消息，只显示 user 和 assistant
+                if ("tool".equals(role)) continue;
+                if ("system".equals(role) && !"error".equals(type)) continue;
+
+                String cssClass;
+                String label;
+                if ("user".equals(role)) {
+                    cssClass = "msg-user";
+                    label = "You";
+                } else if ("error".equals(type)) {
+                    cssClass = "msg-assistant";
+                    label = "Error";
+                    content = "<span class=\"text-red-400\">" + escapeHtml(content) + "</span>";
+                    html.append("<div class=\"").append(cssClass).append(" rounded p-2 text-sm mb-1\">")
+                        .append("<span class=\"text-xs text-gray-500\">").append(label)
+                        .append(" · ").append(fmt.format(msg.createdAt())).append("</span>")
+                        .append("<div>").append(content).append("</div></div>\n");
+                    continue;
+                } else {
+                    cssClass = "msg-assistant";
+                    label = "Agent";
+                }
+
+                html.append("<div class=\"").append(cssClass).append(" rounded p-2 text-sm mb-1\">")
+                    .append("<span class=\"text-xs text-gray-500\">").append(label)
+                    .append(" · ").append(fmt.format(msg.createdAt())).append("</span>")
+                    .append("<div>").append(escapeHtml(content)).append("</div></div>\n");
+            }
+
+            String result = html.isEmpty()
+                    ? "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>"
+                    : html.toString();
+            HandlerUtils.sendHtml(exchange, 200, result);
+        } catch (Exception e) {
+            HandlerUtils.logError("ChatHandler", "GET", "/chat/messages", e);
+            HandlerUtils.sendHtml(exchange, 200,
+                    "<div class=\"text-gray-600 text-sm\">加载消息失败</div>");
+        }
     }
 
     private void handleContext(HttpExchange exchange) throws IOException {
@@ -176,6 +260,32 @@ public class ChatHandler implements HttpHandler {
             context.put("activeRootId", dm.getActiveRootId());
         }
         HandlerUtils.sendJson(exchange, 200, context);
+    }
+
+    private void handleContextBar(HttpExchange exchange) throws IOException {
+        var dm = ctx.getDataManager();
+        String world = dm != null ? dm.getActiveWorld() : null;
+        String branch = dm != null ? dm.getActiveBranch() : null;
+
+        StringBuilder html = new StringBuilder();
+        if (world != null && !world.isBlank()) {
+            html.append("世界: <span class=\"text-green-400\">").append(escapeHtml(world)).append("</span>");
+        }
+        if (branch != null && !branch.isBlank()) {
+            if (!html.isEmpty()) html.append(" &nbsp;|&nbsp; ");
+            html.append("分支: <span class=\"text-green-400\">").append(escapeHtml(branch)).append("</span>");
+        }
+        if (html.isEmpty()) {
+            html.append("分支: —");
+        }
+
+        HandlerUtils.sendHtml(exchange, 200, html.toString());
+    }
+
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
     private static boolean isTerminal(ApiTaskStatus status) {

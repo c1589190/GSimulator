@@ -205,13 +205,19 @@ public class GSimulatorApplication {
         var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(
                 System.out, true);
 
+        // EventBus 桥 — 将 Agent 进度事件转发到 EventBus，供 SSE 流式使用
+        var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
+        var compositeSink = new com.gsim.agent.CompositeAgentProgressSink(
+                cliProgressSink, eventBusSink);
+
         // 工具组管理器（每轮对话重置，激活不跨轮保留）
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
 
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmManager(), toolRegistry, config.getLlmModel(),
-                cliProgressSink,
-                new com.gsim.agent.CliToolPermissionGate(),
+                compositeSink,
+                httpMode ? new com.gsim.agent.AutoApprovePermissionGate()
+                         : new com.gsim.agent.CliToolPermissionGate(),
                 toolGroupManager);
         orchestrator.setContextHistoryConfig(new OrchestratorAgent.ContextHistoryConfig(
                 config.getContextSessionHistoryTurns(),

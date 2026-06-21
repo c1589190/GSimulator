@@ -95,7 +95,7 @@ public class StreamPool {
                 toolCallBuffers.add(new ToolCallMergeBuffer());
             }
             ToolCallMergeBuffer buf = toolCallBuffers.get(index);
-            if (name != null) buf.name = name;
+            if (name != null && !name.isBlank()) buf.name = name;
             if (argsChunk != null) buf.argsBuilder.append(argsChunk);
         }
         events.add(new PoolEvent(EventType.TOOL_CALL_DELTA,
