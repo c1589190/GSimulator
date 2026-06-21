@@ -40,7 +40,7 @@ public class StaticHandler implements HttpHandler {
             return;
         }
 
-        try (InputStream in = getClass().getResourceAsStream("/" + resourcePath)) {
+        try (InputStream in = getClass().getResourceAsStream(resourcePath)) {
             if (in == null) {
                 exchange.sendResponseHeaders(404, -1);
                 exchange.close();

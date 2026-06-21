@@ -2,9 +2,6 @@ package com.gsim.webui;
 
 import com.gsim.app.ApplicationContext;
 import com.gsim.webui.handlers.PageHandler;
-import com.gsim.webui.handlers.ChatHandler;
-import com.gsim.webui.handlers.TimelineHandler;
-import com.gsim.webui.handlers.KnowledgeHandler;
 import com.gsim.webui.handlers.StaticHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
@@ -14,6 +11,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * WebUI 独立 HTTP 服务器，端口 8711。
@@ -59,18 +57,23 @@ public class WebUiServer {
     private void registerHandlers() {
         server.createContext("/static", new StaticHandler());
         server.createContext("/", new PageHandler(ctx));
-        server.createContext("/chat", new ChatHandler(ctx));
-        server.createContext("/timeline", new TimelineHandler(ctx));
-        server.createContext("/knowledge", new KnowledgeHandler(ctx));
     }
 
     public void stop() {
         if (server != null) {
             server.stop(2);
+            server = null;
             log.info("WebUI server stopped.");
         }
         if (executor != null && !executor.isShutdown()) {
             executor.shutdownNow();
+            try {
+                if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    log.warn("WebUI executor did not terminate within 3s");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
