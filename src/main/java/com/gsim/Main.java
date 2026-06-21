@@ -71,9 +71,10 @@ public class Main {
             // --cli：只启动 CLI（显式指定）
             boolean httpMode = cliArgs.http();
             boolean cliMode = cliArgs.cli() || !httpMode;  // 默认 CLI
+            boolean webuiMode = cliArgs.webui();
 
             // 4. 启动应用
-            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode);
+            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode);
             app.start();
 
         } catch (Exception e) {
@@ -95,6 +96,7 @@ public class Main {
         System.out.println("  --no-wizard        跳过首次运行配置向导");
         System.out.println("  --http             启动 HTTP API 服务器 (默认 127.0.0.1:8710)");
         System.out.println("  --cli              启动 CLI REPL (默认，与 --http 同时使用可共存)");
+        System.out.println("  --webui            启动 Web GUI 服务器 (默认 127.0.0.1:8711)");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
         System.out.println("示例:");

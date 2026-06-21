@@ -41,15 +41,22 @@ public class GSimulatorApplication {
     private final AppConfig config;
     private final boolean cliMode;
     private final boolean httpMode;
+    private final boolean webuiMode;
+    private final com.gsim.webui.WebUiServer webUiServer;
 
     public GSimulatorApplication(AppConfig config) {
-        this(config, true, false);
+        this(config, true, false, false);
     }
 
     public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode) {
+        this(config, cliMode, httpMode, false);
+    }
+
+    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode) {
         this.config = config;
         this.cliMode = cliMode;
         this.httpMode = httpMode;
+        this.webuiMode = webuiMode;
         this.ctx = new ApplicationContext(config);
         InteractionManager manager = ctx.getInteractionManager();
 
@@ -59,6 +66,11 @@ public class GSimulatorApplication {
 
         // 注册命令
         registerCommands(manager);
+
+        // 创建 WebUiServer
+        com.gsim.webui.WebUiConfig webUiConfig =
+                com.gsim.webui.WebUiConfig.from(config);
+        this.webUiServer = new com.gsim.webui.WebUiServer(webUiConfig, ctx);
     }
 
     private void registerCommands(InteractionManager manager) {
@@ -349,6 +361,14 @@ public class GSimulatorApplication {
             ctx.getApiManager().start();
         }
 
+        // WebUI 模式：启动 WebUI 服务器
+        if (webuiMode) {
+            webUiServer.forceEnable();
+        }
+        if (webuiMode || config.isWebUiEnabled()) {
+            webUiServer.start();
+        }
+
         // CLI 模式：启动 REPL
         if (cliMode) {
             // 如果 LLM 未配置，打印提示
@@ -378,6 +398,7 @@ public class GSimulatorApplication {
      * 停止应用。
      */
     public void stop() {
+        if (webUiServer != null) webUiServer.stop();
         ctx.shutdown();
     }
 
