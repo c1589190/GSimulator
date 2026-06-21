@@ -1,0 +1,25 @@
+<div>
+    <div class="text-sm font-bold terminal-green mb-2">&#x1F50D; 知识库</div>
+    <form id="search-form" class="mb-3"
+          hx-get="/knowledge/search" hx-target="#search-results" hx-swap="innerHTML">
+        <div class="flex gap-1 mb-2">
+            <input type="text" name="q" placeholder="搜索关键词..."
+                   class="flex-1 input-area rounded px-3 py-1 text-sm text-gray-200">
+            <button type="submit"
+                    class="px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-sm rounded">
+                搜索
+            </button>
+        </div>
+        <div class="flex gap-2 text-xs">
+            <label class="text-gray-400">
+                <input type="radio" name="mode" value="keyword" checked> 关键词
+            </label>
+            <label class="text-gray-400">
+                <input type="radio" name="mode" value="semantic"> 语义
+            </label>
+            <input type="hidden" name="topK" value="10">
+        </div>
+    </form>
+    <div id="search-results" class="text-xs text-gray-500">
+    </div>
+</div>
