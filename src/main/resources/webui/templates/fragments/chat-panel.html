@@ -1,16 +1,134 @@
 <div class="flex flex-col h-full">
     <div class="text-sm font-bold terminal-green mb-2">&#x1F4AC; Agent 对话</div>
-    <div id="chat-context" class="text-xs text-gray-500 mb-2">分支: —</div>
-    <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2">
+    <!-- 分支上下文条 -->
+    <div id="chat-context" class="text-xs text-gray-500 mb-2 px-2 py-1 bg-gray-800 rounded"
+         hx-get="/chat/context" hx-trigger="load" hx-swap="innerHTML">
+        分支: —
+    </div>
+    <!-- 消息列表 -->
+    <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
         <div class="text-gray-600 text-sm">发送消息开始对话</div>
     </div>
+    <!-- 输入区 -->
     <form id="chat-form" class="flex gap-2"
-          hx-post="/chat/send" hx-swap="none">
-        <input type="text" name="message" placeholder="输入消息..."
+          hx-post="/chat/send"
+          hx-target="#chat-messages"
+          hx-swap="beforeend"
+          hx-on::after-request="handleChatResponse(event)">
+        <input type="text" name="message" id="chat-input"
+               placeholder="输入消息..." autocomplete="off"
                class="flex-1 input-area rounded px-3 py-2 text-sm text-gray-200">
-        <button type="submit"
+        <button type="submit" id="chat-send-btn"
                 class="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded">
             发送
         </button>
     </form>
 </div>
+
+<script>
+    // 处理发送响应 — 连接 SSE 流
+    function handleChatResponse(event) {
+        const response = JSON.parse(event.detail.xhr.responseText);
+        if (!response.taskId) return;
+
+        // 添加用户消息气泡
+        const input = document.getElementById('chat-input');
+        const userMsg = input.value;
+        input.value = '';
+        addMessageBubble('user', userMsg);
+
+        // 添加 assistant 占位气泡
+        const asstId = 'msg-' + response.taskId;
+        const asstHtml = '<div id="' + asstId + '" class="msg-assistant rounded p-2 text-sm">'
+            + '<div class="text-gray-500 text-xs">thinking...</div>'
+            + '<div class="msg-content"></div>'
+            + '<div class="msg-reasoning hidden text-gray-500 text-xs italic mt-1"></div>'
+            + '<div class="msg-tools"></div>'
+            + '</div>';
+        document.getElementById('chat-messages').insertAdjacentHTML('beforeend', asstHtml);
+
+        // 连接 SSE
+        const streamUrl = response.streamUrl;
+        const evtSource = new EventSource(streamUrl);
+        const msgEl = document.getElementById(asstId);
+        const contentEl = msgEl.querySelector('.msg-content');
+        const reasoningEl = msgEl.querySelector('.msg-reasoning');
+        const toolsEl = msgEl.querySelector('.msg-tools');
+
+        evtSource.addEventListener('llm_delta', function(e) {
+            const data = JSON.parse(e.data);
+            if (data.content) {
+                contentEl.textContent += data.content;
+            }
+            msgEl.querySelector('.text-gray-500').classList.add('hidden');
+        });
+
+        evtSource.addEventListener('llm_reasoning_delta', function(e) {
+            const data = JSON.parse(e.data);
+            if (data.content) {
+                reasoningEl.classList.remove('hidden');
+                reasoningEl.textContent += data.content;
+            }
+        });
+
+        evtSource.addEventListener('tool_started', function(e) {
+            const data = JSON.parse(e.data);
+            const toolId = 'tool-' + Date.now();
+            toolsEl.insertAdjacentHTML('beforeend',
+                '<div id="' + toolId + '" class="tool-card rounded p-1 text-xs mt-1">'
+                + '<span class="text-yellow-400">&#x2699;</span> '
+                + '<span class="tool-name">' + (data.tool || 'tool') + '</span>'
+                + ' <span class="text-gray-500">running...</span>'
+                + '</div>');
+        });
+
+        evtSource.addEventListener('tool_done', function(e) {
+            const data = JSON.parse(e.data);
+            const cards = toolsEl.querySelectorAll('.tool-card');
+            const last = cards[cards.length - 1];
+            if (last) {
+                last.classList.add('success');
+                const statusSpan = last.querySelector('.text-gray-500');
+                if (statusSpan) statusSpan.textContent = 'done';
+            }
+        });
+
+        evtSource.addEventListener('tool_error', function(e) {
+            const data = JSON.parse(e.data);
+            const cards = toolsEl.querySelectorAll('.tool-card');
+            const last = cards[cards.length - 1];
+            if (last) {
+                last.classList.add('error');
+                const statusSpan = last.querySelector('.text-gray-500');
+                if (statusSpan) statusSpan.textContent = 'error';
+            }
+        });
+
+        evtSource.addEventListener('command_done', function(e) {
+            evtSource.close();
+        });
+
+        evtSource.addEventListener('command_error', function(e) {
+            const data = JSON.parse(e.data);
+            contentEl.textContent = '[错误] ' + (data.error || 'unknown error');
+            evtSource.close();
+        });
+
+        evtSource.addEventListener('done', function(e) {
+            evtSource.close();
+        });
+
+        evtSource.onerror = function(e) {
+            evtSource.close();
+        };
+    }
+
+    function addMessageBubble(role, text) {
+        const cls = role === 'user' ? 'msg-user' : 'msg-assistant';
+        const html = '<div class="' + cls + ' rounded p-2 text-sm">'
+            + '<span class="text-xs text-gray-500">' + (role === 'user' ? 'You' : 'Agent') + '</span>'
+            + '<div>' + text + '</div>'
+            + '</div>';
+        document.getElementById('chat-messages').insertAdjacentHTML('beforeend', html);
+    }
+</script>
