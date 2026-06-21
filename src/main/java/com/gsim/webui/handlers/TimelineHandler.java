@@ -20,6 +20,7 @@ import java.util.*;
 /**
  * Timeline API handler.
  *
+ * <p>GET  /timeline          — delegate to PageHandler for HTML fragment
  * <p>GET  /timeline/data     — branch tree JSON + Mermaid syntax
  * <p>GET  /timeline/node     — node detail HTML fragment
  * <p>POST /timeline/activate — switch active branch
@@ -27,9 +28,11 @@ import java.util.*;
 public class TimelineHandler implements HttpHandler {
 
     private final ApplicationContext ctx;
+    private final PageHandler pageHandler;
 
-    public TimelineHandler(ApplicationContext ctx) {
+    public TimelineHandler(ApplicationContext ctx, PageHandler pageHandler) {
         this.ctx = ctx;
+        this.pageHandler = pageHandler;
     }
 
     @Override
@@ -38,6 +41,12 @@ public class TimelineHandler implements HttpHandler {
         String method = exchange.getRequestMethod().toUpperCase();
 
         try {
+            // GET /timeline (exact) — delegate to PageHandler for HTML fragment
+            if (path.equals("/timeline") && "GET".equals(method)) {
+                pageHandler.handle(exchange);
+                return;
+            }
+
             if (path.equals("/timeline/data") && "GET".equals(method)) {
                 handleData(exchange);
             } else if (path.equals("/timeline/node") && "GET".equals(method)) {

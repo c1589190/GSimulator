@@ -27,12 +27,10 @@ public class WebUiServer {
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
-    private TimelineHandler timelineHandler;
 
     public WebUiServer(WebUiConfig config, ApplicationContext ctx) {
         this.config = config;
         this.ctx = ctx;
-        this.timelineHandler = new TimelineHandler(ctx);
     }
 
     public void forceEnable() {
@@ -62,7 +60,7 @@ public class WebUiServer {
         server.createContext("/static", new StaticHandler());
         PageHandler pageHandler = new PageHandler(ctx);
         server.createContext("/chat", new ChatHandler(ctx, pageHandler));
-        server.createContext("/timeline", timelineHandler);
+        server.createContext("/timeline", new TimelineHandler(ctx, pageHandler));
         server.createContext("/", pageHandler);
     }
 
