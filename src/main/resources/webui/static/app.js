@@ -45,3 +45,25 @@ function switchMobilePanel(name) {
     }
     toggleSidebar();
 }
+
+// ---- 移动端面板延迟加载 ----
+(function() {
+    if (window.innerWidth >= 768) return; // 桌面端跳过
+
+    // 移动端：聊天面板默认由 index.html 的 hx-trigger="load" 加载
+    // 时间线和知识库面板在首次切换时才加载
+    var loaded = { chat: true, timeline: false, knowledge: false };
+
+    var origSwitch = switchMobilePanel;
+    switchMobilePanel = function(name) {
+        if (!loaded[name]) {
+            loaded[name] = true;
+            var el = document.getElementById('mobile-' + name);
+            if (el) {
+                var child = el.querySelector('[hx-get]');
+                if (child) htmx.trigger(child, 'load');
+            }
+        }
+        origSwitch(name);
+    };
+})();
