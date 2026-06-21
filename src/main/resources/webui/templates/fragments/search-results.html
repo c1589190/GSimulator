@@ -4,6 +4,7 @@
         (<span th:text="${mode}">keyword</span>)
         — <span th:text="${count}">0</span> 条结果
     </div>
+    <div class="text-yellow-400 mb-2" th:if="${errorMessage != null}" th:text="${errorMessage}">Error</div>
     <div class="space-y-2" th:if="${count > 0}">
         <div th:each="r : ${results}" class="p-2 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
              th:attr="hx-get='/knowledge/detail?id=' + ${r.chunkId}"

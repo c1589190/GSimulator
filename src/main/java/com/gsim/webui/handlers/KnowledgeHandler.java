@@ -142,14 +142,30 @@ public class KnowledgeHandler implements HttpHandler {
 
         if ("semantic".equalsIgnoreCase(mode)) {
             if (searchService == null) {
-                results = List.of();
+                Map<String, Object> vars = new LinkedHashMap<>();
+                vars.put("query", q);
+                vars.put("mode", mode);
+                vars.put("count", 0);
+                vars.put("results", List.of());
+                vars.put("errorMessage", "Semantic search not available: no embedding profile configured. Use keyword mode.");
+                String html = TemplateRenderer.render("fragments/search-results", vars);
+                sendHtml(exchange, 200, html);
+                return;
+            }
+            KnowledgeSearchResponse resp = searchService.semanticSearch(q, "default", topK);
+            if (resp.success() && resp.items() != null) {
+                results = resp.items();
             } else {
-                KnowledgeSearchResponse resp = searchService.semanticSearch(q, "default", topK);
-                if (resp.success()) {
-                    results = resp.items();
-                } else {
-                    results = List.of();
-                }
+                String errorMsg = resp.error() != null ? resp.error() : "Semantic search failed";
+                Map<String, Object> vars = new LinkedHashMap<>();
+                vars.put("query", q);
+                vars.put("mode", mode);
+                vars.put("count", 0);
+                vars.put("results", List.of());
+                vars.put("errorMessage", errorMsg);
+                String html = TemplateRenderer.render("fragments/search-results", vars);
+                sendHtml(exchange, 200, html);
+                return;
             }
         } else {
             // keyword mode (default)
@@ -262,7 +278,8 @@ public class KnowledgeHandler implements HttpHandler {
     }
 
     private static void sendError(HttpExchange exchange, int status, String msg) throws IOException {
-        sendJson(exchange, status, Map.of("error", msg));
+        String html = "<div class=\"text-red-400 text-xs p-2\">" + msg + "</div>";
+        sendHtml(exchange, status, html);
     }
 
     private static String getQueryParam(String query, String key) {
