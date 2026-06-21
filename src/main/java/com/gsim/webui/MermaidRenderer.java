@@ -76,8 +76,17 @@ public class MermaidRenderer {
 
     private static String shortId(String id) {
         if (id == null) return "?";
+        // Use last 2 dot-separated segments for uniqueness: "branch.b0001" stays "b0001"
+        // but "world1.b0001" becomes "world1-b0001"
         int dot = id.lastIndexOf('.');
-        return dot >= 0 ? id.substring(dot + 1) : id;
+        if (dot < 0) return id;
+        String suffix = id.substring(dot + 1);
+        // If there's another dot before, include it to avoid collisions
+        int prevDot = id.lastIndexOf('.', dot - 1);
+        if (prevDot >= 0) {
+            return id.substring(prevDot + 1).replace('.', '-');
+        }
+        return suffix;
     }
 
     private static String escapeTag(String name) {

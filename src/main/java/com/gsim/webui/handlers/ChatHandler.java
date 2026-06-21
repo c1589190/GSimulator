@@ -14,8 +14,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -59,12 +57,11 @@ public class ChatHandler implements HttpHandler {
             } else if (path.equals("/chat/context") && "GET".equals(method)) {
                 handleContext(exchange);
             } else {
-                sendError(exchange, 404, "Unknown chat endpoint");
+                HandlerUtils.sendError(exchange, 404, "Unknown chat endpoint");
             }
         } catch (Exception e) {
-            System.err.println("[ChatHandler] Error handling " + method + " " + path + ": " + e.getMessage());
-            e.printStackTrace();
-            sendError(exchange, 500, "Internal server error");
+            HandlerUtils.logError("ChatHandler", method, path, e);
+            HandlerUtils.sendError(exchange, 500, "Internal server error");
         }
     }
 
@@ -76,7 +73,7 @@ public class ChatHandler implements HttpHandler {
         String sessionId;
 
         if (contentType != null && contentType.startsWith("application/x-www-form-urlencoded")) {
-            Map<String, String> form = parseFormEncoded(body);
+            Map<String, String> form = HandlerUtils.parseFormEncoded(body);
             message = form.getOrDefault("message", "");
             sessionId = form.getOrDefault("sessionId", "default");
         } else {
@@ -87,7 +84,7 @@ public class ChatHandler implements HttpHandler {
         }
 
         if (message.isBlank()) {
-            sendError(exchange, 400, "message is required");
+            HandlerUtils.sendError(exchange, 400, "message is required");
             return;
         }
 
@@ -101,20 +98,20 @@ public class ChatHandler implements HttpHandler {
         result.put("streamUrl", "/chat/stream?taskId=" + task.taskId());
         result.put("status", task.status().name());
 
-        sendJson(exchange, 200, result);
+        HandlerUtils.sendJson(exchange, 200, result);
     }
 
     private void handleStream(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
-        String taskId = getQueryParam(query, "taskId");
+        String taskId = HandlerUtils.getQueryParam(query, "taskId");
         if (taskId == null || taskId.isBlank()) {
-            sendError(exchange, 400, "taskId query param required");
+            HandlerUtils.sendError(exchange, 400, "taskId query param required");
             return;
         }
 
         TaskManager tm = ctx.getApiManager().getTaskManager();
         if (tm.getTask(taskId) == null) {
-            sendError(exchange, 404, "Task not found: " + taskId);
+            HandlerUtils.sendError(exchange, 404, "Task not found: " + taskId);
             return;
         }
 
@@ -162,11 +159,11 @@ public class ChatHandler implements HttpHandler {
         // 返回当前分支的消息列表
         var dm = ctx.getDataManager();
         if (dm == null) {
-            sendJson(exchange, 200, Map.of("messages", List.of()));
+            HandlerUtils.sendJson(exchange, 200, Map.of("messages", List.of()));
             return;
         }
         // 简化：返回空列表，实际消息在模板中通过 hx-get 加载
-        sendJson(exchange, 200, Map.of("messages", List.of(), "branchId",
+        HandlerUtils.sendJson(exchange, 200, Map.of("messages", List.of(), "branchId",
                 dm.getActiveBranch() != null ? dm.getActiveBranch() : ""));
     }
 
@@ -178,51 +175,7 @@ public class ChatHandler implements HttpHandler {
             context.put("activeWorld", dm.getActiveWorld());
             context.put("activeRootId", dm.getActiveRootId());
         }
-        sendJson(exchange, 200, context);
-    }
-
-    // ---- helpers ----
-
-    private static Map<String, String> parseFormEncoded(String body) {
-        Map<String, String> params = new LinkedHashMap<>();
-        if (body == null || body.isBlank()) return params;
-        for (String pair : body.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0) {
-                String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-                String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-                params.put(key, value);
-            }
-        }
-        return params;
-    }
-
-    private static void sendJson(HttpExchange exchange, int status, Object data) throws IOException {
-        byte[] bytes = JsonUtils.toJsonCompact(data).getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(bytes);
-        }
-    }
-
-    private static void sendError(HttpExchange exchange, int status, String msg) throws IOException {
-        sendJson(exchange, status, Map.of("error", msg));
-    }
-
-    private static String getQueryParam(String query, String key) {
-        if (query == null) return null;
-        for (String pair : query.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0) {
-                String k = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-                if (key.equals(k)) {
-                    return URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-                }
-            }
-        }
-        return null;
+        HandlerUtils.sendJson(exchange, 200, context);
     }
 
     private static boolean isTerminal(ApiTaskStatus status) {

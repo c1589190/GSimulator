@@ -13,8 +13,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -59,20 +57,19 @@ public class KnowledgeHandler implements HttpHandler {
             } else if (path.equals("/knowledge/detail") && "GET".equals(method)) {
                 handleDetail(exchange);
             } else {
-                sendError(exchange, 404, "Unknown knowledge endpoint");
+                HandlerUtils.sendError(exchange, 404, "Unknown knowledge endpoint");
             }
         } catch (Exception e) {
-            System.err.println("[KnowledgeHandler] Error handling " + method + " " + path + ": " + e.getMessage());
-            e.printStackTrace();
-            sendError(exchange, 500, "Internal server error");
+            HandlerUtils.logError("KnowledgeHandler", method, path, e);
+            HandlerUtils.sendError(exchange, 500, "Internal server error");
         }
     }
 
     private void handleSearchGet(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
-        String q = getQueryParam(query, "q");
-        String mode = getQueryParam(query, "mode");
-        String topKStr = getQueryParam(query, "topK");
+        String q = HandlerUtils.getQueryParam(query, "q");
+        String mode = HandlerUtils.getQueryParam(query, "mode");
+        String topKStr = HandlerUtils.getQueryParam(query, "topK");
 
         if (mode == null || mode.isBlank()) mode = "keyword";
         int topK = parseTopK(topKStr);
@@ -89,7 +86,7 @@ public class KnowledgeHandler implements HttpHandler {
         int topK;
 
         if (contentType != null && contentType.startsWith("application/x-www-form-urlencoded")) {
-            Map<String, String> form = parseFormEncoded(body);
+            Map<String, String> form = HandlerUtils.parseFormEncoded(body);
             q = form.getOrDefault("q", "");
             mode = form.getOrDefault("mode", "keyword");
             topK = parseTopK(form.getOrDefault("topK", "10"));
@@ -119,26 +116,12 @@ public class KnowledgeHandler implements HttpHandler {
             vars.put("count", 0);
             vars.put("results", List.of());
             String html = TemplateRenderer.render("fragments/search-results", vars);
-            sendHtml(exchange, 200, html);
+            HandlerUtils.sendHtml(exchange, 200, html);
             return;
         }
 
         KnowledgeStore store = ctx.getKnowledgeStore();
         KnowledgeSearchService searchService = ctx.getKnowledgeSearchService();
-
-        if (store == null) {
-            // No active root — return empty results
-            Map<String, Object> vars = new LinkedHashMap<>();
-            vars.put("query", q);
-            vars.put("mode", mode);
-            vars.put("count", 0);
-            vars.put("results", List.of());
-            String html = TemplateRenderer.render("fragments/search-results", vars);
-            sendHtml(exchange, 200, html);
-            return;
-        }
-
-        List<KnowledgeSearchResult> results;
 
         if ("semantic".equalsIgnoreCase(mode)) {
             if (searchService == null) {
@@ -147,14 +130,15 @@ public class KnowledgeHandler implements HttpHandler {
                 vars.put("mode", mode);
                 vars.put("count", 0);
                 vars.put("results", List.of());
-                vars.put("errorMessage", "Semantic search not available: no embedding profile configured. Use keyword mode.");
+                vars.put("errorMessage", "Semantic search not available: no embedding profile configured.");
                 String html = TemplateRenderer.render("fragments/search-results", vars);
-                sendHtml(exchange, 200, html);
+                HandlerUtils.sendHtml(exchange, 200, html);
                 return;
             }
+            // store==null is fine — semantic search uses its own store
             KnowledgeSearchResponse resp = searchService.semanticSearch(q, "default", topK);
             if (resp.success() && resp.items() != null) {
-                results = resp.items();
+                sendSearchResults(exchange, q, mode, resp.items());
             } else {
                 String errorMsg = resp.error() != null ? resp.error() : "Semantic search failed";
                 Map<String, Object> vars = new LinkedHashMap<>();
@@ -164,14 +148,28 @@ public class KnowledgeHandler implements HttpHandler {
                 vars.put("results", List.of());
                 vars.put("errorMessage", errorMsg);
                 String html = TemplateRenderer.render("fragments/search-results", vars);
-                sendHtml(exchange, 200, html);
-                return;
+                HandlerUtils.sendHtml(exchange, 200, html);
             }
-        } else {
-            // keyword mode (default)
-            results = store.searchKeyword(q, "default", topK);
+            return;
         }
 
+        // keyword mode (default)
+        if (store == null) {
+            Map<String, Object> vars = new LinkedHashMap<>();
+            vars.put("query", q);
+            vars.put("mode", mode);
+            vars.put("count", 0);
+            vars.put("results", List.of());
+            String html = TemplateRenderer.render("fragments/search-results", vars);
+            HandlerUtils.sendHtml(exchange, 200, html);
+            return;
+        }
+
+        List<KnowledgeSearchResult> results = store.searchKeyword(q, "default", topK);
+        sendSearchResults(exchange, q, mode, results);
+    }
+
+    private void sendSearchResults(HttpExchange exchange, String q, String mode, List<KnowledgeSearchResult> results) throws IOException {
         if (results == null) results = List.of();
 
         List<Map<String, Object>> resultMaps = new ArrayList<>(results.size());
@@ -194,27 +192,27 @@ public class KnowledgeHandler implements HttpHandler {
         vars.put("results", resultMaps);
 
         String html = TemplateRenderer.render("fragments/search-results", vars);
-        sendHtml(exchange, 200, html);
+        HandlerUtils.sendHtml(exchange, 200, html);
     }
 
     private void handleDetail(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
-        String id = getQueryParam(query, "id");
+        String id = HandlerUtils.getQueryParam(query, "id");
 
         if (id == null || id.isBlank()) {
-            sendError(exchange, 400, "id query param required");
+            HandlerUtils.sendError(exchange, 400, "id query param required");
             return;
         }
 
         KnowledgeStore store = ctx.getKnowledgeStore();
         if (store == null) {
-            sendError(exchange, 500, "Knowledge store not available");
+            HandlerUtils.sendError(exchange, 500, "Knowledge store not available");
             return;
         }
 
         Optional<KnowledgeChunk> chunkOpt = store.getChunk(id);
         if (chunkOpt.isEmpty()) {
-            sendError(exchange, 404, "Chunk not found: " + id);
+            HandlerUtils.sendError(exchange, 404, "Chunk not found: " + id);
             return;
         }
 
@@ -227,7 +225,7 @@ public class KnowledgeHandler implements HttpHandler {
         vars.put("collection", chunk.collection() != null ? chunk.collection() : "");
 
         String html = TemplateRenderer.render("fragments/search-detail", vars);
-        sendHtml(exchange, 200, html);
+        HandlerUtils.sendHtml(exchange, 200, html);
     }
 
     // ---- helpers ----
@@ -244,55 +242,4 @@ public class KnowledgeHandler implements HttpHandler {
         }
     }
 
-    private static Map<String, String> parseFormEncoded(String body) {
-        Map<String, String> params = new LinkedHashMap<>();
-        if (body == null || body.isBlank()) return params;
-        for (String pair : body.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0) {
-                String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-                String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-                params.put(key, value);
-            }
-        }
-        return params;
-    }
-
-    private static void sendJson(HttpExchange exchange, int status, Object data) throws IOException {
-        byte[] bytes = JsonUtils.toJsonCompact(data).getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(bytes);
-        }
-    }
-
-    private static void sendHtml(HttpExchange exchange, int status, String html) throws IOException {
-        byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(bytes);
-        }
-    }
-
-    private static void sendError(HttpExchange exchange, int status, String msg) throws IOException {
-        String html = "<div class=\"text-red-400 text-xs p-2\">" + msg + "</div>";
-        sendHtml(exchange, status, html);
-    }
-
-    private static String getQueryParam(String query, String key) {
-        if (query == null) return null;
-        for (String pair : query.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0) {
-                String k = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-                if (key.equals(k)) {
-                    return URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-                }
-            }
-        }
-        return null;
-    }
 }

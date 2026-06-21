@@ -25,6 +25,8 @@
 </div>
 
 <script>
+    var activeEventSource = null;
+
     // 加载分支上下文
     (function loadChatContext() {
         fetch('/chat/context')
@@ -63,9 +65,16 @@
             + '</div>';
         document.getElementById('chat-messages').insertAdjacentHTML('beforeend', asstHtml);
 
+        // Close any existing SSE connection
+        if (activeEventSource) {
+            activeEventSource.close();
+            activeEventSource = null;
+        }
+
         // 连接 SSE
         const streamUrl = response.streamUrl;
         const evtSource = new EventSource(streamUrl);
+        activeEventSource = evtSource;
         const msgEl = document.getElementById(asstId);
         const contentEl = msgEl.querySelector('.msg-content');
         const reasoningEl = msgEl.querySelector('.msg-reasoning');
@@ -122,20 +131,24 @@
 
         evtSource.addEventListener('command_done', function(e) {
             evtSource.close();
+            activeEventSource = null;
         });
 
         evtSource.addEventListener('command_error', function(e) {
             const data = JSON.parse(e.data);
             contentEl.textContent = '[错误] ' + (data.error || 'unknown error');
             evtSource.close();
+            activeEventSource = null;
         });
 
         evtSource.addEventListener('done', function(e) {
             evtSource.close();
+            activeEventSource = null;
         });
 
         evtSource.onerror = function(e) {
             evtSource.close();
+            activeEventSource = null;
         };
     }
 
