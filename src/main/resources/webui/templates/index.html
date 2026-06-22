@@ -68,13 +68,13 @@
     <!-- ===== 主内容区 ===== -->
     <main class="flex-1 flex overflow-hidden">
         <!-- 桌面版三栏 -->
-        <div class="hidden md:flex w-full gap-2 p-2">
+        <div class="hidden md:flex w-full gap-2 p-2 min-h-0">
             <div id="desktop-timeline" class="w-1/4 panel p-3 overflow-y-auto">
                 <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML">
                     <div class="text-gray-500 text-sm">加载中...</div>
                 </div>
             </div>
-            <div id="desktop-chat" class="w-2/4 panel p-3 flex flex-col">
+            <div id="desktop-chat" class="w-2/4 panel p-3 flex flex-col min-h-0 overflow-hidden">
                 <div id="desktop-chat-loader">
                     <div class="text-gray-500 text-sm">加载中...</div>
                 </div>
@@ -87,7 +87,7 @@
         </div>
 
         <!-- 移动版单面板 -->
-        <div class="md:hidden w-full p-2">
+        <div class="md:hidden w-full p-2 min-h-0">
             <div id="mobile-chat" class="mobile-panel active panel p-3 h-full">
                 <div id="mobile-chat-loader"></div>
             </div>
