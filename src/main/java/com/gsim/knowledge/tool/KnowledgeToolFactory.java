@@ -152,6 +152,11 @@ public class KnowledgeToolFactory {
             String collection = call.param("collection", "default");
             int topK = parseInt(call.param("topK"), 5, 1, 20);
 
+            if (searchService == null) {
+                return ToolResult.fail(name(), "NO_SEARCH_SERVICE: 语义搜索当前不可用（未配置 embedding 模型）。"
+                        + " 请改用 keyword_search 工具进行关键词检索，或配置 LLM_EMBEDDING_BASE_URL / LLM_EMBEDDING_API_KEY / LLM_EMBEDDING_MODEL 环境变量后重启。");
+            }
+
             List<String> visibleBranchIds = currentVisibleBranchIds();
             int fetchK = visibleBranchIds.isEmpty() ? topK : Math.max(topK * 3, 30);
             KnowledgeSearchResponse resp = searchService.semanticSearch(query, collection, fetchK);
@@ -395,6 +400,9 @@ public class KnowledgeToolFactory {
         @Override
         public ToolResult execute(ToolCall call) {
             String collection = call.param("collection", "default");
+            if (profileManager == null) {
+                return ToolResult.fail(name(), "NO_PROFILE_MANAGER: embedding 功能当前不可用（未配置 embedding 模型）。");
+            }
             Optional<EmbeddingProfile> activeProfile = profileManager.getActiveProfile();
             if (activeProfile.isEmpty() || !activeProfile.get().isAvailable()) {
                 return ToolResult.fail(name(), "NO_ACTIVE_EMBEDDING_PROFILE: 没有可用的 embedding profile。");
