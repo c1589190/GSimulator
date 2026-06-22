@@ -10,9 +10,24 @@
     <div class="mt-2 flex gap-2" th:if="${!isActive}">
         <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
                 hx-post="/timeline/activate"
-                hx-vals='{"branchId":"[[${id}]]"}'
+                th:attr="hx-vals='{&quot;branchId&quot;:&quot;' + ${id} + '&quot;}'"
                 hx-swap="none"
-                hx-on::after-request="location.reload()">
+                hx-on::after-request="
+                    if(event.detail.successful){
+                        try{
+                            var d=JSON.parse(event.detail.xhr.responseText);
+                            if(d&&d.success) location.reload();
+                            else document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>'+(d&&d.message?d.message:'切换失败')+'</div>';
+                        }catch(e){location.reload();}
+                    } else {
+                        try{
+                            var d=JSON.parse(event.detail.xhr.responseText);
+                            document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>'+(d&&d.message?d.message:'请求失败')+'</div>';
+                        }catch(e){
+                            document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>请求失败，请重试</div>';
+                        }
+                    }
+                ">
             切换到此分支
         </button>
     </div>

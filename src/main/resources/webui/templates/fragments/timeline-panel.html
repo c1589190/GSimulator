@@ -47,7 +47,9 @@
                     : 'border-gray-600 text-gray-400 hover:border-gray-400';
                 var html = '<div class="border-l-2 ' + activeClass + ' pl-2 py-1 cursor-pointer"'
                     + ' hx-get="/timeline/node?id=' + node.id + '"'
-                    + ' hx-target="#timeline-detail" hx-swap="innerHTML">'
+                    + ' hx-target="#timeline-detail" hx-swap="innerHTML"'
+                    + ' data-node-id="' + node.id + '"'
+                    + ' onclick="selectTimelineNode(\'' + node.id + '\')">'
                     + '<div class="font-bold">' + node.name + '</div>'
                     + '<div class="text-gray-600">Turn ' + node.turn
                     + ' | ' + node.worldTime + '</div>'
@@ -55,6 +57,19 @@
                 nodeList.insertAdjacentHTML('beforeend', html);
                 htmx.process(nodeList.lastElementChild);
             });
+        }
+    }
+
+    function selectTimelineNode(nodeId) {
+        var list = document.getElementById('timeline-node-list');
+        if (!list) return;
+        var nodes = list.querySelectorAll('[data-node-id]');
+        for (var i = 0; i < nodes.length; i++) {
+            nodes[i].classList.remove('timeline-selected');
+        }
+        if (nodeId) {
+            var target = list.querySelector('[data-node-id="' + nodeId + '"]');
+            if (target) target.classList.add('timeline-selected');
         }
     }
 </script>
