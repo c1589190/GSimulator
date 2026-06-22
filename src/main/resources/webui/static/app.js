@@ -56,13 +56,13 @@ var currentChatPanel = null; // 'desktop' or 'mobile'
 
 function loadChatIntoPanel(panelName) {
     if (currentChatPanel === panelName) return; // 已加载到目标面板
-    var loaderId = panelName + '-chat-loader';
-    var loader = document.getElementById(loaderId);
-    if (!loader) return;
+    var targetId = panelName + '-chat'; // 'desktop-chat' or 'mobile-chat'
+    var target = document.getElementById(targetId);
+    if (!target) return;
     // 检查是否已有内容（避免重复加载）
-    if (loader.querySelector('#chat-form')) return;
-    // 直接用 htmx.ajax 加载，target 用唯一的 loader ID
-    htmx.ajax('GET', '/chat', {target: '#' + loaderId, swap:'innerHTML'});
+    if (target.querySelector('#chat-form')) return;
+    // 直接用 htmx.ajax 加载到面板，替换"加载中..."占位
+    htmx.ajax('GET', '/chat', {target: '#' + targetId, swap:'innerHTML'});
     currentChatPanel = panelName;
 }
 
@@ -189,18 +189,27 @@ window.addEventListener('resize', function() {
         fetch('/chat/messages?format=json', {
             headers: {'Accept': 'application/json'}
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            console.log('[chat] /chat/messages response status:', r.status);
+            return r.json();
+        })
         .then(function(data) {
             var msgList = data.messages || [];
             console.log('[chat] loaded', msgList.length, 'messages from history');
+            msgList.forEach(function(m, i) {
+                console.log('[chat] msg[' + i + '] role=' + m.role + ' type=' + m.type + ' id=' + m.id + ' content=' + (m.content || '').substring(0, 50));
+            });
             if (msgList.length > 0) {
+                var container = document.getElementById('chat-messages');
+                console.log('[chat] #chat-messages found:', !!container);
                 MessageStore.loadFromJson(msgList);
+                console.log('[chat] MessageStore size after load:', MessageStore.getAll().length);
                 ChatRenderer.renderAll(MessageStore.getAll());
+                console.log('[chat] renderAll done, DOM children:', container ? container.children.length : 'N/A');
             }
         })
         .catch(function(err) {
             console.warn('[chat] Failed to load history:', err.message);
-            // 历史加载失败不阻塞聊天功能
         });
     }
 
