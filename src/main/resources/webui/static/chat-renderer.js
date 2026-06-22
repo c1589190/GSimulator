@@ -2,6 +2,15 @@
 // 消息渲染层：负责将 MessageStore 中的消息渲染为 DOM 元素，
 // 并在流式输出过程中实时更新单个消息模块。
 //
+// Assistant 消息结构（交错排列）：
+//   div.msg-assistant
+//     div.think
+//     div.blocks
+//       div.content-block   ← 文本块
+//       div.tool-card       ← 工具调用
+//       div.content-block   ← 工具后的文本块
+//       ...
+//
 // 所有 DOM 操作集中在此模块，app.js 不直接操作 DOM 结构。
 
 (function() {
@@ -25,19 +34,12 @@
         }
     }
 
-    /**
-     * HTML 转义，但保留换行 → <br>，保留已经是合法 HTML 的片段（如 tool card）。
-     * 用于流式文本追加。
-     */
     function textToHtml(text) {
         return escapeHtml(text).replace(/\n/g, '<br>');
     }
 
     // ---- 空状态管理 ----
 
-    /**
-     * 移除空状态占位符（如果存在）。
-     */
     function removeEmptyState() {
         var el = document.getElementById(EMPTY_STATE_ID);
         if (el) el.remove();
@@ -45,18 +47,40 @@
 
     // ---- DOM 查找 ----
 
-    /**
-     * 根据 msgId 查找消息的 DOM 根元素。
-     */
     function findMsgDom(msgId) {
         return document.getElementById('msg-' + msgId);
     }
 
-    // ---- 用户消息渲染 ----
+    /**
+     * 获取 assistant 消息的 .blocks 容器。
+     */
+    function getBlocks(asstMsgId) {
+        var div = findMsgDom(asstMsgId);
+        if (!div) return null;
+        return div.querySelector('.blocks');
+    }
 
     /**
-     * 渲染用户消息并挂到 #chat-messages。
+     * 获取 .blocks 中最后一个 .content-block，如果不存在或最后一个不是文本块则创建新的。
      */
+    function ensureContentBlock(asstMsgId) {
+        var blocks = getBlocks(asstMsgId);
+        if (!blocks) return null;
+        var children = blocks.children;
+        var last = children.length > 0 ? children[children.length - 1] : null;
+        if (last && last.classList.contains('content-block')) {
+            return last;
+        }
+        // 创建新的文本块
+        var cb = document.createElement('div');
+        cb.className = 'content-block';
+        blocks.appendChild(cb);
+        scrollToBottom();
+        return cb;
+    }
+
+    // ---- 用户消息渲染 ----
+
     function renderUserMessage(msg) {
         removeEmptyState();
         var container = document.getElementById(MSG_CONTAINER_ID);
@@ -83,10 +107,6 @@
 
     // ---- Assistant 消息渲染 ----
 
-    /**
-     * 渲染 assistant 消息（含 think / content / tools 子元素）。
-     * 用于初始化加载历史，以及创建流式占位符。
-     */
     function renderAssistantMessage(msg) {
         removeEmptyState();
         var container = document.getElementById(MSG_CONTAINER_ID);
@@ -109,20 +129,20 @@
             think.classList.add('hidden');
         }
 
-        // Content 区域
-        var content = document.createElement('div');
-        content.className = 'content';
-        if (msg.content) {
-            content.innerHTML = textToHtml(msg.content);
-        }
+        // Blocks 容器 — 文本块和工具卡片在此交错排列
+        var blocks = document.createElement('div');
+        blocks.className = 'blocks';
 
-        // Tools 区域
-        var tools = document.createElement('div');
-        tools.className = 'tools';
+        // 初始化一个文本块
+        var contentBlock = document.createElement('div');
+        contentBlock.className = 'content-block';
+        if (msg.content) {
+            contentBlock.innerHTML = textToHtml(msg.content);
+        }
+        blocks.appendChild(contentBlock);
 
         div.appendChild(think);
-        div.appendChild(content);
-        div.appendChild(tools);
+        div.appendChild(blocks);
         container.appendChild(div);
         msg.domRef = div;
         scrollToBottom();
@@ -131,26 +151,16 @@
 
     // ---- 根据 role 分发渲染 ----
 
-    /**
-     * 根据消息 role 和 type 渲染到 DOM。
-     * @param {Object} msg — MessageStore 中的消息
-     * @returns {HTMLElement|null}
-     */
     function renderMessage(msg) {
         if (msg.role === 'user') {
             return renderUserMessage(msg);
         } else if (msg.role === 'assistant' || msg.role === 'tool' || msg.role === 'system') {
             return renderAssistantMessage(msg);
         } else {
-            // 默认按 assistant 处理
             return renderAssistantMessage(msg);
         }
     }
 
-    /**
-     * 将所有 MessageStore 中的消息批量渲染到 DOM。
-     * 用于初始化时从 JSON API 加载历史。
-     */
     function renderAll(messages) {
         for (var i = 0; i < messages.length; i++) {
             renderMessage(messages[i]);
@@ -159,11 +169,6 @@
 
     // ---- 流式更新 ----
 
-    /**
-     * 更新 assistant 消息的 think 指示器。
-     * @param {string} msgId
-     * @param {string} html — 内部 HTML
-     */
     function updateThink(msgId, html) {
         var div = findMsgDom(msgId);
         if (!div) return;
@@ -174,9 +179,6 @@
         }
     }
 
-    /**
-     * 隐藏 think 指示器（内容开始到达时）。
-     */
     function hideThink(msgId) {
         var div = findMsgDom(msgId);
         if (!div) return;
@@ -185,25 +187,20 @@
     }
 
     /**
-     * 更新 assistant 消息的流式内容（完整替换）。
-     * @param {string} msgId
-     * @param {string} text — 累积的完整文本
+     * 更新最后一个 .content-block 的文本（流式追加用完整替换）。
+     * 如果上一个块是 tool-card，自动创建新的 .content-block。
      */
     function updateMessageContent(msgId, text) {
-        var div = findMsgDom(msgId);
-        if (!div) return;
-        var content = div.querySelector('.content');
-        if (content) {
-            content.innerHTML = textToHtml(text);
+        var block = ensureContentBlock(msgId);
+        if (block) {
+            block.innerHTML = textToHtml(text);
         }
         hideThink(msgId);
         scrollToBottom();
     }
 
     /**
-     * 追加推理内容（折叠显示，使用 reasoning 子元素）。
-     * @param {string} msgId
-     * @param {string} reasoningText — 要追加的推理文本
+     * 追加推理内容（在 blocks 前插入 .reasoning 元素）。
      */
     function appendReasoning(msgId, reasoningText) {
         var div = findMsgDom(msgId);
@@ -212,9 +209,9 @@
         if (!reasoning) {
             reasoning = document.createElement('div');
             reasoning.className = 'reasoning text-gray-500 text-xs italic mt-1 border-l-2 border-gray-600 pl-2';
-            var content = div.querySelector('.content');
-            if (content) {
-                content.before(reasoning);
+            var blocks = div.querySelector('.blocks');
+            if (blocks) {
+                blocks.before(reasoning);
             } else {
                 div.appendChild(reasoning);
             }
@@ -226,18 +223,12 @@
     // ---- Tool Card 管理 ----
 
     /**
-     * 添加一个 tool card 到 assistant 消息的 .tools 区域。
-     * @param {string} asstMsgId — assistant 消息 ID
-     * @param {string} toolName
-     * @param {string} status — "streaming" | "running" | "done" | "error"
-     * @param {string} toolIndex — 索引，用于后续精确更新
-     * @returns {string} toolIndex
+     * 在 .blocks 中添加 tool card。
+     * 添加后会自动结束当前文本块，后续文本将进入新的 .content-block。
      */
     function addToolCard(asstMsgId, toolName, status, toolIndex) {
-        var div = findMsgDom(asstMsgId);
-        if (!div) return toolIndex;
-        var tools = div.querySelector('.tools');
-        if (!tools) return toolIndex;
+        var blocks = getBlocks(asstMsgId);
+        if (!blocks) return toolIndex;
 
         var icon, label;
         if (status === 'streaming') {
@@ -265,26 +256,21 @@
         if (status === 'done') card.classList.add('success');
         if (status === 'error') card.classList.add('error');
         card.innerHTML = icon + ' ' + escapeHtml(toolName) + ' ' + label;
-        tools.appendChild(card);
+
+        blocks.appendChild(card);
         scrollToBottom();
         return idx;
     }
 
     /**
-     * 更新 tool card 的状态。
-     * @param {string} asstMsgId
-     * @param {string} toolName — 用于匹配（空字符串匹配任意未完成卡片）
-     * @param {string} status — "done" | "error"
-     * @param {string} errMsg — 仅 error 时使用
+     * 更新 tool card 的状态（在 .blocks 中查找）。
      */
     function updateToolCard(asstMsgId, toolName, status, errMsg) {
-        var div = findMsgDom(asstMsgId);
-        if (!div) return;
-        var tools = div.querySelector('.tools');
-        if (!tools) return;
+        var blocks = getBlocks(asstMsgId);
+        if (!blocks) return;
 
         // 从后向前找第一个未完成的匹配卡片
-        var cards = tools.querySelectorAll('.tool-card:not(.success):not(.error)');
+        var cards = blocks.querySelectorAll('.tool-card:not(.success):not(.error)');
         var matched = null;
         for (var i = cards.length - 1; i >= 0; i--) {
             if (!toolName || cards[i].getAttribute('data-tool-name') === toolName) {
@@ -296,27 +282,23 @@
 
         if (status === 'done') {
             matched.classList.add('success');
-            matched.querySelector('span:last-child').textContent = 'done';
+            var span = matched.querySelector('span:last-child');
+            if (span) span.textContent = 'done';
         } else if (status === 'error') {
             matched.classList.add('error');
-            matched.querySelector('span:last-child').textContent = errMsg || 'failed';
+            var span2 = matched.querySelector('span:last-child');
+            if (span2) span2.textContent = errMsg || 'failed';
         }
     }
 
     // ---- 状态标记 ----
 
-    /**
-     * 标记消息为完成状态。
-     */
     function markComplete(msgId) {
         var div = findMsgDom(msgId);
         if (!div) return;
         hideThink(msgId);
     }
 
-    /**
-     * 标记消息为错误状态。
-     */
     function markError(msgId, err) {
         var div = findMsgDom(msgId);
         if (!div) return;
@@ -343,6 +325,8 @@
         removeEmptyState: removeEmptyState,
         scrollToBottom: scrollToBottom,
         findMsgDom: findMsgDom,
+        ensureContentBlock: ensureContentBlock,
+        getBlocks: getBlocks,
         MSG_CONTAINER_ID: MSG_CONTAINER_ID,
         EMPTY_STATE_ID: EMPTY_STATE_ID
     };

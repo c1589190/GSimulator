@@ -353,6 +353,7 @@ window.addEventListener('resize', function() {
         });
 
         // llm_tool_delta — 流式 tool_call 进度
+        // 重置 accumulatedContent，使后续文本进入新的 .content-block
         var toolCardIndex = 0;
         es.addEventListener('llm_tool_delta', function(e) {
             try {
@@ -360,16 +361,19 @@ window.addEventListener('resize', function() {
                 var toolName = d.tool || 'tool';
                 toolCardIndex = ChatRenderer.addToolCard(asstMsgId, toolName, 'streaming', toolCardIndex);
                 toolCardIndex++;
+                accumulatedContent = '';
             } catch (err) {}
         });
 
         // tool_started — 工具开始执行
+        // 重置 accumulatedContent，使后续文本进入新的 .content-block
         es.addEventListener('tool_started', function(e) {
             try {
                 var d = JSON.parse(e.data);
                 var toolName = d.tool || 'tool';
                 toolCardIndex = ChatRenderer.addToolCard(asstMsgId, toolName, 'running', toolCardIndex);
                 toolCardIndex++;
+                accumulatedContent = '';
             } catch (err) {}
         });
 
