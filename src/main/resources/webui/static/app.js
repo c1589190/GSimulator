@@ -112,165 +112,368 @@ window.addEventListener('resize', function() {
     };
 })();
 
-// ---- 聊天表单初始化（HTMX 加载后通过 afterSettle 事件绑定） ----
+// ===== Phase 3: 基于 MessageStore + ChatRenderer 的聊天逻辑 =====
 (function() {
-    var chatInitialized = false;
-    var es = null;
-    var taskId = null;
+    'use strict';
 
-    function initChat() {
-        var form = document.getElementById('chat-form');
-        if (!form) return;
-        // 如果已初始化且表单未被替换（onsubmit 仍绑定），跳过
-        if (chatInitialized && form.onsubmit) return;
-        var btn = document.getElementById('chat-send-btn');
+    var es = null;           // EventSource 引用
+    var taskId = null;       // 当前任务 ID
+    var chatInitialized = false;  // 是否已完成初始化（加载了历史）
+
+    // ---- 按钮状态管理 ----
+
+    function getSendBtn() {
+        return document.getElementById('chat-send-btn');
+    }
+
+    function getBtnOrigText() { return '发送'; }
+    function getBtnOrigClass() {
+        return 'px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded';
+    }
+
+    function resetSendBtn() {
+        var btn = getSendBtn();
         if (!btn) return;
-        chatInitialized = true;
+        btn.textContent = getBtnOrigText();
+        btn.className = getBtnOrigClass();
+        btn.type = 'button';
+        btn.onclick = function() { window._chatSend && window._chatSend(); };
+    }
 
-        var origText = btn.textContent;
-        var origClass = btn.className;
-
-        function resetBtn() {
-            btn.textContent = origText;
-            btn.className = origClass;
-            btn.type = 'submit';   // 恢复 submit 类型，表单提交走 onsubmit
-            btn.onclick = null;
-        }
-
-        function setCancelBtn() {
-            btn.textContent = '取消';
-            btn.className = 'px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded';
-            btn.type = 'button';   // 临时改为 button 防止触发表单 submit
-            btn.onclick = function(e) {
-                if (e) e.preventDefault();
-                if (es) { es.close(); es = null; }
-                if (taskId) {
-                    fetch('/chat/cancel?taskId=' + taskId, {method:'POST'}).catch(function(){});
-                    taskId = null;
-                }
-                resetBtn();
-                htmx.ajax('GET', '/chat/messages', {target:'#chat-messages', swap:'innerHTML'});
-            };
-        }
-
-        function finish(asstId, errMsg) {
-            if (es) { es.close(); es = null; }
-            taskId = null;
-            resetBtn();
-            if (errMsg) {
-                var el = document.getElementById(asstId);
-                if (el) {
-                    var c = el.querySelector('.content');
-                    if (c && !c.textContent) c.textContent = errMsg;
-                    var t = el.querySelector('.think');
-                    if (t) t.classList.add('hidden');
-                }
-            }
-        }
-
-        form.onsubmit = function() {
-            var input = document.getElementById('chat-input');
-            var msg = input ? input.value.trim() : '';
-            if (!msg) return false;
-
-            var mc = document.getElementById('chat-messages');
-            if (mc) {
-                mc.insertAdjacentHTML('beforeend',
-                    '<div class="msg-user rounded p-2 text-sm mb-1">'
-                    + '<span class="text-xs text-gray-500">You</span>'
-                    + '<div>' + msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>'
-                    + '</div>');
-            }
-            input.value = '';
-
-            var asstId = 'a' + Date.now();
-            if (mc) {
-                mc.insertAdjacentHTML('beforeend',
-                    '<div id="' + asstId + '" class="msg-assistant rounded p-2 text-sm mb-1">'
-                    + '<div class="think text-gray-500 text-xs">⏳ 正在生成...</div>'
-                    + '<div class="content"></div>'
-                    + '<div class="tools"></div>'
-                    + '</div>');
-            }
-
-            setCancelBtn();
-
-            fetch('/chat/send', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'message=' + encodeURIComponent(msg)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(resp) {
-                if (!resp.taskId) { finish(asstId, '[错误] 未收到任务ID'); return; }
-                taskId = resp.taskId;
-
-                es = new EventSource(resp.streamUrl);
-                var el = document.getElementById(asstId);
-                if (!el) { finish(asstId); return; }
-                var contentEl = el.querySelector('.content');
-                var thinkEl = el.querySelector('.think');
-                var toolsEl = el.querySelector('.tools');
-
-                es.addEventListener('llm_started', function() {
-                    if (thinkEl) thinkEl.innerHTML = '<span class="text-green-400">●</span> 生成中...';
-                });
-                es.addEventListener('llm_delta', function(e) {
-                    var d = JSON.parse(e.data);
-                    if (d.content && contentEl) contentEl.textContent += d.content;
-                    if (thinkEl) thinkEl.classList.add('hidden');
-                });
-                es.addEventListener('llm_reasoning_delta', function(e) {
-                    var d = JSON.parse(e.data);
-                    if (d.content && el) {
-                        var r = el.querySelector('.reasoning');
-                        if (!r) {
-                            r = document.createElement('div');
-                            r.className = 'reasoning text-gray-500 text-xs italic mt-1';
-                            el.appendChild(r);
-                        }
-                        r.textContent += d.content;
-                    }
-                });
-                es.addEventListener('tool_started', function(e) {
-                    var d = JSON.parse(e.data);
-                    if (toolsEl) toolsEl.insertAdjacentHTML('beforeend',
-                        '<div class="tool-card rounded p-1 text-xs mt-1">'
-                        + '<span class="text-yellow-400">⚙</span> ' + (d.tool || 'tool')
-                        + ' running...</div>');
-                });
-                es.addEventListener('tool_done', function() {
-                    var cards = toolsEl ? toolsEl.querySelectorAll('.tool-card') : [];
-                    var c = cards[cards.length - 1];
-                    if (c) { c.classList.add('success'); c.innerHTML = c.innerHTML.replace('running...','done'); }
-                });
-                es.addEventListener('command_done', function() {
-                    finish(asstId, null);
-                    htmx.ajax('GET', '/chat/messages', {target:'#chat-messages', swap:'innerHTML'});
-                });
-                es.addEventListener('command_error', function(e) {
-                    var d = JSON.parse(e.data);
-                    finish(asstId, '[错误] ' + (d.error || 'unknown'));
-                    htmx.ajax('GET', '/chat/messages', {target:'#chat-messages', swap:'innerHTML'});
-                });
-                es.addEventListener('done', function() { finish(asstId, null); });
-                es.onerror = function() {
-                    finish(asstId, null);
-                    htmx.ajax('GET', '/chat/messages', {target:'#chat-messages', swap:'innerHTML'});
-                };
-            })
-            .catch(function(err) {
-                finish(asstId, '[错误] ' + err.message);
-            });
-
-            return false;
+    function setCancelBtn() {
+        var btn = getSendBtn();
+        if (!btn) return;
+        btn.textContent = '取消';
+        btn.className = 'px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded';
+        btn.type = 'button';
+        btn.onclick = function(e) {
+            if (e) e.preventDefault();
+            cancelCurrentStream();
         };
     }
 
-    // 页面加载时尝试初始化
-    if (document.readyState === 'complete') initChat();
-    else window.addEventListener('load', initChat);
+    function cancelCurrentStream() {
+        if (es) { es.close(); es = null; }
+        if (taskId) {
+            fetch('/chat/cancel?taskId=' + taskId, {method:'POST'}).catch(function(){});
+            var asstId = MessageStore.getActiveAsstId();
+            if (asstId) {
+                MessageStore.update(asstId, {status: 'error'});
+                ChatRenderer.markError(asstId, '已取消');
+            }
+            taskId = null;
+        }
+        MessageStore.setActiveAsstId(null);
+        resetSendBtn();
+    }
 
-    // HTMX 每次交换后也重试（移动端/桌面端 chat-panel 动态加载）
-    document.body.addEventListener('htmx:afterSettle', initChat);
+    function finishStream(errMsg) {
+        if (es) { es.close(); es = null; }
+        taskId = null;
+        var asstId = MessageStore.getActiveAsstId();
+        if (errMsg && asstId) {
+            MessageStore.update(asstId, {status: 'error'});
+            ChatRenderer.markError(asstId, errMsg);
+        }
+        MessageStore.setActiveAsstId(null);
+        resetSendBtn();
+    }
+
+    // ---- 初始化：加载历史消息 ----
+
+    function initChatPanel() {
+        if (chatInitialized) return;
+        chatInitialized = true;
+        console.log('[chat] initChatPanel: loading history from JSON API');
+
+        fetch('/chat/messages?format=json', {
+            headers: {'Accept': 'application/json'}
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var msgList = data.messages || [];
+            console.log('[chat] loaded', msgList.length, 'messages from history');
+            if (msgList.length > 0) {
+                MessageStore.loadFromJson(msgList);
+                ChatRenderer.renderAll(MessageStore.getAll());
+            }
+        })
+        .catch(function(err) {
+            console.warn('[chat] Failed to load history:', err.message);
+            // 历史加载失败不阻塞聊天功能
+        });
+    }
+
+    // 监听 HTMX 将聊天片段加载到 DOM 后触发初始化
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        var target = e.detail && e.detail.target;
+        if (!target) return;
+        // 检查目标元素或其子元素中是否出现了 chat-form
+        if (target.querySelector && target.querySelector('#chat-form')) {
+            console.log('[chat] chat-form detected in DOM after htmx swap, initializing...');
+            // 延迟一点确保所有 DOM 就绪
+            setTimeout(initChatPanel, 50);
+        }
+    });
+
+    // 备用：如果页面加载时 chat-form 已经在 DOM 中（首次从服务端渲染）
+    if (document.readyState === 'complete') {
+        setTimeout(function() {
+            if (document.getElementById('chat-form')) initChatPanel();
+        }, 100);
+    } else {
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (document.getElementById('chat-form')) initChatPanel();
+            }, 100);
+        });
+    }
+
+    // ---- 发送消息 ----
+
+    window._chatSend = function() {
+        var input = document.getElementById('chat-input');
+        if (!input) return;
+        var msg = input.value.trim();
+        if (!msg) return;
+
+        // 如果有正在进行的流，先取消
+        if (es || taskId) cancelCurrentStream();
+
+        // ---- 创建用户消息模块 ----
+        var userMsg = MessageStore.add({
+            role: 'user',
+            type: 'chat_user',
+            content: msg,
+            status: 'complete'
+        });
+        ChatRenderer.renderUserMessage(userMsg);
+
+        input.value = '';
+
+        // ---- 创建 assistant 占位模块 ----
+        var asstMsgId = MessageStore.generateId();
+        var asstMsg = MessageStore.add({
+            msgId: asstMsgId,
+            role: 'assistant',
+            type: 'chat_assistant',
+            content: '',
+            status: 'pending'
+        });
+        MessageStore.setActiveAsstId(asstMsgId);
+        ChatRenderer.renderAssistantMessage(asstMsg);
+
+        // 立即切换按钮为取消状态
+        setCancelBtn();
+
+        // 发送消息到后端
+        fetch('/chat/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'message=' + encodeURIComponent(msg)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+            if (!resp.taskId) {
+                finishStream('[错误] 未收到任务ID');
+                return;
+            }
+            taskId = resp.taskId;
+            console.log('[chat] task created:', taskId);
+            connectStream(resp.streamUrl, asstMsgId);
+        })
+        .catch(function(err) {
+            finishStream('[错误] ' + err.message);
+        });
+    };
+
+    // 事件委托兜底：拦截 chat-form 的 submit
+    document.body.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (!form || form.id !== 'chat-form') return;
+        e.preventDefault();
+        window._chatSend && window._chatSend();
+    });
+
+    // ---- SSE 流连接和处理 ----
+
+    function connectStream(streamUrl, asstMsgId) {
+        console.log('[chat] connectStream:', streamUrl, 'asstMsgId:', asstMsgId);
+        es = new EventSource(streamUrl);
+
+        var accumulatedContent = '';
+
+        // llm_started — 更新 thinking 指示器
+        es.addEventListener('llm_started', function() {
+            console.log('[chat] llm_started rcvd');
+            MessageStore.update(asstMsgId, {status: 'streaming'});
+            ChatRenderer.updateThink(asstMsgId, '<span class="text-green-400">●</span> 生成中...');
+        });
+
+        // llm_delta — 流式文本内容
+        es.addEventListener('llm_delta', function(e) {
+            console.log('[chat] llm_delta rcvd, data len:', e.data ? e.data.length : 0);
+            try {
+                var d = JSON.parse(e.data);
+                if (d.content) {
+                    accumulatedContent += d.content;
+                    MessageStore.update(asstMsgId, {content: accumulatedContent});
+                    ChatRenderer.updateMessageContent(asstMsgId, accumulatedContent);
+                }
+            } catch (err) {}
+        });
+
+        // llm_reasoning_delta — 流式推理内容（折叠显示）
+        es.addEventListener('llm_reasoning_delta', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                if (d.content) {
+                    ChatRenderer.appendReasoning(asstMsgId, d.content);
+                }
+            } catch (err) {}
+        });
+
+        // llm_error — LLM 流失败
+        es.addEventListener('llm_error', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var errMsg = d.error || 'LLM 流失败';
+                if (!accumulatedContent) {
+                    accumulatedContent = '[错误] ' + errMsg;
+                    MessageStore.update(asstMsgId, {content: accumulatedContent});
+                    ChatRenderer.updateMessageContent(asstMsgId, accumulatedContent);
+                }
+                ChatRenderer.updateThink(asstMsgId, '<span class="text-red-400">✖</span> ' + errMsg);
+            } catch (err) {}
+        });
+
+        // llm_done — LLM 流式输出完成
+        es.addEventListener('llm_done', function() {
+            ChatRenderer.hideThink(asstMsgId);
+        });
+
+        // llm_tool_delta — 流式 tool_call 进度
+        var toolCardIndex = 0;
+        es.addEventListener('llm_tool_delta', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var toolName = d.tool || 'tool';
+                toolCardIndex = ChatRenderer.addToolCard(asstMsgId, toolName, 'streaming', toolCardIndex);
+                toolCardIndex++;
+            } catch (err) {}
+        });
+
+        // tool_started — 工具开始执行
+        es.addEventListener('tool_started', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var toolName = d.tool || 'tool';
+                toolCardIndex = ChatRenderer.addToolCard(asstMsgId, toolName, 'running', toolCardIndex);
+                toolCardIndex++;
+            } catch (err) {}
+        });
+
+        // tool_done — 工具执行成功
+        es.addEventListener('tool_done', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var toolName = d.tool || '';
+                ChatRenderer.updateToolCard(asstMsgId, toolName, 'done');
+            } catch (err) {}
+        });
+
+        // tool_error — 工具执行失败
+        es.addEventListener('tool_error', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var toolName = d.tool || '';
+                var errMsg = d.error || 'failed';
+                ChatRenderer.updateToolCard(asstMsgId, toolName, 'error', errMsg);
+            } catch (err) {}
+        });
+
+        // log — Agent 公开消息（包含 finish_action 的用户可见输出）
+        es.addEventListener('log', function(e) {
+            console.log('[chat] log rcvd, msg len:', e.data ? e.data.length : 0);
+            try {
+                var d = JSON.parse(e.data);
+                var message = d.message;
+                if (message) {
+                    // 剥离 ANSI 转义码（CLI 颜色码会污染 Web 显示）
+                    var clean = message.replace(/\x1B\[[0-9;]*m/g, '').trim();
+                    if (!clean) return;
+                    if (!accumulatedContent) {
+                        accumulatedContent = clean;
+                    } else {
+                        accumulatedContent += '\n\n' + clean;
+                    }
+                    MessageStore.update(asstMsgId, {content: accumulatedContent});
+                    ChatRenderer.updateMessageContent(asstMsgId, accumulatedContent);
+                }
+            } catch (err) {}
+        });
+
+        // result — 最终结果，优先使用 displayText（当没有流式内容时作为兜底）
+        es.addEventListener('result', function(e) {
+            console.log('[chat] result rcvd');
+            try {
+                var d = JSON.parse(e.data);
+                var text = d.displayText || d.message || '';
+                if (text && !accumulatedContent) {
+                    accumulatedContent = text;
+                    MessageStore.update(asstMsgId, {content: accumulatedContent});
+                    ChatRenderer.updateMessageContent(asstMsgId, accumulatedContent);
+                }
+            } catch (err) {}
+        });
+
+        // command_done — 任务完成
+        // [关键变更] 流式内容即为最终内容，不再调用 htmx.ajax 重载！
+        es.addEventListener('command_done', function() {
+            console.log('[chat] command_done rcvd');
+            MessageStore.update(asstMsgId, {status: 'complete'});
+            ChatRenderer.markComplete(asstMsgId);
+            finishStream(null);
+        });
+
+        // command_error — 任务出错
+        es.addEventListener('command_error', function(e) {
+            try {
+                var d = JSON.parse(e.data);
+                var errMsg = d.error || 'unknown error';
+                if (!accumulatedContent) {
+                    accumulatedContent = '[错误] ' + errMsg;
+                    MessageStore.update(asstMsgId, {content: accumulatedContent});
+                    ChatRenderer.updateMessageContent(asstMsgId, accumulatedContent);
+                }
+                ChatRenderer.updateThink(asstMsgId, '<span class="text-red-400">✖</span> 执行出错');
+            } catch (err) {}
+            MessageStore.update(asstMsgId, {status: 'error'});
+            finishStream(null);
+        });
+
+        // done — 兜底：恢复按钮
+        es.addEventListener('done', function() {
+            console.log('[chat] done rcvd');
+            ChatRenderer.hideThink(asstMsgId);
+            if (es) { es.close(); es = null; }
+            taskId = null;
+            MessageStore.setActiveAsstId(null);
+            resetSendBtn();
+        });
+
+        // EventSource 连接错误
+        es.onerror = function() {
+            console.log('[chat] onerror fired, taskId:', taskId, 'readyState:', es ? es.readyState : 'null');
+            if (!taskId) return;
+            if (accumulatedContent) {
+                // 已有内容收到 → 可能是连接提前关闭，视为正常完成
+                MessageStore.update(asstMsgId, {status: 'complete'});
+                ChatRenderer.markComplete(asstMsgId);
+                finishStream(null);
+            } else {
+                finishStream('[错误] 连接中断');
+            }
+        };
+    }
 })();

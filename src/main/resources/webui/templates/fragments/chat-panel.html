@@ -4,16 +4,17 @@
          hx-get="/chat/context-bar" hx-trigger="load" hx-swap="innerHTML">
         分支: —
     </div>
-    <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1"
-         hx-get="/chat/messages" hx-trigger="load" hx-swap="innerHTML">
-        <div class="text-gray-600 text-sm">发送消息开始对话</div>
+    <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
+        <div id="chat-empty-state" class="text-gray-600 text-sm">发送消息开始对话</div>
     </div>
-    <form id="chat-form" class="flex gap-2" autocomplete="off">
+    <form id="chat-form" class="flex gap-2" autocomplete="off" onsubmit="return false;">
         <input type="text" name="message" id="chat-input"
                placeholder="输入消息..." autocomplete="off"
-               class="flex-1 input-area rounded px-3 py-2 text-sm text-gray-200">
-        <button type="submit" id="chat-send-btn"
-                class="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded">
+               class="flex-1 input-area rounded px-3 py-2 text-sm text-gray-200"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window._chatSend&&window._chatSend();}">
+        <button type="button" id="chat-send-btn"
+                class="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded"
+                onclick="window._chatSend&&window._chatSend()">
             发送
         </button>
     </form>

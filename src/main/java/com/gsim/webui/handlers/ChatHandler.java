@@ -179,10 +179,16 @@ public class ChatHandler implements HttpHandler {
 
             // 保持连接直到任务终止或超时
             long deadline = System.currentTimeMillis() + 300_000; // 5 分钟超时
+            long lastKeepAlive = System.currentTimeMillis();
             while (System.currentTimeMillis() < deadline) {
                 ApiTask task = tm.getTask(taskId);
                 if (task != null && isTerminal(task.status())) {
                     break;
+                }
+                // 每 15 秒发送 keep-alive 注释，防止代理/浏览器超时断开
+                if (System.currentTimeMillis() - lastKeepAlive > 15_000) {
+                    sse.writeComment("keepalive");
+                    lastKeepAlive = System.currentTimeMillis();
                 }
                 Thread.sleep(200);
             }
@@ -203,8 +209,12 @@ public class ChatHandler implements HttpHandler {
     private void handleMessages(HttpExchange exchange) throws IOException {
         var dm = ctx.getDataManager();
         if (dm == null || dm.getActiveBranch() == null) {
-            HandlerUtils.sendHtml(exchange, 200,
-                    "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>");
+            if (isJsonRequested(exchange)) {
+                HandlerUtils.sendJson(exchange, 200, Map.of("messages", List.of()));
+            } else {
+                HandlerUtils.sendHtml(exchange, 200,
+                        "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>");
+            }
             return;
         }
 
@@ -213,6 +223,24 @@ public class ChatHandler implements HttpHandler {
             BranchMessageStore store = new BranchMessageStore(dm, dataRoot);
             List<BranchMessage> messages = store.listMessages(dm.getActiveBranch());
 
+            // ---- JSON API（前端模块化渲染用）----
+            if (isJsonRequested(exchange)) {
+                List<Map<String, Object>> msgList = new ArrayList<>();
+                for (BranchMessage msg : messages) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", msg.id());
+                    m.put("role", msg.role());
+                    m.put("type", msg.type());
+                    m.put("content", msg.content());
+                    m.put("toolName", msg.toolName());
+                    m.put("createdAt", msg.createdAt().toString());
+                    msgList.add(m);
+                }
+                HandlerUtils.sendJson(exchange, 200, Map.of("messages", msgList));
+                return;
+            }
+
+            // ---- HTML 渲染（向后兼容）----
             if (messages.isEmpty()) {
                 HandlerUtils.sendHtml(exchange, 200,
                         "<div class=\"text-gray-600 text-sm\">发送消息开始对话</div>");
@@ -264,9 +292,22 @@ public class ChatHandler implements HttpHandler {
             HandlerUtils.sendHtml(exchange, 200, result);
         } catch (Exception e) {
             HandlerUtils.logError("ChatHandler", "GET", "/chat/messages", e);
-            HandlerUtils.sendHtml(exchange, 200,
-                    "<div class=\"text-gray-600 text-sm\">加载消息失败</div>");
+            if (isJsonRequested(exchange)) {
+                HandlerUtils.sendJson(exchange, 500,
+                        Map.of("error", "Failed to load messages: " + e.getMessage()));
+            } else {
+                HandlerUtils.sendHtml(exchange, 200,
+                        "<div class=\"text-gray-600 text-sm\">加载消息失败</div>");
+            }
         }
+    }
+
+    /** 检查请求是否希望 JSON 响应（?format=json 或 Accept: application/json）。 */
+    private static boolean isJsonRequested(HttpExchange exchange) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query != null && query.contains("format=json")) return true;
+        String accept = exchange.getRequestHeaders().getFirst("Accept");
+        return accept != null && accept.contains("application/json");
     }
 
     private void handleContext(HttpExchange exchange) throws IOException {

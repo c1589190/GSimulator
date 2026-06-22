@@ -61,6 +61,10 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
             }
             case "llm_started" -> data.put("streamId", meta.getOrDefault("streamId", ""));
             case "llm_done" -> {}
+            case "llm_tool_delta" -> {
+                data.put("tool", meta.getOrDefault("tool", ""));
+                data.put("index", meta.getOrDefault("index", ""));
+            }
             case "tool_started", "tool_done", "tool_error" -> {
                 data.put("tool", meta.getOrDefault("tool", ""));
                 if (gsimType.equals("tool_error")) {
@@ -81,6 +85,7 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
             case AgentProgressEvent.LLM_REASONING_DELTA -> "llm_reasoning_delta";
             case AgentProgressEvent.LLM_STREAM_COMPLETED -> "llm_done";
             case AgentProgressEvent.LLM_STREAM_FAILED -> "llm_error";
+            case AgentProgressEvent.LLM_TOOL_CALL_DELTA -> "llm_tool_delta";
             case AgentProgressEvent.TOOL_SELECTED, AgentProgressEvent.TOOL_EXECUTING -> "tool_started";
             case AgentProgressEvent.TOOL_SUCCESS -> "tool_done";
             case AgentProgressEvent.TOOL_FAILED -> "tool_error";
