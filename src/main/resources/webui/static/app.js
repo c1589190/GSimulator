@@ -1,21 +1,27 @@
 // GSimulator WebUI — 前端交互脚本
 
-// ---- Mermaid 初始化 ----
-mermaid.initialize({
-    startOnLoad: false,
-    theme: 'dark',
-    themeVariables: {
-        primaryColor: '#1f2937',
-        primaryTextColor: '#e5e7eb',
-        primaryBorderColor: '#374151',
-        lineColor: '#34d399',
-        secondaryColor: '#1a1a2e',
-        tertiaryColor: '#111827'
-    }
-});
+// ---- Mermaid 初始化（CDN 故障不阻塞其他 JS） ----
+try {
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+            primaryColor: '#1f2937',
+            primaryTextColor: '#e5e7eb',
+            primaryBorderColor: '#374151',
+            lineColor: '#34d399',
+            secondaryColor: '#1a1a2e',
+            tertiaryColor: '#111827'
+        }
+    });
+} catch (e) {
+    // mermaid CDN 加载失败 — 图表渲染不可用，其他功能不受影响
+    console.warn('Mermaid init failed, charts disabled:', e.message);
+}
 
 function renderMermaid(elementId, code) {
-    const el = document.getElementById(elementId);
+    if (typeof mermaid === 'undefined') return;
+    var el = document.getElementById(elementId);
     if (!el || !code) return;
     try {
         mermaid.render(elementId + '-svg', code).then(function(r) { el.innerHTML = r.svg; });
@@ -45,17 +51,61 @@ function switchMobilePanel(name) {
     toggleSidebar();
 }
 
+// ---- 聊天面板加载：只加载到当前屏幕尺寸对应的面板，避免重复 ID ----
+var currentChatPanel = null; // 'desktop' or 'mobile'
+
+function loadChatIntoPanel(panelName) {
+    if (currentChatPanel === panelName) return; // 已加载到目标面板
+    var loaderId = panelName + '-chat-loader';
+    var loader = document.getElementById(loaderId);
+    if (!loader) return;
+    // 检查是否已有内容（避免重复加载）
+    if (loader.querySelector('#chat-form')) return;
+    // 直接用 htmx.ajax 加载，target 用唯一的 loader ID
+    htmx.ajax('GET', '/chat', {target: '#' + loaderId, swap:'innerHTML'});
+    currentChatPanel = panelName;
+}
+
+function loadChatForCurrentScreen() {
+    if (window.innerWidth >= 768) {
+        loadChatIntoPanel('desktop');
+    } else {
+        loadChatIntoPanel('mobile');
+    }
+}
+
+// 初始加载聊天面板
+if (document.readyState === 'complete') loadChatForCurrentScreen();
+else window.addEventListener('load', loadChatForCurrentScreen);
+
+// 跨断点切换时重新加载到对应面板
+var wasDesktop = window.innerWidth >= 768;
+window.addEventListener('resize', function() {
+    var nowDesktop = window.innerWidth >= 768;
+    if (nowDesktop !== wasDesktop) {
+        wasDesktop = nowDesktop;
+        currentChatPanel = null; // 重置，强制重新加载
+        loadChatForCurrentScreen();
+    }
+});
+
+// ---- 移动端面板懒加载 ----
 (function() {
     if (window.innerWidth >= 768) return;
-    var loaded = { chat: true, timeline: false, knowledge: false };
+    var loaded = { chat: false, timeline: false, knowledge: false };
     var origSwitch = switchMobilePanel;
     switchMobilePanel = function(name) {
         if (!loaded[name]) {
             loaded[name] = true;
-            var el = document.getElementById('mobile-' + name);
-            if (el) {
-                var child = el.querySelector('[hx-get]');
-                if (child) htmx.trigger(child, 'load');
+            if (name === 'chat') {
+                // 聊天面板使用统一的加载逻辑
+                loadChatIntoPanel('mobile');
+            } else {
+                var el = document.getElementById('mobile-' + name);
+                if (el) {
+                    var child = el.querySelector('[hx-get]');
+                    if (child) htmx.trigger(child, 'load');
+                }
             }
         }
         origSwitch(name);
@@ -70,7 +120,9 @@ function switchMobilePanel(name) {
 
     function initChat() {
         var form = document.getElementById('chat-form');
-        if (!form || chatInitialized) return;
+        if (!form) return;
+        // 如果已初始化且表单未被替换（onsubmit 仍绑定），跳过
+        if (chatInitialized && form.onsubmit) return;
         var btn = document.getElementById('chat-send-btn');
         if (!btn) return;
         chatInitialized = true;
@@ -81,13 +133,16 @@ function switchMobilePanel(name) {
         function resetBtn() {
             btn.textContent = origText;
             btn.className = origClass;
+            btn.type = 'submit';   // 恢复 submit 类型，表单提交走 onsubmit
             btn.onclick = null;
         }
 
         function setCancelBtn() {
             btn.textContent = '取消';
             btn.className = 'px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded';
-            btn.onclick = function() {
+            btn.type = 'button';   // 临时改为 button 防止触发表单 submit
+            btn.onclick = function(e) {
+                if (e) e.preventDefault();
                 if (es) { es.close(); es = null; }
                 if (taskId) {
                     fetch('/chat/cancel?taskId=' + taskId, {method:'POST'}).catch(function(){});
@@ -212,7 +267,7 @@ function switchMobilePanel(name) {
         };
     }
 
-    // 页面加载时尝试初始化（桌面端 chat 会在初始 HTML 中）
+    // 页面加载时尝试初始化
     if (document.readyState === 'complete') initChat();
     else window.addEventListener('load', initChat);
 

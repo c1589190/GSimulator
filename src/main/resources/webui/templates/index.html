@@ -75,7 +75,7 @@
                 </div>
             </div>
             <div id="desktop-chat" class="w-2/4 panel p-3 flex flex-col">
-                <div hx-get="/chat" hx-trigger="load" hx-swap="innerHTML">
+                <div id="desktop-chat-loader" hx-get="/chat" hx-swap="innerHTML">
                     <div class="text-gray-500 text-sm">加载中...</div>
                 </div>
             </div>
@@ -89,7 +89,7 @@
         <!-- 移动版单面板 -->
         <div class="md:hidden w-full p-2">
             <div id="mobile-chat" class="mobile-panel active panel p-3 h-full">
-                <div hx-get="/chat" hx-trigger="load" hx-swap="innerHTML"></div>
+                <div id="mobile-chat-loader" hx-get="/chat" hx-swap="innerHTML"></div>
             </div>
             <div id="mobile-timeline" class="mobile-panel panel p-3 h-full hidden">
                 <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML"></div>

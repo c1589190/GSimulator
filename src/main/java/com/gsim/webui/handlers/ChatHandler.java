@@ -98,10 +98,12 @@ public class ChatHandler implements HttpHandler {
             return;
         }
 
-        // 通过 ApiManager 的 TaskManager 创建任务
+        // 通过 ApiManager 的 TaskManager 创建 PENDING 任务（不自动启动）
+        // 任务将在 SSE 客户端连接后由 handleStream() 启动，
+        // 确保订阅者不会错过任何事件。
         TaskManager tm = ctx.getApiManager().getTaskManager();
         String cmd = "/chat " + message;
-        ApiTask task = tm.createCommandTask(sessionId, cmd);
+        ApiTask task = tm.createCommandTask(sessionId, cmd, false);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("taskId", task.taskId());
@@ -137,7 +139,8 @@ public class ChatHandler implements HttpHandler {
         }
 
         TaskManager tm = ctx.getApiManager().getTaskManager();
-        if (tm.getTask(taskId) == null) {
+        ApiTask preTask = tm.getTask(taskId);
+        if (preTask == null) {
             HandlerUtils.sendError(exchange, 404, "Task not found: " + taskId);
             return;
         }
@@ -145,7 +148,7 @@ public class ChatHandler implements HttpHandler {
         SseWriter sse = new SseWriter(exchange);
         sse.sendHeaders();
 
-        // 订阅 EventBus，过滤此 taskId
+        // 先订阅 EventBus，再启动任务执行 —— 确保不错过任何事件
         EventBus eventBus = ctx.getEventBus();
         FilteredEventSink sink = new FilteredEventSink(
                 event -> taskId.equals(event.taskId()),
@@ -164,8 +167,17 @@ public class ChatHandler implements HttpHandler {
         );
         eventBus.subscribe(sink);
 
-        // 保持连接直到 done 事件或超时
+        // 订阅就绪后再启动任务（只启动 PENDING 状态的任务）
         try {
+            if (preTask.status() == ApiTaskStatus.PENDING) {
+                tm.executePendingTask(taskId);
+            } else if (preTask.status() == ApiTaskStatus.RUNNING) {
+                // 客户端重连场景：任务已在运行，只订阅新事件
+            }
+            // 如果任务已完成（DONE/FAILED/CANCELLED），直接返回 ——
+            // 客户端会收到空的 SSE 然后走 onerror 刷新消息
+
+            // 保持连接直到任务终止或超时
             long deadline = System.currentTimeMillis() + 300_000; // 5 分钟超时
             while (System.currentTimeMillis() < deadline) {
                 ApiTask task = tm.getTask(taskId);
@@ -176,6 +188,12 @@ public class ChatHandler implements HttpHandler {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            // executePendingTask 可能抛异常（任务已被其他人启动等）
+            try {
+                sse.writeEvent("command_error",
+                        Map.of("error", "Task start failed: " + e.getMessage()));
+            } catch (IOException ignored) {}
         } finally {
             eventBus.unsubscribe(sink);
             sse.close();
