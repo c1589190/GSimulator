@@ -37,29 +37,9 @@
         @media (min-width: 768px) {
             .mobile-only { display: none !important; }
             .sidebar-overlay, .sidebar { display: none !important; }
-            .desktop-panel { display: block !important; }
         }
         @media (max-width: 767px) {
-            .desktop-panel { display: none !important; }
-            .mobile-panel.active { display: block !important; }
-            #mobile-chat {
-                display: flex !important;
-                flex-direction: column !important;
-                height: calc(100vh - 3.5rem) !important;
-                height: calc(100dvh - 3.5rem) !important;
-                max-height: calc(100vh - 3.5rem) !important;
-                max-height: calc(100dvh - 3.5rem) !important;
-                overflow: hidden !important;
-            }
-            #mobile-chat > .flex-1 {
-                flex: 1 1 0% !important;
-                min-height: 0 !important;
-                overflow: hidden !important;
-            }
             #chat-messages {
-                flex: 1 1 0% !important;
-                min-height: 0 !important;
-                overflow-y: auto !important;
                 -webkit-overflow-scrolling: touch !important;
             }
         }
@@ -138,6 +118,12 @@
             color: #6ee7b7;
         }
         .upload-tag button:hover { color: #f87171; }
+        /* 桌面侧栏导航激活态 */
+        .nav-item.active {
+            background-color: rgba(52, 211, 153, 0.12);
+            color: #34d399;
+            border-left: 3px solid #34d399;
+        }
     </style>
 </head>
 <body class="flex flex-col overflow-hidden">
@@ -160,13 +146,13 @@
     <div id="sidebar" class="sidebar">
         <button class="text-gray-400 hover:text-white mb-6" onclick="toggleSidebar()">&times; 关闭</button>
         <nav class="flex flex-col gap-2">
-            <button onclick="switchMobilePanel('chat')"
+            <button onclick="loadMobilePage('chat')"
                     class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
                 &#x1F4AC; Agent 对话</button>
-            <button onclick="switchMobilePanel('timeline')"
+            <button onclick="loadMobilePage('timeline')"
                     class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
                 &#x1F333; 时间线分支</button>
-            <button onclick="switchMobilePanel('knowledge')"
+            <button onclick="loadMobilePage('knowledge')"
                     class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
                 &#x1F50D; 知识库</button>
         </nav>
@@ -174,33 +160,51 @@
 
     <!-- ===== 主内容区 ===== -->
     <main class="flex-1 flex overflow-hidden min-h-0">
-        <!-- 桌面版三栏 -->
-        <div class="hidden md:flex w-full gap-2 p-2 min-h-0">
-            <div id="desktop-timeline" class="w-1/4 panel p-3 overflow-y-auto">
-                <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML">
-                    <div class="text-gray-500 text-sm">加载中...</div>
+
+        <!-- 桌面版：左侧固定导航栏 + 右侧主内容区 -->
+        <div class="hidden md:flex w-full min-h-0">
+            <!-- 左侧导航栏 -->
+            <aside class="w-52 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col">
+                <div class="px-4 py-4 border-b border-gray-700">
+                    <div class="text-lg font-bold terminal-green">⚔ GSimulator</div>
+                    <div class="text-xs text-gray-500 mt-1">推演工作台</div>
                 </div>
-            </div>
-            <div id="desktop-chat" class="w-2/4 panel p-3 flex flex-col min-h-0 overflow-hidden">
-                <div class="text-gray-500 text-sm">加载中...</div>
-            </div>
-            <div id="desktop-knowledge" class="w-1/4 panel p-3 overflow-y-auto">
-                <div hx-get="/knowledge" hx-trigger="load" hx-swap="innerHTML">
-                    <div class="text-gray-500 text-sm">加载中...</div>
+                <nav class="flex-1 py-3 flex flex-col gap-1 px-2">
+                    <button onclick="loadDesktopPage('chat')" data-panel="chat"
+                            class="nav-item active text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        💬 Agent 对话
+                    </button>
+                    <button onclick="loadDesktopPage('timeline')" data-panel="timeline"
+                            class="nav-item text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        🌳 时间线分支
+                    </button>
+                    <button onclick="loadDesktopPage('knowledge')" data-panel="knowledge"
+                            class="nav-item text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        🔍 知识库
+                    </button>
+                </nav>
+                <div class="px-4 py-3 border-t border-gray-700 text-xs text-gray-500 space-y-0.5">
+                    <div>世界: <span th:text="${activeWorld}">—</span></div>
+                    <div>分支: <span th:text="${activeBranchId}">—</span></div>
+                </div>
+            </aside>
+
+            <!-- 右侧主内容区：单容器，HTMX 加载不同模块 -->
+            <div class="flex-1 p-2 min-h-0 flex flex-col">
+                <div id="desktop-page" class="panel flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div id="desktop-page-body" class="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
+                        <div class="text-gray-500 text-sm">加载中...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- 移动版单面板 -->
-        <div class="md:hidden w-full p-2 min-h-0 flex flex-col">
-            <div id="mobile-chat" class="mobile-panel active panel p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div class="text-gray-500 text-sm">加载中...</div>
-            </div>
-            <div id="mobile-timeline" class="mobile-panel panel p-3 flex-1 min-h-0 hidden overflow-y-auto">
-                <div hx-get="/timeline" hx-trigger="load" hx-swap="innerHTML"></div>
-            </div>
-            <div id="mobile-knowledge" class="mobile-panel panel p-3 flex-1 min-h-0 hidden overflow-y-auto">
-                <div hx-get="/knowledge" hx-trigger="load" hx-swap="innerHTML"></div>
+        <!-- 移动版：单容器，HTMX 加载不同模块 -->
+        <div class="md:hidden flex-1 w-full p-2 min-h-0 flex flex-col">
+            <div id="mobile-page" class="panel flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div id="mobile-page-body" class="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
+                    <div class="text-gray-500 text-sm">加载中...</div>
+                </div>
             </div>
         </div>
     </main>

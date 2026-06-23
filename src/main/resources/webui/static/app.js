@@ -40,76 +40,36 @@ function toggleSidebar() {
     sidebar.style.display = isOpen ? 'none' : 'block';
 }
 
-function switchMobilePanel(name) {
-    var panels = document.querySelectorAll('.mobile-panel');
-    panels.forEach(function(p) { p.classList.add('hidden'); p.classList.remove('active'); });
-    var target = document.getElementById('mobile-' + name);
-    if (target) {
-        target.classList.remove('hidden');
-        target.classList.add('active');
+// ---- 页面加载：HTMX 交换整个模块 ----
+
+/**
+ * 桌面端：点击侧栏导航 → HTMX 加载对应模块到 #desktop-page-body
+ */
+function loadDesktopPage(name) {
+    // 更新侧栏激活态
+    var navItems = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < navItems.length; i++) {
+        var isActive = navItems[i].getAttribute('data-panel') === name;
+        navItems[i].classList.toggle('active', isActive);
     }
+    // HTMX 加载模块
+    htmx.ajax('GET', '/' + name, {target: '#desktop-page-body', swap: 'innerHTML'});
+}
+
+/**
+ * 移动端：点击汉堡菜单 → HTMX 加载对应模块到 #mobile-page-body
+ */
+function loadMobilePage(name) {
+    // HTMX 加载模块
+    htmx.ajax('GET', '/' + name, {target: '#mobile-page-body', swap: 'innerHTML'});
+    // 关闭侧栏
     toggleSidebar();
 }
 
-// ---- 聊天面板加载：只加载到当前屏幕尺寸对应的面板，避免重复 ID ----
-var currentChatPanel = null; // 'desktop' or 'mobile'
-
-function loadChatIntoPanel(panelName) {
-    if (currentChatPanel === panelName) return; // 已加载到目标面板
-    var targetId = panelName + '-chat'; // 'desktop-chat' or 'mobile-chat'
-    var target = document.getElementById(targetId);
-    if (!target) return;
-    // 检查是否已有内容（避免重复加载）
-    if (target.querySelector('#chat-form')) return;
-    // 直接用 htmx.ajax 加载到面板，替换"加载中..."占位
-    htmx.ajax('GET', '/chat', {target: '#' + targetId, swap:'innerHTML'});
-    currentChatPanel = panelName;
-}
-
-function loadChatForCurrentScreen() {
-    if (window.innerWidth >= 768) {
-        loadChatIntoPanel('desktop');
-    } else {
-        loadChatIntoPanel('mobile');
-    }
-}
-
-// 初始加载聊天面板
-if (document.readyState === 'complete') loadChatForCurrentScreen();
-else window.addEventListener('load', loadChatForCurrentScreen);
-
-// 跨断点切换时重新加载到对应面板
-var wasDesktop = window.innerWidth >= 768;
-window.addEventListener('resize', function() {
-    var nowDesktop = window.innerWidth >= 768;
-    if (nowDesktop !== wasDesktop) {
-        wasDesktop = nowDesktop;
-        currentChatPanel = null; // 重置，强制重新加载
-        loadChatForCurrentScreen();
-    }
-});
-
-// ---- 移动端面板懒加载 ----
+// ---- 初始加载：只加载到当前屏幕尺寸对应的容器，杜绝重复 ID ----
 (function() {
-    if (window.innerWidth >= 768) return;
-    var loaded = { chat: false, timeline: false, knowledge: false };
-    var origSwitch = switchMobilePanel;
-    switchMobilePanel = function(name) {
-        if (!loaded[name]) {
-            loaded[name] = true;
-            if (name === 'chat') {
-                // 聊天面板使用统一的加载逻辑
-                loadChatIntoPanel('mobile');
-            } else {
-                var el = document.getElementById('mobile-' + name);
-                if (el) {
-                    var child = el.querySelector('[hx-get]');
-                    if (child) htmx.trigger(child, 'load');
-                }
-            }
-        }
-        origSwitch(name);
-    };
+    var targetId = window.innerWidth >= 768 ? 'desktop-page-body' : 'mobile-page-body';
+    htmx.ajax('GET', '/chat', {target: '#' + targetId, swap: 'innerHTML'});
 })();
 
 // ===== Phase 3: 基于 MessageStore + ChatRenderer 的聊天逻辑 =====
@@ -118,7 +78,7 @@ window.addEventListener('resize', function() {
 
     var es = null;           // EventSource 引用
     var taskId = null;       // 当前任务 ID
-    var chatInitialized = false;  // 是否已完成初始化（加载了历史）
+
 
     // ---- 按钮状态管理 ----
 
@@ -182,8 +142,6 @@ window.addEventListener('resize', function() {
     // ---- 初始化：加载历史消息 ----
 
     function initChatPanel() {
-        if (chatInitialized) return;
-        chatInitialized = true;
         console.log('[chat] initChatPanel: loading history from JSON API');
 
         fetch('/chat/messages?format=json', {
