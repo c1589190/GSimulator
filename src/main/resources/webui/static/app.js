@@ -240,6 +240,59 @@ window.addEventListener('resize', function() {
 
     // ---- 发送消息 ----
 
+    // ---- 文件上传 ----
+
+    window._chatUpload = function(input) {
+        var file = input.files && input.files[0];
+        if (!file) return;
+
+        var url = '/chat/upload?sessionId=default&filename=' + encodeURIComponent(file.name);
+        fetch(url, {method: 'POST', body: file})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                addUploadTag(data.filename);
+            }
+        })
+        .catch(function(err) {
+            console.warn('[chat] upload failed:', err.message);
+        })
+        .finally(function() {
+            // 重置 file input，允许重复上传同名文件
+            input.value = '';
+        });
+    };
+
+    function addUploadTag(filename) {
+        var container = document.getElementById('chat-uploads');
+        if (!container) return;
+        container.classList.remove('hidden');
+
+        var tag = document.createElement('span');
+        tag.className = 'upload-tag';
+        tag.setAttribute('data-filename', filename);
+        tag.innerHTML = '<span>' + escapeUploadName(filename) + '</span>'
+            + '<button class="ml-1 text-gray-400 hover:text-red-400" onclick="this.parentElement.remove();'
+            + 'if(!document.getElementById(\'chat-uploads\').querySelector(\'.upload-tag\'))'
+            + 'document.getElementById(\'chat-uploads\').classList.add(\'hidden\')">&times;</button>';
+        container.appendChild(tag);
+    }
+
+    function escapeUploadName(s) {
+        if (!s) return '';
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function clearUploadTags() {
+        var container = document.getElementById('chat-uploads');
+        if (container) {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+        }
+    }
+
+    // ---- 发送消息 ----
+
     window._chatSend = function() {
         var input = document.getElementById('chat-input');
         if (!input) return;
@@ -259,6 +312,7 @@ window.addEventListener('resize', function() {
         ChatRenderer.renderUserMessage(userMsg);
 
         input.value = '';
+        clearUploadTags();
 
         // ---- 创建 assistant 占位模块 ----
         var asstMsgId = MessageStore.generateId();

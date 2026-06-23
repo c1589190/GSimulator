@@ -4,10 +4,19 @@
          hx-get="/chat/context-bar" hx-trigger="load" hx-swap="innerHTML">
         分支: —
     </div>
+    <!-- 待上传文件标签 -->
+    <div id="chat-uploads" class="hidden flex flex-wrap gap-1 mb-2"></div>
     <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
         <div id="chat-empty-state" class="text-gray-600 text-sm">发送消息开始对话</div>
     </div>
     <form id="chat-form" class="flex gap-2" autocomplete="off" onsubmit="return false;">
+        <button type="button" id="chat-upload-btn"
+                class="px-2 py-2 text-gray-400 hover:text-green-400 text-lg"
+                title="上传文件" onclick="document.getElementById('chat-file-input').click()">
+            &#x1F4CE;
+        </button>
+        <input type="file" id="chat-file-input" class="hidden"
+               onchange="window._chatUpload && window._chatUpload(this)">
         <input type="text" name="message" id="chat-input"
                placeholder="输入消息..." autocomplete="off"
                class="flex-1 input-area rounded px-3 py-2 text-sm text-gray-200"

@@ -18,10 +18,12 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 对话 API handler。
@@ -36,10 +38,18 @@ public class ChatHandler implements HttpHandler {
 
     private final ApplicationContext ctx;
     private final PageHandler pageHandler;
+    private final Map<String, List<String>> pendingUploads = new ConcurrentHashMap<>();
+    private final Path importDir;
 
     public ChatHandler(ApplicationContext ctx, PageHandler pageHandler) {
         this.ctx = ctx;
         this.pageHandler = pageHandler;
+        this.importDir = ctx.getConfig().getImportDir();
+        try {
+            Files.createDirectories(importDir);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create import dir: " + importDir, e);
+        }
     }
 
     @Override
@@ -66,6 +76,12 @@ public class ChatHandler implements HttpHandler {
                 handleContext(exchange);
             } else if (path.equals("/chat/context-bar") && "GET".equals(method)) {
                 handleContextBar(exchange);
+            } else if (path.equals("/chat/upload") && "POST".equals(method)) {
+                handleUpload(exchange);
+            } else if (path.equals("/chat/uploads") && "GET".equals(method)) {
+                handleListUploads(exchange);
+            } else if (path.equals("/chat/uploads") && "DELETE".equals(method)) {
+                handleClearUploads(exchange);
             } else {
                 HandlerUtils.sendError(exchange, 404, "Unknown chat endpoint");
             }
@@ -96,6 +112,12 @@ public class ChatHandler implements HttpHandler {
         if (message.isBlank()) {
             HandlerUtils.sendError(exchange, 400, "message is required");
             return;
+        }
+
+        // 注入上传文件提示
+        List<String> uploads = pendingUploads.remove(sessionId);
+        if (uploads != null && !uploads.isEmpty()) {
+            message = "(用户上传了文件: " + String.join(", ", uploads) + ")\n\n" + message;
         }
 
         // 通过 ApiManager 的 TaskManager 创建 PENDING 任务（不自动启动）
@@ -309,6 +331,73 @@ public class ChatHandler implements HttpHandler {
         String accept = exchange.getRequestHeaders().getFirst("Accept");
         return accept != null && accept.contains("application/json");
     }
+
+    // ---- 文件上传 ----
+
+    private void handleUpload(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String sessionId = HandlerUtils.getQueryParam(query, "sessionId");
+        if (sessionId == null || sessionId.isBlank()) sessionId = "default";
+        String filename = HandlerUtils.getQueryParam(query, "filename");
+        if (filename == null || filename.isBlank()) {
+            HandlerUtils.sendError(exchange, 400, "filename query param required");
+            return;
+        }
+
+        // 安全化文件名：去除路径分隔符，保留基本文件名
+        String safeName = filename.replaceAll("[\\\\/]", "_").replaceAll("\\s+", "_");
+        if (safeName.isEmpty() || ".".equals(safeName) || "..".equals(safeName)) {
+            HandlerUtils.sendError(exchange, 400, "Invalid filename");
+            return;
+        }
+
+        // 读取原始文件字节
+        byte[] fileBytes = exchange.getRequestBody().readAllBytes();
+        if (fileBytes.length == 0) {
+            HandlerUtils.sendError(exchange, 400, "Empty file");
+            return;
+        }
+
+        // 写入 import/ 目录，冲突时追加序号
+        Path dest = importDir.resolve(safeName);
+        int seq = 1;
+        String base = safeName.contains(".") ? safeName.substring(0, safeName.lastIndexOf('.')) : safeName;
+        String ext = safeName.contains(".") ? safeName.substring(safeName.lastIndexOf('.')) : "";
+        while (Files.exists(dest)) {
+            dest = importDir.resolve(base + "(" + seq + ")" + ext);
+            seq++;
+        }
+        Files.write(dest, fileBytes);
+        String savedName = dest.getFileName().toString();
+
+        // 记录到待上传列表
+        pendingUploads.computeIfAbsent(sessionId, k -> new ArrayList<>()).add(savedName);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("filename", savedName);
+        HandlerUtils.sendJson(exchange, 200, result);
+    }
+
+    private void handleListUploads(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String sessionId = HandlerUtils.getQueryParam(query, "sessionId");
+        if (sessionId == null || sessionId.isBlank()) sessionId = "default";
+
+        List<String> files = pendingUploads.getOrDefault(sessionId, List.of());
+        HandlerUtils.sendJson(exchange, 200, Map.of("files", files));
+    }
+
+    private void handleClearUploads(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        String sessionId = HandlerUtils.getQueryParam(query, "sessionId");
+        if (sessionId == null || sessionId.isBlank()) sessionId = "default";
+
+        pendingUploads.remove(sessionId);
+        HandlerUtils.sendJson(exchange, 200, Map.of("success", true));
+    }
+
+    // ---- 上下文 ----
 
     private void handleContext(HttpExchange exchange) throws IOException {
         var dm = ctx.getDataManager();
