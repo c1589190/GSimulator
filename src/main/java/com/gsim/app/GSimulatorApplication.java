@@ -216,7 +216,7 @@ public class GSimulatorApplication {
         orchestrator = new OrchestratorAgent(
                 ctx.getLlmManager(), toolRegistry, config.getLlmModel(),
                 compositeSink,
-                httpMode ? new com.gsim.agent.AutoApprovePermissionGate()
+                (httpMode || webuiMode) ? new com.gsim.agent.AutoApprovePermissionGate()
                          : new com.gsim.agent.CliToolPermissionGate(),
                 toolGroupManager);
         orchestrator.setContextHistoryConfig(new OrchestratorAgent.ContextHistoryConfig(

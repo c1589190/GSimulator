@@ -1435,12 +1435,20 @@ public class OrchestratorAgent {
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
-                    // 推演内容工具成功 → 黄字回显正文
+                    // 推演内容工具成功 → 黄字回显正文（前端渲染为推文卡片）
                     if (result.success()) {
                         for (ToolResult.Item item : result.items()) {
                             if ("simulation_content_text".equals(item.title())) {
-                                progressSink.onProgress(AgentProgressEvent.publicMessage(
-                                        "\033[33m" + item.snippet() + "\033[0m"));
+                                String snippet = item.snippet();
+                                String title = "";
+                                String body = snippet;
+                                int sep = snippet.indexOf("\n\n");
+                                if (sep > 0) {
+                                    String heading = snippet.substring(0, sep);
+                                    title = heading.startsWith("# ") ? heading.substring(2).trim() : heading.trim();
+                                    body = snippet.substring(sep + 2);
+                                }
+                                progressSink.onProgress(AgentProgressEvent.simulationContent(title, body));
                                 break;
                             }
                         }
@@ -1778,12 +1786,20 @@ public class OrchestratorAgent {
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
-                    // 推演内容工具成功 → 黄字回显正文
+                    // 推演内容工具成功 → 黄字回显正文（前端渲染为推文卡片）
                     if (result.success()) {
                         for (ToolResult.Item item : result.items()) {
                             if ("simulation_content_text".equals(item.title())) {
-                                progressSink.onProgress(AgentProgressEvent.publicMessage(
-                                        "\033[33m" + item.snippet() + "\033[0m"));
+                                String snippet = item.snippet();
+                                String title = "";
+                                String body = snippet;
+                                int sep = snippet.indexOf("\n\n");
+                                if (sep > 0) {
+                                    String heading = snippet.substring(0, sep);
+                                    title = heading.startsWith("# ") ? heading.substring(2).trim() : heading.trim();
+                                    body = snippet.substring(sep + 2);
+                                }
+                                progressSink.onProgress(AgentProgressEvent.simulationContent(title, body));
                                 break;
                             }
                         }

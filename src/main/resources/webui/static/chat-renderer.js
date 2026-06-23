@@ -307,6 +307,76 @@
         if (think) think.classList.remove('hidden');
     }
 
+    // ---- 推文卡片（推演内容展示） ----
+
+    /**
+     * 在 .blocks 中插入推文卡片。
+     * 包含标题行、只读文本域（方便手机端选中复制）、一键复制按钮。
+     */
+    function addTweetCard(asstMsgId, title, content) {
+        var blocks = getBlocks(asstMsgId);
+        if (!blocks) return;
+
+        removeEmptyState();
+
+        var card = document.createElement('div');
+        card.className = 'tweet-card';
+
+        // 标题行
+        var header = document.createElement('div');
+        header.className = 'tweet-header';
+        header.textContent = title || '推演内容';
+
+        // 只读文本域 — body 内容（无需转义，放入 textarea）
+        var textarea = document.createElement('textarea');
+        textarea.className = 'tweet-body';
+        textarea.value = content || '';
+        textarea.readOnly = true;
+        var lines = (content || '').split('\n').length;
+        textarea.rows = Math.max(4, Math.min(lines, 20));
+
+        // 一键复制按钮
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'tweet-copy-btn';
+        copyBtn.textContent = '\u{1F4CB} 复制';
+        copyBtn.onclick = function() {
+            copyTweetContent(textarea, copyBtn);
+        };
+
+        card.appendChild(header);
+        card.appendChild(textarea);
+        card.appendChild(copyBtn);
+        blocks.appendChild(card);
+        scrollToBottom();
+    }
+
+    function copyTweetContent(textarea, btn) {
+        var text = textarea.value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                btn.textContent = '✓ 已复制';
+                setTimeout(function() { btn.textContent = '\u{1F4CB} 复制'; }, 2000);
+            }).catch(function() {
+                fallbackCopy(textarea, btn);
+            });
+        } else {
+            fallbackCopy(textarea, btn);
+        }
+    }
+
+    function fallbackCopy(textarea, btn) {
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            btn.textContent = '✓ 已复制';
+            setTimeout(function() { btn.textContent = '\u{1F4CB} 复制'; }, 2000);
+        } catch (e) {
+            btn.textContent = '✗ 复制失败';
+            setTimeout(function() { btn.textContent = '\u{1F4CB} 复制'; }, 2000);
+        }
+    }
+
     // ---- 导出 ----
 
     window.ChatRenderer = {
@@ -320,6 +390,8 @@
         appendReasoning: appendReasoning,
         addToolCard: addToolCard,
         updateToolCard: updateToolCard,
+        addTweetCard: addTweetCard,
+        copyTweetContent: copyTweetContent,
         markComplete: markComplete,
         markError: markError,
         removeEmptyState: removeEmptyState,

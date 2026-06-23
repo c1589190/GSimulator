@@ -71,7 +71,16 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
                     data.put("error", meta.getOrDefault("error", ""));
                 }
             }
-            case "log" -> data.put("message", event.detail());
+            case "log" -> {
+                data.put("message", event.detail());
+                // 透传推文卡片字段
+                String subType = meta.get("subType");
+                if (subType != null) {
+                    data.put("subType", subType);
+                    data.put("title", meta.getOrDefault("title", ""));
+                    data.put("body", meta.getOrDefault("body", event.detail()));
+                }
+            }
             default -> {}
         }
 

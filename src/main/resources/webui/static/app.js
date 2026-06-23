@@ -406,10 +406,20 @@ window.addEventListener('resize', function() {
         });
 
         // log — Agent 公开消息（包含 finish_action 的用户可见输出）
+        // 子类型 "simulation_content" 渲染为推文卡片
         es.addEventListener('log', function(e) {
             console.log('[chat] log rcvd, msg len:', e.data ? e.data.length : 0);
             try {
                 var d = JSON.parse(e.data);
+                if (d.subType === 'simulation_content') {
+                    var body = d.body || '';
+                    // 剥离 ANSI 转义码
+                    body = body.replace(/\x1B\[[0-9;]*m/g, '').trim();
+                    if (body) {
+                        ChatRenderer.addTweetCard(asstMsgId, d.title || '推演内容', body);
+                    }
+                    return;
+                }
                 var message = d.message;
                 if (message) {
                     // 剥离 ANSI 转义码（CLI 颜色码会污染 Web 显示）
