@@ -1,7 +1,7 @@
 package com.gsim.interaction.commands;
 
 import com.gsim.agent.AgentProgressSink;
-import com.gsim.agent.sub.SimAgent;
+import com.gsim.agent.sub.SearchAgent;
 import com.gsim.agent.sub.SubAgentResult;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionResult;
@@ -14,14 +14,14 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * /sim — 直接创建 SimAgent 进行推演叙事生成。
+ * /search — 直接创建 SearchAgent 进行深度资料搜索。
  *
- * <p>绕过 OrchestratorAgent，直接在当前线程同步执行 SimAgent ToolLoop。
- * 适用于 CLI 直接调用场景。OrchAgent 也可通过 dispatch_sub_agent 工具创建。
+ * <p>绕过 OrchestratorAgent，直接在当前线程同步执行。
+ * 适用于 CLI 直接调用场景。
  */
-public class SimCommand implements InteractionCommand {
+public class SearchCommand implements InteractionCommand {
 
-    private static final Logger log = LoggerFactory.getLogger(SimCommand.class);
+    private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
     private final LlmManager llmManager;
     private final ToolRegistry toolRegistry;
@@ -29,8 +29,8 @@ public class SimCommand implements InteractionCommand {
     private final AgentProgressSink progressSink;
     private final AtomicInteger counter = new AtomicInteger(0);
 
-    public SimCommand(LlmManager llmManager, ToolRegistry toolRegistry,
-                      String model, AgentProgressSink progressSink) {
+    public SearchCommand(LlmManager llmManager, ToolRegistry toolRegistry,
+                         String model, AgentProgressSink progressSink) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
@@ -39,35 +39,35 @@ public class SimCommand implements InteractionCommand {
 
     @Override
     public String name() {
-        return "sim";
+        return "search";
     }
 
     @Override
     public String description() {
-        return "创建 SimAgent 进行推演叙事生成（独立子代理，只读工具）";
+        return "创建 SearchAgent 进行深度资料搜索（绕过主 Agent，直接执行）";
     }
 
     @Override
     public String usage() {
-        return "/sim <推演指令>";
+        return "/search <搜索查询>";
     }
 
     @Override
     public InteractionResult execute(String[] args, InteractionSession session) {
         if (args.length == 0) {
-            return InteractionResult.fail("用法: /sim <推演指令>");
+            return InteractionResult.fail("用法: /search <搜索查询>");
         }
         if (llmManager == null || !llmManager.isAvailable()) {
             return InteractionResult.fail("LLM 未配置。请先运行 /config init 设置 LLM。");
         }
 
-        String prompt = String.join(" ", args).trim();
-        String agentId = "sim-cmd-" + counter.incrementAndGet();
+        String query = String.join(" ", args).trim();
+        String agentId = "search-cmd-" + counter.incrementAndGet();
 
-        SimAgent agent = new SimAgent(agentId, llmManager, toolRegistry, model,
-                progressSink, prompt);
+        SearchAgent agent = new SearchAgent(agentId, llmManager, toolRegistry, model,
+                progressSink, query);
 
-        log.info("[SimCommand] running {} synchronously, promptLen={}", agentId, prompt.length());
+        log.info("[SearchCommand] running {} synchronously, queryLen={}", agentId, query.length());
 
         // 同步执行（不走 VT，直接在当前线程跑 ToolLoop）
         agent.run();
@@ -75,13 +75,13 @@ public class SimCommand implements InteractionCommand {
         try {
             result = agent.future().get();
         } catch (Exception e) {
-            return InteractionResult.fail("SimAgent 执行异常: " + e.getMessage());
+            return InteractionResult.fail("SearchAgent 执行异常: " + e.getMessage());
         }
 
         if (result.success()) {
-            return InteractionResult.ok("sim done (" + agentId + ")", result.text());
+            return InteractionResult.ok("search done (" + agentId + ")", result.text());
         } else {
-            return InteractionResult.fail("SimAgent (" + agentId + ") 失败: "
+            return InteractionResult.fail("SearchAgent (" + agentId + ") 失败: "
                     + (result.error() != null ? result.error() : "未知错误"));
         }
     }

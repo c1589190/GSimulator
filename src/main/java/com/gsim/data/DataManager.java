@@ -772,6 +772,79 @@ public class DataManager {
         return documents.get(branchId);
     }
 
+    /**
+     * 创建 Compact 检查点节点 — 将对话历史压缩为摘要并持久化到新节点。
+     *
+     * <p>新节点作为当前节点的子节点，frontMatter 包含：
+     * <ul>
+     *   <li>{@code compactOf} — 被压缩的父节点 ID</li>
+     *   <li>{@code compactTime} — 压缩时间戳</li>
+     * </ul>
+     * body 只包含紧凑摘要（替代全量消息）。
+     * 新节点成为 activeBranch，后续消息写入新节点。
+     */
+    public DataDocument createCompactCheckpoint(String parentBranchId, String summary) throws IOException {
+        String parent = (parentBranchId != null && !parentBranchId.isBlank())
+                ? normalizeBranchId(parentBranchId) : activeBranch;
+        DataDocument parentDoc = documents.get(parent);
+        int turn = 1;
+        String compactOf = parent; // 标记被压缩的节点
+        if (parentDoc != null) {
+            String pt = parentDoc.frontMatter().getOrDefault("turn", "0");
+            try { turn = Integer.parseInt(pt); } catch (NumberFormatException ignored) {}
+        }
+
+        // 生成 compact 节点 ID: {parent}-compact-{timestamp}
+        String ts = java.time.Instant.now().toString().replace(":", "").replace("-", "").substring(0, 15);
+        String compactSuffix = "-compact-" + ts;
+        String branchId = normalizeBranchId(parent + compactSuffix);
+
+        String displayName = "💾 Compact " + ts;
+        String nodeInput = summary != null ? summary : "无。";
+
+        // 构建特殊的 compact front matter
+        StringBuilder fm = new StringBuilder();
+        fm.append("id: ").append(branchId).append("\n");
+        fm.append("name: ").append(displayName).append("\n");
+        fm.append("type: branch\n");
+        fm.append("parent: ").append(parent).append("\n");
+        fm.append("compactOf: ").append(compactOf).append("\n");
+        fm.append("compactTime: ").append(java.time.Instant.now().toString()).append("\n");
+        fm.append("turn: ").append(turn).append("\n");
+        fm.append("world_time: \n");
+        fm.append("updated: ").append(java.time.LocalDate.now().toString()).append("\n");
+        fm.append("tags: [\"compact\", \"checkpoint\"]\n");
+
+        StringBuilder body = new StringBuilder();
+        body.append("# ").append(displayName).append("\n\n");
+        body.append("## 一、本节点输入（Compact 摘要）\n\n");
+        body.append(nodeInput).append("\n\n");
+        body.append("## 二、LLM 上下文记录\n\n");
+        body.append("### system_note\n").append(summary != null ? summary : "无。").append("\n\n");
+        body.append("## 三、推演结果\n\n待后续推演。\n\n");
+        body.append("## 九、下节点风险\n\n待后续推演。\n\n");
+
+        // 写入消息块供前端显示（compact 摘要作为第一条 system 消息）
+        String tsMsg = java.time.Instant.now().toString();
+        body.append("<!-- BRANCH_MESSAGES START -->\n");
+        body.append("<!-- message:start id=mcompact-001 role=system type=system_note created=")
+                .append(tsMsg).append(" -->\n");
+        body.append("💾 上下文已压缩 (").append(compactOf).append(")\n\n");
+        body.append(summary != null ? summary : "无。").append("\n");
+        body.append("<!-- message:end -->\n");
+        body.append("<!-- BRANCH_MESSAGES END -->\n");
+
+        String content = fm + "\n-------------------\n" + body;
+
+        writeFile(worldDir().resolve("branches/" + branchIdToFilename(branchId)), content);
+        activeBranch = branchId;
+        Files.writeString(worldDir().resolve("active-branch.txt"), branchId, StandardCharsets.UTF_8);
+        reload();
+        log.info("Created compact checkpoint '{}' compactOf='{}' parent='{}' turn={}",
+                branchId, compactOf, parent, turn);
+        return documents.get(branchId);
+    }
+
     public List<DataDocument> getBranchChain(String branchId) {
         rwLock.readLock().lock();
         try {

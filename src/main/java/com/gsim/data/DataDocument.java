@@ -51,6 +51,12 @@ public class DataDocument {
     public String rawPath() { return rawPath; }
     public Map<String, String> frontMatter() { return frontMatter; }
 
+    /** 如果此节点是 compact 检查点，返回被压缩的父节点 ID；否则返回 null。 */
+    public String compactOf() { return frontMatter.get("compactOf"); }
+
+    /** 此节点是否为 compact 检查点。 */
+    public boolean isCompact() { return frontMatter.containsKey("compactOf"); }
+
     /** 完整文档内容（含 front matter），用于显示和写入。 */
     public String fullContent() {
         StringBuilder sb = new StringBuilder();

@@ -239,7 +239,7 @@ public class GSimulatorApplication {
 
             // 注册 /compact 命令（仅在有 ContextSessionManager 时可用）
             if (ctxSessionManager != null) {
-                manager.registerCommand(new CompactCommand(ctxSessionManager, compactor, orchestrator));
+                manager.registerCommand(new CompactCommand(ctxSessionManager, compactor, orchestrator, dataManager));
             }
         }
 
@@ -251,6 +251,9 @@ public class GSimulatorApplication {
 
         // 注册工具组激活工具：activate_tool_groups（Agent 按需激活工具组）
         toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
+
+        // 注册子代理派发/收集工具：dispatch_sub_agent / collect_sub_agent_results
+        orchestrator.registerSubAgentTools(toolRegistry);
 
         chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator,
                 ctxSessionManager, dataRoot, ctx);
@@ -304,7 +307,12 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.branch.tool.PlayerActionUpdateTool(dataManager));
 
         // /sim /run — deprecated wrappers
-        manager.registerCommand(new SimCommand(chatService));
+        // /sim — SimAgent 推演叙事生成（直接创建子代理，独立上下文）
+        manager.registerCommand(new com.gsim.interaction.commands.SimCommand(
+                ctx.getLlmManager(), toolRegistry, config.getLlmModel(), compositeSink));
+        // /search — SearchAgent 深度资料搜索
+        manager.registerCommand(new com.gsim.interaction.commands.SearchCommand(
+                ctx.getLlmManager(), toolRegistry, config.getLlmModel(), compositeSink));
         manager.registerCommand(new RunCommand(chatService));
 
         manager.registerCommand(new NextTurnCommand(dataManager));

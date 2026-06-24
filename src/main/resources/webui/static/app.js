@@ -142,8 +142,18 @@ function loadMobilePage(name) {
     // ---- 初始化：加载历史消息 ----
 
     function initChatPanel() {
-        console.log('[chat] initChatPanel: loading history from JSON API');
+        console.log('[chat] initChatPanel: loading messages');
 
+        // 1. 先从 localStorage 恢复（即时显示，不闪烁）
+        var restored = MessageStore.restoreFromLocal();
+        if (restored) {
+            console.log('[chat] restored', MessageStore.getAll().length, 'messages from localStorage');
+            var container = document.getElementById('chat-messages');
+            if (container) container.innerHTML = '';
+            ChatRenderer.renderAll(MessageStore.getAll());
+        }
+
+        // 2. 再从后端加载（合并/确认 complete 消息）
         fetch('/chat/messages?format=json', {
             headers: {'Accept': 'application/json'}
         })
@@ -153,21 +163,17 @@ function loadMobilePage(name) {
         })
         .then(function(data) {
             var msgList = data.messages || [];
-            console.log('[chat] loaded', msgList.length, 'messages from history');
-            msgList.forEach(function(m, i) {
-                console.log('[chat] msg[' + i + '] role=' + m.role + ' type=' + m.type + ' id=' + m.id + ' content=' + (m.content || '').substring(0, 50));
-            });
-            if (msgList.length > 0) {
-                var container = document.getElementById('chat-messages');
-                console.log('[chat] #chat-messages found:', !!container);
-                MessageStore.loadFromJson(msgList);
-                console.log('[chat] MessageStore size after load:', MessageStore.getAll().length);
-                ChatRenderer.renderAll(MessageStore.getAll());
-                console.log('[chat] renderAll done, DOM children:', container ? container.children.length : 'N/A');
-            }
+            console.log('[chat] loaded', msgList.length, 'messages from backend');
+            MessageStore.loadFromJson(msgList);
+            console.log('[chat] MessageStore size after merge:', MessageStore.getAll().length);
+            // 重新渲染（合并后的完整列表）
+            var container = document.getElementById('chat-messages');
+            if (container) container.innerHTML = '';
+            ChatRenderer.renderAll(MessageStore.getAll());
         })
         .catch(function(err) {
             console.warn('[chat] Failed to load history:', err.message);
+            // 后端不可用时，localStorage 数据已经显示了
         });
     }
 
@@ -318,14 +324,62 @@ function loadMobilePage(name) {
 
     // ---- SSE 流连接和处理 ----
 
+    // SubAgent 状态追踪：agentId → {parentAsstId, type, accumulatedContent, toolCardIndex}
+    var subAgentState = {};
+
+    function getOrCreateSubAgent(agentId, agentType, parentAsstId) {
+        if (subAgentState[agentId]) return subAgentState[agentId];
+        var st = {
+            agentId: agentId,
+            parentAsstId: parentAsstId,
+            type: agentType || 'unknown',
+            accumulatedContent: '',
+            toolCardIndex: 0
+        };
+        subAgentState[agentId] = st;
+        // 在父 assistant 消息中创建 sub-agent 卡片
+        ChatRenderer.renderSubAgentCard(parentAsstId, agentId, st.type);
+        return st;
+    }
+
     function connectStream(streamUrl, asstMsgId) {
         console.log('[chat] connectStream:', streamUrl, 'asstMsgId:', asstMsgId);
         es = new EventSource(streamUrl);
 
         var accumulatedContent = '';
+        var toolCardIndex = 0;
+
+        // ---- 辅助：判断事件是否属于 SubAgent ----
+        function routeByAgent(e) {
+            var agentId = null;
+            try {
+                if (e.data) {
+                    var d = JSON.parse(e.data);
+                    agentId = d.agentId || null;
+                }
+            } catch (err) {}
+            // 返回 {agentId, subState} 或 null（主 Agent）
+            if (agentId) {
+                // 从 agentId 推断类型：sim-1 → sim, search-2 → search
+                var agentType = 'unknown';
+                if (agentId.startsWith('sim')) agentType = 'sim';
+                else if (agentId.startsWith('search')) agentType = 'search';
+                var st = getOrCreateSubAgent(agentId, agentType, asstMsgId);
+                return {agentId: agentId, subState: st, data: (function() {
+                    try { return JSON.parse(e.data); } catch (err) { return {}; }
+                })()};
+            }
+            return null;
+        }
 
         // llm_started — 更新 thinking 指示器
-        es.addEventListener('llm_started', function() {
+        es.addEventListener('llm_started', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                // SubAgent 启动 — 状态已由 getOrCreateSubAgent 创建
+                console.log('[chat] sub-agent started:', rt.agentId);
+                return;
+            }
             console.log('[chat] llm_started rcvd');
             MessageStore.update(asstMsgId, {status: 'streaming'});
             ChatRenderer.updateThink(asstMsgId, '<span class="text-green-400">●</span> 生成中...');
@@ -333,6 +387,14 @@ function loadMobilePage(name) {
 
         // llm_delta — 流式文本内容
         es.addEventListener('llm_delta', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                if (rt.data.content) {
+                    rt.subState.accumulatedContent += rt.data.content;
+                    ChatRenderer.updateSubAgentContent(rt.agentId, rt.subState.accumulatedContent);
+                }
+                return;
+            }
             console.log('[chat] llm_delta rcvd, data len:', e.data ? e.data.length : 0);
             try {
                 var d = JSON.parse(e.data);
@@ -344,8 +406,15 @@ function loadMobilePage(name) {
             } catch (err) {}
         });
 
-        // llm_reasoning_delta — 流式推理内容（折叠显示）
+        // llm_reasoning_delta — 流式推理内容
         es.addEventListener('llm_reasoning_delta', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                if (rt.data.content) {
+                    ChatRenderer.appendSubAgentReasoning(rt.agentId, rt.data.content);
+                }
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 if (d.content) {
@@ -356,6 +425,11 @@ function loadMobilePage(name) {
 
         // llm_error — LLM 流失败
         es.addEventListener('llm_error', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                ChatRenderer.markSubAgentComplete(rt.agentId, false, rt.data.error || 'LLM 流失败');
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 var errMsg = d.error || 'LLM 流失败';
@@ -369,14 +443,26 @@ function loadMobilePage(name) {
         });
 
         // llm_done — LLM 流式输出完成
-        es.addEventListener('llm_done', function() {
+        es.addEventListener('llm_done', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                ChatRenderer.markSubAgentComplete(rt.agentId, true, null);
+                return;
+            }
             ChatRenderer.hideThink(asstMsgId);
         });
 
         // llm_tool_delta — 流式 tool_call 进度
-        // 重置 accumulatedContent，使后续文本进入新的 .content-block
-        var toolCardIndex = 0;
         es.addEventListener('llm_tool_delta', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                var tn = rt.data.tool || 'tool';
+                rt.subState.toolCardIndex = ChatRenderer.addSubAgentToolCard(
+                    rt.agentId, tn, 'streaming', rt.subState.toolCardIndex);
+                rt.subState.toolCardIndex++;
+                rt.subState.accumulatedContent = '';
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 var toolName = d.tool || 'tool';
@@ -387,8 +473,16 @@ function loadMobilePage(name) {
         });
 
         // tool_started — 工具开始执行
-        // 重置 accumulatedContent，使后续文本进入新的 .content-block
         es.addEventListener('tool_started', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                var tn = rt.data.tool || 'tool';
+                rt.subState.toolCardIndex = ChatRenderer.addSubAgentToolCard(
+                    rt.agentId, tn, 'running', rt.subState.toolCardIndex);
+                rt.subState.toolCardIndex++;
+                rt.subState.accumulatedContent = '';
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 var toolName = d.tool || 'tool';
@@ -400,6 +494,12 @@ function loadMobilePage(name) {
 
         // tool_done — 工具执行成功
         es.addEventListener('tool_done', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                var tn = rt.data.tool || '';
+                ChatRenderer.updateSubAgentToolCard(rt.agentId, tn, 'done');
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 var toolName = d.tool || '';
@@ -409,6 +509,12 @@ function loadMobilePage(name) {
 
         // tool_error — 工具执行失败
         es.addEventListener('tool_error', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                var tn = rt.data.tool || '';
+                ChatRenderer.updateSubAgentToolCard(rt.agentId, tn, 'error', rt.data.error);
+                return;
+            }
             try {
                 var d = JSON.parse(e.data);
                 var toolName = d.tool || '';
@@ -417,15 +523,29 @@ function loadMobilePage(name) {
             } catch (err) {}
         });
 
-        // log — Agent 公开消息（包含 finish_action 的用户可见输出）
-        // 子类型 "simulation_content" 渲染为推文卡片
+        // log — Agent 公开消息
         es.addEventListener('log', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) {
+                var message = rt.data.message;
+                if (message) {
+                    var clean = message.replace(/\x1B\[[0-9;]*m/g, '').trim();
+                    if (clean) {
+                        if (!rt.subState.accumulatedContent) {
+                            rt.subState.accumulatedContent = clean;
+                        } else {
+                            rt.subState.accumulatedContent += '\n\n' + clean;
+                        }
+                        ChatRenderer.updateSubAgentContent(rt.agentId, rt.subState.accumulatedContent);
+                    }
+                }
+                return;
+            }
             console.log('[chat] log rcvd, msg len:', e.data ? e.data.length : 0);
             try {
                 var d = JSON.parse(e.data);
                 if (d.subType === 'simulation_content') {
                     var body = d.body || '';
-                    // 剥离 ANSI 转义码
                     body = body.replace(/\x1B\[[0-9;]*m/g, '').trim();
                     if (body) {
                         ChatRenderer.addTweetCard(asstMsgId, d.title || '推演内容', body);
@@ -434,7 +554,6 @@ function loadMobilePage(name) {
                 }
                 var message = d.message;
                 if (message) {
-                    // 剥离 ANSI 转义码（CLI 颜色码会污染 Web 显示）
                     var clean = message.replace(/\x1B\[[0-9;]*m/g, '').trim();
                     if (!clean) return;
                     if (!accumulatedContent) {
@@ -448,12 +567,21 @@ function loadMobilePage(name) {
             } catch (err) {}
         });
 
-        // result — 最终结果，优先使用 displayText（当没有流式内容时作为兜底）
+        // result — 最终结果兜底
+        var needsBranchReload = false;
         es.addEventListener('result', function(e) {
+            var rt = routeByAgent(e);
+            if (rt) return; // SubAgent 不处理 result
             console.log('[chat] result rcvd');
             try {
                 var d = JSON.parse(e.data);
                 var text = d.displayText || d.message || '';
+                // 检测 compact / branch 切换命令，标记需要 reload
+                if (text && (text.indexOf('上下文已压缩') >= 0
+                        || text.indexOf('新节点:') >= 0
+                        || text.indexOf('已切换到') >= 0)) {
+                    needsBranchReload = true;
+                }
                 if (text && !accumulatedContent) {
                     accumulatedContent = text;
                     MessageStore.update(asstMsgId, {content: accumulatedContent});
@@ -463,11 +591,12 @@ function loadMobilePage(name) {
         });
 
         // command_done — 任务完成
-        // [关键变更] 流式内容即为最终内容，不再调用 htmx.ajax 重载！
         es.addEventListener('command_done', function() {
             console.log('[chat] command_done rcvd');
             MessageStore.update(asstMsgId, {status: 'complete'});
             ChatRenderer.markComplete(asstMsgId);
+            // 清理 sub-agent 状态
+            subAgentState = {};
             finishStream(null);
         });
 
@@ -484,6 +613,7 @@ function loadMobilePage(name) {
                 ChatRenderer.updateThink(asstMsgId, '<span class="text-red-400">✖</span> 执行出错');
             } catch (err) {}
             MessageStore.update(asstMsgId, {status: 'error'});
+            subAgentState = {};
             finishStream(null);
         });
 
@@ -494,7 +624,20 @@ function loadMobilePage(name) {
             if (es) { es.close(); es = null; }
             taskId = null;
             MessageStore.setActiveAsstId(null);
+            subAgentState = {};
             resetSendBtn();
+
+            // compact / branch 切换后，重新从当前节点加载消息
+            if (needsBranchReload) {
+                needsBranchReload = false;
+                console.log('[chat] detected branch change, reloading messages');
+                setTimeout(function() {
+                    MessageStore.clear();
+                    var container = document.getElementById(ChatRenderer.MSG_CONTAINER_ID);
+                    if (container) container.innerHTML = '';
+                    initChatPanel();
+                }, 300);
+            }
         });
 
         // EventSource 连接错误
@@ -502,12 +645,20 @@ function loadMobilePage(name) {
             console.log('[chat] onerror fired, taskId:', taskId, 'readyState:', es ? es.readyState : 'null');
             if (!taskId) return;
             if (accumulatedContent) {
-                // 已有内容收到 → 可能是连接提前关闭，视为正常完成
                 MessageStore.update(asstMsgId, {status: 'complete'});
                 ChatRenderer.markComplete(asstMsgId);
                 finishStream(null);
             } else {
-                finishStream('[错误] 连接中断');
+                // 检查是否有 sub-agent 内容
+                var hasSubContent = false;
+                for (var key in subAgentState) {
+                    if (subAgentState[key].accumulatedContent) { hasSubContent = true; break; }
+                }
+                if (hasSubContent) {
+                    finishStream(null);
+                } else {
+                    finishStream('[错误] 连接中断');
+                }
             }
         };
     }

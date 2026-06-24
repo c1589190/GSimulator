@@ -122,7 +122,19 @@ public class BranchContextRenderer {
         // 1. Active Branch 信息
         sb.append("## Active Branch\n");
         sb.append("branch: ").append(branchId).append("\n");
-        sb.append("start node: ").append(startNodeId).append("\n\n");
+        sb.append("start node: ").append(startNodeId).append("\n");
+
+        // 检测 compact 检查点
+        DataDocument currentDoc = dm.readById(branchId);
+        boolean isCompact = currentDoc != null && currentDoc.isCompact();
+        if (isCompact) {
+            String compactOf = currentDoc.compactOf();
+            String compactTime = currentDoc.frontMatter().get("compactTime");
+            sb.append("compact checkpoint: true\n");
+            sb.append("compactOf: ").append(compactOf).append("\n");
+            sb.append("compactTime: ").append(compactTime != null ? compactTime : "unknown").append("\n");
+        }
+        sb.append("\n");
 
         // 2. Pinned Constraints
         List<PinnedConstraint> pins = pinStore != null

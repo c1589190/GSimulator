@@ -27,7 +27,14 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.agent.tool.DispatchSubAgentTool;
+import com.gsim.agent.tool.CollectSubAgentResultsTool;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -75,9 +82,25 @@ public class OrchestratorAgent {
     /** 工具结果压缩阈值（字符数，默认 3000）。 */
     private volatile int toolResultThreshold = 3000;
 
+    /** SubAgent 异步结果收集（agentId → future）。 */
+    private final Map<String, CompletableFuture<SubAgentResult>> runningSubAgents = new ConcurrentHashMap<>();
+    /** SubAgent ID 计数器。 */
+    private final AtomicInteger subAgentCounter = new AtomicInteger(0);
+
     /** 返回工具组管理器（供 NodeAgentChatService 和测试使用）。 */
     public ToolGroupManager groupManager() {
         return groupManager;
+    }
+
+    /**
+     * 注册子代理派发/收集工具到 ToolRegistry。
+     * 由 GSimulatorApplication 在构造后调用。
+     */
+    public void registerSubAgentTools(ToolRegistry registry) {
+        registry.register(new DispatchSubAgentTool(
+                llmManager, toolRegistry, model, progressSink,
+                runningSubAgents, subAgentCounter));
+        registry.register(new CollectSubAgentResultsTool(runningSubAgents));
     }
 
     public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
@@ -342,10 +365,10 @@ public class OrchestratorAgent {
 
             if (!allParsed.isEmpty()) {
                 for (ParsedToolCall parsed : allParsed) {
-                    log.info("Tool call detected: {} with args: {}", parsed.tool, parsed.args);
-                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    log.info("Tool call detected: {} with args: {}", parsed.tool(), parsed.args());
+                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     // 将 tool 结果追加到上下文
                     String toolResultText = formatToolResult(result);
@@ -830,10 +853,7 @@ public class OrchestratorAgent {
 
     // ---- result types ----
 
-    /**
-     * 解析出的工具调用。
-     */
-    record ParsedToolCall(String tool, Map<String, String> args) {}
+    // ParsedToolCall moved to com.gsim.agent.ParsedToolCall (top-level public record)
 
     /**
      * 一次工具调用记录（含结果）。
@@ -904,13 +924,13 @@ public class OrchestratorAgent {
 
             if (!allParsed.isEmpty()) {
                 for (ParsedToolCall parsed : allParsed) {
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
+                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     StringBuilder toolResultStr = new StringBuilder();
-                    toolResultStr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                    toolResultStr.append("工具 ").append(parsed.tool()).append(" 返回:\n");
                     if (result.success()) {
                         for (ToolResult.Item item : result.items()) {
                             toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
@@ -1007,13 +1027,13 @@ public class OrchestratorAgent {
 
             if (!allParsed.isEmpty()) {
                 for (ParsedToolCall parsed : allParsed) {
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
-                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
+                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     StringBuilder tr = new StringBuilder();
-                    tr.append("工具 ").append(parsed.tool).append(" 返回:\n");
+                    tr.append("工具 ").append(parsed.tool()).append(" 返回:\n");
                     if (result.success()) {
                         for (ToolResult.Item item : result.items()) {
                             tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
@@ -1308,7 +1328,7 @@ public class OrchestratorAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, maxToolRounds, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool()));
                 }
 
                 // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
@@ -1356,29 +1376,29 @@ public class OrchestratorAgent {
                 for (ParsedToolCall parsed : allParsed) {
                     String callSource = toolSource == ToolLoopDebug.ToolCallSource.API_TOOL_CALLS
                             ? "API_TOOL_CALLS" : "TEXT_FALLBACK";
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
                     ToolLoopDebug.logToolCall(log, "runToolLoop", toolRound,
-                            parsed.tool, parsed.args.toString(), callSource);
+                            parsed.tool(), parsed.args().toString(), callSource);
 
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(
-                            toolRound, maxToolRounds, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool()));
 
                     // === 执行前门禁：路由 + 分类 + 确认 ===
                     ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
-                            parsed.tool, parsed.args, routeDecision,
+                            parsed.tool(), parsed.args(), routeDecision,
                             allowAllMutations);
                     ToolLoopDebug.logToolExecutionPolicy(log, "runToolLoop", toolRound,
-                            parsed.tool, execDecision);
+                            parsed.tool(), execDecision);
 
                     if (execDecision.decision() == ToolExecutionDecisionType.REJECT) {
                         String reprompt = executionPolicy.buildRejectionReprompt(
-                                parsed.tool, execDecision, routeDecision);
+                                parsed.tool(), execDecision, routeDecision);
                         messages.add(LlmMessage.user(reprompt));
                         trace.add(new MessageTrace("system", "tool_rejected",
                                 execDecision.reason()));
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, maxToolRounds, parsed.tool,
+                                toolRound, maxToolRounds, parsed.tool(),
                                 "REJECTED: " + execDecision.reason()));
                         continue;
                     }
@@ -1386,21 +1406,21 @@ public class OrchestratorAgent {
                     if (execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
                         if (permissionGate != null) {
                             progressSink.onProgress(AgentProgressEvent.awaitingToolConfirmation(
-                                    toolRound, maxToolRounds, parsed.tool));
+                                    toolRound, maxToolRounds, parsed.tool()));
 
                             ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
-                                    parsed.tool, execDecision.category(),
-                                    execDecision.reason(), parsed.args,
+                                    parsed.tool(), execDecision.category(),
+                                    execDecision.reason(), parsed.args(),
                                     contextMeta != null ? contextMeta.activeBranch() : null);
                             ConfirmationChoice choice = permissionGate.askConfirmation(confirmReq);
                             ToolLoopDebug.logToolPermissionDecision(log, "runToolLoop",
-                                    toolRound, parsed.tool, choice);
+                                    toolRound, parsed.tool(), choice);
 
                             if (choice == ConfirmationChoice.DENY) {
-                                String denyMsg = executionPolicy.buildDenyStopMessage(parsed.tool);
+                                String denyMsg = executionPolicy.buildDenyStopMessage(parsed.tool());
                                 messages.add(LlmMessage.user(denyMsg));
                                 trace.add(new MessageTrace("system", "tool_denied",
-                                        "tool=" + parsed.tool + " choice=DENY"));
+                                        "tool=" + parsed.tool() + " choice=DENY"));
                                 finalText = denyMsg;
                                 break;
                             }
@@ -1410,28 +1430,28 @@ public class OrchestratorAgent {
                         }
                     }
 
-                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, maxToolRounds, parsed.tool));
+                                toolRound, maxToolRounds, parsed.tool()));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, maxToolRounds, parsed.tool, result.error()));
+                                toolRound, maxToolRounds, parsed.tool(), result.error()));
                     }
 
-                    String toolFeedback = buildToolResultFeedback(parsed.tool, result);
+                    String toolFeedback = buildToolResultFeedback(parsed.tool(), result);
                     if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
                         toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
                     }
                     messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
-                            "tool=" + parsed.tool + " success=" + result.success()));
+                            "tool=" + parsed.tool() + " success=" + result.success()));
                     ToolLoopDebug.logToolResult(log, "runToolLoop", toolRound,
-                            parsed.tool, result.success(), result.error(),
+                            parsed.tool(), result.success(), result.error(),
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
@@ -1454,7 +1474,7 @@ public class OrchestratorAgent {
                         }
                     }
 
-                    if ("finish_action".equals(parsed.tool) && result.success()) {
+                    if ("finish_action".equals(parsed.tool()) && result.success()) {
                         finishActionSeen = true;
                         for (ToolResult.Item item : result.items()) {
                             if ("finish_action_summary".equals(item.title())) {
@@ -1554,18 +1574,16 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮：纯文本直接显示给用户 + 轻量提醒
+            // 普通无工具轮：不把纯文本发给前端（等 finish_action 统一显示，避免重复）
             consecutiveInvalidToolIntent = 0;
             {
                 consecutiveNoToolRounds++;
                 ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
 
-                // 纯文本显示给用户
-                if (content != null && !content.isBlank()) {
-                    progressSink.onProgress(AgentProgressEvent.publicMessage(content.strip()));
-                }
+                // 不再发送 publicMessage — 纯文本等 finish_action 再显示
+                // （之前这里发 publicMessage 会导致前端看到两份：raw 文本 + finish_action 消息）
 
-                // 连续 3 轮无工具 → abort（比 v1 更宽容）
+                // 连续 3 轮无工具 → abort
                 if (consecutiveNoToolRounds >= 3) {
                     String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
                     trace.add(new MessageTrace("system", "error", errMsg));
@@ -1577,7 +1595,7 @@ public class OrchestratorAgent {
                                     + " consecutive rounds");
                 }
 
-                // 轻量提醒：可调用 finish_action 结束，将摘要放入 summary
+                // 提醒：需要工具或 finish_action
                 String reminder = "你没有调用任何工具。如果你已经完成了用户请求，请调用 finish_action 结束本轮，"
                         + "并在 summary 字段中简要总结你做了什么。\n"
                         + "如果还需要查询/写入/操作，请先调用 activate_tool_groups 激活所需的工具组，"
@@ -1715,7 +1733,7 @@ public class OrchestratorAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, maxToolRounds, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool()));
                 }
 
                 // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
@@ -1753,36 +1771,36 @@ public class OrchestratorAgent {
                 for (ParsedToolCall parsed : allParsed) {
                     String callSource = toolSource == ToolLoopDebug.ToolCallSource.API_TOOL_CALLS
                             ? "API_TOOL_CALLS" : "TEXT_FALLBACK";
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool + " " + parsed.args));
+                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
                     ToolLoopDebug.logToolCall(log, "runSimToolLoop", toolRound,
-                            parsed.tool, parsed.args.toString(), callSource);
+                            parsed.tool(), parsed.args().toString(), callSource);
 
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(
-                            toolRound, maxToolRounds, parsed.tool));
+                            toolRound, maxToolRounds, parsed.tool()));
 
-                    ToolCall call = new ToolCall(parsed.tool, parsed.args);
+                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool, parsed.args, result));
+                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, maxToolRounds, parsed.tool));
+                                toolRound, maxToolRounds, parsed.tool()));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
-                                toolRound, maxToolRounds, parsed.tool, result.error()));
+                                toolRound, maxToolRounds, parsed.tool(), result.error()));
                     }
 
-                    String toolFeedback = buildToolResultFeedback(parsed.tool, result);
+                    String toolFeedback = buildToolResultFeedback(parsed.tool(), result);
                     if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
                         toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
                     }
                     messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
-                            "tool=" + parsed.tool + " success=" + result.success()));
+                            "tool=" + parsed.tool() + " success=" + result.success()));
                     ToolLoopDebug.logToolResult(log, "runSimToolLoop", toolRound,
-                            parsed.tool, result.success(), result.error(),
+                            parsed.tool(), result.success(), result.error(),
                             result.success() ? summarizeToolResult(result) : null,
                             null);
 
@@ -1805,7 +1823,7 @@ public class OrchestratorAgent {
                         }
                     }
 
-                    if ("finish_action".equals(parsed.tool) && result.success()) {
+                    if ("finish_action".equals(parsed.tool()) && result.success()) {
                         finishActionSeen = true;
                         for (ToolResult.Item item : result.items()) {
                             if ("finish_action_summary".equals(item.title())) {
@@ -1897,15 +1915,10 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮
+            // 普通无工具轮：不把纯文本发给前端（等 finish_action 统一显示）
             consecutiveNoToolRounds++;
             consecutiveInvalidToolIntent = 0;
             ToolLoopDebug.logNoToolRound(log, "runSimToolLoop", toolRound, consecutiveNoToolRounds);
-
-            // 纯文本显示给用户
-            if (content != null && !content.isBlank()) {
-                progressSink.onProgress(AgentProgressEvent.publicMessage(content.strip()));
-            }
 
             if (consecutiveNoToolRounds >= 3) {
                 String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);

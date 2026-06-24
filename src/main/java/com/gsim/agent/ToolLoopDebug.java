@@ -73,7 +73,7 @@ public final class ToolLoopDebug {
     }
 
     static void logToolExtraction(Logger log, String loopName, int round,
-                                  List<OrchestratorAgent.ParsedToolCall> tools,
+                                  List<ParsedToolCall> tools,
                                   int apiToolCallCount, int textFallbackToolCallCount,
                                   ToolCallSource source, String rawContent) {
         if (!log.isDebugEnabled()) return;
@@ -255,7 +255,7 @@ public final class ToolLoopDebug {
 
     static void logFinishActionWithOtherToolsRejected(Logger log, String loopName,
                                                       int round,
-                                                      java.util.List<OrchestratorAgent.ParsedToolCall> allParsed) {
+                                                      java.util.List<ParsedToolCall> allParsed) {
         if (!log.isDebugEnabled()) return;
         StringBuilder sb = new StringBuilder();
         sb.append("\n=== TOOL_LOOP FINISH_ACTION ===\n");
@@ -265,7 +265,7 @@ public final class ToolLoopDebug {
         sb.append("rejectReason=FINISH_ACTION_WITH_OTHER_TOOLS\n");
         sb.append("allTools=");
         sb.append(allParsed.stream()
-                .map(OrchestratorAgent.ParsedToolCall::tool)
+                .map(ParsedToolCall::tool)
                 .collect(java.util.stream.Collectors.joining(", ")));
         sb.append("\n=== TOOL_LOOP FINISH_ACTION END ===");
         log.debug(sb.toString());

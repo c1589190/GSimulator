@@ -83,7 +83,7 @@ class CompactCommandTest {
                     }
                 }, new com.gsim.agent.ToolGroupManager());
 
-        command = new CompactCommand(ctxSessionManager, compactor, orchestrator);
+        command = new CompactCommand(ctxSessionManager, compactor, orchestrator, dm);
 
         // Session
         var campaignService = new com.gsim.campaign.CampaignService(

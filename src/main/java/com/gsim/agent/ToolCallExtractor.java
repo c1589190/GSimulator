@@ -42,11 +42,11 @@ public final class ToolCallExtractor {
      * 从文本中提取第一个 tool call。
      * 返回 null 如果没有找到有效 tool call。
      */
-    public static OrchestratorAgent.ParsedToolCall extractFirstToolCall(String text) {
+    public static ParsedToolCall extractFirstToolCall(String text) {
         if (text == null || text.isBlank()) return null;
 
         // 1. Try pure JSON (entire trimmed text)
-        OrchestratorAgent.ParsedToolCall result = tryParseJson(text.trim());
+        ParsedToolCall result = tryParseJson(text.trim());
         if (result != null) return result;
 
         // 2. Try extracting fenced code block(s) - find all fences, try each
@@ -67,8 +67,8 @@ public final class ToolCallExtractor {
     /**
      * 从文本中提取所有 tool call（按出现顺序），自动去重 fenced + bare JSON 重复。
      */
-    public static List<OrchestratorAgent.ParsedToolCall> extractAllToolCalls(String text) {
-        List<OrchestratorAgent.ParsedToolCall> results = new ArrayList<>();
+    public static List<ParsedToolCall> extractAllToolCalls(String text) {
+        List<ParsedToolCall> results = new ArrayList<>();
         if (text == null || text.isBlank()) return results;
 
         // 1. 找到所有 fenced block 的文本范围
@@ -76,7 +76,7 @@ public final class ToolCallExtractor {
 
         // 2. 从 fenced block 中提取 tool call
         for (FenceRange fence : fences) {
-            OrchestratorAgent.ParsedToolCall parsed = tryParseJson(fence.content);
+            ParsedToolCall parsed = tryParseJson(fence.content);
             if (parsed != null) results.add(parsed);
         }
 
@@ -95,7 +95,7 @@ public final class ToolCallExtractor {
             }
             if (insideFence) continue;
 
-            OrchestratorAgent.ParsedToolCall parsed = tryParseJson(candidate);
+            ParsedToolCall parsed = tryParseJson(candidate);
             if (parsed != null) results.add(parsed);
         }
 
@@ -154,7 +154,7 @@ public final class ToolCallExtractor {
     }
 
     /** 尝试将纯 JSON 字符串解析为 tool call。 */
-    static OrchestratorAgent.ParsedToolCall tryParseJson(String jsonText) {
+    static ParsedToolCall tryParseJson(String jsonText) {
         if (jsonText == null || jsonText.isBlank()) return null;
         String trimmed = jsonText.trim();
         if (!trimmed.startsWith("{")) return null;
@@ -174,7 +174,7 @@ public final class ToolCallExtractor {
                     args.put(entry.getKey(), entry.getValue().asText());
                 }
             }
-            return new OrchestratorAgent.ParsedToolCall(tool, args);
+            return new ParsedToolCall(tool, args);
         } catch (Exception e) {
             log.debug("Not a valid tool call JSON: {}", trimmed.substring(0, Math.min(80, trimmed.length())));
             return null;
@@ -280,8 +280,8 @@ public final class ToolCallExtractor {
      * 只支持合法工具名格式 {@code [a-zA-Z0-9_:-]+} 后跟合法 JSON object。
      * 不支持 [工具结果]、{key=value} 等伪格式。
      */
-    static List<OrchestratorAgent.ParsedToolCall> extractBracketInvokeToolCalls(String text) {
-        List<OrchestratorAgent.ParsedToolCall> results = new ArrayList<>();
+    static List<ParsedToolCall> extractBracketInvokeToolCalls(String text) {
+        List<ParsedToolCall> results = new ArrayList<>();
         if (text == null || text.isBlank()) return results;
 
         Matcher matcher = BRACKET_INVOKE.matcher(text);
@@ -304,7 +304,7 @@ public final class ToolCallExtractor {
                         args.put(entry.getKey(), entry.getValue().asText());
                     }
                 }
-                results.add(new OrchestratorAgent.ParsedToolCall(toolName, args));
+                results.add(new ParsedToolCall(toolName, args));
             } catch (Exception e) {
                 log.debug("Bracket invoke JSON parse failed for tool={}: {}", toolName,
                         jsonText.substring(0, Math.min(80, jsonText.length())));

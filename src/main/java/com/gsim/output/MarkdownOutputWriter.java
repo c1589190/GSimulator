@@ -1,7 +1,5 @@
 package com.gsim.output;
 
-import com.gsim.agent.PlayerActionAnalysis;
-import com.gsim.agent.WriterOutput;
 import com.gsim.chroma.EvidenceBundle;
 import com.gsim.chroma.EvidenceItem;
 import com.gsim.timeline.TimelineEvent;
@@ -14,6 +12,8 @@ import java.util.List;
 
 /**
  * Markdown 输出写入器 — 将 /run 结果保存为人类可读的 Markdown 文件。
+ *
+ * <p>PlayerActionAnalysis 和 WriterOutput 已废弃，相关参数替换为通用类型。
  */
 public class MarkdownOutputWriter {
 
@@ -25,11 +25,11 @@ public class MarkdownOutputWriter {
             String campaignId,
             String turnId,
             String taskId,
-            List<PlayerActionAnalysis> analyses,
+            List<String> analyses,                  // was List<PlayerActionAnalysis>
             EvidenceBundle evidence,
             List<TimelineEvent> timelineEvents,
             List<StateChange> stateChanges,
-            WriterOutput writerOutput,
+            String writerOutput,                    // was WriterOutput
             List<String> warnings
     ) throws IOException {
 
@@ -44,23 +44,9 @@ public class MarkdownOutputWriter {
         sb.append("## 一、玩家行动分析\n\n");
         if (analyses != null) {
             for (var a : analyses) {
-                sb.append("### ").append(a.playerName()).append("\n\n");
-                sb.append("- **摘要**: ").append(a.summary()).append("\n");
-                if (!a.declaredActions().isEmpty()) {
-                    sb.append("- **明示行动**: ").append(String.join("; ", a.declaredActions())).append("\n");
-                }
-                if (!a.impliedActions().isEmpty()) {
-                    sb.append("- **隐含行动**: ").append(String.join("; ", a.impliedActions())).append("\n");
-                }
-                sb.append("- **政治意图**: ").append(a.politicalIntent()).append("\n");
-                sb.append("- **军事意图**: ").append(a.militaryIntent()).append("\n");
-                sb.append("- **经济意图**: ").append(a.economicIntent()).append("\n");
-                sb.append("- **外交意图**: ").append(a.diplomaticIntent()).append("\n");
-                if (!a.contradictions().isEmpty()) {
-                    sb.append("- **矛盾点**: ").append(String.join("; ", a.contradictions())).append("\n");
-                }
-                sb.append("\n");
+                sb.append("- ").append(a).append("\n");
             }
+            sb.append("\n");
         }
 
         // 二、知识库检索
@@ -107,11 +93,7 @@ public class MarkdownOutputWriter {
         // 五、公开战报
         sb.append("## 五、公开战报\n\n");
         if (writerOutput != null) {
-            sb.append(writerOutput.publicText()).append("\n\n");
-            if (writerOutput.privateNotes() != null && !writerOutput.privateNotes().isBlank()) {
-                sb.append("### 主持人私密说明\n\n");
-                sb.append(writerOutput.privateNotes()).append("\n\n");
-            }
+            sb.append(writerOutput).append("\n\n");
         }
 
         // 六、警告

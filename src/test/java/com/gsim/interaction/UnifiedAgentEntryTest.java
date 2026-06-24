@@ -1,5 +1,6 @@
 package com.gsim.interaction;
 
+import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.OrchestratorAgent;
 import com.gsim.app.AppConfig;
 import com.gsim.branch.BranchAnalyzer;
@@ -36,6 +37,7 @@ class UnifiedAgentEntryTest {
     private FakeLlmManager fakeLlm;
     private InteractionSession session;
     private NodeAgentChatService chatService;
+    private ToolRegistry toolRegistry;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -62,21 +64,38 @@ class UnifiedAgentEntryTest {
         ContextSessionManager ctxSessionManager = new ContextSessionManager(
                 sessionStore, renderer, dm, worldDir);
 
+        toolRegistry = new ToolRegistry();
         OrchestratorAgent orchestrator = new OrchestratorAgent(
-                fakeLlm, new ToolRegistry(), "test-model");
+                fakeLlm, toolRegistry, "test-model");
 
         chatService = new NodeAgentChatService(dm, renderer, orchestrator, ctxSessionManager,
                 dm.getDataRoot(), null);
     }
 
     @Test
-    @DisplayName("/sim 空内容应返回废弃提示")
-    void simEmptyContentReturnsDeprecationMessage() {
-        SimCommand sim = new SimCommand(chatService);
+    @DisplayName("/sim 空内容应返回用法提示")
+    void simEmptyContentReturnsUsageMessage() {
+        SimCommand sim = new SimCommand(fakeLlm, toolRegistry, "test-model",
+                AgentProgressSink.NOOP);
         InteractionResult result = sim.execute(new String[]{}, null);
         assertFalse(result.success());
-        assertTrue(result.message().contains("已废弃"));
-        assertTrue(result.message().contains("自然语言"));
+        assertTrue(result.message().contains("用法"));
+    }
+
+    @Test
+    @DisplayName("/sim 描述为推演叙事生成入口")
+    void simDescriptionIsSimAgentEntry() {
+        SimCommand sim = new SimCommand(null, null, "test-model", null);
+        assertTrue(sim.description().contains("SimAgent"));
+        assertTrue(sim.description().contains("推演"));
+    }
+
+    @Test
+    @DisplayName("/search 描述为深度资料搜索入口")
+    void searchDescriptionIsSearchAgentEntry() {
+        SearchCommand search = new SearchCommand(null, null, "test-model", null);
+        assertTrue(search.description().contains("SearchAgent"));
+        assertTrue(search.description().contains("搜索"));
     }
 
     @Test
@@ -86,13 +105,6 @@ class UnifiedAgentEntryTest {
         InteractionResult result = run.execute(new String[]{}, null);
         assertFalse(result.success());
         assertTrue(result.message().contains("已废弃"));
-    }
-
-    @Test
-    @DisplayName("/sim 描述中包含已废弃标识")
-    void simDescriptionIndicatesDeprecation() {
-        SimCommand sim = new SimCommand(null);
-        assertTrue(sim.description().contains("已废弃"));
     }
 
     @Test
@@ -108,18 +120,6 @@ class UnifiedAgentEntryTest {
         ChatCommand chat = new ChatCommand(null);
         assertTrue(chat.description().contains("统一"));
         assertTrue(chat.description().contains("已废弃"));
-    }
-
-    @Test
-    @DisplayName("/sim 有内容时转发到 chatService.chat()")
-    void simWithContentForwardsToChatService() throws Exception {
-        fakeLlm.setNextResponse("推演回复");
-
-        SimCommand sim = new SimCommand(chatService);
-        InteractionResult result = sim.execute(new String[]{"推演测试内容"}, null);
-
-        assertTrue(result.success());
-        assertTrue(result.message().contains("sim → chat"));
     }
 
     @Test

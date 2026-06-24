@@ -123,8 +123,16 @@ public class ChatHandler implements HttpHandler {
         // 通过 ApiManager 的 TaskManager 创建 PENDING 任务（不自动启动）
         // 任务将在 SSE 客户端连接后由 handleStream() 启动，
         // 确保订阅者不会错过任何事件。
+        //
+        // 命令路由：以 / 开头的消息直接作为命令执行（如 /compact, /help, /sim）
+        //           非 / 开头的消息走 /chat 转发到 Agent
         TaskManager tm = ctx.getApiManager().getTaskManager();
-        String cmd = "/chat " + message;
+        String cmd;
+        if (message.startsWith("/")) {
+            cmd = message;  // 去掉前导 /chat，直接执行命令
+        } else {
+            cmd = "/chat " + message;
+        }
         ApiTask task = tm.createCommandTask(sessionId, cmd, false);
 
         Map<String, Object> result = new LinkedHashMap<>();

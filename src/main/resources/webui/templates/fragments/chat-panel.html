@@ -6,6 +6,54 @@
     </div>
     <!-- 待上传文件标签 -->
     <div id="chat-uploads" class="hidden flex flex-wrap gap-1 mb-2"></div>
+    <style>
+        /* === SubAgent 卡片 === */
+        .sub-agent-card {
+            background: #0f1724;
+            border: 1px solid #1e293b;
+            border-left: 3px solid #6366f1;
+        }
+        .sub-agent-card[data-agent-type="sim"] {
+            border-left-color: #a78bfa;   /* 紫色 — SimAgent */
+        }
+        .sub-agent-card[data-agent-type="search"] {
+            border-left-color: #22d3ee;   /* 青色 — SearchAgent */
+        }
+        .sub-agent-header {
+            user-select: none;
+        }
+        .sub-agent-header:hover {
+            color: #e2e8f0;
+        }
+        .sub-agent-label {
+            color: #cbd5e1;
+        }
+        .sub-agent-id {
+            font-family: monospace;
+        }
+        .sub-agent-body {
+            padding-left: 0.5rem;
+        }
+        .sub-reasoning {
+            max-height: 6rem;
+            overflow-y: auto;
+        }
+        .sub-content-block {
+            color: #e2e8f0;
+            line-height: 1.5;
+        }
+        .sub-tool-card {
+            background: #0a0e17;
+            border-left: 3px solid #6366f1;
+            padding: 2px 6px;
+        }
+        .sub-tool-card.success {
+            border-left-color: #34d399;
+        }
+        .sub-tool-card.error {
+            border-left-color: #ef4444;
+        }
+    </style>
     <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
         <div id="chat-empty-state" class="text-gray-600 text-sm">发送消息开始对话</div>
     </div>

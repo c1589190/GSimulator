@@ -1,0 +1,18 @@
+# "庞贝"/spine
+Source URL: https://m.prts.wiki/w/%22%E5%BA%9E%E8%B4%9D%22%2Fspine
+Fetched At: 2026-06-25 00:55:07
+Site: prts.wiki
+Crawler: mediawiki-batch-allpages
+Collection Hint: world_lore
+Tags: web,prts.wiki
+---
+{    "prefix": "https://torappu.prts.wiki/assets/enemy_spine/enemy_1050_lslime/",
+   "name": "\"庞贝\"",
+   "skin": {
+       "默认": {
+           "战斗": {
+               "file": "enemy_1050_lslime"
+           }
+       }
+   }
+ }

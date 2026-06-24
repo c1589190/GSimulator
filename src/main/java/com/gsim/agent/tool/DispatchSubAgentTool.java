@@ -1,0 +1,143 @@
+package com.gsim.agent.tool;
+
+import com.gsim.agent.AgentProgressSink;
+import com.gsim.agent.TaggedAgentProgressSink;
+import com.gsim.agent.sub.SearchAgent;
+import com.gsim.agent.sub.SimAgent;
+import com.gsim.agent.sub.SubAgent;
+import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.llm.LlmManager;
+import com.gsim.llm.ToolDef;
+import com.gsim.tool.AgentTool;
+import com.gsim.tool.ToolCall;
+import com.gsim.tool.ToolRegistry;
+import com.gsim.tool.ToolResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * dispatch_sub_agent 工具 — 创建并启动子代理。
+ *
+ * <p>参数:
+ * <ul>
+ *   <li>type (必填): "sim" 或 "search"</li>
+ *   <li>prompt (必填): 子代理的任务指令</li>
+ * </ul>
+ *
+ * <p>子代理在 Virtual Thread 中异步执行，结果通过 CompletableFuture 收集。
+ * 调用 collect_sub_agent_results 等待所有子代理完成并聚合结果。
+ */
+public class DispatchSubAgentTool implements AgentTool {
+
+    public static final String NAME = "dispatch_sub_agent";
+
+    private static final Logger log = LoggerFactory.getLogger(DispatchSubAgentTool.class);
+
+    private final LlmManager llmManager;
+    private final ToolRegistry toolRegistry;
+    private final String model;
+    private final AgentProgressSink progressSink;
+    private final Map<String, CompletableFuture<SubAgentResult>> runningSubAgents;
+    private final AtomicInteger subAgentCounter;
+
+    public DispatchSubAgentTool(LlmManager llmManager, ToolRegistry toolRegistry,
+                                String model, AgentProgressSink progressSink,
+                                Map<String, CompletableFuture<SubAgentResult>> runningSubAgents,
+                                AtomicInteger subAgentCounter) {
+        this.llmManager = llmManager;
+        this.toolRegistry = toolRegistry;
+        this.model = model;
+        this.progressSink = progressSink;
+        this.runningSubAgents = runningSubAgents;
+        this.subAgentCounter = subAgentCounter;
+    }
+
+    @Override
+    public String name() {
+        return NAME;
+    }
+
+    @Override
+    public String description() {
+        return """
+                创建并启动一个子代理（SimAgent 或 SearchAgent）。
+                参数:
+                - type: "sim"（推演叙事生成）或 "search"（深度资料搜索）
+                - prompt: 子代理的任务指令
+                子代理在后台异步执行。使用 collect_sub_agent_results 收集结果。
+                """;
+    }
+
+    @Override
+    public Map<String, Object> getParameters() {
+        return ToolDef.strictSchema(
+                Map.of(
+                        "type", Map.of(
+                                "type", "string",
+                                "description", "子代理类型：sim（推演叙事）或 search（资料搜索）",
+                                "enum", List.of("sim", "search")
+                        ),
+                        "prompt", Map.of(
+                                "type", "string",
+                                "description", "子代理的任务指令文本"
+                        )
+                ),
+                List.of("type", "prompt")
+        );
+    }
+
+    @Override
+    public ToolResult execute(ToolCall call) {
+        String type = call.param("type", "").trim().toLowerCase();
+        String prompt = call.param("prompt", "").trim();
+
+        if (!Set.of("sim", "search").contains(type)) {
+            return ToolResult.fail(NAME, "Unknown sub-agent type: " + type
+                    + ". Allowed: sim, search");
+        }
+        if (prompt.isEmpty()) {
+            return ToolResult.fail(NAME, "prompt cannot be empty");
+        }
+
+        int id = subAgentCounter.incrementAndGet();
+        String agentId = type + "-" + id;
+
+        // 创建带 agentId + taskId/sessionId 标签的 progress sink
+        // 从父线程捕获 ThreadLocal 值（SubAgent 运行在独立 VT 中）
+        String parentTaskId = com.gsim.agent.EventBusAgentProgressSink.getCurrentTaskId();
+        String parentSessionId = com.gsim.agent.EventBusAgentProgressSink.getCurrentSessionId();
+        AgentProgressSink taggedSink = new TaggedAgentProgressSink(
+                progressSink, agentId, parentTaskId, parentSessionId);
+
+        // 创建子代理
+        SubAgent agent = switch (type) {
+            case "sim" -> new SimAgent(agentId, llmManager, toolRegistry, model,
+                    taggedSink, prompt);
+            case "search" -> new SearchAgent(agentId, llmManager, toolRegistry, model,
+                    taggedSink, prompt);
+            default -> throw new IllegalArgumentException("Unknown type: " + type);
+        };
+
+        // 在 Virtual Thread 中启动
+        Thread vt = Thread.startVirtualThread(agent);
+        runningSubAgents.put(agentId, agent.future());
+
+        log.info("[DispatchSubAgent] created {} (type={}, promptLen={})",
+                agentId, type, prompt.length());
+
+        return ToolResult.ok(NAME, List.of(new ToolResult.Item(
+                "dispatched: " + agentId,
+                NAME,
+                "子代理 " + agentId + "（类型: " + type + "）已启动。"
+                        + "当前运行中的子代理: " + runningSubAgents.keySet() + "。"
+                        + "请调用 collect_sub_agent_results 等待并收集所有子代理结果。",
+                1.0)));
+    }
+}

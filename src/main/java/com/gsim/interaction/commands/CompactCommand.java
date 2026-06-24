@@ -5,6 +5,7 @@ import com.gsim.compact.ContextCompactor;
 import com.gsim.context.session.ContextSession;
 import com.gsim.context.session.ContextSessionManager;
 import com.gsim.context.session.SessionMessage;
+import com.gsim.data.DataManager;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionResult;
 import com.gsim.interaction.InteractionSession;
@@ -25,12 +26,14 @@ public class CompactCommand implements InteractionCommand {
     private final ContextSessionManager ctxSessionManager;
     private final ContextCompactor compactor;
     private final OrchestratorAgent orchestrator;
+    private final DataManager dataManager;
 
     public CompactCommand(ContextSessionManager ctxSessionManager, ContextCompactor compactor,
-                          OrchestratorAgent orchestrator) {
+                          OrchestratorAgent orchestrator, DataManager dataManager) {
         this.ctxSessionManager = ctxSessionManager;
         this.compactor = compactor;
         this.orchestrator = orchestrator;
+        this.dataManager = dataManager;
     }
 
     @Override
@@ -78,23 +81,28 @@ public class CompactCommand implements InteractionCommand {
             int originalCount = messages.size();
             int summaryLength = summary.length();
 
-            // 5. 重置 ContextSession
+            // 5. 创建 Compact 检查点节点（持久化到新 branch，切换 activeBranch）
+            String parentBranch = dataManager.getActiveBranch();
+            var compactDoc = dataManager.createCompactCheckpoint(parentBranch, summary);
+            String newBranchId = compactDoc.id();
+            log.info("Compact: {} messages → {} char summary, new branch={} compactOf={}",
+                    originalCount, summaryLength, newBranchId, parentBranch);
+
+            // 6. 重置 ContextSession（branch 已切换，会自动创建新 session）
             ContextSession newSession = ctxSessionManager.resetSession(API_SESSION_ID,
-                    "compact: " + originalCount + " messages → " + summaryLength + " chars");
+                    "compact: " + originalCount + " messages → " + summaryLength + " chars, branch=" + newBranchId);
             String newSessionId = newSession.sessionId();
 
-            // 6. 将压缩摘要写入新的 session（作为 system_note）
+            // 7. 将压缩摘要写入新的 session（作为 system_note）
             String noteContent = "[上下文摘要]\n\n" + summary;
             SessionMessage note = SessionMessage.systemNote(newSessionId, newSession.branchId(), noteContent);
             ctxSessionManager.appendMessage(newSessionId, note);
 
-            log.info("Compact: {} messages → {} char summary, new session={}",
-                    originalCount, summaryLength, newSessionId);
-
             return ok("✅ 上下文已压缩。\n"
                     + "原 " + originalCount + " 条消息 → " + summaryLength + " 字符摘要。\n"
-                    + "新 Session ID: " + newSessionId + "\n\n"
-                    + "可以继续对话。AI 将基于以上摘要理解之前的上下文。");
+                    + "新节点: " + newBranchId + "\n"
+                    + "新 Session: " + newSessionId + "\n\n"
+                    + "旧节点已冻结，后续消息写入新节点。可以继续对话。");
 
         } catch (Exception e) {
             log.error("/compact failed: {}", e.getMessage(), e);

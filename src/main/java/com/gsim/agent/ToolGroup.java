@@ -128,6 +128,8 @@ public record ToolGroup(
     public static final Set<String> DEFAULT_TOOLS = Set.of(
             "finish_action",
             "activate_tool_groups",
+            "dispatch_sub_agent",
+            "collect_sub_agent_results",
             "branch_path",
             "branch_node_get",
             "branch_list",

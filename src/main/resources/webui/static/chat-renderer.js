@@ -379,6 +379,222 @@
 
     // ---- 导出 ----
 
+    // ===== SubAgent 卡片 =====
+
+    /**
+     * 在父 assistant 消息的 .blocks 中创建 SubAgent 卡片。
+     * 返回 {msgId, cardEl} 供后续流式更新使用。
+     */
+    function renderSubAgentCard(parentAsstId, agentId, agentType) {
+        var blocks = getBlocks(parentAsstId);
+        if (!blocks) return null;
+
+        removeEmptyState();
+
+        var typeIcon = agentType === 'sim' ? '\u{1F4DD}' : '\u{1F50D}';
+        var typeLabel = agentType === 'sim' ? 'SimAgent' : 'SearchAgent';
+
+        var card = document.createElement('div');
+        card.id = 'sub-' + agentId;
+        card.className = 'sub-agent-card rounded p-2 text-xs mt-2';
+        card.setAttribute('data-agent-id', agentId);
+        card.setAttribute('data-agent-type', agentType);
+
+        // header
+        var header = document.createElement('div');
+        header.className = 'sub-agent-header flex items-center gap-1 cursor-pointer';
+        header.onclick = function() { toggleSubAgentBody(card); };
+
+        var toggle = document.createElement('span');
+        toggle.className = 'sub-toggle text-gray-500';
+        toggle.textContent = '▼';
+
+        var icon = document.createElement('span');
+        icon.textContent = typeIcon;
+
+        var label = document.createElement('span');
+        label.className = 'sub-agent-label font-bold';
+        label.textContent = typeLabel + ' ';
+
+        var idSpan = document.createElement('span');
+        idSpan.className = 'sub-agent-id text-gray-500';
+        idSpan.textContent = agentId;
+
+        var status = document.createElement('span');
+        status.className = 'sub-agent-status ml-auto text-yellow-400';
+        status.innerHTML = '● 执行中...';
+
+        header.appendChild(toggle);
+        header.appendChild(icon);
+        header.appendChild(label);
+        header.appendChild(idSpan);
+        header.appendChild(status);
+
+        // body
+        var body = document.createElement('div');
+        body.className = 'sub-agent-body';
+
+        // reasoning area
+        var reasoning = document.createElement('div');
+        reasoning.className = 'sub-reasoning hidden text-gray-500 text-xs italic border-l-2 border-gray-600 pl-2 mt-1';
+        body.appendChild(reasoning);
+
+        // blocks container (same pattern as assistant msg)
+        var subBlocks = document.createElement('div');
+        subBlocks.className = 'sub-blocks';
+        var contentBlock = document.createElement('div');
+        contentBlock.className = 'sub-content-block';
+        subBlocks.appendChild(contentBlock);
+        body.appendChild(subBlocks);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        blocks.appendChild(card);
+        scrollToBottom();
+
+        return { card: card, body: body, subBlocks: subBlocks };
+    }
+
+    function toggleSubAgentBody(card) {
+        var body = card.querySelector('.sub-agent-body');
+        var toggle = card.querySelector('.sub-toggle');
+        if (!body || !toggle) return;
+        var collapsed = body.style.display === 'none';
+        body.style.display = collapsed ? '' : 'none';
+        toggle.textContent = collapsed ? '▼' : '▶';
+    }
+
+    /** 获取 sub-agent 卡片的 .sub-blocks 容器 */
+    function getSubBlocks(agentId) {
+        var card = document.getElementById('sub-' + agentId);
+        if (!card) return null;
+        return card.querySelector('.sub-blocks');
+    }
+
+    /** 确保 sub-blocks 中最后一个元素是 .sub-content-block */
+    function ensureSubContentBlock(agentId) {
+        var subBlocks = getSubBlocks(agentId);
+        if (!subBlocks) return null;
+        var children = subBlocks.children;
+        var last = children.length > 0 ? children[children.length - 1] : null;
+        if (last && last.classList.contains('sub-content-block')) return last;
+        var cb = document.createElement('div');
+        cb.className = 'sub-content-block';
+        subBlocks.appendChild(cb);
+        scrollToBottom();
+        return cb;
+    }
+
+    /** 更新 sub-agent 内容文本 */
+    function updateSubAgentContent(agentId, text) {
+        var block = ensureSubContentBlock(agentId);
+        if (block) {
+            block.innerHTML = textToHtml(text);
+        }
+        var card = document.getElementById('sub-' + agentId);
+        if (card) {
+            var status = card.querySelector('.sub-agent-status');
+            if (status) { status.innerHTML = '● 执行中...'; status.className = 'sub-agent-status ml-auto text-yellow-400'; }
+        }
+        scrollToBottom();
+    }
+
+    /** 追加 sub-agent 推理文本 */
+    function appendSubAgentReasoning(agentId, text) {
+        var card = document.getElementById('sub-' + agentId);
+        if (!card) return;
+        var reasoning = card.querySelector('.sub-reasoning');
+        if (reasoning) {
+            reasoning.classList.remove('hidden');
+            reasoning.textContent += text;
+        }
+        scrollToBottom();
+    }
+
+    /** 在 sub-agent 卡片中添加 tool card */
+    function addSubAgentToolCard(agentId, toolName, status, toolIndex) {
+        var subBlocks = getSubBlocks(agentId);
+        if (!subBlocks) return toolIndex;
+
+        var icon, label;
+        if (status === 'streaming') {
+            icon = '<span class="text-blue-400">\u{1F527}</span>';
+            label = '<span class="text-gray-500">streaming...</span>';
+        } else if (status === 'running') {
+            icon = '<span class="text-yellow-400">⚙</span>';
+            label = '<span class="text-gray-500">running...</span>';
+        } else if (status === 'done') {
+            icon = '<span class="text-green-400">✓</span>';
+            label = '<span class="text-green-400">done</span>';
+        } else if (status === 'error') {
+            icon = '<span class="text-red-400">✖</span>';
+            label = '<span class="text-red-400">error</span>';
+        } else {
+            icon = '<span class="text-gray-400">\u{1F527}</span>';
+            label = '<span class="text-gray-500">...</span>';
+        }
+
+        var idx = toolIndex;
+        var card = document.createElement('div');
+        card.className = 'sub-tool-card rounded p-1 text-xs mt-1';
+        card.setAttribute('data-tool-idx', idx);
+        card.setAttribute('data-tool-name', toolName);
+        if (status === 'done') card.classList.add('success');
+        if (status === 'error') card.classList.add('error');
+        card.innerHTML = icon + ' ' + escapeHtml(toolName) + ' ' + label;
+        subBlocks.appendChild(card);
+        scrollToBottom();
+        return idx;
+    }
+
+    /** 更新 sub-agent tool card 状态 */
+    function updateSubAgentToolCard(agentId, toolName, status, errMsg) {
+        var subBlocks = getSubBlocks(agentId);
+        if (!subBlocks) return;
+        var cards = subBlocks.querySelectorAll('.sub-tool-card:not(.success):not(.error)');
+        var matched = null;
+        for (var i = cards.length - 1; i >= 0; i--) {
+            if (!toolName || cards[i].getAttribute('data-tool-name') === toolName) {
+                matched = cards[i];
+                break;
+            }
+        }
+        if (!matched) return;
+        if (status === 'done') {
+            matched.classList.add('success');
+            var span = matched.querySelector('span:last-child');
+            if (span) span.textContent = 'done';
+        } else if (status === 'error') {
+            matched.classList.add('error');
+            var span2 = matched.querySelector('span:last-child');
+            if (span2) span2.textContent = errMsg || 'failed';
+        }
+    }
+
+    /** 标记 sub-agent 完成 */
+    function markSubAgentComplete(agentId, success, resultText) {
+        var card = document.getElementById('sub-' + agentId);
+        if (!card) return;
+        var status = card.querySelector('.sub-agent-status');
+        if (status) {
+            if (success) {
+                status.innerHTML = '✓ 完成';
+                status.className = 'sub-agent-status ml-auto text-green-400';
+            } else {
+                status.innerHTML = '✖ ' + escapeHtml(resultText || '失败');
+                status.className = 'sub-agent-status ml-auto text-red-400';
+            }
+        }
+        // 如果成功且有结果文本，追加到内容区
+        if (success && resultText) {
+            var block = ensureSubContentBlock(agentId);
+            if (block) {
+                block.innerHTML = textToHtml(resultText);
+            }
+        }
+        scrollToBottom();
+    }
+
     window.ChatRenderer = {
         renderMessage: renderMessage,
         renderUserMessage: renderUserMessage,
@@ -400,7 +616,14 @@
         ensureContentBlock: ensureContentBlock,
         getBlocks: getBlocks,
         MSG_CONTAINER_ID: MSG_CONTAINER_ID,
-        EMPTY_STATE_ID: EMPTY_STATE_ID
+        EMPTY_STATE_ID: EMPTY_STATE_ID,
+        // SubAgent
+        renderSubAgentCard: renderSubAgentCard,
+        updateSubAgentContent: updateSubAgentContent,
+        appendSubAgentReasoning: appendSubAgentReasoning,
+        addSubAgentToolCard: addSubAgentToolCard,
+        updateSubAgentToolCard: updateSubAgentToolCard,
+        markSubAgentComplete: markSubAgentComplete
     };
 
     console.log('[ChatRenderer] initialized');

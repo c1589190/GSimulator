@@ -34,14 +34,30 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
         currentTaskId.remove();
     }
 
+    /** 获取当前线程绑定的 taskId（供 DispatchSubAgentTool 等捕获用）。 */
+    public static String getCurrentTaskId() {
+        return currentTaskId.get();
+    }
+
+    /** 获取当前线程绑定的 sessionId（供 DispatchSubAgentTool 等捕获用）。 */
+    public static String getCurrentSessionId() {
+        return currentSessionId.get();
+    }
+
     @Override
     public void onProgress(AgentProgressEvent event) {
         String taskId = currentTaskId.get();
         String sessionId = currentSessionId.get();
+        Map<String, String> meta = event.meta();
+        String agentId = meta.get("agentId");
+
+        // SubAgent 事件：ThreadLocal 为空时从 meta 中获取（由 TaggedAgentProgressSink 注入）
+        if (taskId == null) taskId = meta.get("taskId");
+        if (sessionId == null) sessionId = meta.get("sessionId");
+
         if (taskId == null || sessionId == null) return;
 
         String phase = event.phase();
-        Map<String, String> meta = event.meta();
         String gsimType = mapPhaseToType(phase);
         if (gsimType == null) return;
 
@@ -82,6 +98,11 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
                 }
             }
             default -> {}
+        }
+
+        // 透传 agentId（SubAgent 事件路由用）
+        if (agentId != null) {
+            data.put("agentId", agentId);
         }
 
         eventBus.publish(GSimEvent.of(sessionId, taskId, gsimType, data));

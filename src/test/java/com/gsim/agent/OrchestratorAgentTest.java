@@ -59,7 +59,7 @@ class OrchestratorAgentTest {
     @Test
     @DisplayName("应解析纯 JSON tool call")
     void testParseToolCall_PlainJson() {
-        OrchestratorAgent.ParsedToolCall parsed = OrchestratorAgent.tryParseToolCall(
+        ParsedToolCall parsed = OrchestratorAgent.tryParseToolCall(
                 "{\"tool\":\"wiki_search\",\"args\":{\"query\":\"罗德岛\",\"limit\":5}}");
         assertNotNull(parsed);
         assertEquals("wiki_search", parsed.tool());
@@ -70,7 +70,7 @@ class OrchestratorAgentTest {
     @Test
     @DisplayName("应解析 code-fenced JSON tool call")
     void testParseToolCall_CodeFenced() {
-        OrchestratorAgent.ParsedToolCall parsed = OrchestratorAgent.tryParseToolCall(
+        ParsedToolCall parsed = OrchestratorAgent.tryParseToolCall(
                 "```json\n{\"tool\":\"wiki_search\",\"args\":{\"query\":\"年\"}}\n```");
         assertNotNull(parsed);
         assertEquals("wiki_search", parsed.tool());
