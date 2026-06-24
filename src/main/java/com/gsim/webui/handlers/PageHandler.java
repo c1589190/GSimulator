@@ -52,6 +52,7 @@ public class PageHandler implements HttpHandler {
             }
             case "/chat" -> html = TemplateRenderer.render("fragments/chat-panel");
             case "/timeline" -> html = TemplateRenderer.render("fragments/timeline-panel");
+            case "/scenario" -> html = TemplateRenderer.render("fragments/scenario-manager");
             case "/knowledge" -> html = TemplateRenderer.render("fragments/knowledge-panel");
             default -> {
                 exchange.sendResponseHeaders(404, -1);

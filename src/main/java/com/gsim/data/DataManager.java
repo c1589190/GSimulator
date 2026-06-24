@@ -482,11 +482,12 @@ public class DataManager {
         reload();
     }
 
-    private void initWorld(String worldName) throws IOException {
+    public void initWorld(String worldName) throws IOException {
         initWorld(worldName, null);
     }
 
-    private void initWorld(String worldName, String worldContentMd) throws IOException {
+    /** 创建并初始化一个新世界（剧本），包含结构化模板文件。worldContentMd 为 null 时使用默认模板。 */
+    public void initWorld(String worldName, String worldContentMd) throws IOException {
         Path wd = dataRoot.resolve("worlds").resolve(worldName);
         for (String d : List.of("branches", "patches/pending", "patches/accepted", "patches/rejected"))
             Files.createDirectories(wd.resolve(d));
