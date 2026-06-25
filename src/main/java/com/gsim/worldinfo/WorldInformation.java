@@ -18,7 +18,7 @@ public final class WorldInformation {
     private final List<NodeSnapshot> branchChain;          // root → active
     private final Map<String, List<ElementRef>> byCheckpoint; // checkpointId → all elements
     private final Map<String, List<ElementRef>> byTag;        // tag → elements
-    private final Object keywordIndex;                        // FIXME KeywordIndex in Task 4
+    private final KeywordIndex keywordIndex;
 
     public WorldInformation(String worldId, List<NodeSnapshot> branchChain) {
         this.worldId = worldId;
@@ -27,7 +27,7 @@ public final class WorldInformation {
         this.activeNodeId = branchChain.isEmpty() ? null : branchChain.get(branchChain.size() - 1).nodeId();
         this.byCheckpoint = buildByCheckpoint(branchChain);
         this.byTag = buildByTag(branchChain);
-        this.keywordIndex = null; // FIXME KeywordIndex.build(branchChain) in Task 4
+        this.keywordIndex = KeywordIndex.build(branchChain);
     }
 
     // -- accessors --
@@ -61,7 +61,7 @@ public final class WorldInformation {
     }
 
     // -- keyword --
-    public Object keywordIndex() { return keywordIndex; } // FIXME return KeywordIndex in Task 4
+    public KeywordIndex keywordIndex() { return keywordIndex; }
 
     // -- mutation (called by write_element tool) --
     public synchronized void appendElement(String nodeId, String checkpointId, Element element) {
@@ -80,7 +80,7 @@ public final class WorldInformation {
         for (String t : element.tags()) {
             byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
         }
-        // FIXME keywordIndex.add(ref) in Task 4 when KeywordIndex exists
+        keywordIndex.add(ref);
     }
 
     // -- builders --
