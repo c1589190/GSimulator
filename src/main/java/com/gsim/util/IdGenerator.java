@@ -1,6 +1,7 @@
 package com.gsim.util;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 统一 ID 生成器。
@@ -10,6 +11,16 @@ public final class IdGenerator {
 
     private IdGenerator() {
         // utility class
+    }
+
+    private static final AtomicInteger nodeCounter = new AtomicInteger(0);
+
+    public static String nodeId() {
+        return String.format("n%04d", nodeCounter.getAndIncrement());
+    }
+
+    public static void resetNodeCounter() {
+        nodeCounter.set(0);
     }
 
     /**

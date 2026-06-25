@@ -32,6 +32,8 @@ public class AppConfig {
     private final Path importDir;
     private final Path outputDir;
     private final Path logDir;
+    private final Path worldsDir;
+    private final Path promptsDir;
 
     private final String apiHost;
     private final int apiPort;
@@ -112,6 +114,8 @@ public class AppConfig {
         this.importDir = resolvePath(result.get("import.dir"), baseDir, "import");
         this.outputDir = resolvePath(result.get("output.dir"), baseDir, "data/outputs");
         this.logDir = resolvePath(result.get("log.dir"), baseDir, "data/logs");
+        this.worldsDir = resolvePath(result.get("worlds.dir"), baseDir, "worlds");
+        this.promptsDir = resolvePath(result.get("prompts.dir"), baseDir, "prompts");
 
         this.apiHost = isBlank(result.get("api.host")) ? "127.0.0.1" : result.get("api.host");
         this.apiPort = parseInt(result.get("api.port"), 8710);
@@ -192,6 +196,8 @@ public class AppConfig {
     public Path getImportDir() { return importDir; }
     public Path getOutputDir() { return outputDir; }
     public Path getLogDir() { return logDir; }
+    public Path worldsDir() { return worldsDir; }
+    public Path promptsDir() { return promptsDir; }
 
     public String getApiHost() { return apiHost; }
     public int getApiPort() { return apiPort; }
