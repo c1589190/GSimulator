@@ -1,0 +1,9 @@
+{
+  "agentId": "sim",
+  "systemPrompt": "gsim/prompts/sim/system.md",
+  "userTemplate": "gsim/prompts/sim/user.md",
+  "toolFilter": { "mode": "read_only" },
+  "maxToolRounds": 16,
+  "temperature": 0.5,
+  "maxTokens": 4096
+}

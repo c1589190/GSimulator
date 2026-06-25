@@ -1,11 +1,9 @@
 package com.gsim.agent.tool;
 
 import com.gsim.agent.AgentProgressSink;
-import com.gsim.agent.TaggedAgentProgressSink;
-import com.gsim.agent.sub.SearchAgent;
-import com.gsim.agent.sub.SimAgent;
-import com.gsim.agent.sub.SubAgent;
-import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.agent.core.AgentConfig;
+import com.gsim.agent.core.AgentFactory;
+import com.gsim.agent.core.AgentResult;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
@@ -19,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -44,19 +41,22 @@ public class DispatchSubAgentTool implements AgentTool {
     private final ToolRegistry toolRegistry;
     private final String model;
     private final AgentProgressSink progressSink;
-    private final Map<String, CompletableFuture<SubAgentResult>> runningSubAgents;
+    private final Map<String, CompletableFuture<AgentResult>> runningSubAgents;
     private final AtomicInteger subAgentCounter;
+    private final AgentFactory agentFactory;
 
     public DispatchSubAgentTool(LlmManager llmManager, ToolRegistry toolRegistry,
                                 String model, AgentProgressSink progressSink,
-                                Map<String, CompletableFuture<SubAgentResult>> runningSubAgents,
-                                AtomicInteger subAgentCounter) {
+                                Map<String, CompletableFuture<AgentResult>> runningSubAgents,
+                                AtomicInteger subAgentCounter,
+                                AgentFactory agentFactory) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
         this.progressSink = progressSink;
         this.runningSubAgents = runningSubAgents;
         this.subAgentCounter = subAgentCounter;
+        this.agentFactory = agentFactory;
     }
 
     @Override
@@ -106,28 +106,11 @@ public class DispatchSubAgentTool implements AgentTool {
             return ToolResult.fail(NAME, "prompt cannot be empty");
         }
 
-        int id = subAgentCounter.incrementAndGet();
-        String agentId = type + "-" + id;
-
-        // 创建带 agentId + taskId/sessionId 标签的 progress sink
-        // 从父线程捕获 ThreadLocal 值（SubAgent 运行在独立 VT 中）
         String parentTaskId = com.gsim.agent.EventBusAgentProgressSink.getCurrentTaskId();
         String parentSessionId = com.gsim.agent.EventBusAgentProgressSink.getCurrentSessionId();
-        AgentProgressSink taggedSink = new TaggedAgentProgressSink(
-                progressSink, agentId, parentTaskId, parentSessionId);
 
-        // 创建子代理
-        SubAgent agent = switch (type) {
-            case "sim" -> new SimAgent(agentId, llmManager, toolRegistry, model,
-                    taggedSink, prompt);
-            case "search" -> new SearchAgent(agentId, llmManager, toolRegistry, model,
-                    taggedSink, prompt);
-            default -> throw new IllegalArgumentException("Unknown type: " + type);
-        };
-
-        // 在 Virtual Thread 中启动
-        Thread vt = Thread.startVirtualThread(agent);
-        runningSubAgents.put(agentId, agent.future());
+        // 使用 AgentFactory 创建并启动子代理
+        String agentId = agentFactory.dispatch(type, prompt, parentTaskId, parentSessionId);
 
         log.info("[DispatchSubAgent] created {} (type={}, promptLen={})",
                 agentId, type, prompt.length());

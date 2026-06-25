@@ -32,7 +32,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.agent.core.AbstractAgent;
+import com.gsim.agent.core.AgentConfig;
+import com.gsim.agent.core.AgentFactory;
+import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.tool.DispatchSubAgentTool;
 import com.gsim.agent.tool.CollectSubAgentResultsTool;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,7 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * 3. 解析响应：普通文本 → 最终结果；JSON tool call → 调用工具 → 追加结果 → 回到步骤 2
  * 4. 最多 N 轮 tool 调用（可配置，默认 8），超限后要求 LLM 直接总结
  */
-public class OrchestratorAgent {
+public class OrchestratorAgent extends AbstractAgent {
 
     private static final Logger log = LoggerFactory.getLogger(OrchestratorAgent.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -83,7 +86,7 @@ public class OrchestratorAgent {
     private volatile int toolResultThreshold = 3000;
 
     /** SubAgent 异步结果收集（agentId → future）。 */
-    private final Map<String, CompletableFuture<SubAgentResult>> runningSubAgents = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
     /** SubAgent ID 计数器。 */
     private final AtomicInteger subAgentCounter = new AtomicInteger(0);
 
@@ -96,10 +99,10 @@ public class OrchestratorAgent {
      * 注册子代理派发/收集工具到 ToolRegistry。
      * 由 GSimulatorApplication 在构造后调用。
      */
-    public void registerSubAgentTools(ToolRegistry registry) {
+    public void registerSubAgentTools(ToolRegistry registry, AgentFactory agentFactory) {
         registry.register(new DispatchSubAgentTool(
                 llmManager, toolRegistry, model, progressSink,
-                runningSubAgents, subAgentCounter));
+                runningSubAgents, subAgentCounter, agentFactory));
         registry.register(new CollectSubAgentResultsTool(runningSubAgents));
     }
 
@@ -148,6 +151,8 @@ public class OrchestratorAgent {
                        ToolPermissionGate permissionGate,
                        ToolPermissionConfig permissionConfig,
                        ToolGroupManager groupManager) {
+        super(AgentConfig.defaultOrchestrator(), llmManager, toolRegistry,
+                progressSink != null ? progressSink : AgentProgressSink.NOOP, model);
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
@@ -224,7 +229,7 @@ public class OrchestratorAgent {
      *
      * <p>非流式路径：直接调用 {@link LlmManager#chat}。
      */
-    private LlmResult callLlm(LlmRequest request) {
+    protected LlmResult callLlm(LlmRequest request) {
         int requestTools = request.tools() != null ? request.tools().size() : 0;
         log.debug("[ORCH_STREAM] streamEnabled={} requestTools={}", streamEnabled, requestTools);
 
@@ -603,7 +608,7 @@ public class OrchestratorAgent {
      * 验证 finish_action.message 不包含工具内部标记（占位符、raw JSON、伪造结果）。
      * 返回 null 表示通过，返回 String 表示错误消息。
      */
-    static String validateFinishActionMessage(String message) {
+    protected static String validateFinishActionMessage(String message) {
         if (message == null || message.isBlank()) {
             return "finish_action message 不能为空";
         }
@@ -641,63 +646,9 @@ public class OrchestratorAgent {
      * 验证 finish_action.message 中的成功宣称是否有对应的工具执行记录支撑。
      * 返回 null 表示通过，返回 String 表示错误消息。
      */
+    /** LLM 有充分自主权 — 不质疑 finish_action 中的成功宣称。始终返回 null。 */
     static String validateFinishActionClaims(String message, List<ToolCallRecord> toolCalls) {
-        if (message == null || message.isBlank()) return null;
-
-        if (toolCalls.isEmpty()) {
-            String[] claims = {"已保存", "已创建", "已切换", "已进入",
-                    "已入库", "已写入", "已更新", "已完成", "已记录"};
-            for (String c : claims) {
-                if (message.contains(c)) {
-                    return "finish_action 声称操作成功（'" + c + "'），"
-                            + "但本轮没有执行任何工具。请先调用工具完成操作，再调用 finish_action。";
-                }
-            }
-            return null;
-        }
-
-        java.util.Set<String> successTools = new java.util.HashSet<>();
-        for (ToolCallRecord tc : toolCalls) {
-            if (tc.result().success()) {
-                successTools.add(tc.tool());
-            }
-        }
-
-        if (message.contains("已保存") && !hasAnyToolStartingWith(successTools, "turn_settlement_save")) {
-            return "finish_action 声称'已保存'，但没有 turn_settlement_save* 成功执行记录。"
-                    + "请先调用 turn_settlement_save_last_response，再调用 finish_action。";
-        }
-        if ((message.contains("已进入") || message.contains("已切换") || message.contains("切换到"))
-                && !successTools.contains("branch_next_turn")
-                && !successTools.contains("branch_switch")) {
-            return "finish_action 声称'已进入/已切换'，但没有 branch_next_turn 或 branch_switch 成功执行记录。"
-                    + "请先调用 branch_next_turn，再调用 finish_action。";
-        }
-        if (message.contains("已创建")
-                && !hasAnyToolStartingWith(successTools, "branch_create_child")
-                && !successTools.contains("branch_next_turn")
-                && !successTools.contains("knowledge_upsert")
-                && !successTools.contains("player_action_append")
-                && !successTools.contains("turn_settlement_save_last_response")) {
-            return "finish_action 声称'已创建'，但没有对应的创建工具成功执行记录。"
-                    + "请先调用 branch_create_child / knowledge_upsert / player_action_append 等创建工具，再调用 finish_action。";
-        }
-        if (message.contains("已写入") && !successTools.contains("knowledge_upsert")) {
-            return "finish_action 声称'已写入'，但没有 knowledge_upsert 成功执行记录。"
-                    + "请先调用 knowledge_upsert，再调用 finish_action。";
-        }
-        if (message.contains("已记录") && !successTools.contains("player_action_append")) {
-            return "finish_action 声称'已记录'，但没有 player_action_append 成功执行记录。"
-                    + "请先调用 player_action_append，再调用 finish_action。";
-        }
         return null;
-    }
-
-    private static boolean hasAnyToolStartingWith(java.util.Set<String> tools, String prefix) {
-        for (String t : tools) {
-            if (t.startsWith(prefix)) return true;
-        }
-        return false;
     }
 
     // ---- ToolLoop debug helpers ----
@@ -1574,16 +1525,20 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮：不把纯文本发给前端（等 finish_action 统一显示，避免重复）
+            // 普通无工具轮：纯文本直接作为最终回复 — LLM 有充分自主权
             consecutiveInvalidToolIntent = 0;
             {
                 consecutiveNoToolRounds++;
                 ToolLoopDebug.logNoToolRound(log, "runToolLoop", toolRound, consecutiveNoToolRounds);
 
-                // 不再发送 publicMessage — 纯文本等 finish_action 再显示
-                // （之前这里发 publicMessage 会导致前端看到两份：raw 文本 + finish_action 消息）
+                // 有意义的纯文本 → 直接接受，本轮结束
+                if (content != null && !content.isBlank()
+                        && isMeaningfulAssistantContent(content)) {
+                    finalText = content;
+                    break;
+                }
 
-                // 连续 3 轮无工具 → abort
+                // 连续 3 轮空内容 → abort
                 if (consecutiveNoToolRounds >= 3) {
                     String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
                     trace.add(new MessageTrace("system", "error", errMsg));
@@ -1595,14 +1550,9 @@ public class OrchestratorAgent {
                                     + " consecutive rounds");
                 }
 
-                // 提醒：需要工具或 finish_action
-                String reminder = "你没有调用任何工具。如果你已经完成了用户请求，请调用 finish_action 结束本轮，"
-                        + "并在 summary 字段中简要总结你做了什么。\n"
-                        + "如果还需要查询/写入/操作，请先调用 activate_tool_groups 激活所需的工具组，"
-                        + "再调用对应业务工具。";
-                messages.add(LlmMessage.user(reminder));
-                trace.add(new MessageTrace("system", "finish_reminder",
-                        "no tool call found, light reminder to use finish_action or activate groups"));
+                // 空内容才提醒
+                messages.add(LlmMessage.user("回复内容为空。如果需要查询/操作，请调用工具。如果已完成，请调用 finish_action。"));
+                trace.add(new MessageTrace("system", "finish_reminder", "empty content"));
                 toolRound++;
                 continue;
             }
@@ -1915,10 +1865,16 @@ public class OrchestratorAgent {
                 continue;
             }
 
-            // 普通无工具轮：不把纯文本发给前端（等 finish_action 统一显示）
+            // 普通无工具轮：纯文本直接作为最终回复
             consecutiveNoToolRounds++;
             consecutiveInvalidToolIntent = 0;
             ToolLoopDebug.logNoToolRound(log, "runSimToolLoop", toolRound, consecutiveNoToolRounds);
+
+            if (content != null && !content.isBlank()
+                    && isMeaningfulAssistantContent(content)) {
+                finalText = content;
+                break;
+            }
 
             if (consecutiveNoToolRounds >= 3) {
                 String errMsg = ToolLoopDebug.noToolAbortError(consecutiveNoToolRounds);
@@ -1929,11 +1885,8 @@ public class OrchestratorAgent {
                 return new SimResult(errMsg, toolCalls, trace);
             }
 
-            String reminder = "你没有调用任何工具。如果已完成任务，请调用 finish_action 结束本轮，"
-                    + "并在 summary 中简要总结。如果还需要操作，请先调用 activate_tool_groups 激活工具组。";
-            messages.add(LlmMessage.user(reminder));
-            trace.add(new MessageTrace("system", "finish_required",
-                    "no tool call found, reminding to use finish_action"));
+            messages.add(LlmMessage.user("回复内容为空。如需操作请调用工具，已完成请调用 finish_action。"));
+            trace.add(new MessageTrace("system", "finish_required", "empty content"));
             toolRound++;
             continue;
         }

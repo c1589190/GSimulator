@@ -1,5 +1,6 @@
 package com.gsim.chat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.agent.OrchestratorAgent;
 import com.gsim.app.ApplicationContext;
 import com.gsim.context.BranchContextRenderer;
@@ -23,6 +24,7 @@ import java.util.Map;
  */
 public class NodeAgentChatService {
     private static final Logger log = LoggerFactory.getLogger(NodeAgentChatService.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final DataManager dm;
     private BranchContextRenderer renderer;
@@ -213,7 +215,7 @@ public class NodeAgentChatService {
         for (OrchestratorAgent.ToolCallRecord tc : result.toolCalls()) {
             String tcId = store.nextMessageId(branchId);
             store.appendMessage(branchId, BranchMessage.tool(tcId, "tool_call", tc.tool(),
-                    tc.args().toString()));
+                    toJson(tc.args())));
             String trId = store.nextMessageId(branchId);
             store.appendMessage(branchId, BranchMessage.tool(trId, "tool_result", tc.tool(),
                     tc.result().success() ? tc.result().items().size() + " results" : tc.result().error()));
@@ -270,6 +272,11 @@ public class NodeAgentChatService {
     /** 清除取消标志（新一轮对话开始前调用）。 */
     public void resetCancel() {
         orchestrator.resetCancel();
+    }
+
+    private static String toJson(Map<String, String> args) {
+        try { return MAPPER.writeValueAsString(args); }
+        catch (Exception e) { return args.toString(); }
     }
 
 }

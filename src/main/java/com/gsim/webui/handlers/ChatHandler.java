@@ -76,6 +76,8 @@ public class ChatHandler implements HttpHandler {
                 handleContext(exchange);
             } else if (path.equals("/chat/context-bar") && "GET".equals(method)) {
                 handleContextBar(exchange);
+            } else if (path.equals("/chat/node-summary") && "GET".equals(method)) {
+                handleNodeSummary(exchange);
             } else if (path.equals("/chat/upload") && "POST".equals(method)) {
                 handleUpload(exchange);
             } else if (path.equals("/chat/uploads") && "GET".equals(method)) {
@@ -436,6 +438,41 @@ public class ChatHandler implements HttpHandler {
         }
 
         HandlerUtils.sendHtml(exchange, 200, html.toString());
+    }
+
+    /** GET /chat/node-summary → 当前节点态势摘要 JSON */
+    private void handleNodeSummary(HttpExchange exchange) throws IOException {
+        var dm = ctx.getDataManager();
+        Map<String, Object> resp = new LinkedHashMap<>();
+        if (dm == null) {
+            resp.put("ready", false);
+            resp.put("message", "数据未加载");
+            HandlerUtils.sendJson(exchange, 200, resp);
+            return;
+        }
+
+        String branch = dm.getActiveBranch();
+        var doc = dm.readById(branch);
+        resp.put("ready", true);
+        resp.put("branch", branch);
+        resp.put("rootId", dm.getActiveRootId());
+
+        if (doc != null) {
+            resp.put("name", doc.frontMatter().getOrDefault("name", ""));
+            resp.put("isCompact", doc.isCompact());
+            resp.put("compactOf", doc.compactOf());
+            resp.put("turn", doc.frontMatter().getOrDefault("turn", "0"));
+            resp.put("worldTime", doc.frontMatter().getOrDefault("world_time", ""));
+        }
+
+        // 分支链中节点数
+        var chain = dm.getBranchChain(branch);
+        resp.put("chainLength", chain != null ? chain.size() : 0);
+
+        // 是否需要 bootstrap
+        resp.put("needsBootstrap", dm.needsRootBootstrap());
+
+        HandlerUtils.sendJson(exchange, 200, resp);
     }
 
     private static String escapeHtml(String s) {

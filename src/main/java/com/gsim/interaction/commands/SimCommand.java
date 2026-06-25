@@ -1,88 +1,42 @@
 package com.gsim.interaction.commands;
 
 import com.gsim.agent.AgentProgressSink;
-import com.gsim.agent.sub.SimAgent;
-import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.agent.core.AbstractAgent;
+import com.gsim.agent.core.AgentFactory;
+import com.gsim.agent.core.AgentResult;
 import com.gsim.interaction.InteractionCommand;
 import com.gsim.interaction.InteractionResult;
 import com.gsim.interaction.InteractionSession;
-import com.gsim.llm.LlmManager;
-import com.gsim.tool.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
 
-/**
- * /sim — 直接创建 SimAgent 进行推演叙事生成。
- *
- * <p>绕过 OrchestratorAgent，直接在当前线程同步执行 SimAgent ToolLoop。
- * 适用于 CLI 直接调用场景。OrchAgent 也可通过 dispatch_sub_agent 工具创建。
- */
 public class SimCommand implements InteractionCommand {
-
     private static final Logger log = LoggerFactory.getLogger(SimCommand.class);
-
-    private final LlmManager llmManager;
-    private final ToolRegistry toolRegistry;
-    private final String model;
+    private final AgentFactory agentFactory;
     private final AgentProgressSink progressSink;
-    private final AtomicInteger counter = new AtomicInteger(0);
 
-    public SimCommand(LlmManager llmManager, ToolRegistry toolRegistry,
-                      String model, AgentProgressSink progressSink) {
-        this.llmManager = llmManager;
-        this.toolRegistry = toolRegistry;
-        this.model = model;
+    public SimCommand(AgentFactory agentFactory, AgentProgressSink progressSink) {
+        this.agentFactory = agentFactory;
         this.progressSink = progressSink != null ? progressSink : AgentProgressSink.NOOP;
     }
 
-    @Override
-    public String name() {
-        return "sim";
-    }
-
-    @Override
-    public String description() {
-        return "创建 SimAgent 进行推演叙事生成（独立子代理，只读工具）";
-    }
-
-    @Override
-    public String usage() {
-        return "/sim <推演指令>";
-    }
+    @Override public String name() { return "sim"; }
+    @Override public String description() { return "创建 SimAgent 进行推演叙事生成（独立子代理，只读工具）"; }
+    @Override public String usage() { return "/sim <推演指令>"; }
 
     @Override
     public InteractionResult execute(String[] args, InteractionSession session) {
-        if (args.length == 0) {
-            return InteractionResult.fail("用法: /sim <推演指令>");
-        }
-        if (llmManager == null || !llmManager.isAvailable()) {
-            return InteractionResult.fail("LLM 未配置。请先运行 /config init 设置 LLM。");
-        }
-
+        if (args.length == 0) return InteractionResult.fail("用法: /sim <推演指令>");
         String prompt = String.join(" ", args).trim();
-        String agentId = "sim-cmd-" + counter.incrementAndGet();
-
-        SimAgent agent = new SimAgent(agentId, llmManager, toolRegistry, model,
-                progressSink, prompt);
-
-        log.info("[SimCommand] running {} synchronously, promptLen={}", agentId, prompt.length());
-
-        // 同步执行（不走 VT，直接在当前线程跑 ToolLoop）
-        agent.run();
-        SubAgentResult result;
         try {
-            result = agent.future().get();
+            AbstractAgent agent = agentFactory.create("sim", prompt, Map.of("prompt", prompt));
+            AgentResult result = agent.run(prompt);
+            if (result.success()) return InteractionResult.ok("sim done", result.finalText());
+            else return InteractionResult.fail("SimAgent 失败: " + result.error());
         } catch (Exception e) {
-            return InteractionResult.fail("SimAgent 执行异常: " + e.getMessage());
-        }
-
-        if (result.success()) {
-            return InteractionResult.ok("sim done (" + agentId + ")", result.text());
-        } else {
-            return InteractionResult.fail("SimAgent (" + agentId + ") 失败: "
-                    + (result.error() != null ? result.error() : "未知错误"));
+            return InteractionResult.fail("SimAgent 异常: " + e.getMessage());
         }
     }
 }

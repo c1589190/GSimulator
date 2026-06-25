@@ -7,6 +7,17 @@
     <!-- 待上传文件标签 -->
     <div id="chat-uploads" class="hidden flex flex-wrap gap-1 mb-2"></div>
     <style>
+        /* === 间距修复 === */
+        .tool-card { margin-bottom: 6px; }
+        .content-block { margin-bottom: 4px; }
+        .reasoning-block { margin-bottom: 8px; }
+        .blocks > * + * { margin-top: 4px; }
+
+        /* === 推理链折叠 === */
+        .reasoning-header { user-select: none; }
+        .reasoning-header:hover { color: #9ca3af; }
+        .reasoning-body { max-height: 8rem; overflow-y: auto; }
+
         /* === SubAgent 卡片 === */
         .sub-agent-card {
             background: #0f1724;
@@ -14,45 +25,21 @@
             border-left: 3px solid #6366f1;
         }
         .sub-agent-card[data-agent-type="sim"] {
-            border-left-color: #a78bfa;   /* 紫色 — SimAgent */
+            border-left-color: #a78bfa;
         }
         .sub-agent-card[data-agent-type="search"] {
-            border-left-color: #22d3ee;   /* 青色 — SearchAgent */
+            border-left-color: #22d3ee;
         }
-        .sub-agent-header {
-            user-select: none;
-        }
-        .sub-agent-header:hover {
-            color: #e2e8f0;
-        }
-        .sub-agent-label {
-            color: #cbd5e1;
-        }
-        .sub-agent-id {
-            font-family: monospace;
-        }
-        .sub-agent-body {
-            padding-left: 0.5rem;
-        }
-        .sub-reasoning {
-            max-height: 6rem;
-            overflow-y: auto;
-        }
-        .sub-content-block {
-            color: #e2e8f0;
-            line-height: 1.5;
-        }
-        .sub-tool-card {
-            background: #0a0e17;
-            border-left: 3px solid #6366f1;
-            padding: 2px 6px;
-        }
-        .sub-tool-card.success {
-            border-left-color: #34d399;
-        }
-        .sub-tool-card.error {
-            border-left-color: #ef4444;
-        }
+        .sub-agent-header { user-select: none; }
+        .sub-agent-header:hover { color: #e2e8f0; }
+        .sub-agent-label { color: #cbd5e1; }
+        .sub-agent-id { font-family: monospace; }
+        .sub-agent-body { padding-left: 0.5rem; }
+        .sub-reasoning { max-height: 6rem; overflow-y: auto; }
+        .sub-content-block { color: #e2e8f0; line-height: 1.5; }
+        .sub-tool-card { background: #0a0e17; border-left: 3px solid #6366f1; padding: 2px 6px; }
+        .sub-tool-card.success { border-left-color: #34d399; }
+        .sub-tool-card.error { border-left-color: #ef4444; }
     </style>
     <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
         <div id="chat-empty-state" class="text-gray-600 text-sm">发送消息开始对话</div>

@@ -1,0 +1,8 @@
+{
+  "agentId": "orchestrator",
+  "systemPrompt": "gsim/prompts/orchestrator-system.md",
+  "toolFilter": { "mode": "all" },
+  "maxToolRounds": 32,
+  "temperature": 0.3,
+  "maxTokens": 2048
+}

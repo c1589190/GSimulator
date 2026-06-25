@@ -1,6 +1,6 @@
 package com.gsim.agent.tool;
 
-import com.gsim.agent.sub.SubAgentResult;
+import com.gsim.agent.core.AgentResult;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeoutException;
  * collect_sub_agent_results 工具 — 等待所有子代理完成并聚合结果。
  *
  * <p>阻塞等待所有已派发的子代理执行完毕（超时 300 秒），
- * 聚合所有 SubAgentResult.text 返回给 OrchestratorAgent。
+ * 聚合所有 AgentResult.text 返回给 OrchestratorAgent。
  */
 public class CollectSubAgentResultsTool implements AgentTool {
 
@@ -27,10 +27,10 @@ public class CollectSubAgentResultsTool implements AgentTool {
 
     private static final Logger log = LoggerFactory.getLogger(CollectSubAgentResultsTool.class);
 
-    private final Map<String, CompletableFuture<SubAgentResult>> runningSubAgents;
+    private final Map<String, CompletableFuture<AgentResult>> runningSubAgents;
 
     public CollectSubAgentResultsTool(
-            Map<String, CompletableFuture<SubAgentResult>> runningSubAgents) {
+            Map<String, CompletableFuture<AgentResult>> runningSubAgents) {
         this.runningSubAgents = runningSubAgents;
     }
 
@@ -96,13 +96,13 @@ public class CollectSubAgentResultsTool implements AgentTool {
 
         for (var entry : runningSubAgents.entrySet()) {
             String agentId = entry.getKey();
-            SubAgentResult result = entry.getValue().getNow(null);
+            AgentResult result = entry.getValue().getNow(null);
 
             sb.append("### ").append(agentId).append("\n\n");
             if (result != null && result.success()) {
                 successCount++;
                 // 截断过长文本（子代理结果可能很长，保留前 4000 字符）
-                String text = result.text();
+                String text = result.finalText();
                 if (text != null && text.length() > 4000) {
                     text = text.substring(0, 3997) + "...";
                 }

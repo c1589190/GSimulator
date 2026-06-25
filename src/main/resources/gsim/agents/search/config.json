@@ -1,0 +1,9 @@
+{
+  "agentId": "search",
+  "systemPrompt": "gsim/prompts/search/system.md",
+  "userTemplate": "gsim/prompts/search/user.md",
+  "toolFilter": { "mode": "read_only" },
+  "maxToolRounds": 16,
+  "temperature": 0.3,
+  "maxTokens": 2048
+}

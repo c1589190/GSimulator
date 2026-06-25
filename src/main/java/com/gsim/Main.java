@@ -64,14 +64,11 @@ public class Main {
                 }
             }
 
-            // 3. 确定运行模式
-            // 默认：如果没指定 --http，只启动 CLI
-            // --http：只启动 HTTP API
-            // --cli --http：同时启动 CLI 和 HTTP API
-            // --cli：只启动 CLI（显式指定）
-            boolean httpMode = cliArgs.http();
-            boolean cliMode = cliArgs.cli() || !httpMode;  // 默认 CLI
-            boolean webuiMode = cliArgs.webui();
+            // 3. 统一启动：CLI + HTTP API + WebUI 全部默认开启
+            // --cli / --http / --webui 仍可显式指定（向后兼容），不加就是全开
+            boolean cliMode = cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui());
+            boolean httpMode = cliArgs.http() || true;  // 默认开
+            boolean webuiMode = cliArgs.webui() || true; // 默认开
 
             // 4. 启动应用
             GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode);
@@ -89,20 +86,17 @@ public class Main {
         System.out.println();
         System.out.println("用法: java -jar GSimulator.jar [选项]");
         System.out.println();
+        System.out.println("默认启动 CLI + HTTP API(8710) + Web GUI(8711) + CLI WS(8712)");
+        System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");
-        System.out.println("  --http             启动 HTTP API 服务器 (默认 127.0.0.1:8710)");
-        System.out.println("  --cli              启动 CLI REPL (默认，与 --http 同时使用可共存)");
-        System.out.println("  --webui            启动 Web GUI 服务器 (默认 127.0.0.1:8711)");
+        System.out.println("  --cli              仅 CLI（兼容旧行为）");
+        System.out.println("  --http             仅 HTTP API（兼容旧行为）");
+        System.out.println("  --webui            仅 Web GUI（兼容旧行为）");
         System.out.println("  --help             显示此帮助信息");
-        System.out.println();
-        System.out.println("示例:");
-        System.out.println("  java -jar GSimulator.jar                  # 仅 CLI");
-        System.out.println("  java -jar GSimulator.jar --http           # 仅 HTTP API");
-        System.out.println("  java -jar GSimulator.jar --cli --http     # CLI + HTTP API");
         System.out.println();
         System.out.println("API 配置环境变量:");
         System.out.println("  API_HOST=127.0.0.1");

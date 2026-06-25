@@ -43,6 +43,8 @@ public class GSimulatorApplication {
     private final boolean httpMode;
     private final boolean webuiMode;
     private final com.gsim.webui.WebUiServer webUiServer;
+    private com.gsim.webui.CliWebSocketServer cliWsServer;
+    private com.gsim.agent.CompositeAgentProgressSink compositeSink;
 
     public GSimulatorApplication(AppConfig config) {
         this(config, true, false, false);
@@ -207,7 +209,7 @@ public class GSimulatorApplication {
 
         // EventBus 桥 — 将 Agent 进度事件转发到 EventBus，供 SSE 流式使用
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
-        var compositeSink = new com.gsim.agent.CompositeAgentProgressSink(
+        this.compositeSink = new com.gsim.agent.CompositeAgentProgressSink(
                 cliProgressSink, eventBusSink);
 
         // 工具组管理器（每轮对话重置，激活不跨轮保留）
@@ -253,7 +255,10 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
 
         // 注册子代理派发/收集工具：dispatch_sub_agent / collect_sub_agent_results
-        orchestrator.registerSubAgentTools(toolRegistry);
+        var agentConfigStore = new com.gsim.agent.config.AgentConfigStore();
+        var agentFactory = new com.gsim.agent.core.AgentFactory(
+                agentConfigStore, ctx.getLlmManager(), toolRegistry, compositeSink, config.getLlmModel());
+        orchestrator.registerSubAgentTools(toolRegistry, agentFactory);
 
         chatService = new NodeAgentChatService(dataManager, contextRenderer, orchestrator,
                 ctxSessionManager, dataRoot, ctx);
@@ -307,12 +312,10 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.branch.tool.PlayerActionUpdateTool(dataManager));
 
         // /sim /run — deprecated wrappers
-        // /sim — SimAgent 推演叙事生成（直接创建子代理，独立上下文）
-        manager.registerCommand(new com.gsim.interaction.commands.SimCommand(
-                ctx.getLlmManager(), toolRegistry, config.getLlmModel(), compositeSink));
+        // /sim — SimAgent 推演叙事生成
+        manager.registerCommand(new com.gsim.interaction.commands.SimCommand(agentFactory, compositeSink));
         // /search — SearchAgent 深度资料搜索
-        manager.registerCommand(new com.gsim.interaction.commands.SearchCommand(
-                ctx.getLlmManager(), toolRegistry, config.getLlmModel(), compositeSink));
+        manager.registerCommand(new com.gsim.interaction.commands.SearchCommand(agentFactory));
         manager.registerCommand(new RunCommand(chatService));
 
         manager.registerCommand(new NextTurnCommand(dataManager));
@@ -381,31 +384,39 @@ public class GSimulatorApplication {
         }
         if (webuiMode || config.isWebUiEnabled()) {
             webUiServer.start();
+            // 启动 CLI WebSocket 服务器（端口 8712）
+            cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
+            try { cliWsServer.start(); } catch (Exception e) {
+                log.warn("CLI WebSocket server failed to start: {}", e.getMessage()); }
         }
 
-        // CLI 模式：启动 REPL
+        // CLI REPL — 在 Virtual Thread 中运行，不阻塞其他入口
         if (cliMode) {
-            // 如果 LLM 未配置，打印提示
             if (!config.isLlmConfigured()) {
                 System.out.println();
                 System.out.println("⚠️  LLM 未配置。以下功能不可用:");
                 System.out.println("   /chat — Agent 对话");
                 System.out.println("   /sim  — 推演结算");
-                System.out.println("   /run  — 旧版推演");
                 System.out.println();
                 System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
                 System.out.println();
             }
-
-            // 启动 REPL
-            adapter.start();
-        } else if (httpMode) {
-            // 仅 HTTP 模式：保持服务器运行
-            System.out.println();
-            System.out.println("GSimulator HTTP API 模式运行中。按 Ctrl+C 退出。");
-            System.out.println("API 地址: http://" + config.getApiHost() + ":" + config.getApiPort());
-            Thread.currentThread().join();
+            // VT 中启动 stdin REPL
+            Thread.startVirtualThread(() -> {
+                try { adapter.start(); } catch (Exception e) {
+                    log.error("CLI REPL crashed: {}", e.getMessage(), e); }
+            });
         }
+
+        // 保持 JVM 存活
+        System.out.println();
+        System.out.println("✅ GSimulator 已启动");
+        System.out.println("   CLI REPL:  当前终端（输入 /help）");
+        System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
+        System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
+        System.out.println("   HTTP API:  http://" + config.getApiHost() + ":" + config.getApiPort());
+        System.out.println();
+        Thread.currentThread().join();
     }
 
     /**
@@ -413,6 +424,7 @@ public class GSimulatorApplication {
      */
     public void stop() {
         if (webUiServer != null) webUiServer.stop();
+        if (cliWsServer != null) cliWsServer.stop();
         ctx.shutdown();
     }
 

@@ -1,0 +1,96 @@
+<div class="flex flex-col flex-1 min-h-0" id="cli-app">
+    <div class="flex items-center gap-2 mb-2">
+        <span class="text-sm font-bold terminal-green">&#x1F4BB; CLI Terminal</span>
+        <span id="cli-status" class="text-xs text-gray-500">connecting...</span>
+    </div>
+
+    <div id="cli-output" class="flex-1 overflow-y-auto mb-2 p-2 font-mono text-xs"
+         style="background:#0a0e14; color:#34d399; min-height:200px; max-height:60vh;">
+        <div class="text-gray-500">connecting to ws://localhost:8712 ...</div>
+    </div>
+
+    <form id="cli-form" class="flex gap-2" autocomplete="off" onsubmit="return false;">
+        <span class="text-green-400 font-mono pt-2 text-xs">gsim&gt;</span>
+        <input type="text" id="cli-input"
+               class="flex-1 px-2 py-1 text-sm font-mono"
+               style="background:#0a0e14; color:#34d399; border:1px solid #1e3e2f; outline:none;"
+               placeholder="输入命令..."
+               autocomplete="off"
+               autofocus>
+    </form>
+</div>
+
+<script>
+(function() {
+    var output = document.getElementById('cli-output');
+    var input = document.getElementById('cli-input');
+    var status = document.getElementById('cli-status');
+    var ws = null;
+    var history = [], hidx = -1;
+
+    function append(text) {
+        var lines = text.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var div = document.createElement('div');
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordBreak = 'break-all';
+            div.textContent = lines[i];
+            output.appendChild(div);
+        }
+        output.scrollTop = output.scrollHeight;
+    }
+
+    function connect() {
+        var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var url = proto + '//' + location.hostname + ':8712';
+        status.textContent = 'connecting...';
+        status.className = 'text-xs text-yellow-400';
+
+        ws = new WebSocket(url);
+        ws.onopen = function() {
+            status.textContent = 'connected';
+            status.className = 'text-xs text-green-400';
+            input.disabled = false;
+            input.focus();
+        };
+        ws.onmessage = function(e) {
+            append(e.data);
+        };
+        ws.onclose = function() {
+            status.textContent = 'disconnected (reconnecting in 3s)';
+            status.className = 'text-xs text-red-400';
+            input.disabled = true;
+            setTimeout(connect, 3000);
+        };
+        ws.onerror = function() {
+            status.textContent = 'error';
+            status.className = 'text-xs text-red-400';
+        };
+    }
+
+    function send(cmd) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        append('gsim> ' + cmd);
+        history.push(cmd);
+        hidx = history.length;
+        ws.send(cmd);
+    }
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            var cmd = input.value.trim();
+            if (cmd) { send(cmd); input.value = ''; }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (hidx > 0) { hidx--; input.value = history[hidx]; }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (hidx < history.length - 1) { hidx++; input.value = history[hidx]; }
+            else { hidx = history.length; input.value = ''; }
+        }
+    });
+
+    connect();
+})();
+</script>

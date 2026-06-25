@@ -41,7 +41,8 @@
             content: msg.content,
             toolName: msg.toolName || null,
             createdAt: msg.createdAt,
-            status: msg.status || 'complete'
+            status: msg.status || 'complete',
+            reasoning: msg.reasoning || ''
         };
     }
 
@@ -54,6 +55,7 @@
             toolName: obj.toolName || null,
             createdAt: obj.createdAt || new Date().toISOString(),
             status: obj.status || 'complete',
+            reasoning: obj.reasoning || '',
             domRef: null
         };
     }
