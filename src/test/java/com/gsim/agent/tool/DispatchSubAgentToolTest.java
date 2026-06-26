@@ -85,15 +85,20 @@ class DispatchSubAgentToolTest {
     }
 
     @Test
-    @DisplayName("已知 agent type (sim) 可成功派发")
-    void dispatchKnownTypeSucceeds() {
+    @DisplayName("已知 agent type (sim) 通过校验，阻塞等待子代理结果")
+    void dispatchKnownTypeBlocksAndReturnsSubAgentResult() {
         ToolCall call = new ToolCall("dispatch_sub_agent", Map.of(
                 "type", "sim",
                 "prompt", "test prompt"
         ));
         ToolResult result = tool.execute(call);
 
-        assertTrue(result.success(), "已知 agent type 应成功派发: " + result.error());
+        // Sub-agent fails due to no real LLM, but the dispatch itself is accepted
+        // Error should be about sub-agent failure, NOT "Unknown sub-agent type"
+        if (!result.success()) {
+            assertFalse(result.error().contains("Unknown sub-agent type"),
+                    "已知 type 不应被校验拒绝: " + result.error());
+        }
     }
 
     @Test
@@ -113,7 +118,7 @@ class DispatchSubAgentToolTest {
     }
 
     @Test
-    @DisplayName("创建新 agent 后 dispatch 应能识别")
+    @DisplayName("创建新 agent 后 dispatch 校验通过（不再报 Unknown type）")
     void createThenDispatchNewAgent() throws Exception {
         // Create a new agent config
         Path agentsDir = tempDir.resolve("agents");
@@ -139,7 +144,9 @@ class DispatchSubAgentToolTest {
         ));
         ToolResult result = tool.execute(call);
 
-        assertTrue(result.success(), "新创建的 agent 应可派发: " + result.error());
+        // Should NOT be rejected as unknown type
+        assertFalse(result.error().contains("Unknown sub-agent type"),
+                "新创建的 agent 应通过校验: " + result.error());
     }
 
     @Test

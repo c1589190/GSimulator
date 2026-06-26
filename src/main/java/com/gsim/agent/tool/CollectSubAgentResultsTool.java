@@ -16,10 +16,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * collect_sub_agent_results 工具 — 等待所有子代理完成并聚合结果。
+ * collect_sub_agent_results 工具 — 等待所有异步派发的子代理完成并聚合结果。
  *
- * <p>阻塞等待所有已派发的子代理执行完毕（超时 300 秒），
- * 聚合所有 AgentResult.text 返回给 OrchestratorAgent。
+ * <p>dispatch_sub_agent 现在是同步阻塞的（派发后主 Agent 等待子 Agent 完成），
+ * 因此正常情况下不需要此工具。保留用于：手动检查运行状态、清理残留 future。
  */
 public class CollectSubAgentResultsTool implements AgentTool {
 
@@ -42,8 +42,9 @@ public class CollectSubAgentResultsTool implements AgentTool {
     @Override
     public String description() {
         return """
-                等待所有已派发的子代理完成，聚合它们的执行结果。
-                无参数。调用前必须先通过 dispatch_sub_agent 创建子代理。
+                收集所有异步派发的子代理执行结果。
+                dispatch_sub_agent 现已改为同步阻塞（派发后自动等待结果），
+                此工具仅在需要手动检查运行状态或清理残留 future 时使用。
                 超时时间: 300 秒。
                 """;
     }
