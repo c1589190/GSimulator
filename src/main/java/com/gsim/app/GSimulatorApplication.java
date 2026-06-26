@@ -67,13 +67,15 @@ public class GSimulatorApplication {
         this.httpMode = httpMode;
         this.webuiMode = webuiMode;
         this.ctx = new ApplicationContext(config);
-        this.worldsDir = config.getDataDir().resolve("worlds");
+        this.worldsDir = config.worldsDir();
 
         // Store BootstrapResult data
         if (bootResult != null) {
             this.worldInfo = bootResult.worldInfo();
             this.activeCache = bootResult.activeCache();
             this.contextRenderer = bootResult.contextRenderer();
+            // Wire into ApplicationContext so PageHandler/WebUI see the active world
+            ctx.setActiveRootId(bootResult.worldId());
         }
 
         ToolRegistry toolRegistry = ctx.getToolRegistry();
