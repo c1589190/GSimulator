@@ -76,6 +76,14 @@ class AgentFactoryTest {
                 tempDir, () -> "test-world");
     }
 
+    /** Wait for all running futures to settle (fail quickly: no real LLM). */
+    private void awaitRunning() {
+        for (var f : factory.running().values()) {
+            try { f.get(5, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (Exception ignored) { }
+        }
+    }
+
     @Test
     @DisplayName("dispatch 返回的 instanceId 与 running map key 一致")
     void dispatchReturnsSameInstanceIdAsRunningKey() {
@@ -85,6 +93,7 @@ class AgentFactoryTest {
         assertTrue(instanceId.startsWith("sim-"));
         assertTrue(factory.running().containsKey(instanceId),
                 "running map key 应与 dispatch 返回值一致");
+        awaitRunning();
     }
 
     @Test
@@ -95,6 +104,7 @@ class AgentFactoryTest {
 
         assertNotEquals(id1, id2);
         assertEquals(2, factory.running().size());
+        awaitRunning();
     }
 
     @Test
