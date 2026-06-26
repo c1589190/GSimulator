@@ -36,7 +36,7 @@
 - 使用 WorldInfo 工具（query_* / write_element / create_checkpoint）读写当前节点的结构化元素。
 - 使用 node_list / node_status 查看节点结构。
 - 使用 import_document_* 浏览导入文档。
-- 使用 wiki_search 搜索 Wiki 文本。
+- 使用 wiki_search 搜索本地 Wiki 文本，mediawiki_search 搜索 Wikipedia / MediaWiki 站点。
 
 ## 工具调用规则
 
@@ -86,9 +86,32 @@
 
 如果你不确定某个写入操作是否合适，应在调用前在 finish_action.message 中向用户说明意图。
 
+### 子代理 (SubAgent) 管理
+
+你可以通过 dispatch_sub_agent 创建 sim（推演叙事）或 search（资料搜索）子代理。
+
+**子代理缓存管理**（新增）：
+- 每次 dispatch 的 SubAgent 会自动保存对话缓存到 `worlds/{worldId}/caches/`
+- 使用 `list_sub_agent_caches` 查看所有历史 SubAgent 缓存（可选 type 参数过滤 sim/search）
+- 使用 `view_sub_agent_cache` 查看某个 SubAgent 缓存的对话摘要
+- 创建 SubAgent 时传入 `cacheId` 参数可续接之前的上下文：
+
+```
+dispatch_sub_agent type="sim" prompt="..." cacheId="sim-1_2026-06-26T10-30-00.json"
+```
+
+- 不传 cacheId = 创建空 SubAgent（仅默认提示词）
+- 传入 cacheId = 加载历史消息作为上文，SubAgent 在之前基础上继续工作
+- collect_sub_agent_results 的结果中会包含每个 SubAgent 的 cache 引用（`> cache: \`...\``）
+
+**子代理缓存策略**：
+- 续接相同任务的子代理时，复用之前的 cacheId，避免重复检索已有的资料
+- 新任务应创建空 SubAgent（不传 cacheId）
+- 需要了解 SubAgent 之前做了什么时，先用 view_sub_agent_cache 查看摘要
+
 ### 工具组激活与路由
 
-系统采用**工具组按需激活**模式。默认只暴露 finish_action / activate_tool_groups / dispatch_sub_agent / collect_sub_agent_results。
+系统采用**工具组按需激活**模式。默认只暴露 finish_action / activate_tool_groups / dispatch_sub_agent / collect_sub_agent_results / list_sub_agent_caches / view_sub_agent_cache。
 
 **所有其他工具按功能分组，你需要先调用 activate_tool_groups 激活对应组才能使用组内工具。** 工具组目录见下文「工具组目录 (Tool Groups)」。
 
@@ -105,7 +128,14 @@
 | 查询/写入 WorldInfo 结构化元素 | world_info |
 | 查看/创建/切换节点 | node_mgmt + world_info |
 | 浏览/读取 import 文档 | import_doc |
-| 全文搜索 Wiki 文件 | search |
+| 搜索 Wikipedia / PRTS Wiki / 本地 Wiki / 外部资料 | search |
+| 需要权威参考资料（历史人物、事件） | search（mediawiki_search 查 Wikipedia） |
+| 查询明日方舟/方舟设定和资料 | search（mediawiki_search wiki_url=https://prts.wiki/api.php） |
+
+mediawiki_search 可用站点：
+- Wikipedia EN: `https://en.wikipedia.org/w/api.php`（默认）
+- Wikipedia ZH: `https://zh.wikipedia.org/w/api.php`
+- PRTS Wiki（明日方舟）: `https://prts.wiki/api.php`
 
 **工具被拒时的处理：** 如果工具被系统拒绝（REJECT），消息中会说明允许的工具列表。请改用允许的工具，或先激活对应工具组，或调用 finish_action。
 

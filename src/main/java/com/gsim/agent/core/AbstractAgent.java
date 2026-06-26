@@ -125,9 +125,23 @@ public class AbstractAgent {
         List<ToolCallRecord> allToolCalls = new ArrayList<>();
         int maxRounds = config.maxToolRounds();
 
-        // system prompt (use override if set, e.g. from FreeMarker-rendered template)
-        String sp = systemPromptOverride != null ? systemPromptOverride : config.systemPrompt();
-        messages.add(LlmMessage.system(sp));  // system prompt is regenerated — never cached
+        // system prompt — build from staticSystemPrompt + rendered template
+        StringBuilder spBuilder = new StringBuilder();
+        String staticSys = config.staticSystemPrompt();
+        if (staticSys != null && !staticSys.isBlank()) {
+            spBuilder.append(staticSys);
+        }
+        String templatePart = systemPromptOverride != null
+                ? systemPromptOverride
+                : config.effectiveSystemPromptTemplate();
+        if (templatePart != null && !templatePart.isBlank()) {
+            if (!spBuilder.isEmpty()) spBuilder.append("\n\n---\n\n");
+            spBuilder.append(templatePart);
+        }
+        String sp = spBuilder.toString();
+        if (!sp.isBlank()) {
+            messages.add(LlmMessage.system(sp));  // system prompt is regenerated — never cached
+        }
 
         // Replay prior conversation from cache (skip stale system messages)
         if (priorMessages != null) {

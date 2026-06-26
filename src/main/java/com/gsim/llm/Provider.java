@@ -101,13 +101,17 @@ class Provider {
                 .header("Authorization", "Bearer " + config.apiKey())
                 .build();
 
-        log.debug("[LLM] stream request: model={} messages={} tools={} toolChoice={}",
+        log.info("[LLM] stream request: model={} messages={} tools={} toolChoice={}",
                 request.model() != null ? request.model() : config.model(),
                 request.messages().size(),
                 request.tools() != null ? request.tools().size() : 0,
                 request.toolChoice());
 
         try (Response response = httpClient.newCall(httpRequest).execute()) {
+            String contentType = response.header("Content-Type");
+            log.info("[LLM] stream response: HTTP {} Content-Type={}",
+                    response.code(), contentType != null ? contentType : "(none)");
+
             if (!response.isSuccessful()) {
                 String errBody = response.body() != null ? response.body().string() : "";
                 if (isContextLengthError(errBody)) {

@@ -17,7 +17,14 @@ import java.util.Map;
  * 写入 {@link StreamPool}。完成后调用 {@link StreamPool#onComplete(LlmResult)} 或
  * {@link StreamPool#onError(String)}。
  *
- * <p>支持 JSON fallback：如果首行不是 "data:" 开头，回退到整段 JSON 解析。
+ * <p>兼容多种国产 LLM API 格式：
+ * <ul>
+ *   <li>标准 OpenAI: choices[0].delta.content / reasoning_content / tool_calls</li>
+ *   <li>讯飞/其他变体: choices[0].message.content（流式 chunks 中仍使用 message）</li>
+ *   <li>老式 API: choices[0].text</li>
+ * </ul>
+ *
+ * <p>支持 JSON fallback：如果首行不是 SSE 协议行，回退到整段 JSON 解析。
  */
 class SseParser {
 
@@ -26,6 +33,9 @@ class SseParser {
 
     private final StreamPool pool;
     private final String model;
+
+    /** 已处理 data: 行数。 */
+    private int dataLinesProcessed;
 
     SseParser(StreamPool pool, String model) {
         this.pool = pool;
@@ -45,6 +55,16 @@ class SseParser {
 
         if (firstLine.startsWith("data:")) {
             parseSse(reader, firstLine);
+        } else if (firstLine.startsWith("event:")
+                || firstLine.startsWith("id:")
+                || firstLine.startsWith("retry:")) {
+            // SSE 协议控制行 — 跳过，继续寻找第一个 data: 行
+            String dataLine = findFirstDataLine(reader);
+            if (dataLine != null) {
+                parseSse(reader, dataLine);
+            } else {
+                pool.onError("SSE stream contained no data: lines");
+            }
         } else {
             parseJsonFallback(reader, firstLine);
         }
@@ -52,7 +72,20 @@ class SseParser {
 
     // ---- SSE 路径 ----
 
+    /** 跳过 SSE 控制行（event:/id:/retry:/注释），返回第一个 data: 行。 */
+    private String findFirstDataLine(BufferedReader reader) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith("data:")) {
+                return line;
+            }
+            // event:, id:, retry:, 注释(: 开头), 空行 → 继续
+        }
+        return null;
+    }
+
     private void parseSse(BufferedReader reader, String firstLine) throws IOException {
+        dataLinesProcessed = 0;
         StringBuilder dataBuffer = new StringBuilder();
         String line = firstLine;
 
@@ -66,14 +99,13 @@ class SseParser {
                     return;
                 } else {
                     dataBuffer.append(data);
-                    // 立即处理当前 data（支持单行完整 JSON）
                     processDataLine(dataBuffer.toString());
                     dataBuffer.setLength(0);
                 }
             } else if (line.isEmpty()) {
                 // 空行（SSE 事件分隔符）→ 忽略
             }
-            // 非 data: 行 → 可能是注释或空行，忽略
+            // 非 data: 行（event:, id:, retry: 等）→ 忽略
 
             line = reader.readLine();
         }
@@ -93,12 +125,45 @@ class SseParser {
     private void processDataLine(String json) {
         try {
             JsonNode root = MAPPER.readTree(json);
+
+            // 诊断：首条 data 行记录完整 JSON（INFO 级别方便排查）
+            if (dataLinesProcessed == 0) {
+                // 截断过长的日志
+                String preview = json.length() > 800 ? json.substring(0, 800) + "…" : json;
+                log.info("[SSE] first data line: {}", preview);
+            }
+            dataLinesProcessed++;
+
+            // 检查顶层 error
+            JsonNode errorNode = root.get("error");
+            if (errorNode != null) {
+                String errMsg = errorNode.has("message")
+                        ? errorNode.get("message").asText()
+                        : errorNode.toString();
+                pool.onError(errMsg);
+                return;
+            }
+
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.isEmpty()) return;
 
             JsonNode choice = choices.get(0);
+
+            // 获取 delta 或 message（兼容国产 API 的两种流式格式）
             JsonNode delta = choice.get("delta");
-            if (delta == null) return;
+            if (delta == null) {
+                // 部分 API (讯飞等) 流式 chunks 中仍使用 message
+                delta = choice.get("message");
+            }
+            if (delta == null) {
+                // 老式 API: text 直接在 choice 上
+                JsonNode textNode = choice.get("text");
+                if (textNode != null && !textNode.isNull()) {
+                    String text = textNode.asText();
+                    if (!text.isEmpty()) pool.onContentDelta(text);
+                }
+                return;
+            }
 
             // content
             JsonNode contentNode = delta.get("content");
@@ -150,19 +215,9 @@ class SseParser {
                         }
                     }
 
-                    // 变体: type 字段作为工具名
-                    if (name == null) {
-                        JsonNode typeNode = tcNode.get("type");
-                        if (typeNode != null && !typeNode.isNull()
-                                && "function".equals(typeNode.asText())) {
-                            // type=function 时才尝试从 id 提取名称（不理想但优于空）
-                        }
-                    }
-
                     if (name != null || argsChunk != null) {
                         pool.onToolCallDelta(index, name, argsChunk);
                     } else {
-                        // 无法解析的 tool_call delta，记录原始 JSON 用于调试
                         log.warn("Unparseable tool_call delta (index={}): {}", index, tcNode.toString());
                     }
                 }
@@ -173,6 +228,13 @@ class SseParser {
     }
 
     private void finishStream() {
+        if (dataLinesProcessed == 0) {
+            log.warn("[SSE] stream completed with 0 data lines — "
+                    + "LLM provider may not support streaming or returned empty response");
+        } else {
+            log.info("[SSE] stream done: {} data lines, contentChars={} reasoningChars={}",
+                    dataLinesProcessed, pool.getContent().length(), pool.getReasoning().length());
+        }
         pool.onComplete(new LlmResult(
                 pool.getContent(), pool.getReasoning(),
                 model, 0, true, null,

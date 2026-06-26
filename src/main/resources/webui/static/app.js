@@ -72,13 +72,12 @@ function loadMobilePage(name) {
     htmx.ajax('GET', '/chat', {target: '#' + targetId, swap: 'innerHTML'});
 })();
 
-// ===== Phase 3: 基于 MessageStore + ChatRenderer 的聊天逻辑 =====
+// ===== Phase 4: 基于 SessionWs (WebSocket) 的聊天逻辑 =====
+// @deprecated 旧 SSE 路径保留兼容但不再使用。SessionWs 通过 WebSocket + SessionNode JSON 驱动 UI。
 (function() {
     'use strict';
 
-    var es = null;           // EventSource 引用
-    var taskId = null;       // 当前任务 ID
-
+    var sessionWs = null;   // SessionWs 实例
 
     // ---- 按钮状态管理 ----
 
@@ -108,41 +107,19 @@ function loadMobilePage(name) {
         btn.type = 'button';
         btn.onclick = function(e) {
             if (e) e.preventDefault();
-            cancelCurrentStream();
+            cancelCurrent();
         };
     }
 
-    function cancelCurrentStream() {
-        if (es) { es.close(); es = null; }
-        if (taskId) {
-            fetch('/chat/cancel?taskId=' + taskId, {method:'POST'}).catch(function(){});
-            var asstId = MessageStore.getActiveAsstId();
-            if (asstId) {
-                MessageStore.update(asstId, {status: 'error'});
-                ChatRenderer.markError(asstId, '已取消');
-            }
-            taskId = null;
-        }
-        MessageStore.setActiveAsstId(null);
+    function cancelCurrent() {
+        fetch('/chat/cancel', {method: 'POST'}).catch(function(){});
         resetSendBtn();
     }
 
-    function finishStream(errMsg) {
-        if (es) { es.close(); es = null; }
-        taskId = null;
-        var asstId = MessageStore.getActiveAsstId();
-        if (errMsg && asstId) {
-            MessageStore.update(asstId, {status: 'error'});
-            ChatRenderer.markError(asstId, errMsg);
-        }
-        MessageStore.setActiveAsstId(null);
-        resetSendBtn();
-    }
-
-    // ---- 初始化：加载历史消息 ----
+    // ---- 初始化 ----
 
     function initChatPanel() {
-        console.log('[chat] initChatPanel: loading messages');
+        console.log('[chat] initChatPanel via SessionWs');
 
         // 1. 先从 localStorage 恢复（即时显示，不闪烁）
         var restored = MessageStore.restoreFromLocal();
@@ -153,46 +130,40 @@ function loadMobilePage(name) {
             ClientCache.renderAllMessages(MessageStore.getAll());
         }
 
-        // 2. 加载节点态势摘要（显示在消息顶部）
-        fetch('/chat/node-summary')
-        .then(function(r) { return r.json(); })
-        .then(function(info) {
-            if (info.ready) {
-                var statusText = '📍 ' + info.rootId + ' / ' + info.branch;
-                if (info.isCompact) statusText += ' (💾 compact)';
-                // 服务端重置过 → 清空本地缓存
-                if (info.needsBootstrap) {
-                    statusText = '⚠️ 需要初始化根节点';
-                    localStorage.clear();
-                    MessageStore.clear();
-                    ClientCache.reset();
-                }
+        // 2. 断开旧连接，创建新 SessionWs
+        if (sessionWs) {
+            sessionWs.close();
+        }
+        sessionWs = new SessionWs('default');
+        ClientCache.bindSessionWs(sessionWs);
+
+        // 3. 连接后加载节点摘要
+        sessionWs.onConnected(function() {
+            fetch('/chat/node-summary')
+            .then(function(r) { return r.json(); })
+            .then(function(info) {
+                var statusText = '📍 ' + (info.worldId || '—') + ' / ' + (info.activeNodeId || '—');
                 var ctxBar = document.getElementById('chat-context');
                 if (ctxBar) ctxBar.textContent = statusText;
-            }
-        }).catch(function(){});
+            }).catch(function(){});
+        });
 
-        // 3. 再从后端加载（合并/确认 complete 消息）
+        sessionWs.connect();
+
+        // 4. 从后端加载历史消息（与 SessionPool 互补）
         fetch('/chat/messages?format=json', {
             headers: {'Accept': 'application/json'}
         })
-        .then(function(r) {
-            console.log('[chat] /chat/messages response status:', r.status);
-            return r.json();
-        })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             var msgList = data.messages || [];
             console.log('[chat] loaded', msgList.length, 'messages from backend');
             MessageStore.loadFromJson(msgList);
-            console.log('[chat] MessageStore size after merge:', MessageStore.getAll().length);
-            // 重新渲染（合并后的完整列表）
-            var container = document.getElementById('chat-messages');
-            if (container) container.innerHTML = '';
-            ClientCache.renderAllMessages(MessageStore.getAll());
+            // SessionWs 已经通过 history 事件渲染了 SessionNode 历史，
+            // 这里只做 localStorage 备份
         })
         .catch(function(err) {
             console.warn('[chat] Failed to load history:', err.message);
-            // 后端不可用时，localStorage 数据已经显示了
         });
     }
 
@@ -200,15 +171,13 @@ function loadMobilePage(name) {
     document.body.addEventListener('htmx:afterSwap', function(e) {
         var target = e.detail && e.detail.target;
         if (!target) return;
-        // 检查目标元素或其子元素中是否出现了 chat-form
         if (target.querySelector && target.querySelector('#chat-form')) {
             console.log('[chat] chat-form detected in DOM after htmx swap, initializing...');
-            // 延迟一点确保所有 DOM 就绪
             setTimeout(initChatPanel, 50);
         }
     });
 
-    // 备用：如果页面加载时 chat-form 已经在 DOM 中（首次从服务端渲染）
+    // 备用：页面加载时
     if (document.readyState === 'complete') {
         setTimeout(function() {
             if (document.getElementById('chat-form')) initChatPanel();
@@ -221,8 +190,6 @@ function loadMobilePage(name) {
         });
     }
 
-    // ---- 发送消息 ----
-
     // ---- 文件上传 ----
 
     window._chatUpload = function(input) {
@@ -233,24 +200,18 @@ function loadMobilePage(name) {
         fetch(url, {method: 'POST', body: file})
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.success) {
-                addUploadTag(data.filename);
-            }
+            if (data.success) addUploadTag(data.filename);
         })
         .catch(function(err) {
             console.warn('[chat] upload failed:', err.message);
         })
-        .finally(function() {
-            // 重置 file input，允许重复上传同名文件
-            input.value = '';
-        });
+        .finally(function() { input.value = ''; });
     };
 
     function addUploadTag(filename) {
         var container = document.getElementById('chat-uploads');
         if (!container) return;
         container.classList.remove('hidden');
-
         var tag = document.createElement('span');
         tag.className = 'upload-tag';
         tag.setAttribute('data-filename', filename);
@@ -268,10 +229,7 @@ function loadMobilePage(name) {
 
     function clearUploadTags() {
         var container = document.getElementById('chat-uploads');
-        if (container) {
-            container.innerHTML = '';
-            container.classList.add('hidden');
-        }
+        if (container) { container.innerHTML = ''; container.classList.add('hidden'); }
     }
 
     // ---- 发送消息 ----
@@ -282,55 +240,28 @@ function loadMobilePage(name) {
         var msg = input.value.trim();
         if (!msg) return;
 
-        // 如果有正在进行的流，先取消
-        if (es || taskId) cancelCurrentStream();
-
-        // ---- 创建用户消息模块 ----
-        var userMsg = MessageStore.add({
-            role: 'user',
-            type: 'chat_user',
-            content: msg,
-            status: 'complete'
-        });
-        ChatRenderer.renderUserMessage(userMsg);
-
         input.value = '';
         clearUploadTags();
 
-        // ---- 创建 assistant 占位模块 ----
-        var asstMsgId = MessageStore.generateId();
-        var asstMsg = MessageStore.add({
-            msgId: asstMsgId,
-            role: 'assistant',
-            type: 'chat_assistant',
-            content: '',
-            status: 'pending'
-        });
-        MessageStore.setActiveAsstId(asstMsgId);
-        ClientCache.createAssistantCard(asstMsg);
+        // 通过 SessionWs 发送消息到后端（POST /chat/send）
+        if (sessionWs) {
+            sessionWs.send(msg).then(function(resp) {
+                console.log('[chat] message sent:', resp.sessionId);
+            }).catch(function(err) {
+                console.error('[chat] send error:', err.message);
+            });
+        } else {
+            // Fallback — 直接 POST
+            fetch('/chat/send', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'message=' + encodeURIComponent(msg)
+            }).catch(function(err) {
+                console.error('[chat] send error:', err.message);
+            });
+        }
 
-        // 立即切换按钮为取消状态
         setCancelBtn();
-
-        // 发送消息到后端
-        fetch('/chat/send', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'message=' + encodeURIComponent(msg)
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(resp) {
-            if (!resp.taskId) {
-                finishStream('[错误] 未收到任务ID');
-                return;
-            }
-            taskId = resp.taskId;
-            console.log('[chat] task created:', taskId);
-            connectStream(resp.streamUrl, asstMsgId);
-        })
-        .catch(function(err) {
-            finishStream('[错误] ' + err.message);
-        });
     };
 
     // 事件委托兜底：拦截 chat-form 的 submit
@@ -340,43 +271,4 @@ function loadMobilePage(name) {
         e.preventDefault();
         window._chatSend && window._chatSend();
     });
-
-    // ---- SSE 流连接和处理 ----
-
-    // SubAgent 状态追踪：agentId → {parentAsstId, type, accumulatedContent, toolCardIndex}
-    function connectStream(streamUrl, asstMsgId) {
-        console.log('[chat] connectStream:', streamUrl, 'asstMsgId:', asstMsgId);
-        es = new EventSource(streamUrl);
-
-        var needsBranchReload = false;
-
-        // 所有 SSE 事件统一由 ClientCache 分发
-        var evtNames = ['llm_started','llm_delta','llm_reasoning_delta','llm_error','llm_done',
-            'llm_tool_delta','tool_started','tool_done','tool_error','log','result',
-            'command_done','command_error','done'];
-        for (var i = 0; i < evtNames.length; i++) {
-            es.addEventListener(evtNames[i], (function(n) { return function(e) {
-                if (n === 'result') {
-                    try { var d = JSON.parse(e.data); var t = d.displayText || d.message || '';
-                        if (t.indexOf('上下文已压缩')>=0 || t.indexOf('新节点:')>=0
-                            || t.indexOf('已切换到')>=0) needsBranchReload = true;
-                    } catch(_) {}
-                }
-                ClientCache.dispatch(e);
-                if (n === 'command_done' || n === 'command_error') finishStream(null);
-                if (n === 'done') {
-                    if (es) { es.close(); es = null; }
-                    taskId = null; resetSendBtn();
-                    if (needsBranchReload) { needsBranchReload = false;
-                        console.log('[chat] detected branch change, reloading');
-                        setTimeout(function(){ MessageStore.clear(); ClientCache.reset(); initChatPanel(); }, 300);
-                    }
-                }
-            }; })(evtNames[i]));
-        }
-        es.onerror = function() {
-            console.log('[chat] onerror, taskId:', taskId);
-            if (taskId) finishStream(null);
-        };
-    }
 })();

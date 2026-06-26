@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * LLM 管理器 — Agent 与 LLM Provider 之间的唯一入口。
+ * LLM 管理器 — 实现 {@link LlmProvider} 接口，Agent 与 LLM Provider 之间的入口。
  *
  * <h3>核心方法</h3>
  * <ul>
@@ -27,11 +27,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>线程安全。支持多 Agent 并发调用。
  */
-public class LlmManager {
+public class LlmManager implements LlmProvider {
 
     private static final Logger log = LoggerFactory.getLogger(LlmManager.class);
 
     private final Provider provider;
+    private final String providerId;
     private final AtomicInteger activeCalls = new AtomicInteger(0);
 
     /**
@@ -40,14 +41,23 @@ public class LlmManager {
      */
     protected LlmManager() {
         this.provider = null;
+        this.providerId = "test";
     }
 
     /**
-     * 从 ProviderConfig 创建 LlmManager。
+     * 从 ProviderConfig 创建 LlmManager（使用默认 providerId）。
      */
     public LlmManager(ProviderConfig config) {
+        this(config, "default");
+    }
+
+    /**
+     * 从 ProviderConfig + providerId 创建 LlmManager。
+     */
+    public LlmManager(ProviderConfig config, String providerId) {
         this.provider = new Provider(config);
-        log.info("[LlmManager] initialized: {}", config.toSafeString());
+        this.providerId = providerId;
+        log.info("[LlmManager] initialized '{}': {}", providerId, config.toSafeString());
     }
 
     /**
@@ -104,12 +114,25 @@ public class LlmManager {
         return activeCalls.get();
     }
 
+    @Override
+    public String providerId() {
+        return providerId;
+    }
+
     /** 获取 provider 配置（只读）。 */
-    public ProviderConfig getConfig() {
+    @Override
+    public ProviderConfig config() {
         return provider.config();
     }
 
+    /** @deprecated 使用 {@link #config()} 替代。 */
+    @Deprecated
+    public ProviderConfig getConfig() {
+        return config();
+    }
+
     /** 关闭底层 HTTP 资源。 */
+    @Override
     public void close() {
         provider.close();
     }

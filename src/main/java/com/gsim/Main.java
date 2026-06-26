@@ -3,11 +3,16 @@ package com.gsim;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
+import com.gsim.cache.CacheInfo;
+import com.gsim.cache.CachesManager;
+import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigWizard;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Scanner;
 
 /**
  * GSimulator 主入口。
@@ -65,21 +70,35 @@ public class Main {
                 }
             }
 
+            // 3. 创建 CachesManager
+            CachesManager cachesManager = new FileSystemCachesManager(config.worldsDir());
+
             // Bootstrap: load worlds, build WorldInformation, init cache
             Path worldsDir = config.worldsDir();
             Path promptsDir = config.promptsDir();
-            Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir);
-            Bootstrap.BootstrapResult bootResult = bootstrap.boot();
+            Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir, cachesManager);
+
+            // 4. CLI 缓存选择（交互终端下）
+            String selectedSessionId = null;
+            if (ConfigLoader.isInteractiveTerminal()) {
+                selectedSessionId = selectOrchestratorCache(cachesManager, "default");
+            }
+
+            Bootstrap.BootstrapResult bootResult = bootstrap.boot(selectedSessionId);
             System.out.println("World loaded: " + bootResult.worldId()
                 + ", active node: " + bootResult.activeNodeId()
                 + ", chain length: " + bootResult.worldInfo().branchChain().size());
+            if (bootResult.activeCache() != null) {
+                System.out.println("Active cache: " + bootResult.activeCache().sessionId()
+                    + " (" + bootResult.activeCache().messageCount() + " messages)");
+            }
 
-            // 3. 当前阶段：仅 CLI 模式，HTTP API / WebUI 暂不启动
+            // 5. 当前阶段：仅 CLI 模式，HTTP API / WebUI 暂不启动
             boolean cliMode = true;
             boolean httpMode = false;
             boolean webuiMode = false;
 
-            // 4. 启动应用
+            // 6. 启动应用
             GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, bootResult);
             app.start();
 
@@ -88,6 +107,43 @@ public class Main {
             e.printStackTrace(System.err);
             System.exit(1);
         }
+    }
+
+    /** CLI 交互：选择 Orchestrator 历史缓存或新建。 */
+    private static String selectOrchestratorCache(CachesManager cachesManager, String worldId) {
+        List<CacheInfo> caches = cachesManager.listCaches(worldId, "orchestrator");
+        if (caches.isEmpty()) return null; // 将自动新建
+
+        System.out.println();
+        System.out.println("══════════════════════════════════════════");
+        System.out.println("  选择 Orchestrator 会话缓存");
+        System.out.println("══════════════════════════════════════════");
+        for (int i = 0; i < caches.size(); i++) {
+            CacheInfo ci = caches.get(i);
+            System.out.printf("  [%d] %s  (%d messages, %s)%n",
+                    i + 1, ci.sessionId(), ci.messageCount(),
+                    ci.createdAt().substring(0, Math.min(16, ci.createdAt().length())));
+        }
+        System.out.println("  [N] 新建会话");
+        System.out.print("  选择 (1-" + caches.size() + "/N): ");
+
+        try {
+            Scanner scanner = new Scanner(System.in);
+            String line = scanner.nextLine().trim();
+            if ("n".equalsIgnoreCase(line) || "N".equals(line)) {
+                System.out.println("  创建新会话...");
+                return null;
+            }
+            int idx = Integer.parseInt(line) - 1;
+            if (idx >= 0 && idx < caches.size()) {
+                System.out.println("  加载缓存: " + caches.get(idx).sessionId());
+                return caches.get(idx).sessionId();
+            }
+        } catch (Exception e) {
+            // fall through
+        }
+        System.out.println("  输入无效，使用最新缓存。");
+        return caches.get(0).sessionId(); // fallback: 最新
     }
 
     private static void printUsage() {

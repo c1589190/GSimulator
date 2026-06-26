@@ -11,7 +11,6 @@ import com.gsim.llm.LlmResult;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.llm.StreamPool;
 import com.gsim.llm.ToolDef;
-import com.gsim.resource.PromptResourceManager;
 import com.gsim.resource.ResourceManager;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -291,20 +290,6 @@ public class OrchestratorAgent extends AbstractAgent {
             return LlmResult.failure(e.getMessage());
         }
     }
-
-    // ---- prompt 构建 ----
-
-    private String buildSystemPrompt() {
-        try {
-            return PromptResourceManager.getOrchestratorSystemPrompt();
-        } catch (IOException e) {
-            throw new UncheckedIOException("Orchestrator system prompt not found on classpath", e);
-        }
-    }
-
-    /**
-     * 构建完整 system prompt：orchestrator-system.md + ToolRegistry 工具目录 + BaseContext。
-     */
 
     /**
      * 从 ToolGroupManager 生成工具组目录 prompt（含组名、描述、成员工具、激活说明）。

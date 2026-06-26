@@ -112,6 +112,18 @@ public class GSimulatorApplication {
         com.gsim.webui.WebUiConfig webUiConfig =
                 com.gsim.webui.WebUiConfig.from(config);
         this.webUiServer = new com.gsim.webui.WebUiServer(webUiConfig, ctx);
+
+        // 注册 ChatApiHandler（在 WebUiServer start 之前）
+        if (chatCommand != null) {
+            var chatApiHandler = new com.gsim.webui.handlers.ChatApiHandler(
+                    chatCommand,
+                    () -> worldInfo,
+                    () -> activeCache,
+                    worldsDir,
+                    () -> worldInfo != null ? worldInfo.worldId() : "default");
+            webUiServer.registerHandler("/chat", chatApiHandler);
+            log.info("Registered ChatApiHandler on /chat");
+        }
     }
 
     private void registerAgentTools(ToolRegistry toolRegistry) {
@@ -156,16 +168,38 @@ public class GSimulatorApplication {
 
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
 
+        // MediaWiki search (Wikipedia + any MediaWiki site)
+        toolRegistry.register(new com.gsim.tool.MediaWikiSearchTool());
+
         // Agent control flow tools
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
         toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
 
-        // Sub-agent tools
+        // Sub-agent tools — 从 agents/ 目录加载配置
         var agentConfigStore = new com.gsim.agent.config.AgentConfigStore();
+        agentConfigStore.reload(config.agentsDir());
         this.agentFactory = new com.gsim.agent.core.AgentFactory(
-                agentConfigStore, ctx.getLlmManager(), toolRegistry, compositeSink, config.getLlmModel(),
+                agentConfigStore, ctx.getLlmProviderRegistry(), toolRegistry,
+                compositeSink, config.getLlmModel(),
                 worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default");
         this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory);
+
+        // SubAgent cache 管理工具
+        var worldIdSupplier = new java.util.function.Supplier<String>() {
+            public String get() { return worldInfo != null ? worldInfo.worldId() : "default"; }
+        };
+        toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(
+                ctx.getCachesManager(), worldIdSupplier));
+        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(
+                ctx.getCachesManager(), worldIdSupplier));
+
+        // LLM provider 列表 + 动态创建 SubAgent 配置
+        toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(
+                ctx.getLlmProviderRegistry()));
+        toolRegistry.register(new com.gsim.agent.tool.CreateSubAgentConfigTool(
+                config.agentsDir(), agentConfigStore));
+        toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(
+                config.agentsDir(), agentConfigStore));
     }
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
@@ -220,6 +254,12 @@ public class GSimulatorApplication {
         this.nodeCommand = nc;
         this.chatCommand = cc;
         adapter.setNewCommands(wc, nc, cc);
+
+        // Expose commands to ApplicationContext for WebUI handlers
+        ctx.setChatCommand(cc);
+        ctx.setWorldCommand(wc);
+        ctx.setNodeCommand(nc);
+
         log.info("Wired /world, /node, /chat commands into ConsoleInteractionAdapter");
     }
 
@@ -233,9 +273,45 @@ public class GSimulatorApplication {
             return;
         }
         try {
-            String rendered = contextRenderer.renderSystemPrompt("OrchestratorAgent", worldInfo);
-            orchestrator.setSystemPrompt(rendered);
-            log.info("Injected FreeMarker-rendered system prompt into OrchestratorAgent ({} chars)", rendered.length());
+            // 从 AgentConfigStore 读取 orchestrator 的完整配置
+            var orchConfig = (agentFactory != null && agentFactory.store() != null)
+                    ? agentFactory.store().get("orchestrator")
+                    : null;
+
+            StringBuilder sb = new StringBuilder();
+
+            // 前置 staticSystemPrompt（综合行为规则，纯文本）
+            if (orchConfig != null) {
+                String staticSys = orchConfig.staticSystemPrompt();
+                if (staticSys != null && !staticSys.isBlank()) {
+                    sb.append(staticSys);
+                }
+            }
+
+            // 渲染 systemPromptTemplate（FreeMarker 世界状态模板）
+            String template = null;
+            if (orchConfig != null) {
+                template = orchConfig.systemPromptTemplate();
+            }
+
+            if (template != null && !template.isBlank()) {
+                if (!sb.isEmpty()) sb.append("\n\n---\n\n");
+                String rendered = contextRenderer.renderInlineTemplate(template, worldInfo);
+                sb.append(rendered);
+            } else if (sb.isEmpty()) {
+                // Fallback: 使用文件系统模板（向后兼容）
+                log.warn("Orchestrator agent config has no prompt, using filesystem fallback");
+                String rendered = contextRenderer.renderSystemPrompt("OrchestratorAgent", worldInfo);
+                sb.append(rendered);
+            }
+
+            String fullPrompt = sb.toString();
+            if (!fullPrompt.isBlank()) {
+                orchestrator.setSystemPrompt(fullPrompt);
+                log.info("Injected system prompt into OrchestratorAgent ({} chars, config from {})",
+                        fullPrompt.length(),
+                        orchConfig != null ? "AgentConfigStore" : "filesystem fallback");
+            }
         } catch (Exception e) {
             log.error("Failed to inject system prompt: {}", e.getMessage(), e);
         }
@@ -269,7 +345,9 @@ public class GSimulatorApplication {
                 System.out.println("   /chat — Agent 对话");
                 System.out.println("   /sim  — 推演结算");
                 System.out.println();
-                System.out.println("执行 /config init 配置 LLM，或 /config status 查看当前状态。");
+                System.out.println("编辑 " + config.getLlmsPath() + " 设置 API Key，或设置 LLM_API_KEY 环境变量。");
+                System.out.println("当前已从 llms.json 加载 " + ctx.getLlmProviderRegistry().size() + " 个 provider，");
+                System.out.println("但 API Key 无效（401 错误）。");
                 System.out.println();
             }
             Thread.startVirtualThread(() -> {

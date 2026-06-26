@@ -4,25 +4,27 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- * 提示词资源管理器 — 从 classpath gsim/prompts/ 读取 LLM 提示词。
+ * 提示词资源管理器。
  *
- * <h3>新 API（推荐）</h3>
- * 使用 {@link #getAgentPrompt(String, String)} 按 agentId + sceneId 加载：
+ * <p>主 Agent（Orchestrator）的 system prompt 由 agents/orchestrator.json 配置。
+ * SubAgent 的 prompt 由主 Agent 运行时生成或从 classpath 加载。
+ *
+ * <h3>API</h3>
  * <pre>{@code
+ *   // SubAgent prompt — classpath 读取
  *   PromptResourceManager.getAgentPrompt("sim", "system")
- *   // → gsim/prompts/sim/system.md
- *   PromptResourceManager.renderAgentPrompt("sim", "user", Map.of("prompt", "..."))
- *   // → gsim/prompts/sim/user.md with {{prompt}} substitution
  * }</pre>
  */
 public final class PromptResourceManager {
 
+    private static final ClassLoader CL = Thread.currentThread().getContextClassLoader();
+
     private PromptResourceManager() {}
 
-    // ====== 新 API：agentId + sceneId ======
+    // ====== SubAgent prompt（classpath，运行时生成不持久化） ======
 
     /**
-     * 按 agentId + sceneId 加载 prompt 文件。
+     * 按 agentId + sceneId 加载 SubAgent 的 prompt 模板。
      * 路径约定: {@code gsim/prompts/{agentId}/{sceneId}.md}
      */
     public static String getAgentPrompt(String agentId, String sceneId) throws IOException {
@@ -31,8 +33,7 @@ public final class PromptResourceManager {
     }
 
     /**
-     * 按 agentId + sceneId 加载并渲染 prompt 模板。
-     * 路径约定: {@code gsim/prompts/{agentId}/{sceneId}.md}
+     * 按 agentId + sceneId 加载并渲染 SubAgent 的 prompt 模板。
      */
     public static String renderAgentPrompt(String agentId, String sceneId,
                                             Map<String, String> params) throws IOException {
@@ -46,12 +47,6 @@ public final class PromptResourceManager {
     @Deprecated
     public static String getSystemPrompt() throws IOException {
         return ResourceManager.readText("gsim/prompts/system.md");
-    }
-
-    /** @deprecated 使用 {@link #getAgentPrompt("orchestrator", "system")} 替代 */
-    @Deprecated
-    public static String getOrchestratorSystemPrompt() throws IOException {
-        return ResourceManager.readText("gsim/prompts/orchestrator-system.md");
     }
 
     /** @deprecated 已被 SimAgent 替代 */

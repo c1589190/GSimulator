@@ -8,9 +8,17 @@ import com.gsim.event.ConsoleEventSink;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.InteractionSession;
+import com.gsim.cache.CachesManager;
+import com.gsim.cache.FileSystemCachesManager;
+import com.gsim.llm.LlmConfig;
 import com.gsim.llm.LlmManager;
+import com.gsim.llm.LlmProviderRegistry;
+import com.gsim.llm.LlmsConfigLoader;
 import com.gsim.llm.ProviderConfig;
 import com.gsim.session.SessionPool;
+import com.gsim.commands.ChatCommand;
+import com.gsim.commands.NodeCommand;
+import com.gsim.commands.WorldCommand;
 import com.gsim.tool.LocalFileSearchService;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.WikiSearchTool;
@@ -27,8 +35,11 @@ public class ApplicationContext {
     private final AppConfig config;
     private final TimeProvider timeProvider;
 
+    private final LlmProviderRegistry llmProviderRegistry;
     private final LlmManager llmManager;
+    private final CachesManager cachesManager;
     private final ToolRegistry toolRegistry;
+    private final LocalFileSearchService localFileSearchService;
     private final InteractionContext interactionContext;
     private final InteractionSession interactionSession;
     private final InteractionManager interactionManager;
@@ -42,26 +53,40 @@ public class ApplicationContext {
     private Runnable onRootReadyCallback;
     private String activeRootId;
 
+    // Command instances (injected by GSimulatorApplication)
+    private ChatCommand chatCommand;
+    private WorldCommand worldCommand;
+    private NodeCommand nodeCommand;
+
     public ApplicationContext(AppConfig config) {
         this.config = config;
         this.timeProvider = new TimeProvider();
 
-        // LLM — 只有配置完整时才创建真正的客户端
-        if (config.isLlmConfigured()) {
-            this.llmManager = new LlmManager(ProviderConfig.generic(
-                    "custom",
-                    config.getLlmBaseUrl(), config.getLlmApiKey(),
-                    config.getLlmModel(), config.getLlmTemperature(),
-                    config.getLlmTimeoutSeconds()));
-        } else {
-            this.llmManager = null;
+        // LLM — 从 llms.json 加载所有 provider
+        LlmsConfigLoader llmsLoader = new LlmsConfigLoader(config.getLlmsPath());
+        LlmsConfigLoader.LoadResult llmsResult = llmsLoader.load();
+        this.llmProviderRegistry = LlmProviderRegistry.fromConfig(llmsResult.file());
+
+        // 保留 llmManager 引用指向默认 provider（向后兼容）
+        this.llmManager = (LlmManager) llmProviderRegistry.getDefault();
+
+        // Cache 管理器
+        this.cachesManager = new FileSystemCachesManager(config.worldsDir());
+
+        if (llmsResult.wasNewlyCreated()) {
+            System.out.println();
+            System.out.println("📋 LLM 配置初始化");
+            System.out.println("   在 " + llmsLoader.getLlmsPath() + " 创建了默认 LLM provider 模板。");
+            System.out.println("   你可以编辑该文件添加更多 provider。");
+            System.out.println();
+            System.out.println(LlmsConfigLoader.formatProviderList(llmsResult.file()));
         }
 
         // Tool 系统
         this.toolRegistry = new ToolRegistry();
         Path wikiDir = config.getImportDir().resolve("web").resolve("prts.wiki");
-        LocalFileSearchService searchService = new LocalFileSearchService(wikiDir);
-        this.toolRegistry.register(new WikiSearchTool(searchService));
+        this.localFileSearchService = new LocalFileSearchService(wikiDir);
+        this.toolRegistry.register(new WikiSearchTool(localFileSearchService));
 
         // 交互层
         this.interactionContext = new InteractionContext();
@@ -95,6 +120,8 @@ public class ApplicationContext {
     public AppConfig getConfig() { return config; }
     public TimeProvider getTimeProvider() { return timeProvider; }
     public LlmManager getLlmManager() { return llmManager; }
+    public LlmProviderRegistry getLlmProviderRegistry() { return llmProviderRegistry; }
+    public CachesManager getCachesManager() { return cachesManager; }
     public ToolRegistry getToolRegistry() { return toolRegistry; }
     public InteractionContext getInteractionContext() { return interactionContext; }
     public InteractionSession getInteractionSession() { return interactionSession; }
@@ -121,12 +148,27 @@ public class ApplicationContext {
         return apiManager != null ? apiManager.getSessionManager() : null;
     }
 
+    // ---- Command accessors (for WebUI handlers) ----
+
+    public ChatCommand getChatCommand() { return chatCommand; }
+    public void setChatCommand(ChatCommand cc) { this.chatCommand = cc; }
+
+    public WorldCommand getWorldCommand() { return worldCommand; }
+    public void setWorldCommand(WorldCommand wc) { this.worldCommand = wc; }
+
+    public NodeCommand getNodeCommand() { return nodeCommand; }
+    public void setNodeCommand(NodeCommand nc) { this.nodeCommand = nc; }
+
+    public LocalFileSearchService getLocalFileSearchService() { return localFileSearchService; }
+
+    public Path getWorldsDir() { return config.worldsDir(); }
+
     /**
      * 关闭所有资源：LLM client、event bus、API server。
      */
     public void shutdown() {
-        if (llmManager != null) {
-            llmManager.close();
+        if (llmProviderRegistry != null) {
+            llmProviderRegistry.closeAll();
         }
         eventBus.shutdown();
         apiManager.stop();

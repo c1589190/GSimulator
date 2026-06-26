@@ -3,6 +3,8 @@ package com.gsim.integration;
 import com.gsim.app.Bootstrap;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
+import com.gsim.cache.CachesManager;
+import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.context.ContextRenderer;
 import com.gsim.worldinfo.Element;
 import com.gsim.worldinfo.WorldInformation;
@@ -36,7 +38,8 @@ class EndToEndTest {
             "System: ${worldId}, turn ${activeTurn}");
 
         // --- Bootstrap creates default world ---
-        Bootstrap b = new Bootstrap(worldsDir, promptsDir);
+        CachesManager cachesManager = new FileSystemCachesManager(worldsDir);
+        Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
         Bootstrap.BootstrapResult result = b.boot();
 
         assertEquals("default", result.worldId());
@@ -63,7 +66,7 @@ class EndToEndTest {
 
         CacheSession loaded = CacheStore.load(worldsDir, "default", cache.sessionId());
         assertNotNull(loaded);
-        assertEquals(2, loaded.messageCount()); // system + user
+        assertEquals(1, loaded.messageCount()); // user message only (system prompt injected dynamically)
 
         // --- Context rendering ---
         ContextRenderer renderer = result.contextRenderer();

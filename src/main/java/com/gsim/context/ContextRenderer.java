@@ -7,6 +7,7 @@ import freemarker.template.Template;
 import freemarker.template.TemplateException;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,6 +50,22 @@ public final class ContextRenderer {
         String templateName = agentName + "_compress.md";
         Map<String, Object> data = Map.of("conversation", conversationText);
         return render(templateName, data);
+    }
+
+    /**
+     * Render an inline FreeMarker template string with world context injected.
+     * Used when the template comes from an AgentConfig rather than the filesystem.
+     */
+    public String renderInlineTemplate(String templateContent, WorldInformation wi) {
+        try {
+            Template t = new Template("inline", new StringReader(templateContent), fm);
+            Map<String, Object> data = buildDataModel(wi);
+            StringWriter sw = new StringWriter();
+            t.process(data, sw);
+            return sw.toString();
+        } catch (IOException | TemplateException e) {
+            throw new RuntimeException("Cannot render inline template: " + e.getMessage(), e);
+        }
     }
 
     // -- private --

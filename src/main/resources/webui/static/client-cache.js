@@ -900,6 +900,190 @@
     }
 
     // ══════════════════════════════════════════
+    // SessionWs 绑定 — 映射 SessionNode 事件到 Card 渲染
+    // ══════════════════════════════════════════
+
+    /** nodeId → Card 查找表（用于 SessionWs 实时更新） */
+    var cardsByNodeId = {};
+
+    /**
+     * 将 SessionWs 绑定到 ClientCache。
+     * @param {SessionWs} ws
+     */
+    function bindSessionWs(ws) {
+        ws.onHistory(function(nodes) {
+            console.log('[ClientCache] history:', nodes.length, 'nodes');
+            cards = [];
+            cardsById = {};
+            cardsByNodeId = {};
+            pendingAsstCard = null;
+            pendingToolCard = null;
+            subAgents = {};
+            var c = getContainer();
+            if (c) c.innerHTML = '';
+
+            for (var i = 0; i < nodes.length; i++) {
+                handleNodePush(nodes[i]);
+            }
+            scrollBottom();
+        });
+
+        ws.onNodePushed(function(node) {
+            handleNodePush(node);
+            scrollBottom();
+        });
+
+        ws.onNodeUpdated(function(nodeId, key, value) {
+            handleNodeUpdate(nodeId, key, value);
+        });
+
+        ws.onStatusChanged(function(nodeId, oldStatus, newStatus) {
+            handleStatusChange(nodeId, oldStatus, newStatus);
+        });
+    }
+
+    /** 根据 SessionNode 创建/更新 Card */
+    function handleNodePush(node) {
+        removeEmpty();
+        var nodeId = node.nodeId;
+        var nodeType = node.type;
+        var payload = node.payload || {};
+        var status = node.status || (payload.status || 'PENDING');
+
+        switch (nodeType) {
+            case 'USER_INPUT':
+                var userMsg = MessageStore.add({
+                    msgId: nodeId,
+                    role: 'user',
+                    type: 'chat_user',
+                    content: payload.text || '',
+                    status: 'complete'
+                });
+                var uc = new UserCard(userMsg);
+                uc.render();
+                addCard(uc);
+                cardsByNodeId[nodeId] = uc;
+                break;
+
+            case 'LLM_STREAMING':
+                // 获取或创建 AssistantCard
+                var asstId = nodeId;
+                var asstMsg = MessageStore.add({
+                    msgId: asstId,
+                    role: 'assistant',
+                    type: 'chat_assistant',
+                    content: '',
+                    status: 'pending'
+                });
+                var ac = new AssistantCard(asstMsg);
+                ac.render();
+                addCard(ac);
+                ac.el.setAttribute('data-node-id', nodeId);
+                cardsByNodeId[nodeId] = ac;
+                pendingAsstCard = ac;
+                break;
+
+            case 'TOOL_CALL':
+                var toolName = payload.tool || 'tool';
+                var tc = new ToolCard(toolName, status === 'DONE' ? 'done' : status === 'ERROR' ? 'error' : 'pending');
+                tc.render();
+                if (tc.el) tc.el.setAttribute('data-node-id', nodeId);
+                cardsByNodeId[nodeId] = tc;
+                // 挂到当前 AssistantCard
+                var parent = pendingAsstCard || findAsstCard(node.parentId);
+                if (parent) {
+                    parent.addBlock(tc);
+                    if (!parent.toolCards) parent.toolCards = [];
+                    parent.toolCards.push(tc);
+                    parent.el.setAttribute('data-tool-' + nodeId, '');
+                } else {
+                    addCard(tc);
+                }
+                pendingToolCard = tc;
+                break;
+
+            case 'AGENT_MESSAGE':
+                var subType = payload.subType || '';
+                if (subType === 'simulation_content') {
+                    var twc = new TweetCard(payload.title || '', payload.body || '');
+                    twc.render();
+                    addCard(twc);
+                    cardsByNodeId[nodeId] = twc;
+                } else {
+                    var fakeMsg = {msgId: nodeId, content: payload.message || payload.content || ''};
+                    var sc = new SystemCard(fakeMsg);
+                    sc.render();
+                    addCard(sc);
+                    cardsByNodeId[nodeId] = sc;
+                }
+                break;
+
+            case 'SYSTEM':
+                var msgText = payload.message || payload.content || payload.text || '';
+                if (payload.error) msgText += ' Error: ' + payload.error;
+                var syc = new SystemCard({msgId: nodeId, content: msgText});
+                syc.render();
+                addCard(syc);
+                cardsByNodeId[nodeId] = syc;
+                break;
+        }
+    }
+
+    /** 更新节点（流式内容追加等） */
+    function handleNodeUpdate(nodeId, key, value) {
+        if (key !== 'content') return;
+        var card = cardsByNodeId[nodeId];
+        if (!card) {
+            // 可能是 LLM_STREAMING 节点的 content 更新
+            card = pendingAsstCard;
+        }
+        if (!card) return;
+
+        if (card instanceof AssistantCard || card.constructor.name === 'AssistantCard') {
+            // 找到或创建 ContentBlock
+            if (!card._streamBlock) {
+                card._streamBlock = new ContentBlock('');
+                card._streamBlock.render();
+                card.addBlock(card._streamBlock);
+            }
+            card._streamBlock.append(value);
+        }
+    }
+
+    /** 状态变更 */
+    function handleStatusChange(nodeId, oldStatus, newStatus) {
+        var card = cardsByNodeId[nodeId];
+        if (!card) return;
+
+        if (newStatus === 'DONE') {
+            if (card instanceof ToolCard || card.constructor.name === 'ToolCard') {
+                card.transition('done');
+                pendingToolCard = null;
+            }
+            if (card instanceof AssistantCard || card.constructor.name === 'AssistantCard') {
+                pendingAsstCard = null;
+                card._streamBlock = null;
+            }
+        } else if (newStatus === 'ERROR') {
+            if (card instanceof ToolCard || card.constructor.name === 'ToolCard') {
+                card.transition('error');
+                pendingToolCard = null;
+            }
+            if (card instanceof AssistantCard || card.constructor.name === 'AssistantCard') {
+                if (card._streamBlock) {
+                    card._streamBlock.append('\n[错误]');
+                    card._streamBlock = null;
+                }
+                pendingAsstCard = null;
+            }
+        } else if (newStatus === 'STREAMING') {
+            if (card instanceof ToolCard || card.constructor.name === 'ToolCard') {
+                card.transition('running');
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════
     // 导出
     // ══════════════════════════════════════════
 
@@ -910,6 +1094,7 @@
         findAsstCard: findAsstCard,
         renderAllMessages: renderAllMessages,
         reset: reset,
+        bindSessionWs: bindSessionWs,
         renderDebugPanel: renderDebugPanel,
         get pendingAsstCard() { return pendingAsstCard; },
         set pendingAsstCard(c) { pendingAsstCard = c; },

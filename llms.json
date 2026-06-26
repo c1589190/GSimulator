@@ -1,0 +1,15 @@
+{
+  "version" : 1,
+  "providers" : [ {
+    "id" : "base",
+    "name" : "Base LLM",
+    "baseUrl" : "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2",
+    "apiKey" : "adb6ee123c5d21b19e65f716007a196b:ODlmZTgwMmQyY2IxMTY3OWYwMzIyNTFk",
+    "model" : "astron-code-latest",
+    "defaultTemperature" : 0.3,
+    "defaultMaxTokens" : 4096,
+    "extraBody" : null,
+    "thinking" : null,
+    "isDefault" : true
+  } ]
+}

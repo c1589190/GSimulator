@@ -53,10 +53,11 @@ public record ToolGroup(
     );
 
     public static final ToolGroup SEARCH = new ToolGroup(
-            "search", "文件搜索",
-            "全文搜索导入的 Wiki 文本文件。"
-                    + "wiki_search 搜索 Wiki 文本。",
-            Set.of("wiki_search")
+            "search", "多源搜索",
+            "多源资料搜索：本地 Wiki 文本、Wikipedia / 任意 MediaWiki 站点。"
+                    + "wiki_search 搜索本地 Wiki 文本，"
+                    + "mediawiki_search 搜索 Wikipedia 或其他 MediaWiki 站点。",
+            Set.of("wiki_search", "mediawiki_search")
     );
 
     // ===== 所有工具组列表 =====
@@ -71,7 +72,9 @@ public record ToolGroup(
             "finish_action",
             "activate_tool_groups",
             "dispatch_sub_agent",
-            "collect_sub_agent_results"
+            "collect_sub_agent_results",
+            "list_sub_agent_caches",
+            "view_sub_agent_cache"
     );
 
     // ===== 工具名 → 所属组 key 查找表 =====

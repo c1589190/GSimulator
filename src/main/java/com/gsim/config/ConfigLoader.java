@@ -247,7 +247,6 @@ public class ConfigLoader {
             case "EMBEDDING_MODEL" -> "embedding.model";
             case "EMBEDDING_DIMENSIONS" -> "embedding.dimensions";
             case "EMBEDDING_MODEL_DIR" -> "embedding.model_dir";
-            case "GSIM_BOOTSTRAP_ROOT_LLM_ENABLED" -> "bootstrap.root.llm.enabled";
             case "GSIM_CONTEXT_SESSION_HISTORY_TURNS" -> "context.session.history.turns";
             case "GSIM_CONTEXT_SESSION_MESSAGE_MAX_CHARS" -> "context.session.message.max_chars";
             case "GSIM_AGENT_TOOL_LOOP_MAX_ROUNDS" -> "agent.tool_loop.max_rounds";
@@ -281,8 +280,6 @@ public class ConfigLoader {
         defaults.put("api.host", "127.0.0.1");
         defaults.put("api.port", "8710");
         defaults.put("api.enabled", "false");
-
-        defaults.put("bootstrap.root.llm.enabled", "false");
 
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");

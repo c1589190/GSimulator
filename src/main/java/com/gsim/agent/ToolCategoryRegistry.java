@@ -16,6 +16,7 @@ public class ToolCategoryRegistry {
     static {
         // === READ_ONLY ===
         CATEGORIES.put("wiki_search", ToolCategory.READ_ONLY);
+        CATEGORIES.put("mediawiki_search", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_list", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_read", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_search", ToolCategory.READ_ONLY);
@@ -27,6 +28,11 @@ public class ToolCategoryRegistry {
         // Node: read-only
         CATEGORIES.put("node_list", ToolCategory.READ_ONLY);
         CATEGORIES.put("node_status", ToolCategory.READ_ONLY);
+        // SubAgent cache
+        CATEGORIES.put("list_sub_agent_caches", ToolCategory.READ_ONLY);
+        CATEGORIES.put("view_sub_agent_cache", ToolCategory.READ_ONLY);
+        // LLM providers
+        CATEGORIES.put("list_llm_providers", ToolCategory.READ_ONLY);
 
         // === MUTATING ===
         // WorldInfo: write
@@ -36,6 +42,9 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("node_create", ToolCategory.MUTATING);
         CATEGORIES.put("node_switch", ToolCategory.MUTATING);
         CATEGORIES.put("node_goto_parent", ToolCategory.MUTATING);
+        // Dynamic agent config
+        CATEGORIES.put("create_sub_agent_config", ToolCategory.MUTATING);
+        CATEGORIES.put("update_sub_agent_config", ToolCategory.MUTATING);
 
         // === CONTROL ===
         CATEGORIES.put("finish_action", ToolCategory.CONTROL);

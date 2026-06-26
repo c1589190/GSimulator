@@ -1,7 +1,9 @@
 package com.gsim.app;
 
+import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
+import com.gsim.cache.CachesManager;
 import com.gsim.context.ContextRenderer;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.ActiveStateManager;
@@ -19,6 +21,7 @@ public final class Bootstrap {
 
     private final Path worldsDir;
     private final Path promptsDir;
+    private final CachesManager cachesManager;
 
     // result
     private WorldInformation worldInfo;
@@ -27,12 +30,23 @@ public final class Bootstrap {
     private String worldId;
     private String activeNodeId;
 
-    public Bootstrap(Path worldsDir, Path promptsDir) {
+    public Bootstrap(Path worldsDir, Path promptsDir, CachesManager cachesManager) {
         this.worldsDir = worldsDir;
         this.promptsDir = promptsDir;
+        this.cachesManager = cachesManager;
     }
 
+    /** 使用默认缓存选择（最新 cache 或新建）。 */
     public BootstrapResult boot() {
+        return boot(null);
+    }
+
+    /**
+     * 启动并选择指定缓存。
+     *
+     * @param selectedSessionId 选中的 cache sessionId，null 表示自动选择最新或新建。
+     */
+    public BootstrapResult boot(String selectedSessionId) {
         // 1. List worlds
         List<WorldIndexManager.WorldEntry> worlds = WorldIndexManager.listWorlds(worldsDir);
 
@@ -61,17 +75,27 @@ public final class Bootstrap {
         // 5. Initialize context renderer
         contextRenderer = new ContextRenderer(promptsDir);
 
-        // 6. Load Orchestrator cache, or create new
-        String orchestratorSession = active != null ? ActiveStateManager.orchestratorSession(active) : null;
-        if (orchestratorSession != null) {
-            activeCache = CacheStore.load(worldsDir, worldId, orchestratorSession);
+        // 6. Load Orchestrator cache — select or create
+        if (selectedSessionId != null && !selectedSessionId.isBlank()) {
+            // 用户显式选择了某个 cache
+            activeCache = cachesManager.loadCache(worldId, selectedSessionId);
+            if (activeCache == null) {
+                System.out.println("⚠️  指定的缓存不存在: " + selectedSessionId + "，创建新缓存");
+            }
         }
 
         if (activeCache == null) {
-            activeCache = CacheStore.createNew(worldsDir, worldId, "Orchestrator", activeNodeId);
-            // Inject initial system prompt
-            String systemPrompt = contextRenderer.renderSystemPrompt("OrchestratorAgent", worldInfo);
-            activeCache.addMessage(Map.of("role", "system", "content", systemPrompt));
+            // 自动选择：最新 Orchestrator cache
+            List<CacheInfo> orchCaches = cachesManager.listCaches(worldId, "orchestrator");
+            if (!orchCaches.isEmpty()) {
+                // 取最新的（列表已按 createdAt 降序排列）
+                activeCache = cachesManager.loadCache(worldId, orchCaches.get(0).sessionId());
+            }
+        }
+
+        if (activeCache == null) {
+            // 新建
+            activeCache = cachesManager.createCache(worldId, "Orchestrator", activeNodeId);
             CacheStore.save(worldsDir, worldId, activeCache);
         }
 

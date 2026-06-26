@@ -34,6 +34,7 @@ public class AppConfig {
     private final Path logDir;
     private final Path worldsDir;
     private final Path promptsDir;
+    private final Path agentsDir;
 
     private final String apiHost;
     private final int apiPort;
@@ -54,9 +55,6 @@ public class AppConfig {
     private final String sourceSummary;
 
     private final boolean llmConfigured;
-
-    /** Bootstrap root 创建时是否允许调用 LLM 生成 draft。默认 false（直接 deterministic fallback）。 */
-    private final boolean bootstrapRootLlmEnabled;
 
     /** 对话上下文最近保留轮数（1..50，默认 12）。 */
     private final int contextSessionHistoryTurns;
@@ -95,11 +93,20 @@ public class AppConfig {
      * 从 ConfigLoader 结果构造。
      */
     public AppConfig(ConfigLoader.ConfigResult result) {
-        this.llmBaseUrl = result.get("llm.base_url");
-        this.llmApiKey = result.get("llm.api_key");
-        this.llmModel = result.get("llm.model");
-        this.llmTemperature = parseDouble(result.get("llm.temperature"), 0.3);
-        this.llmTimeoutSeconds = parseInt(result.get("llm.timeout_seconds"), 120);
+        // 先从旧 properties/env 读取作为 fallback
+        String fallbackBaseUrl = result.get("llm.base_url");
+        String fallbackApiKey = result.get("llm.api_key");
+        String fallbackModel = result.get("llm.model");
+        double fallbackTemperature = parseDouble(result.get("llm.temperature"), 0.3);
+        int fallbackTimeout = parseInt(result.get("llm.timeout_seconds"), 120);
+
+        // 再用 llms.json 的 base provider 覆盖（主配置源）
+        LlmsOverride llmsOverride = resolveLlmsOverride(result);
+        this.llmBaseUrl = llmsOverride.baseUrl != null ? llmsOverride.baseUrl : fallbackBaseUrl;
+        this.llmApiKey = llmsOverride.apiKey != null ? llmsOverride.apiKey : fallbackApiKey;
+        this.llmModel = llmsOverride.model != null ? llmsOverride.model : fallbackModel;
+        this.llmTemperature = llmsOverride.temperature > 0 ? llmsOverride.temperature : fallbackTemperature;
+        this.llmTimeoutSeconds = llmsOverride.timeoutSeconds > 0 ? llmsOverride.timeoutSeconds : fallbackTimeout;
 
         this.chromaBaseUrl = result.get("chroma.base_url");
         this.chromaEnabled = parseBoolean(result.get("chroma.enabled"), false);
@@ -116,6 +123,7 @@ public class AppConfig {
         this.logDir = resolvePath(result.get("log.dir"), baseDir, "data/logs");
         this.worldsDir = resolvePath(result.get("worlds.dir"), baseDir, "worlds");
         this.promptsDir = resolvePath(result.get("prompts.dir"), baseDir, "prompts");
+        this.agentsDir = resolvePath(result.get("agents.dir"), baseDir, "agents");
 
         this.apiHost = isBlank(result.get("api.host")) ? "127.0.0.1" : result.get("api.host");
         this.apiPort = parseInt(result.get("api.port"), 8710);
@@ -136,13 +144,8 @@ public class AppConfig {
         this.configPath = result.configPath();
         this.sourceSummary = result.sourceSummary();
 
-        // LLM 配置判定
-        this.llmConfigured = !isBlank(llmBaseUrl)
-                && !isBlank(llmApiKey) && !"no-api-key".equals(llmApiKey)
-                && !isBlank(llmModel);
-
-        // Bootstrap root LLM 开关（默认 false，快速 deterministic fallback）
-        this.bootstrapRootLlmEnabled = parseBoolean(result.get("bootstrap.root.llm.enabled"), false);
+        // LLM 配置判定 — 仅检查 llms.json
+        this.llmConfigured = isLlmsJsonConfigured();
 
         // Context session 历史配置
         this.contextSessionHistoryTurns = clamp(
@@ -198,6 +201,7 @@ public class AppConfig {
     public Path getLogDir() { return logDir; }
     public Path worldsDir() { return worldsDir; }
     public Path promptsDir() { return promptsDir; }
+    public Path agentsDir() { return agentsDir; }
 
     public String getApiHost() { return apiHost; }
     public int getApiPort() { return apiPort; }
@@ -219,14 +223,67 @@ public class AppConfig {
 
     // ---- 新增方法 ----
 
-    /** 判定 LLM 是否已完整配置。 */
+    /** 判定 LLM 是否已完整配置（检查 llms.json 或旧环境变量）。 */
     public boolean isLlmConfigured() {
         return llmConfigured;
     }
 
-    /** Bootstrap root 创建时是否允许调用 LLM 生成 draft（默认关闭）。 */
-    public boolean isBootstrapRootLlmEnabled() {
-        return bootstrapRootLlmEnabled;
+    /** 检查 llms.json 是否存在且包含至少一个有效的 provider。 */
+    private boolean isLlmsJsonConfigured() {
+        Path llmsPath = getLlmsPath();
+        if (!java.nio.file.Files.exists(llmsPath)) return false;
+        try {
+            // 用 LlmsConfigFile 完整解析验证
+            var file = com.gsim.llm.LlmsConfigFile.load(llmsPath);
+            if (file.providers().isEmpty()) return false;
+            // 至少有一个 provider 有非空 baseUrl 和 model
+            return file.providers().stream().anyMatch(p ->
+                    p.baseUrl() != null && !p.baseUrl().isBlank()
+                    && p.model() != null && !p.model().isBlank());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 从 llms.json 的 base provider 解析 LLM 配置，覆盖旧 properties/env 值。 */
+    private LlmsOverride resolveLlmsOverride(ConfigLoader.ConfigResult result) {
+        // 确定 llms.json 路径（与 gsim.properties 同级，或 CWD）
+        Path baseDir = result.configPath() != null
+                ? result.configPath().getParent()
+                : Path.of("").toAbsolutePath();
+        Path llmsPath = baseDir.resolve("llms.json");
+        if (!java.nio.file.Files.exists(llmsPath)) {
+            return LlmsOverride.EMPTY;
+        }
+        try {
+            var file = com.gsim.llm.LlmsConfigFile.load(llmsPath);
+            var base = file.find("base");
+            if (base == null) {
+                base = file.defaultConfig();
+            }
+            if (base == null) return LlmsOverride.EMPTY;
+            return new LlmsOverride(
+                    base.baseUrl(),
+                    base.apiKey(),
+                    base.model(),
+                    base.defaultTemperature(),
+                    120);
+        } catch (Exception e) {
+            return LlmsOverride.EMPTY;
+        }
+    }
+
+    /** llms.json base provider 覆盖值。 */
+    private record LlmsOverride(
+            String baseUrl, String apiKey, String model,
+            double temperature, int timeoutSeconds
+    ) {
+        static final LlmsOverride EMPTY = new LlmsOverride(null, null, null, 0, 0);
+    }
+
+    /** llms.json 文件路径 — 与 worlds/、import/ 同级。 */
+    public Path getLlmsPath() {
+        return worldsDir.getParent().resolve("llms.json");
     }
 
     /** 对话上下文最近保留轮数（1..50，默认 12）。 */

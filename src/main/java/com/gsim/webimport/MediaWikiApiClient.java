@@ -195,6 +195,122 @@ public class MediaWikiApiClient {
     }
 
     /**
+     * 搜索文章（使用 list=search API）。
+     *
+     * @param query 搜索关键词
+     * @param limit 最大返回数（1-20）
+     */
+    public List<SearchResult> search(String query, int limit) throws IOException {
+        String url = apiUrl + "?action=query&list=search" +
+                "&srsearch=" + URLEncoder.encode(query, StandardCharsets.UTF_8) +
+                "&srlimit=" + Math.min(limit, 20) +
+                "&format=json";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .header("User-Agent", userAgent)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("Search HTTP " + response.code());
+            }
+            JsonNode root = mapper.readTree(response.body().string());
+            JsonNode searchResults = root.at("/query/search");
+
+            List<SearchResult> results = new ArrayList<>();
+            if (searchResults.isArray()) {
+                for (JsonNode sr : searchResults) {
+                    String title = sr.has("title") ? sr.get("title").asText() : "";
+                    long pageId = sr.has("pageid") ? sr.get("pageid").asLong() : -1;
+                    String snippet = sr.has("snippet") ? stripHtml(sr.get("snippet").asText()) : "";
+                    int wordCount = sr.has("wordcount") ? sr.get("wordcount").asInt() : 0;
+                    results.add(new SearchResult(title, pageId, snippet, wordCount));
+                }
+            }
+            return results;
+        }
+    }
+
+    /**
+     * 获取页面纯文本摘要（仅引言，prop=extracts&exintro&explaintext）。
+     */
+    public String getExtract(long pageId) {
+        try {
+            String url = apiUrl + "?action=query&prop=extracts" +
+                    "&exintro&explaintext" +
+                    "&pageids=" + pageId +
+                    "&format=json";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .header("User-Agent", userAgent)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return null;
+                JsonNode root = mapper.readTree(response.body().string());
+                JsonNode pages = root.at("/query/pages");
+                if (pages != null && pages.size() > 0) {
+                    String firstKey = pages.fieldNames().next();
+                    JsonNode page = pages.get(firstKey);
+                    if (page.has("extract")) {
+                        return page.get("extract").asText();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("getExtract failed for pageId={}: {}", pageId, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 按标题获取页面摘要。
+     */
+    public String getExtractByTitle(String title) {
+        try {
+            String url = apiUrl + "?action=query&prop=extracts" +
+                    "&exintro&explaintext" +
+                    "&titles=" + URLEncoder.encode(title, StandardCharsets.UTF_8) +
+                    "&format=json";
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .header("User-Agent", userAgent)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return null;
+                JsonNode root = mapper.readTree(response.body().string());
+                JsonNode pages = root.at("/query/pages");
+                if (pages != null && pages.size() > 0) {
+                    String firstKey = pages.fieldNames().next();
+                    JsonNode page = pages.get(firstKey);
+                    if (page.has("extract")) {
+                        return page.get("extract").asText();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("getExtractByTitle failed for '{}': {}", title, e.getMessage());
+        }
+        return null;
+    }
+
+    /** 去除 HTML 标签和实体。 */
+    private static String stripHtml(String html) {
+        if (html == null) return "";
+        return html.replaceAll("<[^>]+>", "")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#039;", "'")
+                .trim();
+    }
+
+    /**
      * API 页面结果。
      */
     public record ApiPageResult(
@@ -210,5 +326,15 @@ public class MediaWikiApiClient {
     public record AllPagesResult(
             List<String> titles,
             String continueToken
+    ) {}
+
+    /**
+     * 搜索结果。
+     */
+    public record SearchResult(
+            String title,
+            long pageId,
+            String snippet,
+            int wordCount
     ) {}
 }
