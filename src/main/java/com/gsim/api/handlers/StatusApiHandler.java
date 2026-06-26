@@ -2,8 +2,6 @@ package com.gsim.api.handlers;
 
 import com.gsim.api.ApiResponse;
 import com.gsim.app.ApplicationContext;
-import com.gsim.campaign.Campaign;
-import com.gsim.campaign.Turn;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -33,19 +31,9 @@ public class StatusApiHandler implements HttpHandler {
         }
 
         try {
-            var campaignService = ctx.getCampaignService();
-            var turnService = ctx.getTurnService();
-            var playerActionService = ctx.getPlayerActionService();
             var config = ctx.getConfig();
 
-            Campaign campaign = campaignService.getCurrentCampaign().orElse(null);
-            Turn turn = turnService.getCurrentTurn().orElse(null);
-
             Map<String, Object> status = new LinkedHashMap<>();
-            status.put("campaignId", campaign != null ? campaign.campaignId() : null);
-            status.put("turnId", turn != null ? turn.turnId() : null);
-            status.put("currentTurnResolved", turn != null && !turn.isOpen());
-            status.put("actionsCount", playerActionService.getActionCount());
             status.put("llmEnabled", config.isLlmConfigured());
             status.put("chromaEnabled", config.isChromaEnabled());
             status.put("apiVersion", API_VERSION);

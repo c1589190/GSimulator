@@ -6,8 +6,7 @@ import com.gsim.api.dto.ImportUrlRequest;
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
 import com.gsim.event.GSimEvent;
-import com.gsim.importdata.ImportManager;
-import com.gsim.importdata.ImportResult;
+import com.gsim.interaction.InteractionSession;
 import com.gsim.webimport.WebImportManager;
 import com.gsim.webimport.WebImportRequest;
 import com.gsim.webimport.WebImportResult;
@@ -19,11 +18,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Import API handler。
+ * Import API handler (URL import only).
  *
  * <p>路由：
  * <ul>
- *   <li>POST /api/import/local — 本地文件导入</li>
  *   <li>POST /api/import/url   — URL 网页导入</li>
  * </ul>
  */
@@ -48,53 +46,14 @@ public class ImportApiHandler implements HttpHandler {
         }
 
         try {
-            if ("/api/import/local".equals(path)) {
-                handleLocalImport(exchange);
-            } else if ("/api/import/url".equals(path)) {
+            if ("/api/import/url".equals(path)) {
                 handleUrlImport(exchange);
-            } else if ("/api/import/wiki-allpages".equals(path)) {
-                handleWikiAllPages(exchange);
             } else {
                 BaseApiHandler.sendNotFound(exchange, "Unknown import endpoint");
             }
         } catch (Exception e) {
             BaseApiHandler.sendError(exchange, 500, "Import failed: " + e.getMessage());
         }
-    }
-
-    private void handleLocalImport(HttpExchange exchange) throws IOException {
-        eventBus.publish(GSimEvent.of("api", "import_progress",
-                Map.of("message", "Starting local import...")));
-
-        var config = ctx.getConfig();
-        // NOTE: Import pipeline not yet connected to SQLite KnowledgeStore.
-        // Passing null chromaClient — ImportManager.doImport() returns IMPORT_PIPELINE_NOT_IMPLEMENTED.
-        ImportManager importManager = new ImportManager(config, null);
-        ImportResult result = importManager.doImport();
-
-        // 检查 pipeline 是否实际连接
-        if (result.logPath() != null && result.logPath().startsWith("IMPORT_PIPELINE_NOT_IMPLEMENTED")) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("message", result.logPath());
-            data.put("summary", result.summary());
-            BaseApiHandler.sendJson(exchange, 501,
-                    ApiResponse.fail("Import pipeline not connected to KnowledgeStore", data));
-            return;
-        }
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("totalFiles", result.totalFiles());
-        data.put("successCount", result.successCount());
-        data.put("failCount", result.failCount());
-        data.put("successFiles", result.successFiles());
-        data.put("failFiles", result.failFiles());
-        data.put("logPath", result.logPath());
-        data.put("summary", result.summary());
-
-        eventBus.publish(GSimEvent.of("api", "import_progress",
-                Map.of("message", "Import completed: " + result.summary())));
-
-        BaseApiHandler.sendOk(exchange, "Import completed", data);
     }
 
     private void handleUrlImport(HttpExchange exchange) throws IOException {
@@ -139,39 +98,5 @@ public class ImportApiHandler implements HttpHandler {
                 Map.of("message", "URL import completed: " + result.pagesFetched() + " pages fetched")));
 
         BaseApiHandler.sendOk(exchange, "URL import completed", data);
-    }
-
-    private void handleWikiAllPages(HttpExchange exchange) throws IOException {
-        String body = BaseApiHandler.readBody(exchange);
-        ImportUrlRequest req = JsonBodyParser.parse(body, ImportUrlRequest.class);
-
-        if (req.url() == null || req.url().isBlank()) {
-            BaseApiHandler.sendError(exchange, 400, "Missing required field: url (MediaWiki API base URL)");
-            return;
-        }
-
-        eventBus.publish(GSimEvent.of("api", "import_progress",
-                Map.of("message", "Starting wiki all-pages import: " + req.url())));
-
-        // 通过 InteractionManager 调用 /import --wiki-allpages
-        var session = new com.gsim.interaction.InteractionSession(
-                ctx.getInteractionContext(), ctx.getConfig(),
-                ctx.getCampaignService(), ctx.getTurnService(), ctx.getPlayerActionService(),
-                ctx.getToolRegistry(), ctx.getLlmManager());
-        String cmd = "/import " + req.url() + " --wiki-allpages";
-        if (req.maxPages() > 0) {
-            cmd += " --max-pages " + req.maxPages();
-        }
-        var result = ctx.getInteractionManager().handle(cmd, session);
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("url", req.url());
-        data.put("success", result.success());
-        data.put("message", result.displayText());
-
-        eventBus.publish(GSimEvent.of("api", "import_progress",
-                Map.of("message", "Wiki all-pages import completed")));
-
-        BaseApiHandler.sendOk(exchange, "Wiki all-pages import completed", data);
     }
 }

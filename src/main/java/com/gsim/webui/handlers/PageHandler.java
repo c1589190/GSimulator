@@ -42,12 +42,10 @@ public class PageHandler implements HttpHandler {
 
         switch (path) {
             case "/" -> {
-                var dm = ctx.getDataManager();
-                String activeBranch = dm != null ? dm.getActiveBranch() : null;
-                String activeWorld = dm != null ? dm.getActiveWorld() : null;
+                String activeRootId = ctx.getActiveRootId();
                 html = TemplateRenderer.render("index", Map.of(
-                        "activeBranchId", activeBranch != null ? activeBranch : "—",
-                        "activeWorld", activeWorld != null ? activeWorld : "—"
+                        "activeBranchId", activeRootId != null ? activeRootId + "-start" : "—",
+                        "activeWorld", activeRootId != null ? activeRootId : "—"
                 ));
             }
             case "/chat" -> html = TemplateRenderer.render("fragments/chat-panel");

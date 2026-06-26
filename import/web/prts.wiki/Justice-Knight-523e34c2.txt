@@ -1,6 +1,6 @@
 # "Justice Knight"
 Source URL: https://m.prts.wiki/w/%22Justice_Knight%22
-Fetched At: 2026-06-25 00:55:14
+Fetched At: 2026-06-26 15:40:51
 Site: prts.wiki
 Crawler: mediawiki-batch-allpages
 Collection Hint: world_lore

@@ -1,9 +1,5 @@
 package com.gsim.interaction;
 
-import com.gsim.chat.NodeAgentChatService;
-import com.gsim.data.DataManager;
-import com.gsim.interaction.commands.ChatCommand;
-import com.gsim.interaction.commands.MessagesCommand;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -20,13 +16,10 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 /**
  * CLI 交互适配器 — 处理终端输入输出。
  * 默认使用 JLine（支持历史、方向键），fallback 到 BufferedReader。
- * 非 / 开头的输入自动路由到 NodeAgentChatService。
  */
 public class ConsoleInteractionAdapter {
 
@@ -36,26 +29,21 @@ public class ConsoleInteractionAdapter {
     private final InteractionSession session;
     private final PrintStream out;
     private final AtomicBoolean running = new AtomicBoolean(true);
-    private final Supplier<DataManager> dmSupplier;
+    private final Path dataDir;
 
     private LineReader lineReader;
     private BufferedReader fallbackReader;
     private boolean jlineAvailable;
-
-    private NodeAgentChatService chatService;
-    private ChatCommand chatCommand;
-    private MessagesCommand messagesCommand;
     private boolean streamEnabled = false;
 
     public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session) {
-        this(manager, session, () -> null);
+        this(manager, session, null);
     }
 
-    /** 构造函数注入 DataManager supplier 用于动态 prompt。 */
-    public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session, Supplier<DataManager> dmSupplier) {
+    public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session, Path dataDir) {
         this.manager = manager;
         this.session = session;
-        this.dmSupplier = dmSupplier;
+        this.dataDir = dataDir;
         this.out = System.out;
         initJline();
     }
@@ -103,18 +91,12 @@ public class ConsoleInteractionAdapter {
     }
 
     private Path resolveHistoryFile() {
-        // 优先使用 data/.gsim_history
-        DataManager dm = dmSupplier.get();
-        if (dm != null) {
+        if (dataDir != null) {
             try {
-                Path dataRoot = dm.getDataRoot();
-                if (dataRoot != null) {
-                    Files.createDirectories(dataRoot);
-                    return dataRoot.resolve(".gsim_history");
-                }
+                Files.createDirectories(dataDir);
+                return dataDir.resolve(".gsim_history");
             } catch (Exception ignored) {}
         }
-        // fallback: home dir
         return Path.of(System.getProperty("user.home"), ".gsim_history");
     }
 
@@ -126,30 +108,13 @@ public class ConsoleInteractionAdapter {
         return null;
     }
 
-    /** 注入对话服务（在注册命令后调用）。 */
-    public void setChatService(NodeAgentChatService chatService, ChatCommand chatCommand,
-                               MessagesCommand messagesCommand) {
-        this.chatService = chatService;
-        this.chatCommand = chatCommand;
-        this.messagesCommand = messagesCommand;
-    }
-
     /** 设置流式输出模式。流式开启时，LLM 回复已在流式过程中直接输出，无需再次打印。 */
     public void setStreamEnabled(boolean streamEnabled) {
         this.streamEnabled = streamEnabled;
     }
 
-    /** 生成动态 prompt。 */
     public String buildPrompt() {
-        DataManager dm = dmSupplier.get();
-        if (dm == null || dm.needsRootBootstrap()) {
-            return "gsim[no-root]> ";
-        }
-        String rootId = dm.getActiveRootId();
-        String branchId = dm.getActiveBranch();
-        // 缩短显示：branch.b0000-start → b0000-start
-        String shortBranch = branchId != null ? branchId.replace("branch.", "") : "?";
-        return "gsim[" + (rootId != null ? rootId : "?") + " " + shortBranch + "]> ";
+        return "gsim> ";
     }
 
     public void start() {
@@ -165,65 +130,6 @@ public class ConsoleInteractionAdapter {
                 // 清洗输入
                 String cleaned = CliInputSanitizer.sanitize(line);
                 if (cleaned.isEmpty()) continue;
-
-                // /messages — 优先使用正式 MessagesCommand
-                if (cleaned.startsWith("/messages") && messagesCommand != null) {
-                    String afterCmd = cleaned.substring("/messages".length()).trim();
-                    InteractionResult r = messagesCommand.handleRaw(afterCmd);
-                    displayResult(r);
-                    continue;
-                }
-
-                // 非 / 开头 → 对话模式（虚拟线程 + ESC 轮询取消）
-                if (!cleaned.startsWith("/") && chatService != null) {
-                    chatService.resetCancel();
-
-                    var replyRef = new AtomicReference<String>();
-                    var chatDone = new AtomicBoolean(false);
-
-                    Thread chatThread = Thread.ofVirtual().start(() -> {
-                        try {
-                            replyRef.set(chatService.chat(cleaned));
-                        } catch (Exception e) {
-                            log.error("Chat error: {}", e.getMessage(), e);
-                            replyRef.set("[ERROR] Chat failed: " + e.getMessage());
-                        } finally {
-                            chatDone.set(true);
-                        }
-                    });
-
-                    try {
-                        while (!chatDone.get()) {
-                            if (System.in.available() > 0) {
-                                int b = System.in.read();
-                                if (b == 0x1B) { // ESC
-                                    chatService.cancelCurrentChat();
-                                    out.println("\n[已取消]");
-                                    break;
-                                }
-                            }
-                            Thread.sleep(100);
-                        }
-                        chatThread.join(3000);
-                    } catch (InterruptedException e) {
-                        chatService.cancelCurrentChat();
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        // 排空 stdin 残留字节（多次 ESC、方向键等），防止污染后续 readLine()
-                        drainStdin();
-                    }
-
-                    String reply = replyRef.get();
-                    if (reply != null) {
-                        if (streamEnabled) {
-                            out.println();
-                        } else {
-                            out.println(reply);
-                            out.println();
-                        }
-                    }
-                    continue;
-                }
 
                 // / 开头 → 命令模式
                 InteractionResult result = manager.handle(cleaned, session);
@@ -272,17 +178,6 @@ public class ConsoleInteractionAdapter {
         out.println();
         out.println("输入 /help 查看可用命令，直接输入文本与 Agent 对话，/exit 退出。");
         out.println();
-    }
-
-    /** 排空 stdin 缓冲区中的残留字节，防止污染后续 JLine readLine()。 */
-    private void drainStdin() {
-        try {
-            while (System.in.available() > 0) {
-                System.in.read();
-            }
-        } catch (IOException ignored) {
-            // best-effort
-        }
     }
 
     private void displayResult(InteractionResult result) {

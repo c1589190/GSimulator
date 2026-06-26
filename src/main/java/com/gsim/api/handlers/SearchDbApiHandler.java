@@ -117,14 +117,14 @@ public class SearchDbApiHandler implements HttpHandler {
         data.put("mode", mode);
 
         // 1. 先尝试知识库 keyword search（FTS5，永远可用）
-        SQLiteKnowledgeStore store = ctx.getKnowledgeStore();
+        SQLiteKnowledgeStore store = ctx.getKnowledgeStore(ctx.getActiveRootId());
         List<Map<String, Object>> results = new ArrayList<>();
         String modeUsed = mode;
 
         if (store != null) {
             if ("semantic".equals(mode)) {
                 // 尝试语义搜索
-                KnowledgeSearchService searchService = ctx.getKnowledgeSearchService();
+                KnowledgeSearchService searchService = ctx.getKnowledgeSearchService(ctx.getActiveRootId());
                 if (searchService != null) {
                     try {
                         KnowledgeSearchResponse response = searchService.semanticSearch(query, null, topK);

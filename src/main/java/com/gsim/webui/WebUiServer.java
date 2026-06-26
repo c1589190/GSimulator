@@ -1,12 +1,9 @@
 package com.gsim.webui;
 
 import com.gsim.app.ApplicationContext;
-import com.gsim.webui.handlers.ChatHandler;
 import com.gsim.webui.handlers.KnowledgeHandler;
 import com.gsim.webui.handlers.PageHandler;
-import com.gsim.webui.handlers.ScenarioHandler;
 import com.gsim.webui.handlers.StaticHandler;
-import com.gsim.webui.handlers.TimelineHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,9 +58,6 @@ public class WebUiServer {
     private void registerHandlers() {
         server.createContext("/static", new StaticHandler());
         PageHandler pageHandler = new PageHandler(ctx);
-        server.createContext("/chat", new ChatHandler(ctx, pageHandler));
-        server.createContext("/timeline", new TimelineHandler(ctx, pageHandler));
-        server.createContext("/scenario", new ScenarioHandler(ctx, pageHandler));
         server.createContext("/knowledge", new KnowledgeHandler(ctx, pageHandler));
         server.createContext("/", pageHandler);
     }

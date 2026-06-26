@@ -2,10 +2,7 @@ package com.gsim.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.campaign.PlayerAction;
-import com.gsim.chat.ToolPollutionFilter;
 import com.gsim.compact.ToolResultCompactor;
-import com.gsim.context.session.SessionMessage;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
@@ -38,7 +35,6 @@ import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.tool.DispatchSubAgentTool;
 import com.gsim.agent.tool.CollectSubAgentResultsTool;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Orchestrator Agent — 主协调者。
@@ -70,12 +66,6 @@ public class OrchestratorAgent extends AbstractAgent {
 
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
-
-    /** 对话上下文历史配置（可运行时更新）。 */
-    private volatile ContextHistoryConfig historyConfig = ContextHistoryConfig.DEFAULT;
-
-    /** 缓存最近一次 assistant 输出（经 stripFake/guard 后处理），供 turn_settlement_save_last_response 使用。 */
-    private final AtomicReference<String> lastAssistantDraft = new AtomicReference<>("");
 
     /** ESC 取消标志。由 ConsoleInteractionAdapter 在检测到 ESC 时设置，ToolLoop 各检查点读取。 */
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
@@ -162,16 +152,6 @@ public class OrchestratorAgent extends AbstractAgent {
         this.permissionGate = permissionGate;
         this.permissionConfig = permissionConfig != null ? permissionConfig : new ToolPermissionConfig();
         this.groupManager = groupManager != null ? groupManager : new ToolGroupManager();
-    }
-
-    /** 返回最近一次 assistant 输出草稿，用于工具保存。可能为空字符串。 */
-    public String getLastAssistantDraft() {
-        return lastAssistantDraft.get();
-    }
-
-    /** 设置上下文历史配置（由调用方在创建后注入）。 */
-    public void setContextHistoryConfig(ContextHistoryConfig config) {
-        this.historyConfig = config != null ? config : ContextHistoryConfig.DEFAULT;
     }
 
     /** 设置最大工具轮数（由调用方从 AppConfig 注入，默认 32，下限 1，无上限）。 */
@@ -318,99 +298,6 @@ public class OrchestratorAgent extends AbstractAgent {
         }
     }
 
-    /**
-     * 执行推演运行。
-     *
-     * @param playerActions 当前回合的玩家行动
-     * @param instruction   主持人指令（可选，来自 /run 命令行）
-     * @param turnInfo      回合信息（campaign/turn ID）
-     * @return Run 结果，包含最终文本和 tool 调用记录
-     */
-    public RunResult run(List<PlayerAction> playerActions, String instruction, String turnInfo) {
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
-        List<LlmMessage> messages = new ArrayList<>();
-
-        // 1. 构建 system prompt
-        messages.add(LlmMessage.system(buildSystemPrompt()));
-
-        // 2. 构建 user prompt
-        messages.add(LlmMessage.user(buildUserPrompt(playerActions, instruction, turnInfo)));
-
-        String finalText = null;
-        int toolRound = 0;
-        List<ToolDef> toolDefs = buildToolDefs();
-
-        // 3. ToolLoop
-        while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResult response = callLlm(request);
-
-            if (!response.success()) {
-                if (response.isContextLengthExceeded()) {
-                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
-                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
-                    return new RunResult(hint, toolCalls);
-                }
-                log.error("LLM call failed: {}", response.errorMessage());
-                return new RunResult("LLM 调用失败: " + response.errorMessage(), toolCalls);
-            }
-
-            String content = response.content();
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
-
-            // 4. 解析 tool call（API tool_calls 优先）
-            List<ParsedToolCall> allParsed = new ArrayList<>();
-            if (response.hasApiToolCalls()) {
-                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
-            }
-            if (allParsed.isEmpty()) {
-                ParsedToolCall parsed = tryParseToolCall(content);
-                if (parsed != null) allParsed.add(parsed);
-            }
-
-            if (!allParsed.isEmpty()) {
-                for (ParsedToolCall parsed : allParsed) {
-                    log.info("Tool call detected: {} with args: {}", parsed.tool(), parsed.args());
-                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
-                    ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
-
-                    // 将 tool 结果追加到上下文
-                    String toolResultText = formatToolResult(result);
-                    if (toolResultCompactor != null && toolResultText.length() > toolResultThreshold) {
-                        toolResultText = toolResultCompactor.compactIfNeeded(toolResultText);
-                    }
-                    messages.add(LlmMessage.user(toolResultText));
-                }
-                toolRound++;
-                continue;
-            }
-
-            // 5. 普通文本 → 最终结果
-            finalText = content;
-            break;
-        }
-
-        // 6. 超过最大轮数，要求总结
-        if (finalText == null) {
-            log.warn("Max tool rounds ({}) reached, forcing summary", maxToolRounds);
-            messages.add(LlmMessage.user(
-                    "你已经完成了多轮工具调用。请基于以上所有查询结果，" +
-                    "写一段完整的推演总结。必须引用信息来源的路径（如 import/web/prts.wiki/...）。" +
-                    "不要调用更多工具，直接输出推演结果。"));
-            LlmRequest finalRequest = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResult finalResponse = callLlm(finalRequest);
-            if (finalResponse.success()) {
-                finalText = finalResponse.content();
-                messages.add(LlmMessage.assistant(finalText));
-            } else {
-                finalText = "达到最大工具调用轮数后，LLM 总结也失败了: " + finalResponse.errorMessage();
-            }
-        }
-
-        return new RunResult(finalText, toolCalls);
-    }
-
     // ---- prompt 构建 ----
 
     private String buildSystemPrompt() {
@@ -423,53 +310,12 @@ public class OrchestratorAgent extends AbstractAgent {
 
     /**
      * 构建完整 system prompt：orchestrator-system.md + ToolRegistry 工具目录 + BaseContext。
-     * 用于 ContextSession 和 RenderedContext 路径。
      */
-    private String buildFullSystemPrompt(String contextMarkdown) {
-        StringBuilder sb = new StringBuilder();
-        // 1. orchestrator-system.md（身份、工具调用规则、详细工具说明）
-        sb.append(buildSystemPrompt());
-        sb.append("\n\n---\n\n");
-        // 2. ToolRegistry 生成的工具目录（确保与已注册工具一致）
-        sb.append(generateToolCatalog());
-        sb.append("\n\n---\n\n");
-        // 3. BaseContextSnapshot 或渲染上下文
-        sb.append(contextMarkdown);
-        return sb.toString();
-    }
 
     /**
      * 从 ToolGroupManager 生成工具组目录 prompt（含组名、描述、成员工具、激活说明）。
      */
-    private String generateToolCatalog() {
-        return groupManager.generateGroupCatalogPrompt();
-    }
 
-    private String buildUserPrompt(List<PlayerAction> playerActions, String instruction, String turnInfo) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## 回合信息\n");
-        sb.append(turnInfo).append("\n\n");
-
-        if (instruction != null && !instruction.isBlank()) {
-            sb.append("## 主持人指令\n");
-            sb.append(instruction).append("\n\n");
-        }
-
-        sb.append("## 玩家行动\n");
-        if (playerActions.isEmpty()) {
-            sb.append("(本回合无玩家行动)\n");
-        } else {
-            for (int i = 0; i < playerActions.size(); i++) {
-                PlayerAction a = playerActions.get(i);
-                sb.append(i + 1).append(". **").append(a.playerName()).append("**: ")
-                        .append(a.content()).append("\n");
-            }
-        }
-
-        sb.append("\n请分析玩家行动。如果需要查询 Wiki，请输出 JSON 工具调用。");
-        sb.append("如果已有足够信息，请直接输出推演结果。");
-        return sb.toString();
-    }
 
     // ---- tool call 解析 ----
 
@@ -812,11 +658,6 @@ public class OrchestratorAgent extends AbstractAgent {
     public record ToolCallRecord(String tool, Map<String, String> args, ToolResult result) {}
 
     /**
-     * Run 的完整结果。
-     */
-    public record RunResult(String finalText, List<ToolCallRecord> toolCalls) {}
-
-    /**
      * 消息追踪记录。
      */
     public record MessageTrace(String role, String type, String content) {}
@@ -826,342 +667,16 @@ public class OrchestratorAgent extends AbstractAgent {
      * @param contextMarkdown BranchContextRenderer 输出的完整 markdown
      * @param simNote 本轮 /sim 的推演备注
      */
-    public SimResult runWithRenderedContext(String contextMarkdown, String simNote) {
-        List<MessageTrace> trace = new ArrayList<>();
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
-        List<LlmMessage> messages = new ArrayList<>();
-
-        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
-
-        String userMsg = "请基于以上上下文进行推演。";
-        if (simNote != null && !simNote.isBlank()) {
-            userMsg += "\n\n推演备注: " + simNote;
-        }
-        messages.add(LlmMessage.user(userMsg));
-        trace.add(new MessageTrace("user", "sim_input", userMsg));
-
-        String finalText = null;
-        int toolRound = 0;
-        List<ToolDef> toolDefs = buildToolDefs();
-
-        while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResult response = callLlm(request);
-
-            if (!response.success()) {
-                if (response.isContextLengthExceeded()) {
-                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
-                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
-                    trace.add(new MessageTrace("system", "error", hint));
-                    return new SimResult(hint, toolCalls, trace);
-                }
-                String err = "LLM 调用失败: " + response.errorMessage();
-                trace.add(new MessageTrace("system", "error", err));
-                return new SimResult(err, toolCalls, trace);
-            }
-
-            String content = response.content();
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
-
-            // API tool_calls 优先
-            List<ParsedToolCall> allParsed = new ArrayList<>();
-            if (response.hasApiToolCalls()) {
-                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
-            }
-            if (allParsed.isEmpty()) {
-                ParsedToolCall parsed = tryParseToolCall(content);
-                if (parsed != null) allParsed.add(parsed);
-            }
-
-            if (!allParsed.isEmpty()) {
-                for (ParsedToolCall parsed : allParsed) {
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
-                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
-                    ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
-
-                    StringBuilder toolResultStr = new StringBuilder();
-                    toolResultStr.append("工具 ").append(parsed.tool()).append(" 返回:\n");
-                    if (result.success()) {
-                        for (ToolResult.Item item : result.items()) {
-                            toolResultStr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                            // 只保留前 200 字符的片段摘要，防止完整内容污染上下文
-                            String snippet = item.snippet();
-                            if (snippet != null && snippet.length() > 200) {
-                                snippet = snippet.substring(0, 200) + "...";
-                            }
-                            toolResultStr.append("  ").append(snippet).append("\n");
-                        }
-                    } else {
-                        toolResultStr.append("错误: ").append(result.error()).append("\n");
-                    }
-                    String toolResultStrFinal = toolResultStr.toString();
-                    trace.add(new MessageTrace("tool", "tool_result", toolResultStrFinal));
-                    if (toolResultCompactor != null && toolResultStrFinal.length() > toolResultThreshold) {
-                        toolResultStrFinal = toolResultCompactor.compactIfNeeded(toolResultStrFinal);
-                    }
-                    messages.add(LlmMessage.user(toolResultStrFinal));
-                }
-                toolRound++;
-                continue;
-            }
-
-            finalText = content;
-            // 过滤：如果 assistant 输出疑似工具定义污染，记录摘要而非全文
-            if (ToolPollutionFilter.isPolluted(finalText)) {
-                trace.add(new MessageTrace("assistant", "sim_output",
-                        "[filtered — assistant output contained tool definition pollution, length="
-                                + finalText.length() + "]"));
-            } else {
-                trace.add(new MessageTrace("assistant", "sim_output", finalText));
-            }
-            break;
-        }
-
-        if (finalText == null) {
-            messages.add(LlmMessage.user("已进行多轮工具调用。请基于以上所有结果写一段推演总结。不要调用更多工具。"));
-            LlmResult finalResp = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
-            if (finalResp.success()) {
-                finalText = finalResp.content();
-                trace.add(new MessageTrace("assistant", "sim_output", finalText));
-            } else {
-                finalText = "推演总结生成失败: " + finalResp.errorMessage();
-            }
-        }
-
-        return new SimResult(finalText, toolCalls, trace);
-    }
 
     public record SimResult(String finalText, List<ToolCallRecord> toolCalls, List<MessageTrace> trace) {}
 
     // ---- chat mode ----
 
     /** 对话模式：不覆盖任何章节，只返回 LLM 回复。 */
-    public ChatResult chatWithRenderedContext(String contextMarkdown, String userText) {
-        List<MessageTrace> trace = new ArrayList<>();
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
-        List<LlmMessage> messages = new ArrayList<>();
-
-        messages.add(LlmMessage.system(buildFullSystemPrompt(contextMarkdown)));
-        messages.add(LlmMessage.user(userText));
-        trace.add(new MessageTrace("user", "chat_user", userText));
-
-        String finalText = null;
-        int toolRound = 0;
-        List<ToolDef> toolDefs = buildToolDefs();
-
-        while (toolRound < maxToolRounds) {
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
-            LlmResult response = callLlm(request);
-
-            if (!response.success()) {
-                if (response.isContextLengthExceeded()) {
-                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
-                    log.warn("[LLM] context length exceeded: {}", response.errorMessage());
-                    return new ChatResult(false, hint, toolCalls, trace, response.errorMessage());
-                }
-                return new ChatResult(false, "", toolCalls, trace, response.errorMessage());
-            }
-
-            String content = response.content();
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
-
-            // API tool_calls 优先
-            List<ParsedToolCall> allParsed = new ArrayList<>();
-            if (response.hasApiToolCalls()) {
-                allParsed.addAll(fromApiToolCalls(response.toolCalls()));
-            }
-            if (allParsed.isEmpty()) {
-                ParsedToolCall parsed = tryParseToolCall(content);
-                if (parsed != null) allParsed.add(parsed);
-            }
-
-            if (!allParsed.isEmpty()) {
-                for (ParsedToolCall parsed : allParsed) {
-                    trace.add(new MessageTrace("tool", "tool_call", parsed.tool() + " " + parsed.args()));
-                    ToolCall call = new ToolCall(parsed.tool(), parsed.args());
-                    ToolResult result = toolRegistry.call(call);
-                    toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
-
-                    StringBuilder tr = new StringBuilder();
-                    tr.append("工具 ").append(parsed.tool()).append(" 返回:\n");
-                    if (result.success()) {
-                        for (ToolResult.Item item : result.items()) {
-                            tr.append("- ").append(item.title()).append(" (").append(item.path()).append(")\n");
-                            // 只保留前 200 字符的片段摘要
-                            String snippet = item.snippet();
-                            if (snippet != null && snippet.length() > 200) {
-                                snippet = snippet.substring(0, 200) + "...";
-                            }
-                            tr.append("  ").append(snippet).append("\n");
-                        }
-                    } else tr.append("错误: ").append(result.error());
-                    String trFinal = tr.toString();
-                    trace.add(new MessageTrace("tool", "tool_result", trFinal));
-                    if (toolResultCompactor != null && trFinal.length() > toolResultThreshold) {
-                        trFinal = toolResultCompactor.compactIfNeeded(trFinal);
-                    }
-                    messages.add(LlmMessage.user(trFinal));
-                }
-                toolRound++;
-                continue;
-            }
-
-            finalText = content;
-            // 过滤：如果 assistant 输出疑似工具定义污染，记录摘要而非全文
-            if (ToolPollutionFilter.isPolluted(finalText)) {
-                trace.add(new MessageTrace("assistant", "chat_response",
-                        "[filtered — assistant output contained tool definition pollution, length="
-                                + finalText.length() + "]"));
-            } else {
-                trace.add(new MessageTrace("assistant", "chat_response", finalText));
-            }
-            break;
-        }
-
-        if (finalText == null) {
-            messages.add(LlmMessage.user("请基于以上信息给出回答，不要调用更多工具。"));
-            LlmResult fr = callLlm(new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs));
-            if (fr.success()) { finalText = fr.content(); trace.add(new MessageTrace("assistant", "chat_response", finalText)); }
-            else return new ChatResult(false, "", toolCalls, trace, fr.errorMessage());
-        }
-
-        return new ChatResult(true, finalText, toolCalls, trace, null);
-    }
 
     public record ChatResult(boolean success, String finalText, List<ToolCallRecord> toolCalls,
                               List<MessageTrace> trace, String errorMessage) {}
 
-    // ====== ContextSession 模式（新路径） ======
-
-    /**
-     * 基于 ContextSession 的对话模式。
-     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(input)
-     */
-    public ChatResult chatWithContextSession(String baseContextMarkdown,
-                                              List<SessionMessage> sessionMessages,
-                                              String userText) {
-        return chatWithContextSession(baseContextMarkdown, sessionMessages, userText,
-                AgentContextMeta.empty());
-    }
-
-    public ChatResult chatWithContextSession(String baseContextMarkdown,
-                                              List<SessionMessage> sessionMessages,
-                                              String userText,
-                                              AgentContextMeta contextMeta) {
-        ContextHistoryConfig cfg = this.historyConfig;
-        List<SessionMessage> filtered = filterByTurns(sessionMessages, cfg.historyTurns());
-
-        if (log.isDebugEnabled()) {
-            log.debug("[ContextSession] historyTurns={}, originalMessages={}, filteredMessages={},"
-                            + " messageMaxChars={}",
-                    cfg.historyTurns(), sessionMessages != null ? sessionMessages.size() : 0,
-                    filtered.size(), cfg.messageMaxChars());
-        }
-
-        List<MessageTrace> trace = new ArrayList<>();
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
-        List<LlmMessage> messages = new ArrayList<>();
-
-        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
-        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
-
-        // 2. history: 当前 ContextSession 内 SessionMessage（按 turn 过滤 + 单条截断）
-        int renderedChars = 0;
-        for (SessionMessage sm : filtered) {
-            String content = sm.content();
-            if (content.length() > cfg.messageMaxChars()) {
-                content = content.substring(0, cfg.messageMaxChars() - 3) + "...";
-            }
-            renderedChars += content.length();
-            switch (sm.role()) {
-                case "user" -> messages.add(LlmMessage.user(content));
-                case "assistant" -> messages.add(LlmMessage.assistant(content));
-                case "tool" -> messages.add(LlmMessage.user("[工具结果] " + content));
-                default -> messages.add(LlmMessage.user(content));
-            }
-        }
-
-        log.debug("[ContextSession] renderedChars={}", renderedChars);
-
-        // 3. user: 当前输入
-        messages.add(LlmMessage.user(userText));
-        trace.add(new MessageTrace("user", "chat_user", userText));
-
-        // 工具组激活状态由调用方管理（NodeAgentChatService 负责 reset）
-        return runToolLoop(messages, trace, toolCalls, false, contextMeta, userText);
-    }
-
-    /**
-     * 基于 ContextSession 的推演模式。
-     * LLM messages = system(orchestrator-system.md + ToolCatalog + BaseContext) + sessionMessages + user(sim prompt)
-     */
-    public SimResult runWithContextSession(String baseContextMarkdown,
-                                            List<SessionMessage> sessionMessages,
-                                            String simNote) {
-        ContextHistoryConfig cfg = this.historyConfig;
-        List<SessionMessage> filtered = filterByTurns(sessionMessages, cfg.historyTurns());
-
-        if (log.isDebugEnabled()) {
-            log.debug("[ContextSession] historyTurns={}, originalMessages={}, filteredMessages={},"
-                            + " messageMaxChars={}",
-                    cfg.historyTurns(), sessionMessages != null ? sessionMessages.size() : 0,
-                    filtered.size(), cfg.messageMaxChars());
-        }
-
-        List<MessageTrace> trace = new ArrayList<>();
-        List<ToolCallRecord> toolCalls = new ArrayList<>();
-        List<LlmMessage> messages = new ArrayList<>();
-
-        // 1. system: orchestrator-system.md + ToolCatalog + BaseContextSnapshot
-        messages.add(LlmMessage.system(buildFullSystemPrompt(baseContextMarkdown)));
-
-        // 2. history: 当前 ContextSession 内 SessionMessage（按 turn 过滤 + 单条截断）
-        int renderedChars = 0;
-        for (SessionMessage sm : filtered) {
-            String content = sm.content();
-            if (content.length() > cfg.messageMaxChars()) {
-                content = content.substring(0, cfg.messageMaxChars() - 3) + "...";
-            }
-            renderedChars += content.length();
-            switch (sm.role()) {
-                case "user" -> messages.add(LlmMessage.user(content));
-                case "assistant" -> messages.add(LlmMessage.assistant(content));
-                case "tool" -> messages.add(LlmMessage.user("[工具结果] " + content));
-                default -> messages.add(LlmMessage.user(content));
-            }
-        }
-
-        log.debug("[ContextSession] renderedChars={}", renderedChars);
-
-        // 3. user: 推演提示
-        String userMsg = "请基于以上上下文进行推演。";
-        if (simNote != null && !simNote.isBlank()) {
-            userMsg += "\n\n推演备注: " + simNote;
-        }
-        messages.add(LlmMessage.user(userMsg));
-        trace.add(new MessageTrace("user", "sim_input", userMsg));
-
-        // 工具组激活状态由调用方管理
-        SimResult result = runSimToolLoop(messages, trace, toolCalls, AgentContextMeta.empty(), simNote);
-        return result;
-    }
-
-    // ---- meaningful content detection ----
-
-    /**
-     * 判断 assistant content 是否为有意义的回复内容。
-     *
-     * <p>以下视为无效占位内容（provider 未生成实际输出）：
-     * <ul>
-     *   <li>null、空字符串、纯空白</li>
-     *   <li>字面量: "null", "NULL", "undefined", "JsonNull" 及其大小写变体</li>
-     *   <li>空 JSON: "{}", "[]{@code }"</li>
-     * </ul>
-     *
-     * <p>注意：包含这些词的正常内容（如 "这个字段是 null"）不误杀 —
-     * 只在 trim 后完全等于这些占位值时判无效。
-     */
     static boolean isMeaningfulAssistantContent(String content) {
         if (content == null) return false;
         String t = content.strip();
@@ -1174,8 +689,6 @@ public class OrchestratorAgent extends AbstractAgent {
             default -> true;
         };
     }
-
-    // ---- auto-wrap helper (REMOVED — no longer needed with simplified plain text handling) ----
 
     /** 公共 tool-loop（chat 模式）— v2 工具组路由。 */
     private ChatResult runToolLoop(List<LlmMessage> messages,
@@ -1245,7 +758,6 @@ public class OrchestratorAgent extends AbstractAgent {
             // 缓存 draft
             String strippedForDraft = toCleanDraft(content);
             if (strippedForDraft != null && !strippedForDraft.isBlank()) {
-                lastAssistantDraft.set(strippedForDraft);
             }
             ToolLoopDebug.logCleanedDraft(log, "runToolLoop", toolRound, strippedForDraft);
 
@@ -1486,7 +998,6 @@ public class OrchestratorAgent extends AbstractAgent {
                     ToolLoopDebug.logFinishAccepted(log, "runToolLoop", toolRound,
                             true, null, null, null, null);
                     ToolLoopDebug.logFinalText(log, "runToolLoop", "finish_action", finalText);
-                    lastAssistantDraft.set(finalText);
                     return new ChatResult(true, finalText, toolCalls, trace, null);
                 }
 
@@ -1575,7 +1086,6 @@ public class OrchestratorAgent extends AbstractAgent {
         finalText = stripRawToolJson(finalText);
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
 
-        lastAssistantDraft.set(finalText);
 
         ToolLoopDebug.logFinalText(log, "runToolLoop", "finish_action", finalText);
         return new ChatResult(true, finalText, toolCalls, trace, null);
@@ -1651,7 +1161,6 @@ public class OrchestratorAgent extends AbstractAgent {
             // 缓存 draft
             String strippedForDraft = toCleanDraft(content);
             if (strippedForDraft != null && !strippedForDraft.isBlank()) {
-                lastAssistantDraft.set(strippedForDraft);
             }
             ToolLoopDebug.logCleanedDraft(log, "runSimToolLoop", toolRound, strippedForDraft);
 
@@ -1829,7 +1338,6 @@ public class OrchestratorAgent extends AbstractAgent {
                     ToolLoopDebug.logFinishAccepted(log, "runSimToolLoop", toolRound,
                             true, null, null, null, null);
                     ToolLoopDebug.logFinalText(log, "runSimToolLoop", "finish_action", finalText);
-                    lastAssistantDraft.set(finalText);
                     return new SimResult(finalText, toolCalls, trace);
                 }
 
@@ -1909,7 +1417,6 @@ public class OrchestratorAgent extends AbstractAgent {
         finalText = guardSuccessClaimWithoutToolBacking(finalText, toolCalls, toolRound);
 
         // 缓存草稿，供 turn_settlement_save_last_response 使用
-        lastAssistantDraft.set(finalText);
 
         ToolLoopDebug.logFinalText(log, "runSimToolLoop", "finish_action", finalText);
         return new SimResult(finalText, toolCalls, trace);
@@ -1922,33 +1429,10 @@ public class OrchestratorAgent extends AbstractAgent {
      * @param historyTurns  最近保留轮数（1..50）
      * @param messageMaxChars 单条消息最大字符数（500..20000）
      */
-    public record ContextHistoryConfig(int historyTurns, int messageMaxChars) {
-        public static final ContextHistoryConfig DEFAULT = new ContextHistoryConfig(12, 4000);
-    }
 
     /**
      * 按轮数过滤 sessionMessage 列表，保留最近 N 轮。
      * 一轮按 user/chat_user 消息切分；每个 user 消息到下一 user 消息之间为一轮。
      * 保留完整轮内容（含 assistant / tool_call / tool_result），不截断轮内 tool 链。
      */
-    public static List<SessionMessage> filterByTurns(List<SessionMessage> messages, int maxTurns) {
-        if (messages == null || messages.isEmpty()) return List.of();
-        if (maxTurns <= 0) return List.of();
-
-        // 从后向前扫描 user 消息，找到第 maxTurns 个
-        int userCount = 0;
-        int cutoffIdx = 0;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            SessionMessage msg = messages.get(i);
-            if ("user".equals(msg.role())) {
-                userCount++;
-                if (userCount >= maxTurns) {
-                    cutoffIdx = i;
-                    break;
-                }
-            }
-        }
-
-        return messages.subList(cutoffIdx, messages.size());
-    }
 }

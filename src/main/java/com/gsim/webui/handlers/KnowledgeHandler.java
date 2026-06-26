@@ -120,8 +120,8 @@ public class KnowledgeHandler implements HttpHandler {
             return;
         }
 
-        KnowledgeStore store = ctx.getKnowledgeStore();
-        KnowledgeSearchService searchService = ctx.getKnowledgeSearchService();
+        KnowledgeStore store = ctx.getKnowledgeStore(ctx.getActiveRootId());
+        KnowledgeSearchService searchService = ctx.getKnowledgeSearchService(ctx.getActiveRootId());
 
         if ("semantic".equalsIgnoreCase(mode)) {
             if (searchService == null) {
@@ -204,7 +204,7 @@ public class KnowledgeHandler implements HttpHandler {
             return;
         }
 
-        KnowledgeStore store = ctx.getKnowledgeStore();
+        KnowledgeStore store = ctx.getKnowledgeStore(ctx.getActiveRootId());
         if (store == null) {
             HandlerUtils.sendError(exchange, 500, "Knowledge store not available");
             return;

@@ -51,7 +51,7 @@ public class KnowledgeApiHandler implements HttpHandler {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        SQLiteKnowledgeStore store = ctx.getKnowledgeStore();
+        SQLiteKnowledgeStore store = ctx.getKnowledgeStore(ctx.getActiveRootId());
         if (store == null) {
             BaseApiHandler.sendOk(exchange, "Knowledge store not available",
                     Map.of("available", false));

@@ -1,36 +1,62 @@
 package com.gsim.player;
 
-import com.gsim.data.DataManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * PlayerProfileManager — 玩家档案管理核心。
- * 依赖 DataManager，读写 players.md。
- *
- * players.md 是当前 world 的玩家档案正史。
- * 玩家行动写入 input.md，不写 players.md。
+ * 读写 players.md 玩家档案文件。
  */
 public class PlayerProfileManager {
 
     private static final Logger log = LoggerFactory.getLogger(PlayerProfileManager.class);
 
-    private final DataManager dm;
+    private final Path playersFile;
 
-    public PlayerProfileManager(DataManager dm) {
-        this.dm = dm;
+    public PlayerProfileManager(Path playersFile) {
+        this.playersFile = playersFile;
+    }
+
+    private void ensureFile() {
+        if (!Files.exists(playersFile)) {
+            try {
+                Files.createDirectories(playersFile.getParent());
+                Files.writeString(playersFile, "# 玩家档案\n\n", StandardOpenOption.CREATE);
+            } catch (IOException e) {
+                throw new RuntimeException("Cannot create players file: " + playersFile, e);
+            }
+        }
+    }
+
+    private String readRaw() {
+        ensureFile();
+        try {
+            return Files.readString(playersFile);
+        } catch (IOException e) {
+            log.warn("Failed to read players file: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    private void writeRaw(String content) {
+        try {
+            Files.writeString(playersFile, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot write players file: " + playersFile, e);
+        }
     }
 
     /** 列出所有玩家。 */
     public List<PlayerProfile> listPlayers() {
-        dm.ensurePlayersFile();
-        String raw = dm.readPlayers();
+        String raw = readRaw();
         return PlayerProfileParser.parse(raw);
     }
 
@@ -48,8 +74,7 @@ public class PlayerProfileManager {
 
     /** 添加新玩家档案（不检查重复）。 */
     public PlayerProfileUpdate addPlayer(PlayerProfile profile) {
-        dm.ensurePlayersFile();
-        String raw = dm.readPlayers();
+        String raw = readRaw();
         String newSection = profile.toMarkdown();
 
         String updated;
@@ -59,15 +84,13 @@ public class PlayerProfileManager {
             updated = raw.stripTrailing() + "\n\n" + newSection + "\n";
         }
 
-        dm.writePlayers(updated);
+        writeRaw(updated);
         log.info("Added player profile: {}", profile.name());
         return PlayerProfileUpdate.created(profile.name(), "all", newSection);
     }
 
     /** 更新玩家字段。如果玩家不存在，自动创建。 */
     public PlayerProfileUpdate updatePlayerField(String name, String field, String content) {
-        dm.ensurePlayersFile();
-
         Optional<PlayerProfile> existing = getPlayer(name);
         if (existing.isPresent()) {
             PlayerProfile updated = existing.get().withField(field, content);
@@ -75,7 +98,6 @@ public class PlayerProfileManager {
             log.info("Updated player '{}' field '{}'", name, field);
             return PlayerProfileUpdate.updated(name, field, content);
         } else {
-            // 自动创建玩家档案
             PlayerProfile newProfile = PlayerProfile.createTemplate(name).withField(field, content);
             addPlayer(newProfile);
             log.info("Created player '{}' with field '{}' = '{}'", name, field, content);
@@ -85,8 +107,6 @@ public class PlayerProfileManager {
 
     /** 追加备注。 */
     public PlayerProfileUpdate appendPlayerNote(String name, String note) {
-        dm.ensurePlayersFile();
-
         Optional<PlayerProfile> existing = getPlayer(name);
         if (existing.isPresent()) {
             PlayerProfile updated = existing.get().withAppendedNote(note);
@@ -103,14 +123,12 @@ public class PlayerProfileManager {
 
     /** 删除玩家档案。返回被删除的档案或 null。 */
     public Optional<PlayerProfile> removePlayer(String name) {
-        dm.ensurePlayersFile();
         Optional<PlayerProfile> target = getPlayer(name);
         if (target.isEmpty()) return Optional.empty();
 
         List<PlayerProfile> all = listPlayers();
         StringBuilder sb = new StringBuilder();
-        // 保留一级标题和 header
-        String raw = dm.readPlayers();
+        String raw = readRaw();
         int firstH2 = raw.indexOf("\n## ");
         if (firstH2 >= 0) {
             String header = raw.substring(0, firstH2).trim();
@@ -130,20 +148,19 @@ public class PlayerProfileManager {
 
         if (!found) return Optional.empty();
 
-        dm.writePlayers(sb.toString());
+        writeRaw(sb.toString());
         log.info("Removed player profile: {}", name);
         return target;
     }
 
     /** 读取 players.md 原文。 */
     public String readRawPlayersMarkdown() {
-        dm.ensurePlayersFile();
-        return dm.readPlayers();
+        return readRaw();
     }
 
     /** 写入 players.md 原文。 */
     public void writeRawPlayersMarkdown(String markdown) {
-        dm.writePlayers(markdown);
+        writeRaw(markdown);
     }
 
     /** 渲染新玩家模板（供 /players template 使用）。 */
@@ -153,7 +170,7 @@ public class PlayerProfileManager {
 
     /** 获取 players.md 路径。 */
     public Path getPlayersPath() {
-        return dm.getPlayersPath();
+        return playersFile;
     }
 
     // ---- private helpers ----
@@ -161,7 +178,7 @@ public class PlayerProfileManager {
     /** 替换一个玩家档案段。 */
     private void replaceProfile(PlayerProfile updated) {
         List<PlayerProfile> all = listPlayers();
-        String raw = dm.readPlayers();
+        String raw = readRaw();
         int firstH2 = raw.indexOf("\n## ");
 
         StringBuilder sb = new StringBuilder();
@@ -179,6 +196,6 @@ public class PlayerProfileManager {
             }
         }
 
-        dm.writePlayers(sb.toString());
+        writeRaw(sb.toString());
     }
 }

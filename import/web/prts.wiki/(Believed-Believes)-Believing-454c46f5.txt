@@ -1,6 +1,6 @@
 # (Believed Believes) Believing
 Source URL: https://m.prts.wiki/w/%28Believed_Believes%29_Believing
-Fetched At: 2026-06-25 00:55:08
+Fetched At: 2026-06-26 15:40:45
 Site: prts.wiki
 Crawler: mediawiki-batch-allpages
 Collection Hint: world_lore

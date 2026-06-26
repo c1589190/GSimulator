@@ -58,7 +58,7 @@ public class EmbeddingApiHandler implements HttpHandler {
     }
 
     private void handleStatus(HttpExchange exchange) throws IOException {
-        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager();
+        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager(ctx.getActiveRootId());
         Map<String, Object> data = new LinkedHashMap<>();
 
         if (pm == null) {
@@ -100,7 +100,7 @@ public class EmbeddingApiHandler implements HttpHandler {
             return;
         }
 
-        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager();
+        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager(ctx.getActiveRootId());
         if (pm == null) {
             BaseApiHandler.sendError(exchange, 503, "Embedding profile manager not available");
             return;
@@ -134,7 +134,7 @@ public class EmbeddingApiHandler implements HttpHandler {
     }
 
     private void handleProfiles(HttpExchange exchange) throws IOException {
-        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager();
+        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager(ctx.getActiveRootId());
         if (pm == null) {
             BaseApiHandler.sendOk(exchange, "Embedding profiles",
                     Map.of("profiles", List.of(), "available", false));
@@ -183,7 +183,7 @@ public class EmbeddingApiHandler implements HttpHandler {
             return;
         }
 
-        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager();
+        EmbeddingProfileManager pm = ctx.getEmbeddingProfileManager(ctx.getActiveRootId());
         if (pm == null) {
             BaseApiHandler.sendError(exchange, 503, "Embedding profile manager not available");
             return;

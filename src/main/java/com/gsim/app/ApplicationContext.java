@@ -3,12 +3,6 @@ package com.gsim.app;
 import com.gsim.api.ApiConfig;
 import com.gsim.api.ApiManager;
 import com.gsim.api.SessionManager;
-import com.gsim.campaign.CampaignService;
-import com.gsim.campaign.TurnService;
-import com.gsim.campaign.PlayerActionService;
-import com.gsim.context.BranchContextRenderer;
-import com.gsim.context.session.ContextSessionManager;
-import com.gsim.data.DataManager;
 import com.gsim.event.EventBus;
 import com.gsim.event.ConsoleEventSink;
 import com.gsim.interaction.InteractionContext;
@@ -18,20 +12,17 @@ import com.gsim.knowledge.embed.EmbeddingModel;
 import com.gsim.knowledge.embed.EmbeddingProfileManager;
 import com.gsim.knowledge.embed.ExternalEmbeddingModel;
 import com.gsim.knowledge.embed.LocalSmallEmbeddingModel;
-import com.gsim.knowledge.scope.KnowledgeScope;
 import com.gsim.knowledge.scope.ScopedKnowledgeStoreFactory;
 import com.gsim.knowledge.search.KnowledgeSearchService;
 import com.gsim.knowledge.store.SQLiteKnowledgeStore;
 import com.gsim.knowledge.tool.KnowledgeToolFactory;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.ProviderConfig;
-import com.gsim.storage.DataPaths;
 import com.gsim.tool.LocalFileSearchService;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.WikiSearchTool;
 import com.gsim.util.TimeProvider;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -41,12 +32,8 @@ import java.nio.file.Path;
 public class ApplicationContext {
 
     private final AppConfig config;
-    private final DataPaths dataPaths;
     private final TimeProvider timeProvider;
 
-    private final CampaignService campaignService;
-    private final TurnService turnService;
-    private final PlayerActionService playerActionService;
     private final LlmManager llmManager;
     private final ToolRegistry toolRegistry;
     private final InteractionContext interactionContext;
@@ -63,23 +50,12 @@ public class ApplicationContext {
     private KnowledgeToolFactory knowledgeToolFactory;
     private String activeRootId;
 
-    // 上下文系统（Phase Context Session）
-    private DataManager dataManager;
-    private BranchContextRenderer branchContextRenderer;
-    private ContextSessionManager contextSessionManager;
-
     // Root 就绪回调（bootstrap 完成后触发 memory tools 重注册等）
     private Runnable onRootReadyCallback;
 
     public ApplicationContext(AppConfig config) {
         this.config = config;
-        this.dataPaths = new DataPaths(config);
         this.timeProvider = new TimeProvider();
-
-        // 服务层
-        this.campaignService = new CampaignService(dataPaths, timeProvider);
-        this.turnService = new TurnService(dataPaths, timeProvider);
-        this.playerActionService = new PlayerActionService(dataPaths, timeProvider);
 
         // LLM — 只有配置完整时才创建真正的客户端
         if (config.isLlmConfigured()) {
@@ -112,7 +88,6 @@ public class ApplicationContext {
         this.interactionContext = new InteractionContext();
         this.interactionSession = new InteractionSession(
                 interactionContext, config,
-                campaignService, turnService, playerActionService,
                 toolRegistry, llmManager);
         this.interactionManager = new InteractionManager();
 
@@ -125,30 +100,6 @@ public class ApplicationContext {
         ApiConfig apiConfig = new ApiConfig(
                 config.getApiHost(), config.getApiPort(), config.isApiEnabled());
         this.apiManager = new ApiManager(apiConfig, this, eventBus);
-    }
-
-    /**
-     * 当 active root 变化时调用，切换 knowledge runtime。
-     */
-    public void resolveKnowledgeForActiveRoot() {
-        if (dataManager == null) return;
-        String rootId = dataManager.getActiveRootId();
-        if (rootId == null) return;
-        if (rootId.equals(activeRootId)) return; // 已经是当前 root
-
-        Path dataRoot = dataManager.getDataRoot();
-        KnowledgeScope scope = KnowledgeScope.of(dataRoot, rootId);
-
-        // 确保 root-scoped store 已创建
-        scopedStoreFactory.getOrCreateStore(scope);
-        if (embeddingModel != null) {
-            scopedStoreFactory.getOrCreateProfileManager(scope);
-            scopedStoreFactory.getOrCreateSearchService(scope);
-        }
-
-        // 重新绑定 tools 到新 root 的 store
-        rebindKnowledgeTools(rootId);
-        this.activeRootId = rootId;
     }
 
     /** 初始化 embedding model（全局配置，不在 initKnowledge 中创建 store）。 */
@@ -190,31 +141,26 @@ public class ApplicationContext {
     }
 
     /** 重新绑定 knowledge tools 到指定 root 的 store。 */
-    private void rebindKnowledgeTools(String rootId) {
+    public void rebindKnowledgeTools(String rootId) {
         var store = scopedStoreFactory.getStore(rootId);
         var pm = scopedStoreFactory.getProfileManager(rootId);
         var ss = scopedStoreFactory.getSearchService(rootId);
-        // 更新 factory 的内部引用（仅当有 root 级 store 时）
         if (store != null) {
             knowledgeToolFactory.rebind(store, ss, pm);
         }
+        this.activeRootId = rootId;
     }
 
     /**
      * 初始化：创建目录、注册命令等。
      */
     public void initialize() throws Exception {
-        dataPaths.initialize();
     }
 
     // ---- Getters ----
 
     public AppConfig getConfig() { return config; }
-    public DataPaths getDataPaths() { return dataPaths; }
     public TimeProvider getTimeProvider() { return timeProvider; }
-    public CampaignService getCampaignService() { return campaignService; }
-    public TurnService getTurnService() { return turnService; }
-    public PlayerActionService getPlayerActionService() { return playerActionService; }
     public LlmManager getLlmManager() { return llmManager; }
     public ToolRegistry getToolRegistry() { return toolRegistry; }
     public InteractionContext getInteractionContext() { return interactionContext; }
@@ -224,16 +170,8 @@ public class ApplicationContext {
     public ConsoleEventSink getConsoleEventSink() { return consoleEventSink; }
     public ApiManager getApiManager() { return apiManager; }
 
-    // ---- Context Session 系统 ----
-
-    public DataManager getDataManager() { return dataManager; }
-    public void setDataManager(DataManager dm) { this.dataManager = dm; }
-
-    public BranchContextRenderer getBranchContextRenderer() { return branchContextRenderer; }
-    public void setBranchContextRenderer(BranchContextRenderer r) { this.branchContextRenderer = r; }
-
-    public ContextSessionManager getContextSessionManager() { return contextSessionManager; }
-    public void setContextSessionManager(ContextSessionManager m) { this.contextSessionManager = m; }
+    public String getActiveRootId() { return activeRootId; }
+    public void setActiveRootId(String rootId) { this.activeRootId = rootId; }
 
     /** 设置 root 就绪回调（bootstrap/root create/switch 后触发）。 */
     public void setOnRootReadyCallback(Runnable callback) { this.onRootReadyCallback = callback; }
@@ -251,22 +189,22 @@ public class ApplicationContext {
 
     // ---- Knowledge 系统（root-scoped） ----
 
-    /** 获取当前 active root 的 store（可能为 null，如果尚无 root）。 */
-    public SQLiteKnowledgeStore getKnowledgeStore() {
-        if (dataManager == null || dataManager.getActiveRootId() == null) return null;
-        return scopedStoreFactory.getStore(dataManager.getActiveRootId());
+    /** 获取指定 root 的 store。 */
+    public SQLiteKnowledgeStore getKnowledgeStore(String rootId) {
+        if (rootId == null) return null;
+        return scopedStoreFactory.getStore(rootId);
     }
 
-    /** 获取当前 active root 的 profile manager。 */
-    public EmbeddingProfileManager getEmbeddingProfileManager() {
-        if (dataManager == null || dataManager.getActiveRootId() == null) return null;
-        return scopedStoreFactory.getProfileManager(dataManager.getActiveRootId());
+    /** 获取指定 root 的 profile manager。 */
+    public EmbeddingProfileManager getEmbeddingProfileManager(String rootId) {
+        if (rootId == null) return null;
+        return scopedStoreFactory.getProfileManager(rootId);
     }
 
-    /** 获取当前 active root 的 search service。 */
-    public KnowledgeSearchService getKnowledgeSearchService() {
-        if (dataManager == null || dataManager.getActiveRootId() == null) return null;
-        return scopedStoreFactory.getSearchService(dataManager.getActiveRootId());
+    /** 获取指定 root 的 search service。 */
+    public KnowledgeSearchService getKnowledgeSearchService(String rootId) {
+        if (rootId == null) return null;
+        return scopedStoreFactory.getSearchService(rootId);
     }
 
     public ScopedKnowledgeStoreFactory getScopedStoreFactory() { return scopedStoreFactory; }

@@ -76,9 +76,6 @@ public class SessionManager {
         return new InteractionSession(
                 newContext,
                 ctx.getConfig(),
-                ctx.getCampaignService(),
-                ctx.getTurnService(),
-                ctx.getPlayerActionService(),
                 ctx.getToolRegistry(),
                 ctx.getLlmManager()
         );

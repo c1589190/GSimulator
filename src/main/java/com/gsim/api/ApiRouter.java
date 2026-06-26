@@ -48,9 +48,6 @@ public class ApiRouter {
         // 任务 API（新接口，推荐使用）
         register("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
 
-        // Campaign / Turn / Action
-        register("/api/campaigns", new CampaignsApiHandler(ctx, eventBus));
-
         // Import
         register("/api/import", new ImportApiHandler(ctx, eventBus));
 
@@ -61,9 +58,6 @@ public class ApiRouter {
         register("/api/logs", new LogsOutputsApiHandler(ctx));
         register("/api/outputs", new LogsOutputsApiHandler(ctx));
 
-        // Branches
-        register("/api/branches", new BranchesApiHandler(ctx, eventBus, sessionManager));
-
         // 配置管理
         register("/api/config", new ConfigApiHandler(ctx, sessionManager));
 
@@ -72,9 +66,6 @@ public class ApiRouter {
 
         // Embedding
         register("/api/embedding", new EmbeddingApiHandler(ctx));
-
-        // 数据管理
-        register("/api/data", new DataApiHandler(ctx, sessionManager));
 
         // 技能
         register("/api/skills", new SkillsApiHandler(ctx, sessionManager));
@@ -102,13 +93,6 @@ public class ApiRouter {
 
         // 工具
         register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
-
-        // Context (new)
-        register("/api/context",
-                new ContextApiHandler(ctx.getContextSessionManager(),
-                        ctx.getBranchContextRenderer(),
-                        ctx.getDataManager(),
-                        ctx.getSessionManager()));
     }
 
     /**
