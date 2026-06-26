@@ -80,6 +80,7 @@ public final class ContextRenderer {
         data.put("worldTime", wi.activeNode().worldTime());
         data.put("chainLength", wi.branchChain().size());
         data.put("checkpointIds", wi.allCheckpointIds());
+        data.put("task", ""); // default empty, sub-agent templates use ${task!""}
 
         // recent 3 narratives
         List<ElementRef> narratives = wi.checkpointHistory("narrative");

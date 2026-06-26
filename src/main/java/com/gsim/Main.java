@@ -81,7 +81,7 @@ public class Main {
             boolean webuiMode = cliArgs.webui() || true; // 默认开
 
             // 4. 启动应用
-            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode);
+            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, bootResult);
             app.start();
 
         } catch (Exception e) {

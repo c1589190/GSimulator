@@ -1,5 +1,9 @@
 package com.gsim.interaction;
 
+import com.gsim.commands.ChatCommand;
+import com.gsim.commands.NodeCommand;
+import com.gsim.commands.WorldCommand;
+
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
@@ -15,11 +19,21 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * CLI 交互适配器 — 处理终端输入输出。
  * 默认使用 JLine（支持历史、方向键），fallback 到 BufferedReader。
+ *
+ * <p>命令路由：
+ * <ul>
+ *   <li>{@code /world}, {@code /node}, {@code /chat} — 路由到对应的命令类</li>
+ *   <li>{@code /exit}, {@code /quit} — 关闭 REPL</li>
+ *   <li>{@code /help} — 显示帮助</li>
+ *   <li>其他输入 — 提示使用 {@code /chat} 发送消息</li>
+ * </ul>
  */
 public class ConsoleInteractionAdapter {
 
@@ -30,6 +44,10 @@ public class ConsoleInteractionAdapter {
     private final PrintStream out;
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final Path dataDir;
+
+    private WorldCommand worldCommand;
+    private NodeCommand nodeCommand;
+    private ChatCommand chatCommand;
 
     private LineReader lineReader;
     private BufferedReader fallbackReader;
@@ -46,6 +64,27 @@ public class ConsoleInteractionAdapter {
         this.dataDir = dataDir;
         this.out = System.out;
         initJline();
+    }
+
+    /**
+     * Full constructor accepting the new command instances for direct routing.
+     */
+    public ConsoleInteractionAdapter(InteractionManager manager, InteractionSession session,
+                                      Path dataDir,
+                                      WorldCommand worldCommand,
+                                      NodeCommand nodeCommand,
+                                      ChatCommand chatCommand) {
+        this(manager, session, dataDir);
+        this.worldCommand = worldCommand;
+        this.nodeCommand = nodeCommand;
+        this.chatCommand = chatCommand;
+    }
+
+    /** Set or update the command instances after construction. */
+    public void setNewCommands(WorldCommand worldCommand, NodeCommand nodeCommand, ChatCommand chatCommand) {
+        this.worldCommand = worldCommand;
+        this.nodeCommand = nodeCommand;
+        this.chatCommand = chatCommand;
     }
 
     private void initJline() {
@@ -132,16 +171,91 @@ public class ConsoleInteractionAdapter {
                 if (cleaned.isEmpty()) continue;
 
                 // / 开头 → 命令模式
-                InteractionResult result = manager.handle(cleaned, session);
-                displayResult(result);
-
-                if ("exit".equals(extractCommandName(cleaned))) break;
+                if (cleaned.startsWith("/")) {
+                    String cmdName = extractCommandName(cleaned);
+                    if ("exit".equals(cmdName) || "quit".equals(cmdName)) {
+                        shutdown();
+                        break;
+                    }
+                    handleCommand(cmdName, cleaned);
+                } else {
+                    // 非命令 → 建议使用 /chat 发送消息
+                    out.println("直接输入文本需要通过 /chat 命令发送。");
+                    out.println("输入 /chat <message> 发送消息，/help 查看可用命令。");
+                    out.println();
+                }
 
             } catch (IOException e) {
                 log.error("REPL read error: {}", e.getMessage(), e);
                 out.println("读取输入时发生错误: " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Route a slash command to the appropriate handler.
+     */
+    private void handleCommand(String cmdName, String rawInput) {
+        List<String> args = parseArgs(rawInput);
+
+        switch (cmdName) {
+            case "help" -> {
+                printHelp();
+                return;
+            }
+            case "world" -> {
+                if (worldCommand == null) {
+                    out.println("World command not available.");
+                    out.println();
+                    return;
+                }
+                String text = worldCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
+            case "node" -> {
+                if (nodeCommand == null) {
+                    out.println("Node command not available.");
+                    out.println();
+                    return;
+                }
+                String text = nodeCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
+            case "chat" -> {
+                if (chatCommand == null) {
+                    out.println("Chat command not available.");
+                    out.println();
+                    return;
+                }
+                String text = chatCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
+            default -> displayResult(
+                    InteractionResult.fail("Unknown command: /" + cmdName
+                            + ". Type /help for available commands."));
+        }
+    }
+
+    /** Split raw input into arg list (skipping the command prefix). */
+    private List<String> parseArgs(String rawInput) {
+        String trimmed = rawInput.trim();
+        int spaceIdx = trimmed.indexOf(' ');
+        if (spaceIdx < 0) return List.of();
+        String rest = trimmed.substring(spaceIdx + 1).trim();
+        if (rest.isEmpty()) return List.of();
+        return Arrays.asList(rest.split("\\s+"));
+    }
+
+    private void printHelp() {
+        out.println("Available commands:");
+        out.println("  /world [list|create|switch]   — World management");
+        out.println("  /node [status|list|goto|create] — Node management");
+        out.println("  /chat <message>               — Send message to LLM");
+        out.println("  /chat history [n]             — Show last n messages");
+        out.println("  /chat clear                   — Clear chat session");
+        out.println("  /exit                         — Exit");
+        out.println("  /help                         — Show this help");
+        out.println();
     }
 
     private String readLine(String prompt) throws IOException {

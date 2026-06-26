@@ -57,7 +57,18 @@ public class AbstractAgent {
     protected final String model;
     protected final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
+    /** Override for the system prompt injected via setSystemPrompt(). */
+    protected String systemPromptOverride = null;
+
     protected final List<AgentRound> rounds = new ArrayList<>();
+
+    /**
+     * Override the empty AgentConfig system prompt with a rendered template.
+     * Used by OrchestratorAgent to inject FreeMarker-rendered context.
+     */
+    public void setSystemPrompt(String prompt) {
+        this.systemPromptOverride = prompt;
+    }
 
     public AbstractAgent(AgentConfig config, LlmManager llm, ToolRegistry allTools,
                          AgentProgressSink progressSink, String model) {
@@ -99,8 +110,9 @@ public class AbstractAgent {
         List<ToolCallRecord> allToolCalls = new ArrayList<>();
         int maxRounds = config.maxToolRounds();
 
-        // system prompt
-        messages.add(LlmMessage.system(config.systemPrompt()));
+        // system prompt (use override if set, e.g. from FreeMarker-rendered template)
+        String sp = systemPromptOverride != null ? systemPromptOverride : config.systemPrompt();
+        messages.add(LlmMessage.system(sp));
 
         // user prompt
         if (userInput != null && !userInput.isBlank()) {

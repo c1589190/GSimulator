@@ -1,7 +1,12 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
+import com.gsim.cache.CacheSession;
+import com.gsim.commands.ChatCommand;
+import com.gsim.commands.NodeCommand;
+import com.gsim.commands.WorldCommand;
 import com.gsim.compact.ToolResultCompactor;
+import com.gsim.context.ContextRenderer;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.player.PlayerProfileManager;
 import com.gsim.tool.PlayerProfileGetTool;
@@ -9,8 +14,14 @@ import com.gsim.tool.PlayerProfileListTool;
 import com.gsim.tool.PlayerProfileNoteTool;
 import com.gsim.tool.PlayerProfileUpdateTool;
 import com.gsim.tool.ToolRegistry;
+import com.gsim.worldinfo.WorldInformation;
+import com.gsim.worldinfo.tool.QueryCheckpointTool;
+import com.gsim.worldinfo.tool.QueryKeywordTool;
+import com.gsim.worldinfo.tool.QueryNodeTool;
+import com.gsim.worldinfo.tool.WriteElementTool;
 
 import java.nio.file.Path;
+import java.util.function.Supplier;
 
 /**
  * GSimulator 应用启动器。
@@ -30,6 +41,13 @@ public class GSimulatorApplication {
     private com.gsim.webui.CliWebSocketServer cliWsServer;
     private com.gsim.agent.CompositeAgentProgressSink compositeSink;
 
+    // -- Bootstrap result wiring --
+    private OrchestratorAgent orchestrator;
+    private WorldInformation worldInfo;
+    private CacheSession activeCache;
+    private ContextRenderer contextRenderer;
+    private Path worldsDir;
+
     public GSimulatorApplication(AppConfig config) {
         this(config, true, false, false);
     }
@@ -39,19 +57,42 @@ public class GSimulatorApplication {
     }
 
     public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode) {
+        this(config, cliMode, httpMode, webuiMode, null);
+    }
+
+    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode,
+                                  Bootstrap.BootstrapResult bootResult) {
         this.config = config;
         this.cliMode = cliMode;
         this.httpMode = httpMode;
         this.webuiMode = webuiMode;
         this.ctx = new ApplicationContext(config);
+        this.worldsDir = config.getDataDir().resolve("worlds");
+
+        // Store BootstrapResult data
+        if (bootResult != null) {
+            this.worldInfo = bootResult.worldInfo();
+            this.activeCache = bootResult.activeCache();
+            this.contextRenderer = bootResult.contextRenderer();
+        }
+
         ToolRegistry toolRegistry = ctx.getToolRegistry();
 
-        // 创建 CLI 适配器
+        // 创建 CLI 适配器（命令稍后注入）
         this.adapter = new ConsoleInteractionAdapter(null, ctx.getInteractionSession(),
                 config.getDataDir());
 
         // 注册 Agent 工具
         registerAgentTools(toolRegistry);
+
+        // 注册 world info 查询工具
+        registerWorldInfoTools(toolRegistry);
+
+        // 创建命令并注入到 adapter
+        wireCommands();
+
+        // 注入 FreeMarker 渲染的系统 prompt
+        injectSystemPrompt();
 
         // 创建 WebUiServer
         com.gsim.webui.WebUiConfig webUiConfig =
@@ -86,14 +127,14 @@ public class GSimulatorApplication {
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
 
         // Orchestrator
-        var orchestrator = new OrchestratorAgent(
+        this.orchestrator = new OrchestratorAgent(
                 ctx.getLlmManager(), toolRegistry, config.getLlmModel(),
                 compositeSink,
                 (httpMode || webuiMode) ? new com.gsim.agent.AutoApprovePermissionGate()
                          : new com.gsim.agent.CliToolPermissionGate(),
                 toolGroupManager);
-        orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
-        orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
+        this.orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
+        this.orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
 
         // Tool result compactor
         if (config.isCompactEnabled() && ctx.getLlmManager() != null) {
@@ -103,8 +144,8 @@ public class GSimulatorApplication {
                     config.getCompactLlmModel(),
                     config.getCompactLlmTemperature(),
                     cliProgressSink);
-            orchestrator.setToolResultCompactor(toolResultCompactor);
-            orchestrator.setToolResultThreshold(config.getCompactToolResultThreshold());
+            this.orchestrator.setToolResultCompactor(toolResultCompactor);
+            this.orchestrator.setToolResultThreshold(config.getCompactToolResultThreshold());
         }
 
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
@@ -117,7 +158,54 @@ public class GSimulatorApplication {
         var agentConfigStore = new com.gsim.agent.config.AgentConfigStore();
         var agentFactory = new com.gsim.agent.core.AgentFactory(
                 agentConfigStore, ctx.getLlmManager(), toolRegistry, compositeSink, config.getLlmModel());
-        orchestrator.registerSubAgentTools(toolRegistry, agentFactory);
+        this.orchestrator.registerSubAgentTools(toolRegistry, agentFactory);
+    }
+
+    private void registerWorldInfoTools(ToolRegistry toolRegistry) {
+        if (worldInfo == null) {
+            log.warn("WorldInformation not available, skipping world info tool registration");
+            return;
+        }
+        Supplier<WorldInformation> wiSupplier = () -> this.worldInfo;
+        toolRegistry.register(new QueryCheckpointTool(wiSupplier));
+        toolRegistry.register(new QueryKeywordTool(wiSupplier));
+        toolRegistry.register(new QueryNodeTool(wiSupplier));
+        toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir));
+        log.info("Registered 4 world info query tools (query_checkpoint, query_keyword, query_node, write_element)");
+    }
+
+    private void wireCommands() {
+        // Re-bootstrap callback (called when /world switch or /node goto/create changes state)
+        Runnable onChanged = () -> {
+            log.info("World/node changed — re-bootstrap needed");
+            // In a full implementation this would re-run Bootstrap.boot();
+            // For now, just log. The command output already informs the user.
+        };
+        WorldCommand wc = new WorldCommand(worldsDir, onChanged);
+        NodeCommand nc = new NodeCommand(worldsDir, () -> worldInfo, onChanged);
+        ChatCommand cc = new ChatCommand(worldsDir,
+                () -> worldInfo != null ? worldInfo.worldId() : "default",
+                () -> activeCache);
+        adapter.setNewCommands(wc, nc, cc);
+        log.info("Wired /world, /node, /chat commands into ConsoleInteractionAdapter");
+    }
+
+    private void injectSystemPrompt() {
+        if (orchestrator == null) {
+            log.warn("Orchestrator not initialized, skipping system prompt injection");
+            return;
+        }
+        if (contextRenderer == null || worldInfo == null) {
+            log.warn("ContextRenderer or WorldInformation not available, skipping system prompt injection");
+            return;
+        }
+        try {
+            String rendered = contextRenderer.renderSystemPrompt("OrchestratorAgent", worldInfo);
+            orchestrator.setSystemPrompt(rendered);
+            log.info("Injected FreeMarker-rendered system prompt into OrchestratorAgent ({} chars)", rendered.length());
+        } catch (Exception e) {
+            log.error("Failed to inject system prompt: {}", e.getMessage(), e);
+        }
     }
 
     /**

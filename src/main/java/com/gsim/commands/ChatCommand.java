@@ -30,7 +30,14 @@ public final class ChatCommand {
         if (args.isEmpty()) return "Usage: /chat [message|history|clear] ...";
         String sub = args.get(0);
         if ("history".equals(sub)) {
-            int n = args.size() > 1 ? Integer.parseInt(args.get(1)) : 10;
+            int n = 10;
+            if (args.size() > 1) {
+                try {
+                    n = Integer.parseInt(args.get(1));
+                } catch (NumberFormatException e) {
+                    return "Invalid number: " + args.get(1) + ". Usage: /chat history [n]";
+                }
+            }
             return showHistory(n);
         }
         if ("clear".equals(sub)) {

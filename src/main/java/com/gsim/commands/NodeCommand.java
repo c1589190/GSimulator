@@ -125,7 +125,7 @@ public final class NodeCommand {
                 }
             }
         } catch (Exception e) {
-            // silently ignore — will just start from 0
+            System.err.println("[NodeCommand] Failed to scan node directory for counter seeding: " + e.getMessage());
         }
         if (max >= 0) {
             IdGenerator.seedNodeCounter(max + 1);
