@@ -74,11 +74,10 @@ public class Main {
                 + ", active node: " + bootResult.activeNodeId()
                 + ", chain length: " + bootResult.worldInfo().branchChain().size());
 
-            // 3. 统一启动：CLI + HTTP API + WebUI 全部默认开启
-            // --cli / --http / --webui 仍可显式指定（向后兼容），不加就是全开
-            boolean cliMode = cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui());
-            boolean httpMode = cliArgs.http() || true;  // 默认开
-            boolean webuiMode = cliArgs.webui() || true; // 默认开
+            // 3. 当前阶段：仅 CLI 模式，HTTP API / WebUI 暂不启动
+            boolean cliMode = true;
+            boolean httpMode = false;
+            boolean webuiMode = false;
 
             // 4. 启动应用
             GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, bootResult);

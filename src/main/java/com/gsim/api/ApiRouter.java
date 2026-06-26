@@ -51,21 +51,12 @@ public class ApiRouter {
         // Import
         register("/api/import", new ImportApiHandler(ctx, eventBus));
 
-        // SearchDB
-        register("/api/searchdb", new SearchDbApiHandler(ctx, eventBus, sessionManager));
-
         // Logs & Outputs
         register("/api/logs", new LogsOutputsApiHandler(ctx));
         register("/api/outputs", new LogsOutputsApiHandler(ctx));
 
         // 配置管理
         register("/api/config", new ConfigApiHandler(ctx, sessionManager));
-
-        // 知识库
-        register("/api/knowledge", new KnowledgeApiHandler(ctx));
-
-        // Embedding
-        register("/api/embedding", new EmbeddingApiHandler(ctx));
 
         // 技能
         register("/api/skills", new SkillsApiHandler(ctx, sessionManager));

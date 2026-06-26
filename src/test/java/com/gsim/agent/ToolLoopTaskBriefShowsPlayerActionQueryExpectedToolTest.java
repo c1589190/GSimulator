@@ -23,11 +23,11 @@ class ToolLoopTaskBriefShowsPlayerActionQueryExpectedToolTest {
     }
 
     @Test
-    @DisplayName("用户问搜索 → KNOWLEDGE_SEARCH")
+    @DisplayName("用户问搜索 → WORLDINFO_SEARCH")
     void knowledgeSearchDetected() {
-        assertEquals("KNOWLEDGE_SEARCH",
+        assertEquals("WORLDINFO_SEARCH",
                 ToolLoopDebug.inferUserIntent("搜索龙门的相关知识"));
-        assertEquals("KNOWLEDGE_SEARCH",
+        assertEquals("WORLDINFO_SEARCH",
                 ToolLoopDebug.inferUserIntent("查找一下感染者"));
     }
 

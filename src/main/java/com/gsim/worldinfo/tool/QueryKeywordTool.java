@@ -28,7 +28,8 @@ public final class QueryKeywordTool implements AgentTool {
     public String description() {
         return "Full-text keyword search across all world information elements. " +
                "Returns matching elements with source attribution (nodeId, turn, checkpointId). " +
-               "Supports pagination via offset.";
+               "Supports pagination via offset. " +
+               "Optional checkpointId filter to limit search to a specific checkpoint.";
     }
 
     @Override
@@ -40,14 +41,15 @@ public final class QueryKeywordTool implements AgentTool {
 
         int limit = parseInt(call.param("limit"), 20);
         int offset = parseInt(call.param("offset"), 0);
+        String checkpointId = call.param("checkpointId");
 
         WorldInformation wi = worldInfo.get();
-        KeywordIndex.SearchResult result = wi.keywordIndex().search(keywords, limit, offset);
+        KeywordIndex.SearchResult result = wi.keywordIndex().search(keywords, limit, offset, checkpointId);
 
         List<ToolResult.Item> items = result.items().stream()
             .map(hit -> new ToolResult.Item(
                 hit.elementRef().element().key(),
-                "%s@turn%d (%s)".formatted(hit.elementRef().nodeId(), hit.elementRef().turn(), hit.elementRef().checkpointId()),
+                hit.elementRef().nodeId() + ":" + hit.elementRef().checkpointId() + ":" + hit.elementRef().element().key(),
                 hit.snippet(),
                 (double) hit.score()))
             .toList();
@@ -62,7 +64,8 @@ public final class QueryKeywordTool implements AgentTool {
             "properties", Map.of(
                 "keywords", Map.of("type", "string", "description", "Space-separated search keywords"),
                 "limit", Map.of("type", "integer", "description", "Max results (default 20)"),
-                "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)")
+                "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)"),
+                "checkpointId", Map.of("type", "string", "description", "Optional checkpoint ID to filter results (exact match)")
             ),
             "required", List.of("keywords")
         );

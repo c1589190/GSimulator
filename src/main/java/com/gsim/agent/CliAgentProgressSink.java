@@ -31,6 +31,13 @@ public class CliAgentProgressSink implements AgentProgressSink {
     public void onProgress(AgentProgressEvent event) {
         if (event == null) return;
 
+        // SubAgent 事件折叠处理（不刷屏，只显示状态行）
+        String subAgentId = event.meta().get("agentId");
+        if (subAgentId != null && isSubAgentId(subAgentId)) {
+            handleSubAgentEvent(event, subAgentId);
+            return;
+        }
+
         // LLM 流式事件直接 inline 打印
         if (handleStreamEvent(event)) return;
 
@@ -187,6 +194,50 @@ public class CliAgentProgressSink implements AgentProgressSink {
             return Integer.parseInt(meta.getOrDefault(key, "0"));
         } catch (NumberFormatException e) {
             return 0;
+        }
+    }
+
+    // ══════════════════════════════════════════
+    // SubAgent 折叠输出
+    // ══════════════════════════════════════════
+
+    /** 跟踪已输出过 "working" 的 SubAgent（避免重复打印）。 */
+    private final java.util.Set<String> subAgentSeen = new java.util.HashSet<>();
+
+    /** SubAgent ID 格式：type-number（如 sim-1, search-2）。 */
+    private static boolean isSubAgentId(String agentId) {
+        return agentId.matches("^(sim|search)-\\d+$");
+    }
+
+    /** 处理 SubAgent 事件 — 流式内容折叠为状态行，工具调用显示简短信息。 */
+    private void handleSubAgentEvent(AgentProgressEvent event, String agentId) {
+        switch (event.phase()) {
+            case AgentProgressEvent.LLM_STREAM_STARTED -> {
+                if (subAgentSeen.add(agentId)) {
+                    out.println(ANSI_GREY + "[SubAgent " + agentId + "] working..." + ANSI_RESET);
+                }
+            }
+            case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
+                subAgentSeen.remove(agentId);
+                out.println(ANSI_GREY + "[SubAgent " + agentId + "] done" + ANSI_RESET);
+            }
+            case AgentProgressEvent.LLM_STREAM_FAILED -> {
+                subAgentSeen.remove(agentId);
+                String error = event.meta().getOrDefault("error", "unknown");
+                out.println("[SubAgent " + agentId + "] failed: " + error);
+            }
+            case AgentProgressEvent.TOOL_SUCCESS -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                out.println(ANSI_GREY + "[SubAgent " + agentId + "] tool: " + tool + ANSI_RESET);
+            }
+            case AgentProgressEvent.TOOL_FAILED -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String error = event.meta().getOrDefault("error", "");
+                out.println("[SubAgent " + agentId + "] tool failed: " + tool
+                        + (error.isBlank() ? "" : " — " + error));
+            }
+            // 所有其他事件（含 LLM_CONTENT_DELTA / LLM_REASONING_DELTA）静默丢弃
+            default -> {}
         }
     }
 }

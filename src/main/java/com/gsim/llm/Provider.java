@@ -181,7 +181,10 @@ class Provider {
         List<Map<String, Object>> msgs = new ArrayList<>();
         for (LlmMessage msg : request.messages()) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("role", msg.role());
+            // "tool" role requires tool_call_id per OpenAI spec — our synthetic
+            // tool feedback uses [TOOL_RESULT] markers, so downgrade to "user".
+            String role = "tool".equals(msg.role()) ? "user" : msg.role();
+            m.put("role", role);
             m.put("content", msg.content());
             msgs.add(m);
         }

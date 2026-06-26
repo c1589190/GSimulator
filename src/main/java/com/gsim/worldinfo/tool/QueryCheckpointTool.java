@@ -28,7 +28,9 @@ public final class QueryCheckpointTool implements AgentTool {
     @Override
     public String description() {
         return "Query all historical elements of a checkpoint (player, faction, worldview, etc.) " +
-               "across all turns. Set turnFrom/turnTo to narrow the range.";
+               "across all turns. Supports wildcard prefix matching (e.g. 'player.*') " +
+               "to return elements from all matching checkpoints. " +
+               "Set turnFrom/turnTo to narrow the range.";
     }
 
     @Override
@@ -40,11 +42,23 @@ public final class QueryCheckpointTool implements AgentTool {
 
         WorldInformation wi = worldInfo.get();
         List<ElementRef> refs;
+
         String turnFromStr = call.param("turnFrom");
         String turnToStr = call.param("turnTo");
-        if (turnFromStr != null || turnToStr != null) {
-            int from = turnFromStr != null ? Integer.parseInt(turnFromStr) : 0;
-            int to = turnToStr != null ? Integer.parseInt(turnToStr) : Integer.MAX_VALUE;
+        int from = turnFromStr != null ? parseInt(turnFromStr, 0) : 0;
+        int to = turnToStr != null ? parseInt(turnToStr, Integer.MAX_VALUE) : Integer.MAX_VALUE;
+
+        if (cpId.contains("*")) {
+            // wildcard / prefix match
+            refs = wi.checkpointHistoryByPrefix(cpId).stream()
+                .filter(r -> r.turn() >= from && r.turn() <= to)
+                .sorted((a, b) -> {
+                    int cmp = a.checkpointId().compareTo(b.checkpointId());
+                    if (cmp != 0) return cmp;
+                    return Integer.compare(a.turn(), b.turn());
+                })
+                .toList();
+        } else if (turnFromStr != null || turnToStr != null) {
             refs = wi.checkpointHistory(cpId, from, to);
         } else {
             refs = wi.checkpointHistory(cpId);
@@ -53,10 +67,11 @@ public final class QueryCheckpointTool implements AgentTool {
         String label = "";
         String type = "";
         if (!refs.isEmpty()) {
-            // get checkpoint metadata from its first node
+            // get checkpoint metadata from its source checkpoint
+            String lookupCpId = cpId.contains("*") ? refs.get(0).checkpointId() : cpId;
             var firstNode = wi.nodeById(refs.get(0).nodeId());
             if (firstNode != null) {
-                Checkpoint cp = firstNode.checkpoints().get(cpId);
+                Checkpoint cp = firstNode.checkpoints().get(lookupCpId);
                 if (cp != null) {
                     label = cp.label();
                     type = cp.type();
@@ -65,7 +80,8 @@ public final class QueryCheckpointTool implements AgentTool {
         }
 
         List<ToolResult.Item> items = refs.stream()
-            .map(r -> new ToolResult.Item(r.element().key(), r.nodeId() + "@turn" + r.turn(),
+            .map(r -> new ToolResult.Item(r.element().key(),
+                r.nodeId() + ":" + r.checkpointId() + ":" + r.element().key(),
                 r.element().value(), 1.0))
             .toList();
 
@@ -77,11 +93,16 @@ public final class QueryCheckpointTool implements AgentTool {
         return Map.of(
             "type", "object",
             "properties", Map.of(
-                "checkpointId", Map.of("type", "string", "description", "Checkpoint ID like 'player.曹操' or 'worldview'"),
+                "checkpointId", Map.of("type", "string", "description",
+                    "Checkpoint ID like 'player.曹操' or 'worldview'. Supports '*' wildcard for prefix matching, e.g. 'player.*' returns all player.* checkpoints"),
                 "turnFrom", Map.of("type", "integer", "description", "Optional start turn (inclusive)"),
                 "turnTo", Map.of("type", "integer", "description", "Optional end turn (inclusive)")
             ),
             "required", List.of("checkpointId")
         );
+    }
+
+    private static int parseInt(String s, int defaultVal) {
+        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return defaultVal; }
     }
 }

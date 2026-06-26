@@ -8,14 +8,16 @@ import com.gsim.commands.WorldCommand;
 import com.gsim.compact.ToolResultCompactor;
 import com.gsim.context.ContextRenderer;
 import com.gsim.interaction.ConsoleInteractionAdapter;
-import com.gsim.player.PlayerProfileManager;
-import com.gsim.tool.PlayerProfileGetTool;
-import com.gsim.tool.PlayerProfileListTool;
-import com.gsim.tool.PlayerProfileNoteTool;
-import com.gsim.tool.PlayerProfileUpdateTool;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.worldinfo.WorldInformation;
+import com.gsim.worldinfo.tool.CreateCheckpointTool;
+import com.gsim.worldinfo.tool.NodeCreateTool;
+import com.gsim.worldinfo.tool.NodeGotoParentTool;
+import com.gsim.worldinfo.tool.NodeListTool;
+import com.gsim.worldinfo.tool.NodeStatusTool;
+import com.gsim.worldinfo.tool.NodeSwitchTool;
 import com.gsim.worldinfo.tool.QueryCheckpointTool;
+import com.gsim.worldinfo.tool.QueryElementTool;
 import com.gsim.worldinfo.tool.QueryKeywordTool;
 import com.gsim.worldinfo.tool.QueryNodeTool;
 import com.gsim.worldinfo.tool.WriteElementTool;
@@ -40,6 +42,7 @@ public class GSimulatorApplication {
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
     private com.gsim.agent.CompositeAgentProgressSink compositeSink;
+    private com.gsim.agent.core.AgentFactory agentFactory;
 
     // -- Bootstrap result wiring --
     private OrchestratorAgent orchestrator;
@@ -90,11 +93,17 @@ public class GSimulatorApplication {
         // 注册 Agent 工具
         registerAgentTools(toolRegistry);
 
-        // 注册 world info 查询工具
-        registerWorldInfoTools(toolRegistry);
+        // Node change callback — shared between tools and commands
+        Runnable onNodeChanged = () -> {
+            log.info("World/node changed — re-bootstrap needed");
+            // In a full implementation this would re-run Bootstrap.boot();
+        };
+
+        // 注册 world info + node 管理工具
+        registerWorldInfoTools(toolRegistry, onNodeChanged);
 
         // 创建命令并注入到 adapter
-        wireCommands();
+        wireCommands(onNodeChanged);
 
         // 注入 FreeMarker 渲染的系统 prompt
         injectSystemPrompt();
@@ -106,27 +115,19 @@ public class GSimulatorApplication {
     }
 
     private void registerAgentTools(ToolRegistry toolRegistry) {
-        // Player profiles (direct path-based)
-        Path dataDir = config.getDataDir();
-        Path playersFile = dataDir.resolve("players.md");
-        PlayerProfileManager profileManager = new PlayerProfileManager(playersFile);
-
-        toolRegistry.register(new PlayerProfileListTool(profileManager));
-        toolRegistry.register(new PlayerProfileGetTool(profileManager));
-        toolRegistry.register(new PlayerProfileUpdateTool(profileManager));
-        toolRegistry.register(new PlayerProfileNoteTool(profileManager));
-
         // Import doc tools
         var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
         toolRegistry.register(new com.gsim.importing.tool.ImportDocumentListTool(importDocService));
         toolRegistry.register(new com.gsim.importing.tool.ImportDocumentReadTool(importDocService));
         toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
 
-        // CLI progress sink
+        // Agent progress sinks: CLI + EventBus (SSE) + SessionPool (unified async pool)
         var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(System.out, true);
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
+        var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(
+                ctx.getSessionPool(), "default");
         this.compositeSink = new com.gsim.agent.CompositeAgentProgressSink(
-                cliProgressSink, eventBusSink);
+                cliProgressSink, eventBusSink, sessionPoolBridge);
 
         // Tool group manager
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
@@ -161,36 +162,60 @@ public class GSimulatorApplication {
 
         // Sub-agent tools
         var agentConfigStore = new com.gsim.agent.config.AgentConfigStore();
-        var agentFactory = new com.gsim.agent.core.AgentFactory(
-                agentConfigStore, ctx.getLlmManager(), toolRegistry, compositeSink, config.getLlmModel());
-        this.orchestrator.registerSubAgentTools(toolRegistry, agentFactory);
+        this.agentFactory = new com.gsim.agent.core.AgentFactory(
+                agentConfigStore, ctx.getLlmManager(), toolRegistry, compositeSink, config.getLlmModel(),
+                worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default");
+        this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory);
     }
 
-    private void registerWorldInfoTools(ToolRegistry toolRegistry) {
+    private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
         if (worldInfo == null) {
             log.warn("WorldInformation not available, skipping world info tool registration");
             return;
         }
         Supplier<WorldInformation> wiSupplier = () -> this.worldInfo;
+
+        // Query tools
         toolRegistry.register(new QueryCheckpointTool(wiSupplier));
         toolRegistry.register(new QueryKeywordTool(wiSupplier));
         toolRegistry.register(new QueryNodeTool(wiSupplier));
+        toolRegistry.register(new QueryElementTool(wiSupplier));
+
+        // Write tools
         toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir));
-        log.info("Registered 4 world info query tools (query_checkpoint, query_keyword, query_node, write_element)");
+        toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
+
+        // Node management tools
+        toolRegistry.register(new NodeListTool(wiSupplier));
+        toolRegistry.register(new NodeStatusTool(wiSupplier));
+        toolRegistry.register(new NodeCreateTool(wiSupplier, worldsDir, onNodeChanged));
+        toolRegistry.register(new NodeSwitchTool(wiSupplier, worldsDir, onNodeChanged));
+        toolRegistry.register(new NodeGotoParentTool(wiSupplier, worldsDir, onNodeChanged));
+
+        log.info("Registered 11 world info + node tools (query_node, query_checkpoint, " +
+                "query_keyword, query_element, write_element, create_checkpoint, " +
+                "node_list, node_status, node_create, node_switch, node_goto_parent)");
     }
 
-    private void wireCommands() {
-        // Re-bootstrap callback (called when /world switch or /node goto/create changes state)
-        Runnable onChanged = () -> {
-            log.info("World/node changed — re-bootstrap needed");
-            // In a full implementation this would re-run Bootstrap.boot();
-            // For now, just log. The command output already informs the user.
-        };
-        WorldCommand wc = new WorldCommand(worldsDir, onChanged);
-        NodeCommand nc = new NodeCommand(worldsDir, () -> worldInfo, onChanged);
+    private void wireCommands(Runnable onNodeChanged) {
+        // Write-through cache saver: every Agent message persisted immediately
+        String wid = worldInfo != null ? worldInfo.worldId() : "default";
+        orchestrator.setMessageSaver(msg -> {
+            CacheSession s = activeCache;
+            if (s != null) {
+                com.gsim.cache.CacheStore.appendAndSave(worldsDir, wid, s,
+                        java.util.Map.of("role", msg.role(), "content",
+                                msg.content() != null ? msg.content() : ""));
+            }
+        });
+
+        WorldCommand wc = new WorldCommand(worldsDir, onNodeChanged);
+        NodeCommand nc = new NodeCommand(worldsDir, () -> worldInfo, onNodeChanged);
         ChatCommand cc = new ChatCommand(worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default",
-                () -> activeCache);
+                () -> activeCache,
+                (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
+        cc.setCancelCallback(orchestrator::cancel);
         this.worldCommand = wc;
         this.nodeCommand = nc;
         this.chatCommand = cc;
@@ -224,16 +249,11 @@ public class GSimulatorApplication {
 
         if (httpMode) {
             ctx.getApiManager().forceEnable();
-        }
-
-        if (httpMode || config.isApiEnabled()) {
             ctx.getApiManager().start();
         }
 
         if (webuiMode) {
             webUiServer.forceEnable();
-        }
-        if (webuiMode || config.isWebUiEnabled()) {
             webUiServer.start();
             cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
             cliWsServer.setCommands(worldCommand, nodeCommand, chatCommand);
@@ -260,10 +280,16 @@ public class GSimulatorApplication {
 
         System.out.println();
         System.out.println("✅ GSimulator 已启动");
-        System.out.println("   CLI REPL:  当前终端（输入 /help）");
-        System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
-        System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
-        System.out.println("   HTTP API:  http://" + config.getApiHost() + ":" + config.getApiPort());
+        if (cliMode) {
+            System.out.println("   CLI REPL:  当前终端（输入 /help）");
+        }
+        if (httpMode) {
+            System.out.println("   HTTP API:  http://" + config.getApiHost() + ":" + config.getApiPort());
+        }
+        if (webuiMode) {
+            System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
+            System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
+        }
         System.out.println();
         Thread.currentThread().join();
     }

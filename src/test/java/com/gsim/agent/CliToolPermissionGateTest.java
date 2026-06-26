@@ -29,8 +29,8 @@ class CliToolPermissionGateTest {
     void inputYReturnsAllowOnce() {
         var in = new BufferedReader(new StringReader("Y\n"));
         var gate = new CliToolPermissionGate(captureOutput(), in);
-        var req = new ToolConfirmationRequest("knowledge_upsert", ToolCategory.MUTATING,
-                "写入工具：knowledge_upsert 将修改数据，需要用户确认。", Map.of(), null);
+        var req = new ToolConfirmationRequest("write_element", ToolCategory.MUTATING,
+                "写入工具：write_element 将修改数据，需要用户确认。", Map.of(), null);
         assertEquals(ConfirmationChoice.ALLOW_ONCE, gate.askConfirmation(req));
     }
 
@@ -61,7 +61,7 @@ class CliToolPermissionGateTest {
     void inputAReturnsAllowAll() {
         var in = new BufferedReader(new StringReader("a\n"));
         var gate = new CliToolPermissionGate(captureOutput(), in);
-        var req = new ToolConfirmationRequest("knowledge_upsert", ToolCategory.MUTATING,
+        var req = new ToolConfirmationRequest("write_element", ToolCategory.MUTATING,
                 "写入工具", Map.of(), null);
         assertEquals(ConfirmationChoice.ALLOW_ALL_THIS_TURN, gate.askConfirmation(req));
     }
@@ -93,7 +93,7 @@ class CliToolPermissionGateTest {
     void unknownInputReturnsDeny() {
         var in = new BufferedReader(new StringReader("x\n"));
         var gate = new CliToolPermissionGate(captureOutput(), in);
-        var req = new ToolConfirmationRequest("knowledge_upsert", ToolCategory.MUTATING,
+        var req = new ToolConfirmationRequest("write_element", ToolCategory.MUTATING,
                 "写入工具", Map.of(), null);
         assertEquals(ConfirmationChoice.DENY, gate.askConfirmation(req));
     }
@@ -106,7 +106,7 @@ class CliToolPermissionGateTest {
             public String readLine() { return null; }
         };
         var gate = new CliToolPermissionGate(captureOutput(), in);
-        var req = new ToolConfirmationRequest("knowledge_upsert", ToolCategory.MUTATING,
+        var req = new ToolConfirmationRequest("write_element", ToolCategory.MUTATING,
                 "写入工具", Map.of(), null);
         assertEquals(ConfirmationChoice.DENY, gate.askConfirmation(req));
     }
@@ -120,12 +120,12 @@ class CliToolPermissionGateTest {
         var ps = new PrintStream(out, true, StandardCharsets.UTF_8);
         var in = new BufferedReader(new StringReader("y\n"));
         var gate = new CliToolPermissionGate(ps, in);
-        var req = new ToolConfirmationRequest("knowledge_upsert", ToolCategory.MUTATING,
-                "写入工具：knowledge_upsert 将修改数据，需要用户确认。",
+        var req = new ToolConfirmationRequest("write_element", ToolCategory.MUTATING,
+                "写入工具：write_element 将修改数据，需要用户确认。",
                 Map.of("key", "value"), "branch.b0001-test");
         gate.askConfirmation(req);
         String output = out.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("knowledge_upsert"), "Should contain tool name, got: " + output);
+        assertTrue(output.contains("write_element"), "Should contain tool name, got: " + output);
         assertTrue(output.contains("MUTATING"), "Should contain category, got: " + output);
         assertTrue(output.contains("将修改数据"), "Should contain reason, got: " + output);
         assertTrue(output.contains("branch.b0001-test"), "Should contain branch ID, got: " + output);

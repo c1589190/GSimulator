@@ -1,7 +1,6 @@
 package com.gsim.webui;
 
 import com.gsim.app.ApplicationContext;
-import com.gsim.webui.handlers.KnowledgeHandler;
 import com.gsim.webui.handlers.PageHandler;
 import com.gsim.webui.handlers.StaticHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -58,7 +57,6 @@ public class WebUiServer {
     private void registerHandlers() {
         server.createContext("/static", new StaticHandler());
         PageHandler pageHandler = new PageHandler(ctx);
-        server.createContext("/knowledge", new KnowledgeHandler(ctx, pageHandler));
         server.createContext("/", pageHandler);
     }
 

@@ -16,61 +16,26 @@ public class ToolCategoryRegistry {
     static {
         // === READ_ONLY ===
         CATEGORIES.put("wiki_search", ToolCategory.READ_ONLY);
-        CATEGORIES.put("keyword_search", ToolCategory.READ_ONLY);
-        CATEGORIES.put("knowledge_search", ToolCategory.READ_ONLY);
-        CATEGORIES.put("knowledge_get_chunk", ToolCategory.READ_ONLY);
-        CATEGORIES.put("knowledge_get_document", ToolCategory.READ_ONLY);
-        CATEGORIES.put("player_profile_list", ToolCategory.READ_ONLY);
-        CATEGORIES.put("player_profile_get", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_list", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_read", ToolCategory.READ_ONLY);
         CATEGORIES.put("import_document_search", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_analysis", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_path", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_node_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_node_search", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_log_filter", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_pin_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_status", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_world_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_entities_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_rules_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_initial_info_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("root_players_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("simulation_content_list", ToolCategory.READ_ONLY);
-        CATEGORIES.put("simulation_content_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("turn_settlement_get", ToolCategory.READ_ONLY);
-        CATEGORIES.put("branch_list", ToolCategory.READ_ONLY);
-        CATEGORIES.put("player_action_list", ToolCategory.READ_ONLY);
-        CATEGORIES.put("player_action_get", ToolCategory.READ_ONLY);
+        // WorldInfo: query
+        CATEGORIES.put("query_node", ToolCategory.READ_ONLY);
+        CATEGORIES.put("query_checkpoint", ToolCategory.READ_ONLY);
+        CATEGORIES.put("query_keyword", ToolCategory.READ_ONLY);
+        CATEGORIES.put("query_element", ToolCategory.READ_ONLY);
+        // Node: read-only
+        CATEGORIES.put("node_list", ToolCategory.READ_ONLY);
+        CATEGORIES.put("node_status", ToolCategory.READ_ONLY);
 
         // === MUTATING ===
-        CATEGORIES.put("knowledge_upsert", ToolCategory.MUTATING);
-        CATEGORIES.put("knowledge_update", ToolCategory.MUTATING);
-        CATEGORIES.put("knowledge_embed_missing", ToolCategory.MUTATING);
-        CATEGORIES.put("player_input", ToolCategory.MUTATING);
-        CATEGORIES.put("player_profile_update", ToolCategory.MUTATING);
-        CATEGORIES.put("player_profile_note", ToolCategory.MUTATING);
-        CATEGORIES.put("branch_pin_add", ToolCategory.MUTATING);
-        CATEGORIES.put("root_create", ToolCategory.MUTATING);
-        CATEGORIES.put("root_world_update", ToolCategory.MUTATING);
-        CATEGORIES.put("root_entities_update", ToolCategory.MUTATING);
-        CATEGORIES.put("root_rules_update", ToolCategory.MUTATING);
-        CATEGORIES.put("root_initial_info_update", ToolCategory.MUTATING);
-        CATEGORIES.put("root_players_update", ToolCategory.MUTATING);
-        CATEGORIES.put("simulation_content_append", ToolCategory.MUTATING);
-        CATEGORIES.put("simulation_content_update", ToolCategory.MUTATING);
-        CATEGORIES.put("turn_settlement_save", ToolCategory.MUTATING);
-        CATEGORIES.put("turn_settlement_save_last_response", ToolCategory.MUTATING);
-        CATEGORIES.put("branch_create_child", ToolCategory.MUTATING);
-        CATEGORIES.put("branch_switch", ToolCategory.MUTATING);
-        CATEGORIES.put("branch_goto_parent", ToolCategory.MUTATING);
-        CATEGORIES.put("branch_next_turn", ToolCategory.MUTATING);
-        CATEGORIES.put("player_action_append", ToolCategory.MUTATING);
-        CATEGORIES.put("player_action_update", ToolCategory.MUTATING);
-
-        // === DESTRUCTIVE ===
-        CATEGORIES.put("knowledge_delete", ToolCategory.DESTRUCTIVE);
+        // WorldInfo: write
+        CATEGORIES.put("write_element", ToolCategory.MUTATING);
+        CATEGORIES.put("create_checkpoint", ToolCategory.MUTATING);
+        // Node: mutating
+        CATEGORIES.put("node_create", ToolCategory.MUTATING);
+        CATEGORIES.put("node_switch", ToolCategory.MUTATING);
+        CATEGORIES.put("node_goto_parent", ToolCategory.MUTATING);
 
         // === CONTROL ===
         CATEGORIES.put("finish_action", ToolCategory.CONTROL);

@@ -48,33 +48,33 @@ class UserIntentTest {
                 UserIntent.infer("整理成推文"));
     }
 
-    // ========== KNOWLEDGE_WRITE ==========
+    // ========== WORLDINFO_WRITE ==========
 
     @Test
-    @DisplayName("写入知识库 → KNOWLEDGE_WRITE")
+    @DisplayName("写入世界信息 → WORLDINFO_WRITE")
     void knowledgeWrite() {
-        assertEquals(UserIntent.KNOWLEDGE_WRITE,
-                UserIntent.infer("把这个写入知识库"));
-        assertEquals(UserIntent.KNOWLEDGE_WRITE,
-                UserIntent.infer("记录到知识库"));
-        assertEquals(UserIntent.KNOWLEDGE_WRITE,
+        assertEquals(UserIntent.WORLDINFO_WRITE,
+                UserIntent.infer("把这个写入元素"));
+        assertEquals(UserIntent.WORLDINFO_WRITE,
+                UserIntent.infer("记录到世界"));
+        assertEquals(UserIntent.WORLDINFO_WRITE,
                 UserIntent.infer("保存为事实"));
-        assertEquals(UserIntent.KNOWLEDGE_WRITE,
-                UserIntent.infer("更新知识库资料"));
+        assertEquals(UserIntent.WORLDINFO_WRITE,
+                UserIntent.infer("更新世界信息"));
     }
 
-    // ========== KNOWLEDGE_SEARCH ==========
+    // ========== WORLDINFO_SEARCH ==========
 
     @Test
-    @DisplayName("搜索 → KNOWLEDGE_SEARCH")
+    @DisplayName("搜索 → WORLDINFO_SEARCH")
     void knowledgeSearch() {
-        assertEquals(UserIntent.KNOWLEDGE_SEARCH,
+        assertEquals(UserIntent.WORLDINFO_SEARCH,
                 UserIntent.infer("搜索乌萨斯"));
-        assertEquals(UserIntent.KNOWLEDGE_SEARCH,
+        assertEquals(UserIntent.WORLDINFO_SEARCH,
                 UserIntent.infer("查一下有没有关于罗德岛的资料"));
-        assertEquals(UserIntent.KNOWLEDGE_SEARCH,
+        assertEquals(UserIntent.WORLDINFO_SEARCH,
                 UserIntent.infer("知不知道整合运动"));
-        assertEquals(UserIntent.KNOWLEDGE_SEARCH,
+        assertEquals(UserIntent.WORLDINFO_SEARCH,
                 UserIntent.infer("wiki上有什么"));
     }
 
@@ -135,7 +135,7 @@ class UserIntentTest {
     // ========== 优先级测试 ==========
 
     @Test
-    @DisplayName("短推优先级高于知识搜索")
+    @DisplayName("短推优先级高于世界信息搜索")
     void shortPostBeforeSearch() {
         // "复写" 同时触发 short post + 可能不触发 search
         assertEquals(UserIntent.SHORT_POST_REWRITE,
@@ -143,10 +143,10 @@ class UserIntentTest {
     }
 
     @Test
-    @DisplayName("知识写入优先级高于 next turn")
+    @DisplayName("世界信息写入优先级高于 next turn")
     void knowledgeWriteBeforeNextTurn() {
-        // "写入知识库" 应该在 next turn 之前匹配
-        assertEquals(UserIntent.KNOWLEDGE_WRITE,
-                UserIntent.infer("写入知识库关于下一回合的内容"));
+        // "写入世界" 应该在 next turn 之前匹配
+        assertEquals(UserIntent.WORLDINFO_WRITE,
+                UserIntent.infer("写入世界关于下一回合的内容"));
     }
 }

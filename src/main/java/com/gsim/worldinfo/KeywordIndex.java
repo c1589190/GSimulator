@@ -48,6 +48,14 @@ public final class KeywordIndex {
      * Results are scored by keyword match count and returned with pagination.
      */
     public SearchResult search(String keywords, int limit, int offset) {
+        return search(keywords, limit, offset, null);
+    }
+
+    /**
+     * Search with optional checkpointId filter — only returns elements from the
+     * specified checkpoint (exact match).
+     */
+    public SearchResult search(String keywords, int limit, int offset, String checkpointId) {
         if (keywords == null || keywords.isBlank()) {
             return new SearchResult(0, offset, List.of());
         }
@@ -59,6 +67,7 @@ public final class KeywordIndex {
         Map<ElementRef, Integer> scores = new LinkedHashMap<>();
         for (String token : tokens) {
             for (ElementRef ref : inverted.getOrDefault(token, List.of())) {
+                if (checkpointId != null && !checkpointId.equals(ref.checkpointId())) continue;
                 scores.merge(ref, 1, Integer::sum);
             }
         }

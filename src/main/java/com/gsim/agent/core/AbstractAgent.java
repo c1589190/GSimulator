@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * AbstractAgent — 统一 Agent 基类，所有 Agent（主/辅）共用同一个 ToolLoop。
@@ -62,6 +63,15 @@ public class AbstractAgent {
 
     protected final List<AgentRound> rounds = new ArrayList<>();
 
+    /** Write-through cache saver — called for every NEW message added during a run.
+     *  System prompts and replayed prior messages are NOT passed to this sink. */
+    private Consumer<LlmMessage> messageSaver;
+
+    /** Set a write-through saver that persists each new message as it is added. */
+    public void setMessageSaver(Consumer<LlmMessage> saver) {
+        this.messageSaver = saver;
+    }
+
     /**
      * Override the empty AgentConfig system prompt with a rendered template.
      * Used by OrchestratorAgent to inject FreeMarker-rendered context.
@@ -86,10 +96,15 @@ public class AbstractAgent {
 
     /** 执行 ToolLoop，返回完整结果（含每轮记录） */
     public AgentResult run(String userInput) {
+        return run(userInput, List.of());
+    }
+
+    /** 执行 ToolLoop，注入历史消息作为对话上文。 */
+    public AgentResult run(String userInput, List<LlmMessage> priorMessages) {
         rounds.clear();
         cancelRequested.set(false);
         try {
-            return executeToolLoop(userInput);
+            return executeToolLoop(userInput, priorMessages);
         } catch (Exception e) {
             log.error("[{}] fatal: {}", agentId, e.getMessage(), e);
             return AgentResult.fail(agentId, e.getMessage());
@@ -105,18 +120,27 @@ public class AbstractAgent {
     // ToolLoop
     // ══════════════════════════════════════════
 
-    protected AgentResult executeToolLoop(String userInput) {
+    protected AgentResult executeToolLoop(String userInput, List<LlmMessage> priorMessages) {
         List<LlmMessage> messages = new ArrayList<>();
         List<ToolCallRecord> allToolCalls = new ArrayList<>();
         int maxRounds = config.maxToolRounds();
 
         // system prompt (use override if set, e.g. from FreeMarker-rendered template)
         String sp = systemPromptOverride != null ? systemPromptOverride : config.systemPrompt();
-        messages.add(LlmMessage.system(sp));
+        messages.add(LlmMessage.system(sp));  // system prompt is regenerated — never cached
 
-        // user prompt
+        // Replay prior conversation from cache (skip stale system messages)
+        if (priorMessages != null) {
+            for (LlmMessage m : priorMessages) {
+                if (!"system".equals(m.role())) {
+                    messages.add(m);
+                }
+            }
+        }
+
+        // user prompt (write-through to cache)
         if (userInput != null && !userInput.isBlank()) {
-            messages.add(LlmMessage.user(userInput));
+            addMessage(messages, LlmMessage.user(userInput));
         }
 
         // filtered tool defs
@@ -146,7 +170,7 @@ public class AbstractAgent {
             }
 
             String content = response.content();
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
+            addMessage(messages, LlmMessage.assistant(content != null ? content : ""));
 
             // parse tool calls
             List<ParsedToolCall> allParsed = new ArrayList<>();
@@ -183,7 +207,7 @@ public class AbstractAgent {
                                     result.error()));
 
                     String feedback = buildToolFeedback(parsed.tool(), result);
-                    messages.add(LlmMessage.user(feedback));
+                    addMessage(messages, LlmMessage.tool(feedback));
 
                     // 子类钩子：执行后处理
                     afterToolExecute(parsed, result);
@@ -206,7 +230,7 @@ public class AbstractAgent {
                 if (finishSeen && finishMsg != null) {
                     String validationError = validateFinishMessage(finishMsg);
                     if (validationError != null) {
-                        messages.add(LlmMessage.user(validationError));
+                        addMessage(messages, LlmMessage.user(validationError));
                         toolRound++;
                         continue;
                     }
@@ -233,7 +257,7 @@ public class AbstractAgent {
                         "Agent 连续 " + consecutiveNoTool + " 轮无有效输出");
             }
 
-            messages.add(LlmMessage.user("回复内容为空。如需操作请调用工具，已完成请调用 finish_action。"));
+            addMessage(messages, LlmMessage.user("回复内容为空。如需操作请调用工具，已完成请调用 finish_action。"));
             toolRound++;
         }
 
@@ -244,6 +268,14 @@ public class AbstractAgent {
         }
 
         return AgentResult.ok(agentId, finalText, List.copyOf(rounds), allToolCalls.size());
+    }
+
+    /** Add a message to the list and write-through to cache saver if configured. */
+    private void addMessage(List<LlmMessage> messages, LlmMessage msg) {
+        messages.add(msg);
+        if (messageSaver != null) {
+            messageSaver.accept(msg);
+        }
     }
 
     // ══════════════════════════════════════════

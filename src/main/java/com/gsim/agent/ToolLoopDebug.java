@@ -471,7 +471,7 @@ public final class ToolLoopDebug {
             return "PLAYER_ACTION_QUERY";
         }
         if (s.contains("搜索") || s.contains("查找") || s.contains("知识") || s.contains("查询")) {
-            return "KNOWLEDGE_SEARCH";
+            return "WORLDINFO_SEARCH";
         }
         if (s.contains("推演") || s.contains("sim") || s.contains("结算") || s.contains("下一回合")) {
             return "WORLD_SIM";
@@ -489,7 +489,7 @@ public final class ToolLoopDebug {
         String intent = inferUserIntent(userText);
         String desc = switch (intent) {
             case "PLAYER_ACTION_QUERY" -> "查询玩家行动记录";
-            case "KNOWLEDGE_SEARCH" -> "搜索知识库";
+            case "WORLDINFO_SEARCH" -> "搜索世界信息";
             case "WORLD_SIM" -> "世界推演";
             case "STATUS_CHECK" -> "查看状态";
             default -> "处理用户请求";

@@ -28,22 +28,22 @@ class ToolExecutionPolicyTest {
     @DisplayName("READ_ONLY 工具直接放行")
     void readOnlyToolAllowed() {
         var route = new ToolRouteDecision(
-                Set.of("root_status", "finish_action"),
+                Set.of("query_element", "finish_action"),
                 "GROUP_BASED", "test");
         var dec = policy.validateBeforeExecute(
-                "root_status", Map.of(), route, false);
+                "query_element", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
         assertTrue(dec.allowedByRoute());
     }
 
     @Test
-    @DisplayName("player_action_list (READ_ONLY) 直接放行")
-    void playerActionListAllowed() {
+    @DisplayName("node_list (READ_ONLY) 直接放行")
+    void nodeListAllowed() {
         var route = new ToolRouteDecision(
-                Set.of("player_action_list", "finish_action"),
-                "PLAYER_ACTION_QUERY", "test");
+                Set.of("node_list", "finish_action"),
+                "NODE_MGMT_QUERY", "test");
         var dec = policy.validateBeforeExecute(
-                "player_action_list", Map.of(), route, false);
+                "node_list", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -53,10 +53,10 @@ class ToolExecutionPolicyTest {
     @DisplayName("MUTATING 工具需要确认（allowAllMutations=false）")
     void mutatingToolNeedsConfirmation() {
         var route = new ToolRouteDecision(
-                Set.of("knowledge_upsert", "finish_action"),
+                Set.of("write_element", "finish_action"),
                 "KNOWLEDGE_WRITE", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, false);
+                "write_element", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
         assertEquals(ToolCategory.MUTATING, dec.category());
     }
@@ -65,25 +65,26 @@ class ToolExecutionPolicyTest {
     @DisplayName("MUTATING 工具 allowAllMutations=true 时放行")
     void mutatingToolAllowedWhenAllowAll() {
         var route = new ToolRouteDecision(
-                Set.of("knowledge_upsert", "finish_action"),
+                Set.of("write_element", "finish_action"),
                 "KNOWLEDGE_WRITE", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, true);
+                "write_element", Map.of(), route, true);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
-    // ========== DESTRUCTIVE → 永远需要确认 ==========
+    // ========== MUTATING 始终需确认（allowAllMutations=false） ==========
 
     @Test
-    @DisplayName("DESTRUCTIVE 工具永远需要确认（即使 allowAllMutations=true）")
+    @DisplayName("已知 MUTATING 工具在 allowAllMutations=false 时需确认")
     void destructiveAlwaysNeedsConfirmation() {
+        // create_checkpoint 是已知 MUTATING 工具（在 WORLD_INFO ToolGroup 中）
         var route = new ToolRouteDecision(
-                Set.of("knowledge_delete", "finish_action"),
-                "KNOWLEDGE_WRITE", "test");
+                Set.of("create_checkpoint", "finish_action"),
+                "GENERAL", "test");
         var dec = policy.validateBeforeExecute(
-                "knowledge_delete", Map.of(), route, true);
+                "create_checkpoint", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
-        assertEquals(ToolCategory.DESTRUCTIVE, dec.category());
+        assertEquals(ToolCategory.MUTATING, dec.category());
     }
 
     // ========== CONTROL (finish_action, activate_tool_groups) → ALLOW ==========
@@ -105,7 +106,7 @@ class ToolExecutionPolicyTest {
                 Set.of("activate_tool_groups", "finish_action"),
                 "GROUP_BASED", "test");
         var dec = policy.validateBeforeExecute(
-                "activate_tool_groups", Map.of("groups", "[\"player_action\"]"), route, false);
+                "activate_tool_groups", Map.of("groups", "[\"world_info\"]"), route, false);
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -115,10 +116,11 @@ class ToolExecutionPolicyTest {
     @DisplayName("工具不在 allowedTools 中 → REJECT")
     void toolNotInRouteRejected() {
         var route = new ToolRouteDecision(
-                Set.of("player_action_list", "finish_action"),
-                "PLAYER_ACTION_QUERY", "test");
+                Set.of("node_list", "finish_action"),
+                "NODE_MGMT_QUERY", "test");
+        // create_checkpoint 在 WORLD_INFO ToolGroup 中，不在 NODE_MGMT_QUERY 路由允许列表
         var dec = policy.validateBeforeExecute(
-                "knowledge_upsert", Map.of(), route, false);
+                "create_checkpoint", Map.of(), route, false);
         assertEquals(ToolExecutionDecisionType.REJECT, dec.decision());
         assertFalse(dec.allowedByRoute());
     }
@@ -142,12 +144,12 @@ class ToolExecutionPolicyTest {
     @DisplayName("拒绝重提示消息包含工具名和允许列表")
     void rejectionRepromptContainsToolNameAndAllowed() {
         var route = new ToolRouteDecision(
-                Set.of("player_action_list", "finish_action"),
-                "PLAYER_ACTION_QUERY", "test");
+                Set.of("node_list", "finish_action"),
+                "NODE_MGMT_QUERY", "test");
         var dec = ToolExecutionDecision.reject("测试拒绝", ToolCategory.MUTATING, false);
-        String reprompt = policy.buildRejectionReprompt("knowledge_upsert", dec, route);
-        assertTrue(reprompt.contains("knowledge_upsert"));
-        assertTrue(reprompt.contains("player_action_list"));
+        String reprompt = policy.buildRejectionReprompt("write_element", dec, route);
+        assertTrue(reprompt.contains("write_element"));
+        assertTrue(reprompt.contains("node_list"));
         assertTrue(reprompt.contains("finish_action"));
     }
 
@@ -156,8 +158,8 @@ class ToolExecutionPolicyTest {
     @Test
     @DisplayName("拒绝终止消息包含工具名")
     void denyStopMessageContainsToolName() {
-        String msg = policy.buildDenyStopMessage("knowledge_delete");
-        assertTrue(msg.contains("knowledge_delete"));
+        String msg = policy.buildDenyStopMessage("node_create");
+        assertTrue(msg.contains("node_create"));
         assertTrue(msg.contains("拒绝"));
     }
 }

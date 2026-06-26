@@ -299,7 +299,10 @@ public class ConsoleInteractionAdapter {
     }
 
     private void displayResult(InteractionResult result) {
-        if (!streamEnabled) {
+        // SKIP only if streaming already showed all content: success with blank or "streamed" result
+        boolean skip = streamEnabled && result.success()
+                && (result.displayText() == null || result.displayText().isBlank());
+        if (!skip) {
             if (result.displayText() != null && !result.displayText().isBlank()) out.println(result.displayText());
         }
         if (result.errors() != null && !result.errors().isEmpty())

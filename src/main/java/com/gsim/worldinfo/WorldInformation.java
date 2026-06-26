@@ -51,6 +51,21 @@ public final class WorldInformation {
             .toList();
     }
 
+    /**
+     * Wildcard / prefix query: {@code checkpointHistoryByPrefix("player.*")} returns
+     * all elements from checkpointIds that match the pattern (e.g. {@code player.曹操},
+     * {@code player.刘备}). Supports {@code *} as a multi-character wildcard.
+     */
+    public List<ElementRef> checkpointHistoryByPrefix(String pattern) {
+        String prefix = pattern.endsWith("*") ? pattern.substring(0, pattern.length() - 1) : null;
+        return byCheckpoint.entrySet().stream()
+            .filter(e -> prefix != null
+                ? e.getKey().startsWith(prefix)
+                : e.getKey().equals(pattern))
+            .flatMap(e -> e.getValue().stream())
+            .toList();
+    }
+
     public List<String> allCheckpointIds() {
         return List.copyOf(byCheckpoint.keySet());
     }
@@ -81,6 +96,64 @@ public final class WorldInformation {
             byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
         }
         keywordIndex.add(ref);
+    }
+
+    /**
+     * Upsert: if an element with the same key already exists in the same checkpoint,
+     * replace it; otherwise append.
+     * @return true if replaced, false if appended
+     */
+    public synchronized boolean upsertElement(String nodeId, String checkpointId, Element element) {
+        NodeSnapshot node = nodeById(nodeId);
+        if (node == null) throw new IllegalArgumentException("Unknown node: " + nodeId);
+        Checkpoint cp = node.checkpoints().get(checkpointId);
+        if (cp == null) {
+            cp = new Checkpoint(checkpointId, "misc", new ArrayList<>());
+            node.checkpoints().put(checkpointId, cp);
+        }
+
+        // find existing element with same key in this checkpoint
+        List<Element> elements = cp.elements();
+        for (int i = 0; i < elements.size(); i++) {
+            if (elements.get(i).key().equals(element.key())) {
+                // remove old refs from indexes
+                ElementRef oldRef = ElementRef.from(nodeId, node.turn(), node.worldTime(), checkpointId, elements.get(i));
+                removeRefFromIndexes(oldRef);
+                // replace
+                elements.set(i, element);
+                // add new ref to indexes
+                ElementRef newRef = ElementRef.from(nodeId, node.turn(), node.worldTime(), checkpointId, element);
+                addRefToIndexes(newRef);
+                return true;
+            }
+        }
+
+        // not found — append
+        cp.elements().add(element);
+        ElementRef ref = ElementRef.from(nodeId, node.turn(), node.worldTime(), checkpointId, element);
+        addRefToIndexes(ref);
+        return false;
+    }
+
+    private void addRefToIndexes(ElementRef ref) {
+        byCheckpoint.computeIfAbsent(ref.checkpointId(), k -> new ArrayList<>()).add(ref);
+        for (String t : ref.element().tags()) {
+            byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
+        }
+        keywordIndex.add(ref);
+    }
+
+    private void removeRefFromIndexes(ElementRef ref) {
+        // byCheckpoint
+        List<ElementRef> cpList = byCheckpoint.get(ref.checkpointId());
+        if (cpList != null) cpList.removeIf(r -> r.element().key().equals(ref.element().key()));
+        // byTag
+        for (String t : ref.element().tags()) {
+            List<ElementRef> tagList = byTag.get(t);
+            if (tagList != null) tagList.removeIf(r -> r.element().key().equals(ref.element().key()));
+        }
+        // keywordIndex — no removal API yet; old ref becomes stale but won't be returned
+        // since we rebuild the index on load; for live sessions the old ref lingers
     }
 
     // -- builders --

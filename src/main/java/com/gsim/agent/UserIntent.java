@@ -11,11 +11,11 @@ public enum UserIntent {
     /** 短推/复写/重写/改写已有玩家行动 */
     SHORT_POST_REWRITE,
 
-    /** 搜索知识库 */
-    KNOWLEDGE_SEARCH,
+    /** 搜索世界信息 */
+    WORLDINFO_SEARCH,
 
-    /** 写入/更新知识库 */
-    KNOWLEDGE_WRITE,
+    /** 写入/更新世界信息 */
+    WORLDINFO_WRITE,
 
     /** 结算 + 下一回合 */
     NEXT_TURN_SETTLE,
@@ -34,10 +34,10 @@ public enum UserIntent {
             "短推", "推文", "复写", "重写", "改写", "整理成推文"
     };
 
-    /** 知识写入 触发词 */
-    private static final String[] KNOWLEDGE_WRITE_TRIGGERS = {
-            "写入知识库", "记录到知识库", "保存为事实", "更新知识库",
-            "保存到知识库", "导入知识库"
+    /** 世界信息写入 触发词 */
+    private static final String[] WORLDINFO_WRITE_TRIGGERS = {
+            "写入元素", "记录到世界", "保存为事实", "更新世界信息",
+            "写入世界", "记录事实"
     };
 
     /** 结算 触发词 */
@@ -62,10 +62,10 @@ public enum UserIntent {
             }
         }
 
-        // 知识写入
-        for (String trigger : KNOWLEDGE_WRITE_TRIGGERS) {
+        // 世界信息写入
+        for (String trigger : WORLDINFO_WRITE_TRIGGERS) {
             if (lower.contains(trigger)) {
-                return KNOWLEDGE_WRITE;
+                return WORLDINFO_WRITE;
             }
         }
 
@@ -89,14 +89,14 @@ public enum UserIntent {
             return PLAYER_ACTION_QUERY;
         }
 
-        // 知识搜索
+        // 世界信息搜索
         if (lower.contains("搜索")
                 || lower.contains("查一下")
                 || lower.contains("有没有关于")
                 || lower.contains("知不知道")
                 || lower.contains("wiki")
                 || lower.contains("资料")) {
-            return KNOWLEDGE_SEARCH;
+            return WORLDINFO_SEARCH;
         }
 
         return GENERAL;

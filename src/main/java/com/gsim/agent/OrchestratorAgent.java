@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.gsim.agent.core.AbstractAgent;
@@ -62,13 +61,10 @@ public class OrchestratorAgent extends AbstractAgent {
     private final ToolGroupManager groupManager;
 
     /** Agent ToolLoop 最大工具轮数（默认 32，≥1，可由 setter 注入覆盖）。 */
-    private volatile int maxToolRounds = 32;
+    private volatile int maxToolRounds = 64;
 
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
-
-    /** ESC 取消标志。由 ConsoleInteractionAdapter 在检测到 ESC 时设置，ToolLoop 各检查点读取。 */
-    private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
     /** 工具结果溢出保护（null = 未启用）。 */
     private volatile ToolResultCompactor toolResultCompactor;
@@ -79,6 +75,8 @@ public class OrchestratorAgent extends AbstractAgent {
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
     /** SubAgent ID 计数器。 */
     private final AtomicInteger subAgentCounter = new AtomicInteger(0);
+    /** AgentFactory 引用（用于 ESC 时取消所有子代理）。 */
+    private AgentFactory agentFactory;
 
     /** 返回工具组管理器（供 NodeAgentChatService 和测试使用）。 */
     public ToolGroupManager groupManager() {
@@ -90,6 +88,7 @@ public class OrchestratorAgent extends AbstractAgent {
      * 由 GSimulatorApplication 在构造后调用。
      */
     public void registerSubAgentTools(ToolRegistry registry, AgentFactory agentFactory) {
+        this.agentFactory = agentFactory;
         registry.register(new DispatchSubAgentTool(
                 llmManager, toolRegistry, model, progressSink,
                 runningSubAgents, subAgentCounter, agentFactory));
@@ -185,19 +184,14 @@ public class OrchestratorAgent extends AbstractAgent {
         this.toolResultThreshold = Math.max(500, threshold);
     }
 
-    /** 设置取消标志（ESC 中断当前 ToolLoop）。 */
+    /** 取消当前 ToolLoop 及所有正在运行的 SubAgent（ESC / Ctrl+C）。 */
+    @Override
     public void cancel() {
-        cancelRequested.set(true);
-    }
-
-    /** 清除取消标志（新一轮对话开始前）。 */
-    public void resetCancel() {
-        cancelRequested.set(false);
-    }
-
-    /** 查询是否已请求取消。 */
-    public boolean isCancelRequested() {
-        return cancelRequested.get();
+        super.cancel();
+        // 取消所有子代理：直接设置 cancelRequested 标志（比 future.cancel 更可靠）
+        if (agentFactory != null) {
+            agentFactory.cancelAll();
+        }
     }
 
     /**

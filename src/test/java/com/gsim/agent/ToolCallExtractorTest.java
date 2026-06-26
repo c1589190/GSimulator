@@ -65,9 +65,9 @@ class ToolCallExtractorTest {
     @Test
     void toolCallWithArgs() {
         var result = ToolCallExtractor.extractFirstToolCall(
-                "{\"tool\":\"knowledge_upsert\",\"args\":{\"title\":\"Test\",\"content\":\"Hello\"}}");
+                "{\"tool\":\"write_element\",\"args\":{\"title\":\"Test\",\"content\":\"Hello\"}}");
         assertNotNull(result);
-        assertEquals("knowledge_upsert", result.tool());
+        assertEquals("write_element", result.tool());
         assertEquals("Test", result.args().get("title"));
         assertEquals("Hello", result.args().get("content"));
     }

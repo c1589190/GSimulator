@@ -219,7 +219,7 @@ class CliStreamPreviewRendererTest {
         assertNotNull(CliAgentProgressSink.format(
                 AgentProgressEvent.waitingLlm(1, 32)));
         assertNotNull(CliAgentProgressSink.format(
-                AgentProgressEvent.toolSelected(1, 32, "knowledge_search")));
+                AgentProgressEvent.toolSelected(1, 32, "query_keyword")));
 
         String pubMsg = CliAgentProgressSink.format(
                 AgentProgressEvent.publicMessage("Hello world"));

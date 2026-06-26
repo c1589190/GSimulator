@@ -19,7 +19,6 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
 
     static {
         try {
-            // 通过 classpath 定位文件
             Path promptPath = Path.of("src/main/resources/gsim/prompts/orchestrator-system.md");
             promptContent = Files.readString(promptPath);
         } catch (IOException e) {
@@ -37,7 +36,6 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
     @Test
     @DisplayName("不包含旧 /sim 独占指令")
     void noLegacySimInstruction() {
-        // "/sim 时……" 这种独占指令不应出现
         assertFalse(promptContent.contains("/sim 时"),
                 "不应有 /sim 独占指令，已改为统一 Agent 入口");
     }
@@ -83,7 +81,6 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
     @Test
     @DisplayName("应包含工具调用规则不冲突")
     void hasConsistentToolCallingRules() {
-        // "当需要调用工具时" (旧) 或 "API tool_calls 调用工具" (新)
         boolean hasWhenNeeded = promptContent.contains("当需要调用工具时")
                 || promptContent.contains("API tool_calls 调用工具")
                 || promptContent.contains("工具调用 JSON")
@@ -114,15 +111,28 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
     }
 
     @Test
-    @DisplayName("应说明 knowledge_search 无 embedding 时改用 keyword_search")
-    void hasKnowledgeFallbackInstruction() {
+    @DisplayName("应包含 WorldInfo 查询格式 nodeId:checkpointId:key")
+    void hasWorldInfoQueryFormat() {
         assertTrue(
-                promptContent.contains("NO_ACTIVE_EMBEDDING_PROFILE") ||
-                        promptContent.contains("NO_EMBEDDINGS_FOR_PROFILE"),
-                "应提到 NO_ACTIVE_EMBEDDING_PROFILE / NO_EMBEDDINGS_FOR_PROFILE 错误码");
-        assertTrue(
-                promptContent.contains("改用 keyword_search") ||
-                        promptContent.contains("keyword_search"),
-                "应说明无 embedding 时可改用 keyword_search");
+                promptContent.contains("nodeId:checkpointId:key"),
+                "应包含 WorldInfo nodeId:checkpointId:key 查询格式说明");
+    }
+
+    @Test
+    @DisplayName("应包含 query_element 和 write_element 工具说明")
+    void hasWorldInfoToolDescriptions() {
+        assertTrue(promptContent.contains("query_element"),
+                "应包含 query_element 工具说明");
+        assertTrue(promptContent.contains("write_element"),
+                "应包含 write_element 工具说明");
+    }
+
+    @Test
+    @DisplayName("应包含节点管理工具说明")
+    void hasNodeManagementTools() {
+        assertTrue(promptContent.contains("node_create"),
+                "应包含 node_create 工具说明");
+        assertTrue(promptContent.contains("node_switch"),
+                "应包含 node_switch 工具说明");
     }
 }

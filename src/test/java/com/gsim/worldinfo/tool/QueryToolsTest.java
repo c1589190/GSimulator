@@ -45,6 +45,16 @@ class QueryToolsTest {
     }
 
     @Test
+    void queryCheckpointWildcardReturnsAllMatching() {
+        var tool = new QueryCheckpointTool(() -> wi);
+        ToolResult r = tool.execute(new ToolCall("query_checkpoint", Map.of("checkpointId", "player.*")));
+
+        assertTrue(r.success());
+        assertEquals(1, r.items().size()); // player.曹操
+        assertTrue(r.items().get(0).snippet().contains("陈留"));
+    }
+
+    @Test
     void queryCheckpointMissingIdFails() {
         var tool = new QueryCheckpointTool(() -> wi);
         ToolResult r = tool.execute(new ToolCall("query_checkpoint", Map.of()));
@@ -69,6 +79,29 @@ class QueryToolsTest {
 
         assertTrue(r.success());
         assertEquals(1, r.items().size());
+    }
+
+    @Test
+    void queryKeywordWithCheckpointFilter() {
+        var tool = new QueryKeywordTool(() -> wi);
+        // "中原" keyword exists in "worldview" checkpoint
+        ToolResult r = tool.execute(new ToolCall("query_keyword",
+            Map.of("keywords", "中原", "checkpointId", "worldview")));
+
+        assertTrue(r.success());
+        assertEquals(1, r.items().size());
+        assertTrue(r.items().get(0).path().contains("n0000"));
+    }
+
+    @Test
+    void queryKeywordCheckpointFilterExcludesNonMatching() {
+        var tool = new QueryKeywordTool(() -> wi);
+        // "曹操" keyword exists in "player.曹操" and "narrative" but not "worldview"
+        ToolResult r = tool.execute(new ToolCall("query_keyword",
+            Map.of("keywords", "曹操", "checkpointId", "worldview")));
+
+        assertTrue(r.success());
+        assertEquals(0, r.items().size());
     }
 
     @Test

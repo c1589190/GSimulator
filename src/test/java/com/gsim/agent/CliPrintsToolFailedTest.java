@@ -17,8 +17,8 @@ class CliPrintsToolFailedTest {
     @DisplayName("TOOL_FAILED 输出工具名和失败原因")
     void toolFailedShowsNameAndReason() {
         var event = new AgentProgressEvent(
-                AgentProgressEvent.TOOL_FAILED, 2, 8, "工具失败：knowledge_upsert",
-                Map.of("tool", "knowledge_upsert", "error", "title 不能为空"));
+                AgentProgressEvent.TOOL_FAILED, 2, 8, "工具失败：write_element",
+                Map.of("tool", "write_element", "error", "title 不能为空"));
 
         String formatted = CliAgentProgressSink.format(event);
 
@@ -27,7 +27,7 @@ class CliPrintsToolFailedTest {
                 "Should have [Agent] prefix: " + formatted);
         assertTrue(formatted.contains("工具失败"),
                 "Should mention tool failure: " + formatted);
-        assertTrue(formatted.contains("knowledge_upsert"),
+        assertTrue(formatted.contains("write_element"),
                 "Should include tool name: " + formatted);
         assertTrue(formatted.contains("title 不能为空"),
                 "Should include error reason: " + formatted);

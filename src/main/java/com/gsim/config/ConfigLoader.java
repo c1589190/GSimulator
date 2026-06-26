@@ -276,33 +276,18 @@ public class ConfigLoader {
 
         defaults.put("data.dir", "data");
         defaults.put("import.dir", "import");
-        defaults.put("output.dir", "data/outputs");
-        defaults.put("log.dir", "data/logs");
-
-        defaults.put("chroma.enabled", "false");
-        defaults.put("chroma.base_url", "http://localhost:8000");
-
-        defaults.put("web_research.enabled", "false");
-        defaults.put("web_research.timeout_seconds", "30");
-        defaults.put("web_research.user_agent", "GSimulator/0.1.0 (research-bot)");
+        defaults.put("worlds.dir", "worlds");
 
         defaults.put("api.host", "127.0.0.1");
         defaults.put("api.port", "8710");
         defaults.put("api.enabled", "false");
-
-        defaults.put("embedding.provider", "");
-        defaults.put("embedding.base_url", "");
-        defaults.put("embedding.api_key", "");
-        defaults.put("embedding.model", "");
-        defaults.put("embedding.dimensions", "");
-        defaults.put("embedding.model_dir", "data/models/local-small");
 
         defaults.put("bootstrap.root.llm.enabled", "false");
 
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");
 
-        defaults.put("agent.tool_loop.max_rounds", "32");
+        defaults.put("agent.tool_loop.max_rounds", "64");
 
         defaults.put("llm.stream.enabled", "true");
         defaults.put("cli.stream.preview.enabled", "true");

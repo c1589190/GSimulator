@@ -35,48 +35,46 @@ class ToolGroupManagerTest {
         assertEquals(ToolGroup.DEFAULT_TOOLS, tools);
         assertTrue(tools.contains("finish_action"));
         assertTrue(tools.contains("activate_tool_groups"));
-        assertTrue(tools.contains("branch_path"));
-        assertTrue(tools.contains("branch_node_get"));
-        assertTrue(tools.contains("branch_list"));
-        assertTrue(tools.contains("root_status"));
+        assertTrue(tools.contains("dispatch_sub_agent"));
+        assertTrue(tools.contains("collect_sub_agent_results"));
     }
 
     @Test
     @DisplayName("activate 单个组后 computeAllowedTools 包含默认工具 + 该组成员")
     void activateSingleGroup() {
-        mgr.activate("player_action");
+        mgr.activate("world_info");
         assertTrue(mgr.hasActiveGroups());
-        assertEquals(Set.of("player_action"), mgr.activeGroupKeys());
+        assertEquals(Set.of("world_info"), mgr.activeGroupKeys());
 
         Set<String> tools = mgr.computeAllowedTools();
         assertTrue(tools.containsAll(ToolGroup.DEFAULT_TOOLS));
-        assertTrue(tools.containsAll(ToolGroup.PLAYER_ACTION.memberTools()));
-        assertTrue(tools.contains("player_action_list"));
-        assertTrue(tools.contains("player_action_get"));
-        assertTrue(tools.contains("player_action_append"));
+        assertTrue(tools.containsAll(ToolGroup.WORLD_INFO.memberTools()));
+        assertTrue(tools.contains("query_element"));
+        assertTrue(tools.contains("query_node"));
+        assertTrue(tools.contains("write_element"));
     }
 
     @Test
     @DisplayName("activate 多个组后 computeAllowedTools 包含所有成员")
     void activateMultipleGroups() {
-        mgr.activate("player_action");
-        mgr.activate("knowledge");
+        mgr.activate("world_info");
+        mgr.activate("import_doc");
 
         Set<String> tools = mgr.computeAllowedTools();
         assertTrue(tools.containsAll(ToolGroup.DEFAULT_TOOLS));
-        assertTrue(tools.containsAll(ToolGroup.PLAYER_ACTION.memberTools()));
-        assertTrue(tools.containsAll(ToolGroup.KNOWLEDGE.memberTools()));
-        assertTrue(tools.contains("player_action_list"));
-        assertTrue(tools.contains("knowledge_search"));
-        assertTrue(tools.contains("knowledge_upsert"));
+        assertTrue(tools.containsAll(ToolGroup.WORLD_INFO.memberTools()));
+        assertTrue(tools.containsAll(ToolGroup.IMPORT_DOC.memberTools()));
+        assertTrue(tools.contains("query_element"));
+        assertTrue(tools.contains("import_document_list"));
+        assertTrue(tools.contains("import_document_search"));
     }
 
     @Test
     @DisplayName("activate 同一组多次是幂等的")
     void activateSameGroupIdempotent() {
-        mgr.activate("player_action");
-        mgr.activate("player_action");
-        mgr.activate("player_action");
+        mgr.activate("world_info");
+        mgr.activate("world_info");
+        mgr.activate("world_info");
         assertEquals(1, mgr.activeGroupKeys().size());
     }
 
@@ -91,8 +89,8 @@ class ToolGroupManagerTest {
     @Test
     @DisplayName("reset 清除所有激活组")
     void resetClearsAll() {
-        mgr.activate("player_action");
-        mgr.activate("knowledge");
+        mgr.activate("world_info");
+        mgr.activate("import_doc");
         assertTrue(mgr.hasActiveGroups());
 
         mgr.reset();
@@ -102,11 +100,11 @@ class ToolGroupManagerTest {
     }
 
     @Test
-    @DisplayName("createWithAllGroupsActivated 预激活全部 10 组")
+    @DisplayName("createWithAllGroupsActivated 预激活全部 4 组")
     void createWithAllGroupsActivated() {
         ToolGroupManager allMgr = ToolGroupManager.createWithAllGroupsActivated();
         assertTrue(allMgr.hasActiveGroups());
-        assertEquals(10, allMgr.activeGroupKeys().size());
+        assertEquals(4, allMgr.activeGroupKeys().size());
 
         Set<String> tools = allMgr.computeAllowedTools();
         assertTrue(tools.containsAll(ToolGroup.DEFAULT_TOOLS));
@@ -138,21 +136,20 @@ class ToolGroupManagerTest {
     @Test
     @DisplayName("activeGroupKeys 返回不可变快照")
     void activeGroupKeysReturnsSnapshot() {
-        mgr.activate("player_action");
+        mgr.activate("world_info");
         Set<String> keys = mgr.activeGroupKeys();
-        assertThrows(UnsupportedOperationException.class, () -> keys.add("knowledge"));
+        assertThrows(UnsupportedOperationException.class, () -> keys.add("import_doc"));
     }
 
     @Test
     @DisplayName("computeAllowedTools 返回的集合包含 DEFAULT_TOOLS 中所有工具名")
     void defaultToolsAreAlwaysPresent() {
-        mgr.activate("knowledge"); // 只激活 knowledge 组
+        mgr.activate("import_doc"); // 只激活 import_doc 组
         Set<String> tools = mgr.computeAllowedTools();
         for (String dt : ToolGroup.DEFAULT_TOOLS) {
             assertTrue(tools.contains(dt), "默认工具 " + dt + " 应始终包含");
         }
-        assertTrue(tools.contains("knowledge_search"));
-        assertTrue(tools.contains("keyword_search"),
-                "keyword_search 应在 knowledge 组中，作为 knowledge_search 的降级方案");
+        assertTrue(tools.contains("import_document_search"));
+        assertTrue(tools.contains("import_document_list"));
     }
 }

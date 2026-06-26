@@ -53,7 +53,7 @@ class CliProgressShowsSelectedToolTest {
     @Test
     @DisplayName("输出行长度 ≤ 120 chars")
     void outputLineWithinReasonableLength() {
-        var event = AgentProgressEvent.toolSelected(1, 5, "knowledge_search");
+        var event = AgentProgressEvent.toolSelected(1, 5, "query_keyword");
         String line = CliAgentProgressSink.format(event);
         assertNotNull(line);
         assertTrue(line.length() <= 120,

@@ -112,6 +112,13 @@ public class DispatchSubAgentTool implements AgentTool {
         // 使用 AgentFactory 创建并启动子代理
         String agentId = agentFactory.dispatch(type, prompt, parentTaskId, parentSessionId);
 
+        // 从 AgentFactory 取出 future 放入 OrchestratorAgent 的 runningSubAgents map
+        // (CollectSubAgentResultsTool 从此 map 读取，两者必须共享同一引用)
+        java.util.concurrent.CompletableFuture<AgentResult> future = agentFactory.running().get(agentId);
+        if (future != null) {
+            runningSubAgents.put(agentId, future);
+        }
+
         log.info("[DispatchSubAgent] created {} (type={}, promptLen={})",
                 agentId, type, prompt.length());
 

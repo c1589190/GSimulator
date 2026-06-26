@@ -5,6 +5,12 @@ import com.gsim.app.ApplicationContext;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
+import com.gsim.session.CliNodeRenderer;
+import com.gsim.session.NodeStatus;
+import com.gsim.session.NodeType;
+import com.gsim.session.SessionNode;
+import com.gsim.session.SessionNodeListener;
+import com.gsim.session.SessionPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +41,7 @@ public class CliWebSocketServer {
     private final ApplicationContext ctx;
     private final int port;
     private final CompositeAgentProgressSink compositeSink;
+    private final SessionPool sessionPool;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private volatile ServerSocket serverSocket;
     private volatile boolean running;
@@ -49,6 +56,7 @@ public class CliWebSocketServer {
         this.ctx = ctx;
         this.port = port;
         this.compositeSink = compositeSink;
+        this.sessionPool = ctx.getSessionPool();
     }
 
     public void start() throws IOException {
@@ -99,6 +107,41 @@ public class CliWebSocketServer {
                 return;
             }
 
+            // CLI 渲染器 — WebSocket 不需要 ANSI
+            CliNodeRenderer renderer = new CliNodeRenderer(false);
+
+            // 订阅 SessionPool，实时推送节点事件到 WebSocket
+            SessionNodeListener poolListener = new SessionNodeListener() {
+                @Override
+                public void onNodePushed(SessionNode node) {
+                    String line = renderer.renderPushed(node);
+                    if (line != null && !line.isEmpty()) {
+                        try { sendWs(out, line); } catch (IOException e) { /* ignore */ }
+                    }
+                    if (node.type() == NodeType.LLM_STREAMING) {
+                        try { sendWs(out, renderer.startLlmStream()); } catch (IOException e) {}
+                    }
+                }
+
+                @Override
+                public void onNodeUpdated(SessionNode node, String key, Object newValue) {
+                    if ("content".equals(key) && newValue instanceof String delta) {
+                        String rendered = renderer.renderContentDelta(delta);
+                        if (rendered != null) {
+                            try { sendWs(out, rendered); } catch (IOException e) {}
+                        }
+                    }
+                }
+
+                @Override
+                public void onStatusChanged(SessionNode node, NodeStatus oldStatus, NodeStatus newStatus) {
+                    if (node.type() == NodeType.LLM_STREAMING && newStatus == NodeStatus.DONE) {
+                        try { sendWs(out, renderer.endLlmStream(true)); } catch (IOException e) {}
+                    }
+                }
+            };
+            sessionPool.subscribe("default", poolListener);
+
             // 发送欢迎消息
             sendWs(out, exec("/help"));
 
@@ -114,7 +157,11 @@ public class CliWebSocketServer {
                     break;
                 }
 
-                // 创建临时 progress sink 用于实时推送事件
+                // 推入用户输入节点
+                sessionPool.pushNode("default", NodeType.USER_INPUT,
+                        Map.of("text", cmd, "source", "websocket"));
+
+                // 创建临时 progress sink 用于实时推送事件（保持兼容）
                 CliWsProgressSink ps = new CliWsProgressSink(out);
                 compositeSink.addSink(ps);
 

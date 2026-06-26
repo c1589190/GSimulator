@@ -49,7 +49,8 @@ public final class QueryNodeTool implements AgentTool {
             var cp = entry.getValue();
             for (var el : cp.elements()) {
                 items.add(new ToolResult.Item(
-                    el.key(), cpId + " (" + cp.label() + ")",
+                    el.key(),
+                    nodeId + ":" + cpId + ":" + el.key(),
                     el.value(), 1.0));
             }
         }

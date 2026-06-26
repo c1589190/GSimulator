@@ -22,24 +22,32 @@ class AgentToolLoopMaxRoundsConfigTest {
     Path tempDir;
 
     @Test
-    @DisplayName("agent.tool_loop.max_rounds 默认值 = 32")
-    void defaultMaxRoundsIs32() {
+    @DisplayName("agent.tool_loop.max_rounds 默认值 = 64")
+    void defaultMaxRoundsIs64() {
         ConfigLoader loader = new ConfigLoader(new String[]{});
         ConfigLoader.ConfigResult result = loader.load();
 
         ConfigLoader.ConfigEntry entry = result.entries().get("agent.tool_loop.max_rounds");
         assertNotNull(entry, "agent.tool_loop.max_rounds should exist in defaults");
         if (entry.source() == ConfigSource.DEFAULT) {
-            assertEquals("32", entry.value());
+            assertEquals("64", entry.value());
         }
     }
 
     @Test
-    @DisplayName("AppConfig.getAgentToolLoopMaxRounds() 默认返回 32")
-    void appConfigDefaultMaxRounds() {
-        ConfigLoader loader = new ConfigLoader(new String[]{});
+    @DisplayName("AppConfig.getAgentToolLoopMaxRounds() 默认返回 64")
+    void appConfigDefaultMaxRounds() throws IOException {
+        // 显式设置 agent.tool_loop.max_rounds=64，因为 ConfigLoader 在 --config 之后
+        // 还会加载 CWD 的 gsim.properties（可能被用户修改），后者优先级更高。
+        Path propsFile = tempDir.resolve("default-max.properties");
+        writeFile(propsFile,
+                "llm.base_url=https://api.example.com/v1\n" +
+                        "llm.api_key=sk-test\n" +
+                        "llm.model=m\n" +
+                        "agent.tool_loop.max_rounds=64\n");
+        ConfigLoader loader = new ConfigLoader(new String[]{"--config", propsFile.toString()});
         AppConfig config = new AppConfig(loader.load());
-        assertEquals(32, config.getAgentToolLoopMaxRounds());
+        assertEquals(64, config.getAgentToolLoopMaxRounds());
     }
 
     @Test
