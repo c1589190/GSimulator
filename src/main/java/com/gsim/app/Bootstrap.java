@@ -62,7 +62,7 @@ public final class Bootstrap {
         contextRenderer = new ContextRenderer(promptsDir);
 
         // 6. Load Orchestrator cache, or create new
-        String orchestratorSession = ActiveStateManager.orchestratorSession(active);
+        String orchestratorSession = active != null ? ActiveStateManager.orchestratorSession(active) : null;
         if (orchestratorSession != null) {
             activeCache = CacheStore.load(worldsDir, worldId, orchestratorSession);
         }
