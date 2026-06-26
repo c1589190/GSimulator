@@ -117,62 +117,48 @@ public class CliAgentProgressSink implements AgentProgressSink {
         };
     }
 
-    /** 格式化非流式事件为简短状态行。保证长度 ≤ 120 chars。 */
+    /** 格式化非流式事件为简短状态行。仅输出错误、公开消息、被拒绝的 finish_action。 */
     static String format(AgentProgressEvent event) {
         if (event == null) return null;
         return switch (event.phase()) {
-            case AgentProgressEvent.CONTEXT_LOADED -> {
-                int chars = parseIntMeta(event.meta(), "requestChars");
-                int tools = parseIntMeta(event.meta(), "toolCount");
-                String activeBranch = event.meta().getOrDefault("activeBranch", "");
-                String contextMode = event.meta().getOrDefault("contextMode", "");
-                yield "[Agent] 上下文：activeBranch=" + activeBranch
-                        + "，mode=" + contextMode
-                        + "，requestChars=" + chars
-                        + "，tools=" + tools + " 个";
-            }
-            case AgentProgressEvent.WAITING_LLM ->
-                    "[Agent] 正在等待 LLM 选择工具……";
-            case AgentProgressEvent.TOOL_SELECTED -> {
-                String tool = event.meta().getOrDefault("tool", "");
-                yield "[Agent] LLM 选择工具：" + tool;
-            }
-            case AgentProgressEvent.TOOL_EXECUTING -> {
-                String tool = event.meta().getOrDefault("tool", "");
-                yield "[Agent] 正在执行工具：" + tool;
-            }
-            case AgentProgressEvent.TOOL_SUCCESS -> {
-                String tool = event.meta().getOrDefault("tool", "");
-                yield "[Agent] 工具成功：" + tool;
-            }
+            // ── 错误/异常（终端可见） ──
             case AgentProgressEvent.TOOL_FAILED -> {
                 String tool = event.meta().getOrDefault("tool", "");
                 String error = event.meta().getOrDefault("error", "");
                 yield "[Agent] 工具失败：" + tool + (error.isBlank() ? "" : "，原因：" + error);
             }
-            case AgentProgressEvent.AWAITING_TOOL_CONFIRMATION ->
-                    "[Agent] 等待确认：" + event.detail();
-            case AgentProgressEvent.AWAITING_FINISH_ACTION ->
-                    "[Agent] 正在让 LLM 根据工具结果生成 finish_action……";
-            case AgentProgressEvent.PLAIN_ANSWER_WITHOUT_FINISH ->
-                    "[Agent] " + event.detail();
-            case AgentProgressEvent.INVALID_BRACKET_INTENT ->
-                    "[Agent] " + event.detail();
-            case AgentProgressEvent.FINISH_ACTION_REJECTED ->
-                    "[Agent] finish_action 被拒绝：" + reasonText(
-                            event.meta().getOrDefault("rejectReason", ""));
-            case AgentProgressEvent.FINISH_ACTION_ACCEPTED ->
-                    null;
-            case AgentProgressEvent.AGENT_PUBLIC_MESSAGE ->
-                    event.detail();
+            case AgentProgressEvent.LLM_STREAM_FAILED -> {
+                String error = event.meta().getOrDefault("error", "未知错误");
+                yield "[Agent] LLM 流式输出失败: " + error;
+            }
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
-            case AgentProgressEvent.LLM_STREAM_STARTED,
+
+            // ── 公开消息/推演内容（终端可见） ──
+            case AgentProgressEvent.AGENT_PUBLIC_MESSAGE ->
+                    event.detail();
+
+            // ── finish_action 拒绝（终端可见，用户需知晓） ──
+            case AgentProgressEvent.FINISH_ACTION_REJECTED ->
+                    "[Agent] finish_action 被拒绝："
+                            + reasonText(event.meta().getOrDefault("rejectReason", ""));
+
+            // ── 以下事件静默（写入 toolloop.log / debug.log，不打印到终端） ──
+            case AgentProgressEvent.CONTEXT_LOADED,
+                 AgentProgressEvent.WAITING_LLM,
+                 AgentProgressEvent.TOOL_SELECTED,
+                 AgentProgressEvent.TOOL_EXECUTING,
+                 AgentProgressEvent.TOOL_SUCCESS,
+                 AgentProgressEvent.AWAITING_TOOL_CONFIRMATION,
+                 AgentProgressEvent.AWAITING_FINISH_ACTION,
+                 AgentProgressEvent.PLAIN_ANSWER_WITHOUT_FINISH,
+                 AgentProgressEvent.INVALID_BRACKET_INTENT,
+                 AgentProgressEvent.FINISH_ACTION_ACCEPTED,
+                 AgentProgressEvent.LLM_STREAM_STARTED,
                  AgentProgressEvent.LLM_CONTENT_DELTA,
                  AgentProgressEvent.LLM_REASONING_DELTA,
                  AgentProgressEvent.LLM_TOOL_CALL_DELTA,
-                 AgentProgressEvent.LLM_STREAM_COMPLETED,
-                 AgentProgressEvent.LLM_STREAM_FAILED -> null;
+                 AgentProgressEvent.LLM_STREAM_COMPLETED -> null;
             default -> null;
         };
     }
@@ -209,26 +195,13 @@ public class CliAgentProgressSink implements AgentProgressSink {
         return agentId.matches("^(sim|search)-\\d+$");
     }
 
-    /** 处理 SubAgent 事件 — 流式内容折叠为状态行，工具调用显示简短信息。 */
+    /** 处理 SubAgent 事件 — 仅错误输出到终端。 */
     private void handleSubAgentEvent(AgentProgressEvent event, String agentId) {
         switch (event.phase()) {
-            case AgentProgressEvent.LLM_STREAM_STARTED -> {
-                if (subAgentSeen.add(agentId)) {
-                    out.println(ANSI_GREY + "[SubAgent " + agentId + "] working..." + ANSI_RESET);
-                }
-            }
-            case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
-                subAgentSeen.remove(agentId);
-                out.println(ANSI_GREY + "[SubAgent " + agentId + "] done" + ANSI_RESET);
-            }
             case AgentProgressEvent.LLM_STREAM_FAILED -> {
                 subAgentSeen.remove(agentId);
                 String error = event.meta().getOrDefault("error", "unknown");
                 out.println("[SubAgent " + agentId + "] failed: " + error);
-            }
-            case AgentProgressEvent.TOOL_SUCCESS -> {
-                String tool = event.meta().getOrDefault("tool", "");
-                out.println(ANSI_GREY + "[SubAgent " + agentId + "] tool: " + tool + ANSI_RESET);
             }
             case AgentProgressEvent.TOOL_FAILED -> {
                 String tool = event.meta().getOrDefault("tool", "");
@@ -236,7 +209,7 @@ public class CliAgentProgressSink implements AgentProgressSink {
                 out.println("[SubAgent " + agentId + "] tool failed: " + tool
                         + (error.isBlank() ? "" : " — " + error));
             }
-            // 所有其他事件（含 LLM_CONTENT_DELTA / LLM_REASONING_DELTA）静默丢弃
+            // 所有其他事件静默（写入日志文件但不打印到终端）
             default -> {}
         }
     }

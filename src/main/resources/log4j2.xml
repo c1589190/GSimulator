@@ -66,24 +66,46 @@
     </Appenders>
 
     <Loggers>
-        <!-- ToolLoop 调试：agent 包 DEBUG → toolloop.log；CONSOLE 仅 INFO+ -->
+        <!-- ToolLoop 调试：agent 包 DEBUG → toolloop.log；CONSOLE 仅 WARN+ -->
         <Logger name="com.gsim.agent" level="DEBUG" additivity="false">
             <AppenderRef ref="TOOLLOOP_LOG"/>
             <AppenderRef ref="DEBUG_LOG"/>
-            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="CONSOLE" level="WARN"/>
         </Logger>
 
-        <!-- LLM 调试：llm 包 DEBUG → llm.log；CONSOLE 仅 INFO+ -->
+        <!-- LLM 调试：llm 包 DEBUG → llm.log；CONSOLE 仅 WARN+ -->
         <Logger name="com.gsim.llm" level="DEBUG" additivity="false">
             <AppenderRef ref="LLM_LOG"/>
             <AppenderRef ref="DEBUG_LOG"/>
-            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="CONSOLE" level="WARN"/>
         </Logger>
 
-        <!-- 统一 debug 汇总：com.gsim 包 DEBUG+ → debug.log；CONSOLE/MAIN_LOG 仅 INFO+ -->
-        <Logger name="com.gsim" level="DEBUG" additivity="false">
+        <!-- app/event/webui 包保持 INFO 输出到控制台（启动信息、错误等） -->
+        <Logger name="com.gsim.app" level="INFO" additivity="false">
             <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="MAIN_LOG" level="INFO"/>
+        </Logger>
+        <Logger name="com.gsim.event" level="INFO" additivity="false">
+            <AppenderRef ref="DEBUG_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="MAIN_LOG" level="INFO"/>
+        </Logger>
+        <Logger name="com.gsim.api" level="INFO" additivity="false">
+            <AppenderRef ref="DEBUG_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="MAIN_LOG" level="INFO"/>
+        </Logger>
+        <Logger name="com.gsim.webui" level="INFO" additivity="false">
+            <AppenderRef ref="DEBUG_LOG"/>
+            <AppenderRef ref="CONSOLE" level="INFO"/>
+            <AppenderRef ref="MAIN_LOG" level="INFO"/>
+        </Logger>
+
+        <!-- 统一 com.gsim 包 DEBUG → debug.log；CONSOLE 仅 WARN+（静默所有调试/信息日志） -->
+        <Logger name="com.gsim" level="DEBUG" additivity="false">
+            <AppenderRef ref="DEBUG_LOG"/>
+            <AppenderRef ref="CONSOLE" level="WARN"/>
             <AppenderRef ref="MAIN_LOG" level="INFO"/>
         </Logger>
 

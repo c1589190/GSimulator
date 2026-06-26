@@ -201,30 +201,40 @@ class CliStreamPreviewRendererTest {
     // ---- format 测试 ----
 
     @Test
-    @DisplayName("format 对 LLM_STREAM 事件返回 null（由 handleStreamEvent 处理）")
+    @DisplayName("format 对 LLM_STREAM 事件返回 null（由 handleStreamEvent 处理），FAILED 除外")
     void formatReturnsNullForStreamEvents() {
         assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmStreamStarted("x")));
         assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmContentDelta("x", "y")));
         assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmReasoningDelta("x", "y")));
         assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmToolCallDelta("x")));
         assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmStreamCompleted("x")));
-        assertNull(CliAgentProgressSink.format(AgentProgressEvent.llmStreamFailed("x", "e")));
+        // LLM_STREAM_FAILED now returns non-null (error visible on terminal)
+        assertNotNull(CliAgentProgressSink.format(AgentProgressEvent.llmStreamFailed("x", "e")));
     }
 
     @Test
-    @DisplayName("format 对原有事件保持不变")
-    void formatPreservesExistingEvents() {
-        assertNotNull(CliAgentProgressSink.format(
+    @DisplayName("format quiet mode: 常规进度事件 null，公开消息/错误非 null")
+    void formatQuietModePreservesErrorsAndMessages() {
+        // Quiet: context/selection/execution/success → null
+        assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.contextLoaded(1, 32, 5000, 3)));
-        assertNotNull(CliAgentProgressSink.format(
+        assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.waitingLlm(1, 32)));
-        assertNotNull(CliAgentProgressSink.format(
+        assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.toolSelected(1, 32, "query_keyword")));
+        assertNull(CliAgentProgressSink.format(
+                AgentProgressEvent.toolSuccess(1, 32, "query_keyword")));
 
+        // Visible: public message
         String pubMsg = CliAgentProgressSink.format(
                 AgentProgressEvent.publicMessage("Hello world"));
         assertEquals("Hello world", pubMsg);
 
+        // Visible: tool failed
+        assertNotNull(CliAgentProgressSink.format(
+                AgentProgressEvent.toolFailed(1, 32, "bad", "err")));
+
+        // Quiet: finish accepted
         assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.finishAccepted(1, 32)));
     }
@@ -348,20 +358,20 @@ class CliStreamPreviewRendererTest {
         ps.flush();
         assertTrue(baos.toString().contains("\033[90m"), "渲染后应有 ANSI 灰框输出");
 
-        // sink 处理非流式事件 — 不再清除灰框
+        // sink 处理错误事件 — 不依赖 renderer
         var sink = new CliAgentProgressSink(ps, true);
-        var event = AgentProgressEvent.plainAnswerWithoutFinish(2, 10);
+        var event = AgentProgressEvent.toolFailed(2, 10, "bad_tool", "error msg");
         sink.onProgress(event);
 
         String output = baos.toString();
-        assertTrue(output.contains("[Agent]"), "非流式事件后应格式化 [Agent] 行");
+        assertTrue(output.contains("[Agent]"), "错误事件应格式化 [Agent] 行: " + output);
     }
 
     @Test
-    @DisplayName("无 renderer 时非流式事件也正常处理")
+    @DisplayName("无 renderer 时错误事件也正常处理")
     void nonStreamEventsNormalWithoutRenderer() {
         CliAgentProgressSink sink = new CliAgentProgressSink(ps, true);
-        var event = AgentProgressEvent.plainAnswerWithoutFinish(2, 10);
+        var event = AgentProgressEvent.toolFailed(2, 10, "bad_tool", "error msg");
         assertDoesNotThrow(() -> sink.onProgress(event));
     }
 }

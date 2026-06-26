@@ -49,11 +49,12 @@ class CliPrintsConsolePrintMessageWithoutDebugPrefixTest {
     }
 
     @Test
-    @DisplayName("其他事件仍带 [Agent] 前缀")
-    void otherEventsStillHaveAgentPrefix() {
-        var waitingEvent = AgentProgressEvent.waitingLlm(1, 5);
-        String formatted = CliAgentProgressSink.format(waitingEvent);
+    @DisplayName("错误事件仍带 [Agent] 前缀")
+    void errorEventsStillHaveAgentPrefix() {
+        var failEvent = AgentProgressEvent.toolFailed(1, 5, "bad_tool", "some error");
+        String formatted = CliAgentProgressSink.format(failEvent);
+        assertNotNull(formatted);
         assertTrue(formatted.contains("[Agent]"),
-                "Other events should retain [Agent] prefix: " + formatted);
+                "Error events should retain [Agent] prefix: " + formatted);
     }
 }

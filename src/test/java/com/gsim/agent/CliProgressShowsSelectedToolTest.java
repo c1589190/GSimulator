@@ -8,63 +8,55 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 验证 CliAgentProgressSink.format 生成的进度行简短且信息完整。
+ * 验证 CliAgentProgressSink.format 在 quiet 模式下的行为：
+ * 常规工具进度事件 → null（静默），错误事件 → 非 null。
  */
-@DisplayName("CLI 进度显示工具选择/执行")
+@DisplayName("CLI 进度显示（quiet mode）")
 class CliProgressShowsSelectedToolTest {
 
     @Test
-    @DisplayName("TOOL_SELECTED 格式包含工具名")
-    void toolSelectedShowsToolName() {
+    @DisplayName("TOOL_SELECTED → null（静默）")
+    void toolSelectedIsQuiet() {
         var event = new AgentProgressEvent(AgentProgressEvent.TOOL_SELECTED,
                 1, 5, "LLM 选择工具：player_action_list",
                 Map.of("tool", "player_action_list"));
-        String line = CliAgentProgressSink.format(event);
-        assertNotNull(line);
-        assertTrue(line.contains("player_action_list"),
-                "Should contain tool name: " + line);
-        assertTrue(line.contains("[Agent]"),
-                "Should start with [Agent] prefix: " + line);
+        assertNull(CliAgentProgressSink.format(event));
     }
 
     @Test
-    @DisplayName("TOOL_EXECUTING 格式包含工具名")
-    void toolExecutingShowsToolName() {
+    @DisplayName("TOOL_EXECUTING → null（静默）")
+    void toolExecutingIsQuiet() {
         var event = new AgentProgressEvent(AgentProgressEvent.TOOL_EXECUTING,
                 1, 5, "正在执行工具：player_action_list",
                 Map.of("tool", "player_action_list"));
-        String line = CliAgentProgressSink.format(event);
-        assertNotNull(line);
-        assertTrue(line.contains("player_action_list"));
-        assertTrue(line.contains("[Agent]"));
+        assertNull(CliAgentProgressSink.format(event));
     }
 
     @Test
-    @DisplayName("TOOL_SUCCESS 格式包含工具名")
-    void toolSuccessShowsToolName() {
+    @DisplayName("TOOL_SUCCESS → null（静默）")
+    void toolSuccessIsQuiet() {
         var event = new AgentProgressEvent(AgentProgressEvent.TOOL_SUCCESS,
                 1, 5, "工具成功：player_action_list",
                 Map.of("tool", "player_action_list"));
-        String line = CliAgentProgressSink.format(event);
-        assertNotNull(line);
-        assertTrue(line.contains("player_action_list"));
+        assertNull(CliAgentProgressSink.format(event));
     }
 
     @Test
-    @DisplayName("输出行长度 ≤ 120 chars")
-    void outputLineWithinReasonableLength() {
-        var event = AgentProgressEvent.toolSelected(1, 5, "query_keyword");
+    @DisplayName("TOOL_FAILED → 非 null（错误可见）")
+    void toolFailedIsVisible() {
+        var event = new AgentProgressEvent(AgentProgressEvent.TOOL_FAILED,
+                1, 5, "工具失败：bad_tool",
+                Map.of("tool", "bad_tool", "error", "not found"));
         String line = CliAgentProgressSink.format(event);
         assertNotNull(line);
-        assertTrue(line.length() <= 120,
-                "Line should be ≤ 120 chars, got " + line.length() + ": " + line);
+        assertTrue(line.contains("bad_tool"));
+        assertTrue(line.contains("not found"));
     }
 
     @Test
-    @DisplayName("FINISH_ACTION_ACCEPTED 输出 null（不额外输出）")
+    @DisplayName("FINISH_ACTION_ACCEPTED → null（不额外输出）")
     void finishAcceptedOutputsNull() {
         var event = AgentProgressEvent.finishAccepted(1, 5);
-        String line = CliAgentProgressSink.format(event);
-        assertNull(line, "FINISH_ACTION_ACCEPTED should produce no output");
+        assertNull(CliAgentProgressSink.format(event));
     }
 }
