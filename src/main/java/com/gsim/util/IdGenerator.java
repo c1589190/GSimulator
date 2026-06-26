@@ -23,6 +23,11 @@ public final class IdGenerator {
         nodeCounter.set(0);
     }
 
+    /** Seed the counter from existing node IDs (find max nXXXX, set to max+1). */
+    public static void seedNodeCounter(int value) {
+        nodeCounter.set(value);
+    }
+
     /**
      * 生成短 ID，格式如 "task-a1b2c3d4"
      */
