@@ -109,6 +109,8 @@ public class AgentFactory {
         // Replace the rootSink from create() with a properly tagged sink
         AgentProgressSink tagged = new TaggedAgentProgressSink(rootSink, instanceId, taskId, sessionId);
         agent.replaceProgressSink(tagged);
+        // Override agentId so logs show "sim-1" instead of "sim"
+        agent.setAgentId(instanceId);
 
         // 加载或创建 CacheSession
         CacheSession subCache;

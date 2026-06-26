@@ -74,6 +74,8 @@ public class OrchestratorAgent extends AbstractAgent {
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
     /** SubAgent ID 计数器。 */
     private final AtomicInteger subAgentCounter = new AtomicInteger(0);
+    /** 当前 run 中已派发但未收集的子 Agent 计数（用于强制 collect-before-finish）。 */
+    private int dispatchedUncollected = 0;
     /** AgentFactory 引用（用于 ESC 时取消所有子代理）。 */
     private AgentFactory agentFactory;
 
@@ -164,6 +166,12 @@ public class OrchestratorAgent extends AbstractAgent {
         return maxToolRounds;
     }
 
+    /** 覆盖基类方法，返回注入的 maxToolRounds 而非 config 默认值。 */
+    @Override
+    protected int effectiveMaxToolRounds() {
+        return maxToolRounds;
+    }
+
     /** 设置是否使用 LLM 流式输出（由 AppConfig 注入）。 */
     public void setStreamEnabled(boolean streamEnabled) {
         this.streamEnabled = streamEnabled;
@@ -191,6 +199,76 @@ public class OrchestratorAgent extends AbstractAgent {
         // 取消所有子代理：直接设置 cancelRequested 标志（比 future.cancel 更可靠）
         if (agentFactory != null) {
             agentFactory.cancelAll();
+        }
+    }
+
+    /** 重置 dispatch 追踪计数器（每次 run 开始时调用）。 */
+    @Override
+    public AgentResult run(String userInput, List<LlmMessage> priorMessages) {
+        dispatchedUncollected = 0;
+        return super.run(userInput, priorMessages);
+    }
+
+    // ══════════════════════════════════════════
+    // 工具执行钩子 — 权限门禁 + 派发追踪
+    // ══════════════════════════════════════════
+
+    @Override
+    protected boolean beforeToolExecute(ParsedToolCall parsed, List<LlmMessage> messages) {
+        String toolName = parsed.tool();
+
+        // ── dispatch / collect 追踪 ──
+        if ("dispatch_sub_agent".equals(toolName)) {
+            // Will be tracked in afterToolExecute on success
+        }
+        if ("finish_action".equals(toolName) && dispatchedUncollected > 0) {
+            String rejection = "[系统] 当前有 " + dispatchedUncollected
+                    + " 个已派发的子 Agent 尚未收集结果。"
+                    + "请先调用 collect_sub_agent_results 收集结果，"
+                    + "然后再调用 finish_action 结束本轮。";
+            messages.add(LlmMessage.user(rejection));
+            progressSink.onProgress(AgentProgressEvent.finishRejected(0, effectiveMaxToolRounds(),
+                    "UNCOLLECTED_SUB_AGENTS"));
+            return false;
+        }
+
+        // ── 权限门禁（fail-closed） ──
+        ToolCategory category = ToolCategoryRegistry.categoryOf(toolName);
+        if (category == ToolCategory.MUTATING || category == ToolCategory.DESTRUCTIVE) {
+            if (permissionGate == null) {
+                String rejectMsg = "[系统] 工具 " + toolName
+                        + " 需要用户确认（" + category + "），但当前未配置权限门禁。操作被拒绝。"
+                        + "请改用只读工具或调用 finish_action 结束本轮。";
+                messages.add(LlmMessage.user(rejectMsg));
+                progressSink.onProgress(AgentProgressEvent.toolFailed(0, effectiveMaxToolRounds(),
+                        toolName, "REJECTED: no permission gate"));
+                return false;
+            }
+            // gate exists — ask user (blocking)
+            ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
+                    toolName, category,
+                    category == ToolCategory.DESTRUCTIVE
+                            ? "破坏性操作: " + toolName : "写入操作: " + toolName,
+                    parsed.args(), null);
+            ConfirmationChoice choice = permissionGate.askConfirmation(confirmReq);
+            if (choice == ConfirmationChoice.DENY) {
+                String denyMsg = "[系统] 用户拒绝了工具 " + toolName + "，本轮已停止。";
+                messages.add(LlmMessage.user(denyMsg));
+                return false;
+            }
+            // ALLOW or ALLOW_ALL_THIS_TURN → proceed
+        }
+        return true;
+    }
+
+    @Override
+    protected void afterToolExecute(ParsedToolCall parsed, ToolResult result) {
+        String toolName = parsed.tool();
+        if ("dispatch_sub_agent".equals(toolName) && result.success()) {
+            dispatchedUncollected++;
+        }
+        if ("collect_sub_agent_results".equals(toolName)) {
+            dispatchedUncollected = 0;
         }
     }
 

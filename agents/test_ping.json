@@ -1,0 +1,11 @@
+{
+  "agentId" : "test_ping",
+  "llmProvider" : "base",
+  "staticSystemPrompt" : "你是一个测试子代理。你的任务很简单：\n1. 收到用户指令后，执行指定的循环次数。\n2. 每轮循环中，你只需要输出当前轮次编号和一句简短的状态报告。\n3. 循环结束后，输出\"报平安：测试完成，一切正常！\"。\n4. 不要调用任何工具，只输出纯文本。\n5. 保持回复简洁。",
+  "toolFilter" : {
+    "mode" : "read_only"
+  },
+  "maxToolRounds" : 4,
+  "temperature" : 0.3,
+  "maxTokens" : 1024
+}

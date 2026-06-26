@@ -50,7 +50,7 @@ public class AbstractAgent {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractAgent.class);
 
-    protected final String agentId;
+    protected String agentId;
     protected final AgentConfig config;
     protected final LlmManager llm;
     protected final ToolRegistry allTools;
@@ -91,6 +91,14 @@ public class AbstractAgent {
         this.progressSink = newSink != null ? newSink : AgentProgressSink.NOOP;
     }
 
+    /**
+     * Override the agentId (used for logging). Called by AgentFactory.dispatch()
+     * to set the instance ID (e.g. "sim-1") instead of the config type ("sim").
+     */
+    public void setAgentId(String id) {
+        this.agentId = id;
+    }
+
     public AbstractAgent(AgentConfig config, LlmManager llm, ToolRegistry allTools,
                          AgentProgressSink progressSink, String model) {
         this.config = config;
@@ -127,6 +135,11 @@ public class AbstractAgent {
     public AgentConfig config() { return config; }
     public List<AgentRound> rounds() { return List.copyOf(rounds); }
 
+    /** 子类可覆盖以提供不同的最大轮数（如 OrchestratorAgent 使用注入值）。 */
+    protected int effectiveMaxToolRounds() {
+        return config.maxToolRounds();
+    }
+
     // ══════════════════════════════════════════
     // ToolLoop
     // ══════════════════════════════════════════
@@ -134,7 +147,7 @@ public class AbstractAgent {
     protected AgentResult executeToolLoop(String userInput, List<LlmMessage> priorMessages) {
         List<LlmMessage> messages = new ArrayList<>();
         List<ToolCallRecord> allToolCalls = new ArrayList<>();
-        int maxRounds = config.maxToolRounds();
+        int maxRounds = effectiveMaxToolRounds();
 
         // system prompt — build from staticSystemPrompt + rendered template
         StringBuilder spBuilder = new StringBuilder();
@@ -177,7 +190,8 @@ public class AbstractAgent {
 
         while (toolRound <= maxRounds) {
             if (cancelRequested.get()) {
-                log.info("[{}] cancelled at round {}", agentId, toolRound);
+                log.info("[{}] cancelled by user at round {}/{}",
+                        agentId, toolRound, maxRounds);
                 return AgentResult.fail(agentId, "cancelled");
             }
 
@@ -260,6 +274,8 @@ public class AbstractAgent {
                         continue;
                     }
                     finalText = finishMsg;
+                    log.info("[{}] completed via finish_action at round {}/{} ({} tool calls)",
+                            agentId, toolRound, maxRounds, allToolCalls.size());
                     break;
                 }
 
@@ -274,10 +290,15 @@ public class AbstractAgent {
                 finalText = content;
                 rounds.add(new AgentRound(toolRound, List.copyOf(messages),
                         List.of(), finalText, ""));
+                log.info("[{}] completed with plain text at round {}/{} ({} chars)",
+                        agentId, toolRound, maxRounds,
+                        finalText != null ? finalText.length() : 0);
                 break;
             }
 
             if (consecutiveNoTool >= 3) {
+                log.warn("[{}] aborted: {} consecutive rounds with no output",
+                        agentId, consecutiveNoTool);
                 return AgentResult.fail(agentId,
                         "Agent 连续 " + consecutiveNoTool + " 轮无有效输出");
             }
@@ -288,6 +309,8 @@ public class AbstractAgent {
 
         // max rounds reached
         if (finalText == null) {
+            log.warn("[{}] aborted: max rounds ({}) reached without finish_action",
+                    agentId, maxRounds);
             return AgentResult.fail(agentId,
                     "Agent 达到最大轮数 (" + maxRounds + ") 未完成");
         }
