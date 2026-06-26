@@ -74,8 +74,6 @@ public class OrchestratorAgent extends AbstractAgent {
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
     /** SubAgent ID 计数器。 */
     private final AtomicInteger subAgentCounter = new AtomicInteger(0);
-    /** 当前 run 中已派发但未收集的子 Agent 计数（用于强制 collect-before-finish）。 */
-    private int dispatchedUncollected = 0;
     /** AgentFactory 引用（用于 ESC 时取消所有子代理）。 */
     private AgentFactory agentFactory;
 
@@ -202,37 +200,15 @@ public class OrchestratorAgent extends AbstractAgent {
         }
     }
 
-    /** 重置 dispatch 追踪计数器（每次 run 开始时调用）。 */
-    @Override
-    public AgentResult run(String userInput, List<LlmMessage> priorMessages) {
-        dispatchedUncollected = 0;
-        return super.run(userInput, priorMessages);
-    }
-
     // ══════════════════════════════════════════
-    // 工具执行钩子 — 权限门禁 + 派发追踪
+    // 工具执行钩子 — 权限门禁（fail-closed）
     // ══════════════════════════════════════════
 
     @Override
     protected boolean beforeToolExecute(ParsedToolCall parsed, List<LlmMessage> messages) {
         String toolName = parsed.tool();
 
-        // ── dispatch / collect 追踪 ──
-        if ("dispatch_sub_agent".equals(toolName)) {
-            // Will be tracked in afterToolExecute on success
-        }
-        if ("finish_action".equals(toolName) && dispatchedUncollected > 0) {
-            String rejection = "[系统] 当前有 " + dispatchedUncollected
-                    + " 个已派发的子 Agent 尚未收集结果。"
-                    + "请先调用 collect_sub_agent_results 收集结果，"
-                    + "然后再调用 finish_action 结束本轮。";
-            messages.add(LlmMessage.user(rejection));
-            progressSink.onProgress(AgentProgressEvent.finishRejected(0, effectiveMaxToolRounds(),
-                    "UNCOLLECTED_SUB_AGENTS"));
-            return false;
-        }
-
-        // ── 权限门禁（fail-closed） ──
+        // 权限门禁：mutating/destructive 工具必须经过 permissionGate
         ToolCategory category = ToolCategoryRegistry.categoryOf(toolName);
         if (category == ToolCategory.MUTATING || category == ToolCategory.DESTRUCTIVE) {
             if (permissionGate == null) {
@@ -259,17 +235,6 @@ public class OrchestratorAgent extends AbstractAgent {
             // ALLOW or ALLOW_ALL_THIS_TURN → proceed
         }
         return true;
-    }
-
-    @Override
-    protected void afterToolExecute(ParsedToolCall parsed, ToolResult result) {
-        String toolName = parsed.tool();
-        if ("dispatch_sub_agent".equals(toolName) && result.success()) {
-            dispatchedUncollected++;
-        }
-        if ("collect_sub_agent_results".equals(toolName)) {
-            dispatchedUncollected = 0;
-        }
     }
 
     /**
