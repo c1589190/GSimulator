@@ -1,6 +1,7 @@
 package com.gsim;
 
 import com.gsim.app.AppConfig;
+import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigDoctor;
@@ -63,6 +64,15 @@ public class Main {
                     config = new AppConfig(configResult);
                 }
             }
+
+            // Bootstrap: load worlds, build WorldInformation, init cache
+            Path worldsDir = config.worldsDir();
+            Path promptsDir = config.promptsDir();
+            Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir);
+            Bootstrap.BootstrapResult bootResult = bootstrap.boot();
+            System.out.println("World loaded: " + bootResult.worldId()
+                + ", active node: " + bootResult.activeNodeId()
+                + ", chain length: " + bootResult.worldInfo().branchChain().size());
 
             // 3. 统一启动：CLI + HTTP API + WebUI 全部默认开启
             // --cli / --http / --webui 仍可显式指定（向后兼容），不加就是全开
