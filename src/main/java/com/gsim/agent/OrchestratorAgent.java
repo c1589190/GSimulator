@@ -170,6 +170,12 @@ public class OrchestratorAgent extends AbstractAgent {
         return maxToolRounds;
     }
 
+    /** Orchestrator 必须通过 finish_action 结束，不接受纯文本自动完成。 */
+    @Override
+    protected boolean requireFinishAction() {
+        return true;
+    }
+
     /** 设置是否使用 LLM 流式输出（由 AppConfig 注入）。 */
     public void setStreamEnabled(boolean streamEnabled) {
         this.streamEnabled = streamEnabled;

@@ -140,6 +140,11 @@ public class AbstractAgent {
         return config.maxToolRounds();
     }
 
+    /** 子类可覆盖：是否强制 finish_action（拒绝纯文本自动接受）。Orchestrator 应返回 true。 */
+    protected boolean requireFinishAction() {
+        return false;
+    }
+
     // ══════════════════════════════════════════
     // ToolLoop
     // ══════════════════════════════════════════
@@ -287,6 +292,14 @@ public class AbstractAgent {
             consecutiveNoTool++;
             if (content != null && !content.isBlank()
                     && isMeaningful(content)) {
+                if (requireFinishAction()) {
+                    // Orchestrator: reject plain text, demand tool call or finish_action
+                    addMessage(messages, LlmMessage.user(
+                            "请调用工具执行操作，完成后调用 finish_action 结束。"
+                            + "不要只描述你将要做什么——请实际执行。"));
+                    toolRound++;
+                    continue;
+                }
                 finalText = content;
                 rounds.add(new AgentRound(toolRound, List.copyOf(messages),
                         List.of(), finalText, ""));
