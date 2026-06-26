@@ -54,12 +54,14 @@ public class AbstractAgent {
     protected final AgentConfig config;
     protected final LlmManager llm;
     protected final ToolRegistry allTools;
-    protected final AgentProgressSink progressSink;
     protected final String model;
     protected final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
     /** Override for the system prompt injected via setSystemPrompt(). */
     protected String systemPromptOverride = null;
+
+    /** Progress sink — may be replaced post-construction via AgentFactory.dispatch(). */
+    protected AgentProgressSink progressSink;
 
     protected final List<AgentRound> rounds = new ArrayList<>();
 
@@ -78,6 +80,15 @@ public class AbstractAgent {
      */
     public void setSystemPrompt(String prompt) {
         this.systemPromptOverride = prompt;
+    }
+
+    /**
+     * Replace the progress sink after construction.
+     * Used by AgentFactory.dispatch() to inject a TaggedAgentProgressSink
+     * with the correct instanceId + taskId/sessionId after the agent is built.
+     */
+    public void replaceProgressSink(AgentProgressSink newSink) {
+        this.progressSink = newSink != null ? newSink : AgentProgressSink.NOOP;
     }
 
     public AbstractAgent(AgentConfig config, LlmManager llm, ToolRegistry allTools,

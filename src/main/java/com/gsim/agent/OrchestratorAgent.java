@@ -90,7 +90,8 @@ public class OrchestratorAgent extends AbstractAgent {
         this.agentFactory = agentFactory;
         registry.register(new DispatchSubAgentTool(
                 llmManager, toolRegistry, model, progressSink,
-                runningSubAgents, subAgentCounter, agentFactory));
+                runningSubAgents, subAgentCounter, agentFactory,
+                agentFactory.store()));
         registry.register(new CollectSubAgentResultsTool(runningSubAgents));
     }
 
@@ -846,29 +847,40 @@ public class OrchestratorAgent extends AbstractAgent {
                     }
 
                     if (execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
-                        if (permissionGate != null) {
-                            progressSink.onProgress(AgentProgressEvent.awaitingToolConfirmation(
-                                    toolRound, maxToolRounds, parsed.tool()));
+                        if (permissionGate == null) {
+                            // Fail-closed: no gate configured → reject
+                            String rejectMsg = "工具 " + parsed.tool()
+                                    + " 需要用户确认，但当前未配置权限门禁（permissionGate）。"
+                                    + "操作被拒绝。请调用 finish_action 结束本轮。";
+                            messages.add(LlmMessage.user(rejectMsg));
+                            trace.add(new MessageTrace("system", "tool_rejected",
+                                    "NO_PERMISSION_GATE"));
+                            progressSink.onProgress(AgentProgressEvent.toolFailed(
+                                    toolRound, maxToolRounds, parsed.tool(),
+                                    "REJECTED: no permission gate configured"));
+                            continue;
+                        }
+                        progressSink.onProgress(AgentProgressEvent.awaitingToolConfirmation(
+                                toolRound, maxToolRounds, parsed.tool()));
 
-                            ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
-                                    parsed.tool(), execDecision.category(),
-                                    execDecision.reason(), parsed.args(),
-                                    contextMeta != null ? contextMeta.activeBranch() : null);
-                            ConfirmationChoice choice = permissionGate.askConfirmation(confirmReq);
-                            ToolLoopDebug.logToolPermissionDecision(log, "runToolLoop",
-                                    toolRound, parsed.tool(), choice);
+                        ToolConfirmationRequest confirmReq = new ToolConfirmationRequest(
+                                parsed.tool(), execDecision.category(),
+                                execDecision.reason(), parsed.args(),
+                                contextMeta != null ? contextMeta.activeBranch() : null);
+                        ConfirmationChoice choice = permissionGate.askConfirmation(confirmReq);
+                        ToolLoopDebug.logToolPermissionDecision(log, "runToolLoop",
+                                toolRound, parsed.tool(), choice);
 
-                            if (choice == ConfirmationChoice.DENY) {
-                                String denyMsg = executionPolicy.buildDenyStopMessage(parsed.tool());
-                                messages.add(LlmMessage.user(denyMsg));
-                                trace.add(new MessageTrace("system", "tool_denied",
-                                        "tool=" + parsed.tool() + " choice=DENY"));
-                                finalText = denyMsg;
-                                break;
-                            }
-                            if (choice == ConfirmationChoice.ALLOW_ALL_THIS_TURN) {
-                                allowAllMutations = true;
-                            }
+                        if (choice == ConfirmationChoice.DENY) {
+                            String denyMsg = executionPolicy.buildDenyStopMessage(parsed.tool());
+                            messages.add(LlmMessage.user(denyMsg));
+                            trace.add(new MessageTrace("system", "tool_denied",
+                                    "tool=" + parsed.tool() + " choice=DENY"));
+                            finalText = denyMsg;
+                            break;
+                        }
+                        if (choice == ConfirmationChoice.ALLOW_ALL_THIS_TURN) {
+                            allowAllMutations = true;
                         }
                     }
 

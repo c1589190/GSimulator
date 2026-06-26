@@ -41,6 +41,9 @@ public class AgentFactory {
     private final Map<String, CompletableFuture<AgentResult>> running = new ConcurrentHashMap<>();
     /** 追踪所有运行中的 AbstractAgent 实例，用于 ESC 取消时设置 cancelRequested。 */
     private final Map<String, AbstractAgent> runningAgents = new ConcurrentHashMap<>();
+    /** 已完成子代理的结果缓存（最多保留 100 条，FIFO 淘汰）。 */
+    private final Map<String, AgentResult> completed = new ConcurrentHashMap<>();
+    private static final int MAX_COMPLETED = 100;
 
     /** Cache 文件输出目录（worlds/<worldId>/caches/）。 */
     private final Path worldsDir;
@@ -60,7 +63,7 @@ public class AgentFactory {
         this.worldIdSupplier = worldIdSupplier;
     }
 
-    /** 创建一个 Agent（阻塞，同步返回） */
+    /** 创建一个 Agent（阻塞，同步返回）。不创建 TaggedAgentProgressSink — 由调用方（如 dispatch）注入。 */
     public AbstractAgent create(String agentId, String prompt, Map<String, String> userVars) {
         AgentConfig config = configStore.get(agentId);
         if (config == null) throw new IllegalArgumentException("Unknown agent: " + agentId);
@@ -77,14 +80,10 @@ public class AgentFactory {
                 config.userTemplate(), config.toolFilter(),
                 config.maxToolRounds(), config.temperature(), config.maxTokens());
 
-        // 创建 tagged sink
-        int id = counter.incrementAndGet();
-        String instanceId = agentId + "-" + id;
-        AgentProgressSink tagged = new TaggedAgentProgressSink(rootSink, instanceId);
-
         // 按 Agent 配置选择 LLM provider
         LlmProvider agentLlm = llmRegistry.get(config.llmProvider());
-        return new AbstractAgent(fullConfig, (LlmManager) agentLlm, allTools, tagged, model);
+        // 使用 rootSink — 调用方可随后 replaceProgressSink()
+        return new AbstractAgent(fullConfig, (LlmManager) agentLlm, allTools, rootSink, model);
     }
 
     /** 异步派发 SubAgent（无 cache — 创建空 cache）。 */
@@ -106,8 +105,10 @@ public class AgentFactory {
         String instanceId = type + "-" + id;
         String wid = worldIdSupplier.get();
 
-        AgentProgressSink tagged = new TaggedAgentProgressSink(rootSink, instanceId, taskId, sessionId);
         AbstractAgent agent = create(type, prompt, null);
+        // Replace the rootSink from create() with a properly tagged sink
+        AgentProgressSink tagged = new TaggedAgentProgressSink(rootSink, instanceId, taskId, sessionId);
+        agent.replaceProgressSink(tagged);
 
         // 加载或创建 CacheSession
         CacheSession subCache;
@@ -153,6 +154,16 @@ public class AgentFactory {
                 f.complete(AgentResult.fail(instanceId, e.getMessage(), cacheRef.sessionId()));
             } finally {
                 runningAgents.remove(instanceId);
+                // Move from running to completed cache (bounded FIFO)
+                AgentResult result = f.getNow(null);
+                if (result != null) {
+                    if (completed.size() >= MAX_COMPLETED) {
+                        // Simple FIFO: remove one arbitrary entry
+                        var it = completed.keySet().iterator();
+                        if (it.hasNext()) { completed.remove(it.next()); }
+                    }
+                    completed.put(instanceId, result);
+                }
             }
         });
         log.info("[AgentFactory] dispatched {} type={} cache={} (prior={} msgs)",

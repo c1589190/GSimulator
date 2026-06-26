@@ -1,6 +1,7 @@
 package com.gsim.agent.tool;
 
 import com.gsim.agent.AgentProgressSink;
+import com.gsim.agent.config.AgentConfigStore;
 import com.gsim.agent.core.AgentConfig;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
@@ -13,11 +14,13 @@ import com.gsim.tool.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * dispatch_sub_agent 工具 — 创建并启动子代理。
@@ -46,12 +49,14 @@ public class DispatchSubAgentTool implements AgentTool {
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents;
     private final AtomicInteger subAgentCounter;
     private final AgentFactory agentFactory;
+    private final AgentConfigStore configStore;
 
     public DispatchSubAgentTool(LlmManager llmManager, ToolRegistry toolRegistry,
                                 String model, AgentProgressSink progressSink,
                                 Map<String, CompletableFuture<AgentResult>> runningSubAgents,
                                 AtomicInteger subAgentCounter,
-                                AgentFactory agentFactory) {
+                                AgentFactory agentFactory,
+                                AgentConfigStore configStore) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
@@ -59,6 +64,7 @@ public class DispatchSubAgentTool implements AgentTool {
         this.runningSubAgents = runningSubAgents;
         this.subAgentCounter = subAgentCounter;
         this.agentFactory = agentFactory;
+        this.configStore = configStore;
     }
 
     @Override
@@ -80,12 +86,20 @@ public class DispatchSubAgentTool implements AgentTool {
 
     @Override
     public Map<String, Object> getParameters() {
+        // Dynamic enum: all known agent types except the orchestrator itself
+        List<String> knownTypes = new ArrayList<>(configStore.agentIds());
+        knownTypes.remove("orchestrator");
+        if (knownTypes.isEmpty()) {
+            knownTypes.addAll(List.of("sim", "search"));
+        }
+
         return ToolDef.strictSchema(
                 Map.of(
                         "type", Map.of(
                                 "type", "string",
-                                "description", "子代理类型：sim（推演叙事）或 search（资料搜索）",
-                                "enum", List.of("sim", "search")
+                                "description", "子代理类型。当前可用: "
+                                        + knownTypes.stream().collect(Collectors.joining(", ")),
+                                "enum", knownTypes
                         ),
                         "prompt", Map.of(
                                 "type", "string",
@@ -107,9 +121,14 @@ public class DispatchSubAgentTool implements AgentTool {
         String cacheId = call.param("cacheId", "").trim();
         if (cacheId.isEmpty()) cacheId = null;
 
-        if (!Set.of("sim", "search").contains(type)) {
+        // Dynamic validation against AgentConfigStore
+        if (configStore.get(type) == null) {
+            String available = configStore.agentIds().stream()
+                    .filter(id -> !"orchestrator".equals(id))
+                    .collect(Collectors.joining(", "));
             return ToolResult.fail(NAME, "Unknown sub-agent type: " + type
-                    + ". Allowed: sim, search");
+                    + ". Available: " + (available.isEmpty() ? "sim, search" : available)
+                    + ". Use create_sub_agent_config to register new agent types.");
         }
         if (prompt.isEmpty()) {
             return ToolResult.fail(NAME, "prompt cannot be empty");

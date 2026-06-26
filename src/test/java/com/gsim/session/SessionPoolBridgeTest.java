@@ -184,6 +184,46 @@ class SessionPoolBridgeTest {
     // ===== 完整工作流模拟 =====
 
     @Test
+    @DisplayName("两个连续工具调用应各自更新自己的节点（不交叉）")
+    void twoConsecutiveToolCallsUpdateCorrectNodes() {
+        // Tool A
+        bridge.onProgress(AgentProgressEvent.toolSelected(1, 3, "query_keyword"));
+        bridge.onProgress(AgentProgressEvent.toolExecuting(1, 3, "query_keyword"));
+        bridge.onProgress(AgentProgressEvent.toolSuccess(1, 3, "query_keyword"));
+
+        // Tool B
+        bridge.onProgress(AgentProgressEvent.toolSelected(1, 3, "write_element"));
+        bridge.onProgress(AgentProgressEvent.toolExecuting(1, 3, "write_element"));
+        bridge.onProgress(AgentProgressEvent.toolFailed(1, 3, "write_element", "permission denied"));
+
+        List<SessionNode> toolNodes = pool.getNodes("test-session").stream()
+                .filter(n -> n.type() == NodeType.TOOL_CALL)
+                .toList();
+        assertEquals(2, toolNodes.size());
+
+        // Tool A should be DONE
+        assertEquals(NodeStatus.DONE, toolNodes.get(0).payload().get("status"));
+        assertEquals("query_keyword", toolNodes.get(0).payload().get("tool"));
+
+        // Tool B should be ERROR (not mistakenly marked DONE)
+        assertEquals(NodeStatus.ERROR, toolNodes.get(1).payload().get("status"));
+        assertEquals("write_element", toolNodes.get(1).payload().get("tool"));
+    }
+
+    @Test
+    @DisplayName("clearSession 清理 bridge 映射")
+    void clearSessionCleansBridge() {
+        bridge.onProgress(AgentProgressEvent.llmStreamStarted("s1"));
+        bridge.onProgress(AgentProgressEvent.toolSelected(1, 3, "test_tool"));
+        bridge.clearSession();
+
+        // After clear, these should not throw
+        assertDoesNotThrow(() ->
+                bridge.onProgress(AgentProgressEvent.llmContentDelta("s1", "新的流"))
+        );
+    }
+
+    @Test
     @DisplayName("完整 Agent 工作流: LLM 流式 + 工具调用 + 公开消息")
     void fullWorkflowSimulation() {
         // Round 1: LLM starts streaming

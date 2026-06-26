@@ -53,10 +53,12 @@ public class SessionPool {
         sessions.computeIfAbsent(sessionId, k -> new CopyOnWriteArrayList<>()).add(node);
         nodeIndex.put(nodeId, node);
 
-        // 唤醒等待者（如用户输入节点）
-        CompletableFuture<SessionNode> waiter = waiters.remove(sessionId);
-        if (waiter != null && type == NodeType.USER_INPUT) {
-            waiter.complete(node);
+        // 唤醒等待者（仅 USER_INPUT 节点）
+        if (type == NodeType.USER_INPUT) {
+            CompletableFuture<SessionNode> waiter = waiters.remove(sessionId);
+            if (waiter != null) {
+                waiter.complete(node);
+            }
         }
 
         // 通知订阅者
@@ -77,16 +79,19 @@ public class SessionPool {
 
     /**
      * 向节点的 content key 追加字符串（LLM delta 场景）。
+     * 安全处理 content 可能是 StringBuilder（流式写入中）或 String（已完成）的情况。
      */
     public void appendContent(String nodeId, String delta) {
         SessionNode node = nodeIndex.get(nodeId);
         if (node == null) return;
         synchronized (node) {
-            @SuppressWarnings("unchecked")
-            StringBuilder sb = (StringBuilder) node.payload()
-                    .computeIfAbsent("content", k -> new StringBuilder());
-            if (sb instanceof StringBuilder) {
+            Object content = node.payload().get("content");
+            if (content instanceof StringBuilder sb) {
                 sb.append(delta);
+            } else if (content instanceof String s) {
+                node.payload().put("content", s + delta);
+            } else {
+                node.payload().put("content", delta);
             }
         }
         notifyListeners(node.sessionId(), l -> l.onNodeUpdated(node, "content", delta));
@@ -108,10 +113,21 @@ public class SessionPool {
     public void transitionStatus(String nodeId, NodeStatus newStatus) {
         SessionNode node = nodeIndex.get(nodeId);
         if (node == null) return;
-        NodeStatus oldStatus = (NodeStatus) node.payload().getOrDefault("status", NodeStatus.PENDING);
+        NodeStatus oldStatus = parseStatus(node.payload().getOrDefault("status", NodeStatus.PENDING));
         node.payload().put("status", newStatus);
         notifyListeners(node.sessionId(),
                 l -> l.onStatusChanged(node, oldStatus, newStatus));
+    }
+
+    /** 安全解析 NodeStatus — 兼容 enum 和 String，防止 ClassCastException。 */
+    private static NodeStatus parseStatus(Object raw) {
+        if (raw instanceof NodeStatus s) return s;
+        if (raw instanceof String s) {
+            try { return NodeStatus.valueOf(s); }
+            catch (IllegalArgumentException e) { return NodeStatus.PENDING; }
+        }
+        if (raw == null) return NodeStatus.PENDING;
+        return NodeStatus.PENDING;
     }
 
     // ===== 查询 =====
@@ -150,10 +166,16 @@ public class SessionPool {
 
     /**
      * 异步等待该会话的下一个 USER_INPUT 节点（Agent 阻塞/异步等待）。
+     *
+     * @throws IllegalStateException 如果该 session 已有等待者
      */
     public CompletableFuture<SessionNode> waitForUserInput(String sessionId) {
         CompletableFuture<SessionNode> future = new CompletableFuture<>();
-        waiters.put(sessionId, future);
+        CompletableFuture<SessionNode> old = waiters.putIfAbsent(sessionId, future);
+        if (old != null) {
+            throw new IllegalStateException(
+                    "Another waiter already exists for session: " + sessionId);
+        }
         return future;
     }
 
@@ -180,6 +202,10 @@ public class SessionPool {
             for (SessionNode n : nodes) nodeIndex.remove(n.nodeId());
         }
         listeners.remove(sessionId);
-        waiters.remove(sessionId);
+        CompletableFuture<SessionNode> waiter = waiters.remove(sessionId);
+        if (waiter != null) {
+            waiter.completeExceptionally(
+                    new IllegalStateException("Session cleared while waiting: " + sessionId));
+        }
     }
 }

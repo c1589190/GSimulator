@@ -93,12 +93,27 @@ public class CollectSubAgentResultsTool implements AgentTool {
 
         int successCount = 0;
         int failCount = 0;
+        int runningCount = 0;
+        int unknownCount = 0;
 
         for (var entry : runningSubAgents.entrySet()) {
             String agentId = entry.getKey();
-            AgentResult result = entry.getValue().getNow(null);
+            CompletableFuture<AgentResult> future = entry.getValue();
+            AgentResult result = future.getNow(null);
 
             sb.append("### ").append(agentId).append("\n\n");
+            String status;
+            if (result != null) {
+                status = result.success() ? "COMPLETED" : "FAILED";
+            } else if (future.isCancelled()) {
+                status = "CANCELLED";
+            } else if (!future.isDone()) {
+                status = "RUNNING";
+            } else {
+                status = "UNKNOWN";
+            }
+            sb.append("- **状态**: ").append(status).append("\n");
+
             if (result != null && result.success()) {
                 successCount++;
                 // 截断过长文本（子代理结果可能很长，保留前 4000 字符）
@@ -106,19 +121,27 @@ public class CollectSubAgentResultsTool implements AgentTool {
                 if (text != null && text.length() > 4000) {
                     text = text.substring(0, 3997) + "...";
                 }
-                sb.append(text != null ? text : "(空结果)").append("\n\n");
+                sb.append("- **结果**:\n").append(text != null ? text : "(空结果)").append("\n\n");
             } else {
-                failCount++;
-                sb.append("**执行失败**: ")
-                        .append(result != null ? result.error() : "无结果")
+                if (status.equals("RUNNING")) {
+                    runningCount++;
+                } else if (status.equals("UNKNOWN")) {
+                    unknownCount++;
+                } else {
+                    failCount++;
+                }
+                sb.append("- **错误**: ")
+                        .append(result != null ? result.error() : "无结果（状态: " + status + "）")
                         .append("\n\n");
             }
         }
 
         sb.append("---\n");
         sb.append("汇总: ").append(successCount).append(" 成功, ")
-                .append(failCount).append(" 失败, ")
-                .append(totalCount).append(" 总计");
+                .append(failCount).append(" 失败");
+        if (runningCount > 0) sb.append(", ").append(runningCount).append(" 仍在运行");
+        if (unknownCount > 0) sb.append(", ").append(unknownCount).append(" 状态未知");
+        sb.append(", ").append(totalCount).append(" 总计");
 
         log.info("[CollectSubAgent] completed: {} success, {} fail, {} total",
                 successCount, failCount, totalCount);

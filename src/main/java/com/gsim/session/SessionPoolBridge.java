@@ -27,6 +27,9 @@ public final class SessionPoolBridge implements AgentProgressSink {
     /** streamId → nodeId 映射（LLM 流式 delta 追加用） */
     private final Map<String, String> streamNodes = new ConcurrentHashMap<>();
 
+    /** 最近创建的 TOOL_CALL 节点 ID（替代 latest-scan，工具在 Orchestrator 中串行执行） */
+    private volatile String lastToolCallNodeId;
+
     public SessionPoolBridge(SessionPool pool, String sessionId) {
         this.pool = pool;
         this.sessionId = sessionId;
@@ -109,6 +112,7 @@ public final class SessionPoolBridge implements AgentProgressSink {
                 SessionNode node = pool.pushNode(sessionId, NodeType.TOOL_CALL, newPayload());
                 node.payload().put("tool", toolName);
                 pool.transitionStatus(node.nodeId(), NodeStatus.PENDING);
+                lastToolCallNodeId = node.nodeId();
             }
             case AgentProgressEvent.TOOL_EXECUTING -> {
                 // find the most recent TOOL_CALL node and mark it as executing
@@ -176,33 +180,34 @@ public final class SessionPoolBridge implements AgentProgressSink {
         }
     }
 
-    /** 标记最近一个 TOOL_CALL 节点为 done（成功或失败）。 */
+    /** 标记最近创建的 TOOL_CALL 节点为 done（成功或失败）。使用 tracked nodeId 替代列表扫描。 */
     private void markLatestToolCallDone(String toolName, String result, AgentProgressEvent event) {
-        var nodes = pool.getNodes(sessionId);
-        for (int i = nodes.size() - 1; i >= 0; i--) {
-            SessionNode n = nodes.get(i);
-            if (n.type() == NodeType.TOOL_CALL
-                    && n.payload().get("status") != NodeStatus.DONE
-                    && n.payload().get("status") != NodeStatus.ERROR) {
-                n.payload().put("result", result);
-                n.payload().put("detail", event.detail());
-                pool.transitionStatus(n.nodeId(),
-                        "failed".equals(result) ? NodeStatus.ERROR : NodeStatus.DONE);
-                return;
-            }
-        }
+        String nodeId = lastToolCallNodeId;
+        if (nodeId == null) return;
+        SessionNode node = pool.nodeById(nodeId);
+        if (node == null) return;
+        if (node.payload().get("status") == NodeStatus.DONE
+                || node.payload().get("status") == NodeStatus.ERROR) return;
+        node.payload().put("result", result);
+        node.payload().put("detail", event.detail());
+        pool.transitionStatus(nodeId,
+                "failed".equals(result) ? NodeStatus.ERROR : NodeStatus.DONE);
     }
 
-    /** 标记最近一个 TOOL_CALL 节点为 executing。 */
+    /** 标记最近创建的 TOOL_CALL 节点为 executing。使用 tracked nodeId 替代列表扫描。 */
     private void markLatestToolCall(AgentProgressEvent event) {
-        var nodes = pool.getNodes(sessionId);
-        for (int i = nodes.size() - 1; i >= 0; i--) {
-            SessionNode n = nodes.get(i);
-            if (n.type() == NodeType.TOOL_CALL) {
-                pool.transitionStatus(n.nodeId(), NodeStatus.STREAMING);
-                return;
-            }
-        }
+        String nodeId = lastToolCallNodeId;
+        if (nodeId == null) return;
+        SessionNode node = pool.nodeById(nodeId);
+        if (node == null) return;
+        pool.transitionStatus(nodeId, NodeStatus.STREAMING);
+    }
+
+    /** 清理该 session 相关的所有 bridge 映射（streamNodes、toolCallNodeId）。 */
+    public void clearSession() {
+        // 仅清理属于当前 session 的 stream 映射
+        streamNodes.clear();
+        lastToolCallNodeId = null;
     }
 
     private static Map<String, Object> newPayload() {

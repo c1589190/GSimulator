@@ -2,6 +2,7 @@ package com.gsim.agent.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.agent.config.AgentConfigStore;
+import com.gsim.agent.core.AgentConfig;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
@@ -196,14 +197,33 @@ public class UpdateSubAgentConfigTool implements AgentTool {
                 changes.put("max_tool_rounds", oldMr + " → " + newMr);
             }
 
-            // 写回文件
-            String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(config);
-            Files.writeString(configFile, json);
+            // 写回文件（原子写入：temp → validate → move → reload）
+            Path tempFile = agentsDir.resolve(agentId + ".json.tmp");
+            try {
+                String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(config);
+                Files.writeString(tempFile, json);
 
-            log.info("[UpdateSubAgentConfigTool] updated {}: {}", agentId, changes.keySet());
+                // 验证 JSON 可解析
+                try {
+                    AgentConfig.fromJson(json);
+                } catch (Exception parseErr) {
+                    Files.deleteIfExists(tempFile);
+                    return ToolResult.fail(NAME, "生成的配置 JSON 不合法: " + parseErr.getMessage());
+                }
 
-            // 立即 reload 让 AgentFactory 生效
-            configStore.reload(agentsDir);
+                // 原子替换
+                Files.move(tempFile, configFile,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+
+                log.info("[UpdateSubAgentConfigTool] updated {}: {}", agentId, changes.keySet());
+
+                // 立即 reload
+                configStore.reload(agentsDir);
+            } catch (Exception e) {
+                try { Files.deleteIfExists(tempFile); } catch (Exception ignored) {}
+                throw e;
+            }
 
             StringBuilder summary = new StringBuilder();
             summary.append("✅ SubAgent 配置已更新: `").append(agentId).append("`\n\n");

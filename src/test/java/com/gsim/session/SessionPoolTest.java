@@ -274,14 +274,26 @@ class SessionPoolTest {
     }
 
     @Test
-    @DisplayName("非 USER_INPUT 节点不触发 waitForUserInput")
-    void nonUserInputDoesNotTriggerWaiter() {
+    @DisplayName("非 USER_INPUT 节点不触发 waitForUserInput，且后续 USER_INPUT 仍可完成")
+    void nonUserInputDoesNotTriggerWaiterButWaiterStillWorks() {
         CompletableFuture<SessionNode> future = pool.waitForUserInput("s1");
 
         pool.pushNode("s1", NodeType.TOOL_CALL, Map.of("tool", "test"));
         pool.pushNode("s1", NodeType.AGENT_MESSAGE, Map.of("msg", "test"));
 
-        assertFalse(future.isDone());
+        assertFalse(future.isDone(), "非 USER_INPUT 不应完成 waiter");
+
+        // Subsequent USER_INPUT should still complete it (waiter was NOT removed)
+        pool.pushNode("s1", NodeType.USER_INPUT, Map.of("text", "玩家输入"));
+        assertTrue(future.isDone(), "后续 USER_INPUT 应完成 waiter");
+        assertEquals("玩家输入", future.getNow(null).payload().get("text"));
+    }
+
+    @Test
+    @DisplayName("重复调用 waitForUserInput 应抛出异常")
+    void duplicateWaitForUserInputThrows() {
+        pool.waitForUserInput("s1");
+        assertThrows(IllegalStateException.class, () -> pool.waitForUserInput("s1"));
     }
 
     // ===== clearSession =====
@@ -299,6 +311,57 @@ class SessionPoolTest {
         assertTrue(pool.getNodes("s1").isEmpty());
         pool.pushNode("s1", NodeType.USER_INPUT, Map.of());
         assertEquals(0, count.get()); // listener also removed
+    }
+
+    @Test
+    @DisplayName("clearSession 应 completeExceptionally 正在等待的 waiter")
+    void clearSessionCompletesWaiterExceptionally() {
+        CompletableFuture<SessionNode> future = pool.waitForUserInput("s1");
+        pool.clearSession("s1");
+
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+    }
+
+    // ===== appendContent 类型安全 =====
+
+    @Test
+    @DisplayName("appendContent 在 content 已是 String（流已完成）时不应崩溃")
+    void appendContentAfterStreamCompletedShouldNotCrash() {
+        SessionNode node = pool.pushNode("s1", NodeType.LLM_STREAMING,
+                new ConcurrentHashMap<>());
+        // Simulate completed stream: content is a String
+        node.payload().put("content", "已完成的内容");
+
+        // Late delta should not crash — should append to string safely
+        assertDoesNotThrow(() -> pool.appendContent(node.nodeId(), "追加内容"));
+        String content = pool.getContent(node.nodeId());
+        assertTrue(content.contains("已完成的内容"));
+        assertTrue(content.contains("追加内容"));
+    }
+
+    @Test
+    @DisplayName("appendContent 在 content 为 null 时正常启动")
+    void appendContentWithNullContentStartsFresh() {
+        SessionNode node = pool.pushNode("s1", NodeType.LLM_STREAMING,
+                new ConcurrentHashMap<>());
+        // content key not yet set
+
+        assertDoesNotThrow(() -> pool.appendContent(node.nodeId(), "首次内容"));
+        assertEquals("首次内容", pool.getContent(node.nodeId()));
+    }
+
+    // ===== transitionStatus 类型安全 =====
+
+    @Test
+    @DisplayName("transitionStatus 在 status 为 String 时不应崩溃")
+    void transitionStatusHandlesStringStatus() {
+        SessionNode node = pool.pushNode("s1", NodeType.TOOL_CALL,
+                new ConcurrentHashMap<>());
+        node.payload().put("status", "PENDING"); // String, not enum
+
+        assertDoesNotThrow(() -> pool.transitionStatus(node.nodeId(), NodeStatus.DONE));
+        assertEquals(NodeStatus.DONE, node.payload().get("status"));
     }
 
     // ===== nodeById =====
