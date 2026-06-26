@@ -47,6 +47,9 @@ public class GSimulatorApplication {
     private CacheSession activeCache;
     private ContextRenderer contextRenderer;
     private Path worldsDir;
+    private WorldCommand worldCommand;
+    private NodeCommand nodeCommand;
+    private ChatCommand chatCommand;
 
     public GSimulatorApplication(AppConfig config) {
         this(config, true, false, false);
@@ -188,6 +191,9 @@ public class GSimulatorApplication {
         ChatCommand cc = new ChatCommand(worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default",
                 () -> activeCache);
+        this.worldCommand = wc;
+        this.nodeCommand = nc;
+        this.chatCommand = cc;
         adapter.setNewCommands(wc, nc, cc);
         log.info("Wired /world, /node, /chat commands into ConsoleInteractionAdapter");
     }
@@ -230,6 +236,7 @@ public class GSimulatorApplication {
         if (webuiMode || config.isWebUiEnabled()) {
             webUiServer.start();
             cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
+            cliWsServer.setCommands(worldCommand, nodeCommand, chatCommand);
             try { cliWsServer.start(); } catch (Exception e) {
                 log.warn("CLI WebSocket server failed to start: {}", e.getMessage()); }
         }

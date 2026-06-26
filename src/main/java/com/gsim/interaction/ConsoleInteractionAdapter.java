@@ -179,10 +179,14 @@ public class ConsoleInteractionAdapter {
                     }
                     handleCommand(cmdName, cleaned);
                 } else {
-                    // 非命令 → 建议使用 /chat 发送消息
-                    out.println("直接输入文本需要通过 /chat 命令发送。");
-                    out.println("输入 /chat <message> 发送消息，/help 查看可用命令。");
-                    out.println();
+                    // 非命令 → 默认走 /chat 发送消息
+                    if (chatCommand != null) {
+                        String text = chatCommand.execute(List.of(cleaned));
+                        displayResult(InteractionResult.ok(text));
+                    } else {
+                        out.println("Chat command not available.");
+                        out.println();
+                    }
                 }
 
             } catch (IOException e) {

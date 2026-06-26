@@ -2,9 +2,9 @@ package com.gsim.webui;
 
 import com.gsim.agent.CompositeAgentProgressSink;
 import com.gsim.app.ApplicationContext;
-import com.gsim.interaction.InteractionManager;
-import com.gsim.interaction.InteractionResult;
-import com.gsim.interaction.InteractionSession;
+import com.gsim.commands.ChatCommand;
+import com.gsim.commands.NodeCommand;
+import com.gsim.commands.WorldCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +13,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -36,6 +38,11 @@ public class CliWebSocketServer {
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private volatile ServerSocket serverSocket;
     private volatile boolean running;
+
+    // New command routing
+    private WorldCommand worldCommand;
+    private NodeCommand nodeCommand;
+    private ChatCommand chatCommand;
 
     public CliWebSocketServer(ApplicationContext ctx, int port,
                                CompositeAgentProgressSink compositeSink) {
@@ -69,6 +76,13 @@ public class CliWebSocketServer {
 
     public int port() { return port; }
 
+    /** Inject new command instances for routing. */
+    public void setCommands(WorldCommand wc, NodeCommand nc, ChatCommand cc) {
+        this.worldCommand = wc;
+        this.nodeCommand = nc;
+        this.chatCommand = cc;
+    }
+
     // ══════════════════════════════════════════
     // Client handler — REPL loop
     // ══════════════════════════════════════════
@@ -85,23 +99,26 @@ public class CliWebSocketServer {
                 return;
             }
 
-            // 创建 CLI session
-            InteractionManager manager = ctx.getInteractionManager();
-            InteractionSession session = ctx.getSessionManager().getOrCreateSession("default");
-
             // 发送欢迎消息
-            sendWs(out, exec(manager, session, "/help"));
+            sendWs(out, exec("/help"));
 
             // REPL 循环
             while (running && !client.isClosed()) {
                 String cmd = readWs(in);
                 if (cmd == null) break;
 
+                // Escape exit/quit
+                String trimmed = cmd.trim().toLowerCase();
+                if (trimmed.equals("/exit") || trimmed.equals("/quit")) {
+                    sendWs(out, "Goodbye.");
+                    break;
+                }
+
                 // 创建临时 progress sink 用于实时推送事件
                 CliWsProgressSink ps = new CliWsProgressSink(out);
                 compositeSink.addSink(ps);
 
-                String output = exec(manager, session, cmd);
+                String output = exec(cmd);
 
                 // 移除 sink 并等待发送完成
                 compositeSink.removeSink(ps);
@@ -116,20 +133,46 @@ public class CliWebSocketServer {
         }
     }
 
-    private String exec(InteractionManager manager, InteractionSession session, String cmd) {
+    private String exec(String cmd) {
         try {
-            InteractionResult result = manager.handle(cmd, session);
-            StringBuilder sb = new StringBuilder();
-            if (result.success()) {
-                sb.append(result.message());
-                if (result.displayText() != null) sb.append("\n").append(result.displayText());
+            String trimmed = cmd.trim();
+            if (trimmed.startsWith("/")) {
+                int spaceIdx = trimmed.indexOf(' ');
+                String cmdName = spaceIdx > 0 ? trimmed.substring(1, spaceIdx) : trimmed.substring(1);
+                List<String> args = spaceIdx > 0
+                    ? Arrays.asList(trimmed.substring(spaceIdx + 1).trim().split("\\s+"))
+                    : List.of();
+
+                return switch (cmdName) {
+                    case "help" -> helpText();
+                    case "world" -> worldCommand != null ? worldCommand.execute(args) : "World command not available.";
+                    case "node" -> nodeCommand != null ? nodeCommand.execute(args) : "Node command not available.";
+                    case "chat" -> chatCommand != null ? chatCommand.execute(args) : "Chat command not available.";
+                    case "exit", "quit" -> "Goodbye.";
+                    default -> "Unknown command: /" + cmdName + ". Type /help for available commands.";
+                };
             } else {
-                sb.append("[错误] ").append(result.message());
+                // Non-command input → route to /chat
+                if (chatCommand != null) {
+                    return chatCommand.execute(List.of(trimmed));
+                }
+                return "直接输入文本需要通过 /chat 命令发送。输入 /chat <message> 发送消息。";
             }
-            return sb.toString().trim();
         } catch (Exception e) {
             return "[错误] " + e.getMessage();
         }
+    }
+
+    private String helpText() {
+        return """
+            Available commands:
+              /world [list|create|switch]   — World management
+              /node [status|list|goto|create] — Node management
+              /chat <message>               — Send message to LLM
+              /chat history [n]             — Show last n messages
+              /chat clear                   — Clear chat session
+              /exit, /quit                  — Exit
+              /help                         — Show this help""";
     }
 
     // ══════════════════════════════════════════
