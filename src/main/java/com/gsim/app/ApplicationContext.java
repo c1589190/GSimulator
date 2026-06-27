@@ -16,7 +16,9 @@ import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.llm.LlmsConfigLoader;
 import com.gsim.llm.ProviderConfig;
 import com.gsim.session.SessionPool;
+import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
+import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.tool.LocalFileSearchService;
@@ -57,6 +59,8 @@ public class ApplicationContext {
     private ChatCommand chatCommand;
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
+    private LlmCommand llmCommand;
+    private AgentCommand agentCommand;
 
     public ApplicationContext(AppConfig config) {
         this.config = config;
@@ -158,6 +162,12 @@ public class ApplicationContext {
 
     public NodeCommand getNodeCommand() { return nodeCommand; }
     public void setNodeCommand(NodeCommand nc) { this.nodeCommand = nc; }
+
+    public LlmCommand getLlmCommand() { return llmCommand; }
+    public void setLlmCommand(LlmCommand lc) { this.llmCommand = lc; }
+
+    public AgentCommand getAgentCommand() { return agentCommand; }
+    public void setAgentCommand(AgentCommand ac) { this.agentCommand = ac; }
 
     public LocalFileSearchService getLocalFileSearchService() { return localFileSearchService; }
 

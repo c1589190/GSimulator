@@ -2,7 +2,9 @@ package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
 import com.gsim.cache.CacheSession;
+import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
+import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.compact.ToolResultCompactor;
@@ -119,10 +121,42 @@ public class GSimulatorApplication {
                     chatCommand,
                     () -> worldInfo,
                     () -> activeCache,
+                    s -> this.activeCache = s,
+                    worldsDir,
+                    () -> worldInfo != null ? worldInfo.worldId() : "default",
+                    ctx.getCachesManager(),
+                    ctx.getSessionPool());
+            webUiServer.registerHandler("/chat", chatApiHandler);
+            webUiServer.registerHandler("/api/chat", chatApiHandler);
+            log.info("Registered ChatApiHandler on /chat and /api/chat");
+
+            // TimelineApiHandler
+            var timelineHandler = new com.gsim.webui.handlers.TimelineApiHandler(
+                    () -> worldInfo,
                     worldsDir,
                     () -> worldInfo != null ? worldInfo.worldId() : "default");
-            webUiServer.registerHandler("/chat", chatApiHandler);
-            log.info("Registered ChatApiHandler on /chat");
+            webUiServer.registerHandler("/timeline/data", timelineHandler);
+            webUiServer.registerHandler("/timeline/node", timelineHandler);
+            webUiServer.registerHandler("/timeline/nodes", timelineHandler);
+            log.info("Registered TimelineApiHandler on /timeline/*");
+
+            // LlmApiHandler + AgentApiHandler — 配置管理
+            var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
+                    new com.gsim.llm.LlmConfigManager(config.getLlmsPath()),
+                    ctx.getLlmProviderRegistry());
+            webUiServer.registerHandler("/api/llm", llmApiHandler);
+
+            var agentApiHandler = new com.gsim.webui.handlers.AgentApiHandler(
+                    new com.gsim.agent.config.AgentConfigManager(
+                            agentFactory.store(), config.agentsDir()));
+            webUiServer.registerHandler("/api/agents", agentApiHandler);
+
+            var worldApiHandler = new com.gsim.webui.handlers.WorldApiHandler(
+                    worldsDir,
+                    () -> worldInfo != null ? worldInfo.worldId() : "default");
+            webUiServer.registerHandler("/api/worlds", worldApiHandler);
+
+            log.info("Registered LlmApiHandler + AgentApiHandler + WorldApiHandler");
         }
     }
 
@@ -260,7 +294,17 @@ public class GSimulatorApplication {
         ctx.setWorldCommand(wc);
         ctx.setNodeCommand(nc);
 
-        log.info("Wired /world, /node, /chat commands into ConsoleInteractionAdapter");
+        // LLM + Agent config management commands
+        var llmConfigManager = new com.gsim.llm.LlmConfigManager(config.getLlmsPath());
+        var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(
+                agentFactory.store(), config.agentsDir());
+        LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
+        AgentCommand agentCmd = new AgentCommand(agentConfigManager);
+        adapter.setConfigCommands(llmCmd, agentCmd);
+        ctx.setLlmCommand(llmCmd);
+        ctx.setAgentCommand(agentCmd);
+
+        log.info("Wired /world, /node, /chat, /llm, /agent commands into ConsoleInteractionAdapter");
     }
 
     private void injectSystemPrompt() {

@@ -1,0 +1,193 @@
+<div>
+    <div class="text-sm font-bold terminal-green mb-2">⚙ 设置</div>
+
+    <!-- Tab 切换 -->
+    <div class="flex gap-1 mb-2">
+        <button id="settings-tab-llm" class="settings-tab px-2 py-1 text-xs rounded-t bg-green-800 text-green-200"
+                onclick="switchSettingsTab('llm')">LLM Providers</button>
+        <button id="settings-tab-agent" class="settings-tab px-2 py-1 text-xs rounded-t bg-gray-700 text-gray-400"
+                onclick="switchSettingsTab('agent')">Agent Configs</button>
+    </div>
+
+    <!-- LLM Providers -->
+    <div id="settings-panel-llm">
+        <div id="llm-provider-list" class="space-y-2 mb-3">
+            <div class="text-gray-600 text-xs">加载中...</div>
+        </div>
+        <div id="llm-test-result" class="text-xs mb-2"></div>
+    </div>
+
+    <!-- Agent Configs -->
+    <div id="settings-panel-agent" class="hidden">
+        <div id="agent-config-list" class="space-y-2 mb-3">
+            <div class="text-gray-600 text-xs">加载中...</div>
+        </div>
+        <button id="agent-reload-btn" class="px-3 py-1 bg-blue-700 hover:bg-blue-600 text-white text-xs rounded"
+                onclick="reloadAgents()">🔄 重载配置</button>
+        <div id="agent-reload-msg" class="text-xs mt-1"></div>
+    </div>
+</div>
+
+<style>
+    .settings-tab.active { background-color: #065f46; color: #d1fae5; }
+    .settings-edit-row { display: flex; gap: 0.25rem; align-items: center; margin-top: 0.25rem; }
+    .settings-edit-row input, .settings-edit-row select {
+        padding: 0.125rem 0.25rem; font-size: 0.7rem;
+        background: #1f2937; border: 1px solid #4b5563; border-radius: 0.25rem; color: #e5e7eb;
+    }
+</style>
+
+<script>
+    var _settingsTab = 'llm';
+
+    function switchSettingsTab(tab) {
+        _settingsTab = tab;
+        document.getElementById('settings-tab-llm').classList.toggle('bg-green-800', tab === 'llm');
+        document.getElementById('settings-tab-llm').classList.toggle('text-green-200', tab === 'llm');
+        document.getElementById('settings-tab-llm').classList.toggle('bg-gray-700', tab !== 'llm');
+        document.getElementById('settings-tab-llm').classList.toggle('text-gray-400', tab !== 'llm');
+        document.getElementById('settings-tab-agent').classList.toggle('bg-green-800', tab === 'agent');
+        document.getElementById('settings-tab-agent').classList.toggle('text-green-200', tab === 'agent');
+        document.getElementById('settings-tab-agent').classList.toggle('bg-gray-700', tab !== 'agent');
+        document.getElementById('settings-tab-agent').classList.toggle('text-gray-400', tab !== 'agent');
+        document.getElementById('settings-panel-llm').classList.toggle('hidden', tab !== 'llm');
+        document.getElementById('settings-panel-agent').classList.toggle('hidden', tab !== 'agent');
+        if (tab === 'llm') loadLlmProviders();
+        if (tab === 'agent') loadAgentConfigs();
+    }
+
+    // ============ LLM Providers ============
+    function loadLlmProviders() {
+        fetch('/api/llm/providers')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var list = document.getElementById('llm-provider-list');
+            var providers = data.providers || [];
+            if (providers.length === 0) {
+                list.innerHTML = '<div class="text-gray-600 text-xs">无 LLM Provider</div>';
+                return;
+            }
+            var html = '';
+            providers.forEach(function(p) {
+                html += '<div class="p-2 bg-gray-900 rounded text-xs">'
+                    + '<div class="font-bold text-gray-300">' + p.id + (p.isDefault ? ' ⭐' : '')
+                    + ' <span class="text-gray-500">' + p.model + '</span></div>'
+                    + '<div class="text-gray-500">' + p.name + ' | ' + p.baseUrl + '</div>'
+                    + '<div class="text-gray-500">API Key: ' + p.apiKey + ' | temp: ' + p.temperature + ' | maxTokens: ' + p.maxTokens + '</div>'
+                    + '<div class="settings-edit-row">'
+                    + '<input id="llm-field-' + p.id + '" type="text" placeholder="字段 (temperature/model/baseUrl/apiKey/name)" size="12">'
+                    + '<input id="llm-value-' + p.id + '" type="text" placeholder="值" size="20">'
+                    + '<button class="px-2 py-0.5 bg-green-700 hover:bg-green-600 text-white rounded" '
+                    +   'onclick="updateLlmProvider(\'' + p.id + '\')">保存</button>'
+                    + '<button class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 text-white rounded" '
+                    +   'onclick="testLlmProvider(\'' + p.id + '\')">测试</button>'
+                    + '<span id="llm-msg-' + p.id + '" class="ml-1"></span>'
+                    + '</div></div>';
+            });
+            list.innerHTML = html;
+        });
+    }
+
+    function updateLlmProvider(id) {
+        var field = document.getElementById('llm-field-' + id).value.trim();
+        var value = document.getElementById('llm-value-' + id).value.trim();
+        var msgEl = document.getElementById('llm-msg-' + id);
+        if (!field) { msgEl.innerHTML = '<span class="text-red-400">输入字段名</span>'; return; }
+
+        fetch('/api/llm/providers/' + encodeURIComponent(id), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field: field, value: value})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                msgEl.innerHTML = '<span class="text-green-400">✔</span>';
+                loadLlmProviders();
+            } else {
+                msgEl.innerHTML = '<span class="text-red-400">' + data.message + '</span>';
+            }
+        });
+    }
+
+    function testLlmProvider(id) {
+        var msgEl = document.getElementById('llm-msg-' + id);
+        msgEl.innerHTML = '<span class="text-yellow-400">测试中...</span>';
+        fetch('/api/llm/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var ok = data.result && data.result.indexOf('OK') >= 0;
+            msgEl.innerHTML = '<span class="' + (ok ? 'text-green-400' : 'text-red-400') + '">' + data.result + '</span>';
+        });
+    }
+
+    // ============ Agent Configs ============
+    function loadAgentConfigs() {
+        fetch('/api/agents')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var list = document.getElementById('agent-config-list');
+            var agents = data.agents || [];
+            if (agents.length === 0) {
+                list.innerHTML = '<div class="text-gray-600 text-xs">无 Agent 配置</div>';
+                return;
+            }
+            var html = '';
+            agents.forEach(function(a) {
+                html += '<div class="p-2 bg-gray-900 rounded text-xs">'
+                    + '<div class="font-bold text-gray-300">' + a.agentId
+                    + ' <span class="text-gray-500">provider=' + a.llmProvider
+                    + ' temp=' + a.temperature + ' rounds=' + a.maxToolRounds
+                    + ' tokens=' + a.maxTokens + ' filter=' + a.toolFilterMode + '</span></div>'
+                    + '<div class="settings-edit-row">'
+                    + '<input id="agent-field-' + a.agentId + '" type="text" placeholder="字段 (temperature/maxTokens/maxToolRounds/llmProvider/toolFilter)" size="14">'
+                    + '<input id="agent-value-' + a.agentId + '" type="text" placeholder="值" size="20">'
+                    + '<button class="px-2 py-0.5 bg-green-700 hover:bg-green-600 text-white rounded" '
+                    +   'onclick="updateAgent(\'' + a.agentId + '\')">保存</button>'
+                    + '<span id="agent-msg-' + a.agentId + '" class="ml-1"></span>'
+                    + '</div></div>';
+            });
+            list.innerHTML = html;
+        });
+    }
+
+    function updateAgent(id) {
+        var field = document.getElementById('agent-field-' + id).value.trim();
+        var value = document.getElementById('agent-value-' + id).value.trim();
+        var msgEl = document.getElementById('agent-msg-' + id);
+        if (!field) { msgEl.innerHTML = '<span class="text-red-400">输入字段名</span>'; return; }
+
+        fetch('/api/agents/' + encodeURIComponent(id), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field: field, value: value})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                msgEl.innerHTML = '<span class="text-green-400">✔</span>';
+                loadAgentConfigs();
+            } else {
+                msgEl.innerHTML = '<span class="text-red-400">' + data.message + '</span>';
+            }
+        });
+    }
+
+    function reloadAgents() {
+        var msgEl = document.getElementById('agent-reload-msg');
+        msgEl.innerHTML = '<span class="text-yellow-400">重载中...</span>';
+        fetch('/api/agents/reload', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            msgEl.innerHTML = '<span class="text-green-400">' + data.message + '</span>';
+            loadAgentConfigs();
+        });
+    }
+
+    // 首次加载
+    loadLlmProviders();
+</script>

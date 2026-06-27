@@ -1,5 +1,17 @@
 <div class="flex flex-col flex-1 min-h-0">
     <div class="text-sm font-bold terminal-green mb-2">&#x1F4AC; Agent 对话</div>
+    <!-- 对话选择器 -->
+    <div id="chat-conversation-bar" class="flex gap-1 mb-2 items-center">
+        <select id="conversation-select" class="flex-1 px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-300"
+                onchange="switchConversation(this.value)">
+            <option value="">加载中...</option>
+        </select>
+        <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
+                onclick="newConversation()" title="新建对话">+</button>
+        <button class="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded"
+                onclick="deleteConversation()" title="删除当前对话">×</button>
+    </div>
+
     <div id="chat-context" class="text-xs text-gray-500 mb-2 px-2 py-1 bg-gray-800 rounded"
          hx-get="/chat/context-bar" hx-trigger="load" hx-swap="innerHTML">
         分支: —

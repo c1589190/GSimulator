@@ -121,6 +121,32 @@ function loadMobilePage(name) {
     function initChatPanel() {
         console.log('[chat] initChatPanel via SessionWs');
 
+        // 0. 先检查后端状态（抗刷新丢失）
+        fetch('/chat/status')
+        .then(function(r) { return r.json(); })
+        .then(function(status) {
+            window._chatStatus = status;
+            console.log('[chat] status:', status.worldId, '/', status.activeNodeId,
+                'streaming:', status.isStreaming);
+
+            // 更新上下文栏
+            if (status.worldId) {
+                var ctxBar = document.getElementById('chat-context');
+                if (ctxBar) {
+                    ctxBar.textContent = '📍 ' + status.worldId + ' / ' + status.activeNodeId
+                        + ' | Turn ' + status.turn + ' | ' + status.worldTime;
+                }
+            }
+
+            // 如果有流式中的内容，前端标记待续接
+            if (status.isStreaming) {
+                console.log('[chat] Active stream detected: ' + status.streamingNodeId
+                    + ' (will resume via WebSocket)');
+            }
+        }).catch(function(err) {
+            console.warn('[chat] Failed to check status:', err.message);
+        });
+
         // 1. 先从 localStorage 恢复（即时显示，不闪烁）
         var restored = MessageStore.restoreFromLocal();
         if (restored) {
@@ -149,6 +175,9 @@ function loadMobilePage(name) {
         });
 
         sessionWs.connect();
+
+        // 3b. 加载对话列表
+        setTimeout(function() { window.loadConversations && window.loadConversations(); }, 300);
 
         // 4. 从后端加载历史消息（与 SessionPool 互补）
         fetch('/chat/messages?format=json', {
@@ -271,4 +300,71 @@ function loadMobilePage(name) {
         e.preventDefault();
         window._chatSend && window._chatSend();
     });
+
+    // ---- 对话管理 (Task 4) ----
+    window.loadConversations = function() {
+        fetch('/chat/conversations')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('conversation-select');
+            if (!sel) return;
+            var currentVal = sel.value;
+            sel.innerHTML = '';
+            var conversations = data.conversations || [];
+            conversations.forEach(function(c) {
+                var opt = document.createElement('option');
+                opt.value = c.sessionId;
+                opt.textContent = (c.isActive ? '● ' : '') + c.agentName
+                    + ' (' + c.messageCount + ' msgs, ' + (c.createdAt || '').substring(0,16) + ')';
+                if (c.isActive) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            if (conversations.length === 0) {
+                sel.innerHTML = '<option value="">无对话</option>';
+            }
+        })
+        .catch(function(err) { console.warn('loadConversations:', err.message); });
+    };
+
+    window.switchConversation = function(sessionId) {
+        if (!sessionId) return;
+        fetch('/chat/conversations/' + encodeURIComponent(sessionId) + '/load', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                location.reload();  // 简单粗暴：重载页面以载入新对话
+            }
+        })
+        .catch(function(err) { console.warn('switchConversation:', err.message); });
+    };
+
+    window.newConversation = function() {
+        fetch('/chat/conversations', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({agentName: 'Orchestrator'})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                fetch('/chat/conversations/' + encodeURIComponent(data.sessionId) + '/load', {method: 'POST'})
+                .then(function() { location.reload(); });
+            }
+        })
+        .catch(function(err) { console.warn('newConversation:', err.message); });
+    };
+
+    window.deleteConversation = function() {
+        var sel = document.getElementById('conversation-select');
+        if (!sel || !sel.value) return;
+        var sessionId = sel.value;
+        if (!confirm('删除此对话？')) return;
+        fetch('/chat/conversations/' + encodeURIComponent(sessionId), {method: 'DELETE'})
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) window.loadConversations();
+        })
+        .catch(function(err) { console.warn('deleteConversation:', err.message); });
+    };
+
 })();

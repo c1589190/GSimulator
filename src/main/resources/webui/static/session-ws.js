@@ -6,6 +6,7 @@
 //
 // 事件:
 //   history               — 连接时回放已有节点
+//   streamingState        — 连接时当前流式节点（抗刷新丢失）
 //   nodePushed            — 新节点 (node: SessionNode JSON)
 //   nodeUpdated           — 节点更新 (nodeId, key, value)
 //   nodeStatusChanged     — 状态变更 (nodeId, oldStatus, newStatus)
@@ -24,6 +25,7 @@
         this._onNodePushed = null;
         this._onNodeUpdated = null;
         this._onStatusChanged = null;
+        this._onStreamingState = null;
         this._onHistory = null;
         this._onConnected = null;
         this._onDisconnected = null;
@@ -67,6 +69,9 @@
                     break;
                 case 'nodeStatusChanged':
                     if (self._onStatusChanged) self._onStatusChanged(msg.nodeId, msg.oldStatus, msg.newStatus);
+                    break;
+                case 'streamingState':
+                    if (self._onStreamingState) self._onStreamingState(msg.node);
                     break;
                 case 'pong':
                     break;
@@ -122,6 +127,7 @@
     SessionWs.prototype.onNodePushed = function(fn) { this._onNodePushed = fn; };
     SessionWs.prototype.onNodeUpdated = function(fn) { this._onNodeUpdated = fn; };
     SessionWs.prototype.onStatusChanged = function(fn) { this._onStatusChanged = fn; };
+    SessionWs.prototype.onStreamingState = function(fn) { this._onStreamingState = fn; };
     SessionWs.prototype.onHistory = function(fn) { this._onHistory = fn; };
     SessionWs.prototype.onConnected = function(fn) { this._onConnected = fn; };
     SessionWs.prototype.onDisconnected = function(fn) { this._onDisconnected = fn; };

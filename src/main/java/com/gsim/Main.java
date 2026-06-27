@@ -93,10 +93,11 @@ public class Main {
                     + " (" + bootResult.activeCache().messageCount() + " messages)");
             }
 
-            // 5. 当前阶段：仅 CLI 模式，HTTP API / WebUI 暂不启动
-            boolean cliMode = true;
-            boolean httpMode = false;
-            boolean webuiMode = false;
+            // 5. 确定启动模式
+            // 未指定任何模式标志时，默认启用 CLI + HTTP API + WebUI
+            boolean cliMode = cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui());
+            boolean httpMode = cliArgs.http() || (!cliArgs.cli() && !cliArgs.webui());
+            boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http());
 
             // 6. 启动应用
             GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, bootResult);

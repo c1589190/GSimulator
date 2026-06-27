@@ -74,9 +74,7 @@ public class ApiManager {
         System.out.println("   POST /api/tasks/{id}/cancel   — 取消任务");
         System.out.println("   POST /api/command             — 执行命令（旧）");
         System.out.println("   POST /api/command/stream      — SSE 流式命令（旧）");
-        System.out.println("   GET  /api/campaigns           — Campaign 管理");
         System.out.println("   POST /api/import/url          — URL 导入");
-        System.out.println("   GET  /api/searchdb            — 搜索知识库");
     }
 
     /**

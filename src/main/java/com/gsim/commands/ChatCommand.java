@@ -54,6 +54,14 @@ public final class ChatCommand {
         this.cancelCallback = cb;
     }
 
+    /** 公开取消方法，供 HTTP API 调用。 */
+    public void cancel() {
+        Runnable cb = this.cancelCallback;
+        if (cb != null) {
+            cb.run();
+        }
+    }
+
     public String execute(List<String> args) {
         if (args.isEmpty()) return "Usage: /chat [message|history|clear] ...";
         String sub = args.get(0);

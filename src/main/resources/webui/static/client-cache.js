@@ -940,6 +940,16 @@
         ws.onStatusChanged(function(nodeId, oldStatus, newStatus) {
             handleStatusChange(nodeId, oldStatus, newStatus);
         });
+
+        ws.onStreamingState(function(node) {
+            // 抗刷新丢失：重连时收到正在流式中的节点
+            // 如果该节点不在 cardsByNodeId 中（新连接场景），渲染它
+            if (!cardsByNodeId[node.nodeId]) {
+                console.log('[ClientCache] streamingState: rendering active stream node', node.nodeId);
+                handleNodePush(node);
+                scrollBottom();
+            }
+        });
     }
 
     /** 根据 SessionNode 创建/更新 Card */

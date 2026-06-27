@@ -1,26 +1,26 @@
 <div id="scenario-manager-root">
-    <!-- ===== 剧本选择器 ===== -->
-    <div class="text-sm font-bold terminal-green mb-2">📜 剧本管理</div>
+    <!-- ===== 世界选择器 ===== -->
+    <div class="text-sm font-bold terminal-green mb-2">📜 世界管理</div>
 
-    <div id="scenario-selector" class="mb-3 p-2 bg-gray-900 rounded"
-         hx-get="/scenario/list" hx-trigger="load" hx-swap="innerHTML">
-        <div class="text-gray-600 text-xs">加载剧本列表...</div>
+    <div id="world-selector" class="mb-3 p-2 bg-gray-900 rounded"
+         hx-get="/api/worlds" hx-trigger="load" hx-swap="innerHTML">
+        <div class="text-gray-600 text-xs">加载世界列表...</div>
     </div>
 
-    <!-- 创建剧本表单（默认隐藏） -->
-    <div id="scenario-create-form" class="hidden mb-3 p-2 bg-gray-900 rounded">
-        <div class="text-xs font-bold text-gray-300 mb-2">➕ 创建新剧本</div>
-        <input id="new-scenario-name" type="text" placeholder="剧本名称（英文ID，如 ming-dynasty）"
+    <!-- 创建世界表单（默认隐藏） -->
+    <div id="world-create-form" class="hidden mb-3 p-2 bg-gray-900 rounded">
+        <div class="text-xs font-bold text-gray-300 mb-2">➕ 创建新世界</div>
+        <input id="new-world-id" type="text" placeholder="世界ID（英文，如 ming-dynasty）"
                class="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-300 mb-2 input-area">
-        <textarea id="new-scenario-desc" placeholder="世界观描述（可选，留空使用默认模板）" rows="3"
-                  class="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-300 mb-2 input-area"></textarea>
+        <input id="new-world-name" type="text" placeholder="显示名称（如 大明王朝）"
+               class="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-300 mb-2 input-area">
         <div class="flex gap-2">
             <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
-                    onclick="createScenario()">创建</button>
+                    onclick="createWorld()">创建</button>
             <button class="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded"
-                    onclick="document.getElementById('scenario-create-form').classList.add('hidden')">取消</button>
+                    onclick="document.getElementById('world-create-form').classList.add('hidden')">取消</button>
         </div>
-        <div id="scenario-create-msg" class="text-xs mt-1"></div>
+        <div id="world-create-msg" class="text-xs mt-1"></div>
     </div>
 
     <!-- ===== 故事背景编辑器 ===== -->
@@ -87,19 +87,20 @@
 </style>
 
 <script>
-    // ==================== 初始化守卫（防止重复加载） ====================
+    // ==================== 初始化 ====================
     var _scenarioInitDone = false;
+    var currentWorldId = null;
+    var currentFile = 'world.md';
 
     function scenarioInit() {
         if (_scenarioInitDone) return;
         _scenarioInitDone = true;
-        loadScenarioList();
+        loadWorldList();
         setTimeout(function() {
-            if (document.getElementById('file-editor')) loadCurrentFile();
-        }, 300);
+            if (document.getElementById('file-editor') && currentWorldId) loadCurrentFile();
+        }, 500);
     }
 
-    // HTMX 加载后自动初始化
     document.body.addEventListener('htmx:afterSettle', function(e) {
         var target = e.detail && e.detail.target;
         if (target && target.querySelector && target.querySelector('#scenario-manager-root')) {
@@ -108,27 +109,28 @@
         }
     });
 
-    // 如果页面首次加载时已经在 DOM 中（服务端渲染场景）
     if (document.getElementById('scenario-manager-root')) {
         setTimeout(scenarioInit, 100);
     }
 
-    // ==================== 当前激活的文件 Tab ====================
-    var currentFile = 'world.md';
-
-    function loadScenarioList() {
-        fetch('/scenario/list')
+    // ==================== 世界列表 ====================
+    function loadWorldList() {
+        fetch('/api/worlds')
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                renderScenarioList(data);
+                currentWorldId = data.activeWorld;
+                renderWorldList(data);
+                if (!document.getElementById('file-editor').value || document.getElementById('file-editor').value === '加载中...') {
+                    loadCurrentFile();
+                }
             })
             .catch(function(err) {
-                console.warn('Failed to load scenarios:', err.message);
+                console.warn('Failed to load worlds:', err.message);
             });
     }
 
-    function renderScenarioList(data) {
-        var container = document.getElementById('scenario-selector');
+    function renderWorldList(data) {
+        var container = document.getElementById('world-selector');
         if (!container) return;
 
         var worlds = data.worlds || [];
@@ -139,44 +141,42 @@
                 ? 'bg-green-800 text-green-200 border-green-400'
                 : 'bg-gray-700 text-gray-300 border-gray-600 hover:border-gray-400';
             html += '<span class="px-2 py-0.5 text-xs rounded border ' + cls + '">'
-                + (w.isActive ? '● ' : '') + w.name + '</span>';
+                + (w.isActive ? '● ' : '') + w.name + ' <span class="text-gray-500">(' + w.id + ')</span></span>';
         });
         html += '</div>';
 
         html += '<div class="flex gap-1">';
         html += '<button class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 text-white text-xs rounded" '
-            + 'onclick="showSwitchDialog()">切换剧本</button>';
+            + 'onclick="showSwitchDialog()">切换世界</button>';
         html += '<button class="px-2 py-0.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs rounded" '
-            + 'onclick="showDeleteDialog()">删除剧本</button>';
+            + 'onclick="showDeleteDialog()">删除世界</button>';
         html += '<button class="px-2 py-0.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded" '
-            + 'onclick="document.getElementById(\'scenario-create-form\').classList.remove(\'hidden\')">+ 新建</button>';
+            + 'onclick="document.getElementById(\'world-create-form\').classList.remove(\'hidden\')">+ 新建</button>';
         html += '</div>';
 
-        // 存储剧本列表用于快速查找
         container.setAttribute('data-worlds', JSON.stringify(worlds));
         container.setAttribute('data-active', active);
         container.innerHTML = html;
     }
 
-    // ==================== 切换剧本 ====================
+    // ==================== 切换世界 ====================
     function showSwitchDialog() {
-        var container = document.getElementById('scenario-selector');
+        var container = document.getElementById('world-selector');
         var worlds = JSON.parse(container.getAttribute('data-worlds') || '[]');
-        var active = container.getAttribute('data-active') || '';
 
         var options = '';
         worlds.forEach(function(w) {
             var sel = w.isActive ? ' selected' : '';
-            options += '<option value="' + w.name + '"' + sel + '>' + w.name + (w.isActive ? ' (当前)' : '') + '</option>';
+            options += '<option value="' + w.id + '"' + sel + '>' + w.name + ' (' + w.id + ')' + (w.isActive ? ' [当前]' : '') + '</option>';
         });
 
         var html = '<div class="mt-2 p-2 bg-gray-800 rounded">'
-            + '<div class="text-xs font-bold text-gray-300 mb-1">切换剧本</div>'
+            + '<div class="text-xs font-bold text-gray-300 mb-1">切换世界</div>'
             + '<select id="switch-select" class="w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 mb-2">'
             + options + '</select>'
             + '<div class="flex gap-1">'
             + '<button class="px-2 py-0.5 bg-blue-700 hover:bg-blue-600 text-white text-xs rounded" onclick="doSwitch()">确认切换</button>'
-            + '<button class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded" onclick="loadScenarioList()">取消</button>'
+            + '<button class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded" onclick="loadWorldList()">取消</button>'
             + '</div>'
             + '<div id="switch-msg" class="text-xs mt-1"></div>'
             + '</div>';
@@ -186,12 +186,8 @@
     function doSwitch() {
         var sel = document.getElementById('switch-select');
         if (!sel) return;
-        var name = sel.value;
-        fetch('/scenario/switch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: name})
-        })
+        var id = sel.value;
+        fetch('/api/worlds/' + encodeURIComponent(id) + '/switch', {method: 'POST'})
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.success) {
@@ -207,31 +203,30 @@
         });
     }
 
-    // ==================== 删除剧本 ====================
+    // ==================== 删除世界 ====================
     function showDeleteDialog() {
-        var container = document.getElementById('scenario-selector');
+        var container = document.getElementById('world-selector');
         var worlds = JSON.parse(container.getAttribute('data-worlds') || '[]');
-        var active = container.getAttribute('data-active') || '';
 
         var options = '';
         worlds.forEach(function(w) {
             if (!w.isActive) {
-                options += '<option value="' + w.name + '">' + w.name + '</option>';
+                options += '<option value="' + w.id + '">' + w.name + ' (' + w.id + ')</option>';
             }
         });
 
         if (!options) {
-            alert('没有可删除的剧本（不能删除当前活动剧本，且至少需要一个剧本）。');
+            alert('没有可删除的世界（不能删除当前活动世界）。');
             return;
         }
 
         var html = '<div class="mt-2 p-2 bg-gray-800 rounded border border-red-700">'
-            + '<div class="text-xs font-bold text-red-400 mb-1">⚠ 删除剧本（不可逆）</div>'
+            + '<div class="text-xs font-bold text-red-400 mb-1">⚠ 删除世界（不可逆）</div>'
             + '<select id="delete-select" class="w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 mb-2">'
             + options + '</select>'
             + '<div class="flex gap-1">'
             + '<button class="px-2 py-0.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded" onclick="doDelete()">确认删除</button>'
-            + '<button class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded" onclick="loadScenarioList()">取消</button>'
+            + '<button class="px-2 py-0.5 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded" onclick="loadWorldList()">取消</button>'
             + '</div>'
             + '<div id="delete-msg" class="text-xs mt-1"></div>'
             + '</div>';
@@ -241,10 +236,10 @@
     function doDelete() {
         var sel = document.getElementById('delete-select');
         if (!sel) return;
-        var name = sel.value;
-        if (!confirm('确认删除剧本 "' + name + '"？此操作不可恢复！')) return;
+        var id = sel.value;
+        if (!confirm('确认删除世界 "' + id + '"？此操作不可恢复！')) return;
 
-        fetch('/scenario/' + encodeURIComponent(name), {method: 'DELETE'})
+        fetch('/api/worlds/' + encodeURIComponent(id), {method: 'DELETE'})
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.success) {
@@ -260,38 +255,33 @@
             });
     }
 
-    // ==================== 创建剧本 ====================
-    function createScenario() {
-        var name = document.getElementById('new-scenario-name').value.trim();
-        var desc = document.getElementById('new-scenario-desc').value.trim();
-        var msgEl = document.getElementById('scenario-create-msg');
+    // ==================== 创建世界 ====================
+    function createWorld() {
+        var id = document.getElementById('new-world-id').value.trim();
+        var name = document.getElementById('new-world-name').value.trim();
+        var msgEl = document.getElementById('world-create-msg');
 
-        if (!name) {
-            msgEl.innerHTML = '<span class="text-red-400">请输入剧本名称</span>';
+        if (!id) {
+            msgEl.innerHTML = '<span class="text-red-400">请输入世界ID</span>';
             return;
         }
 
-        fetch('/scenario/create', {
+        fetch('/api/worlds', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: name, worldContent: desc || null})
+            body: JSON.stringify({id: id, name: name || id})
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.success) {
-                // 创建成功后自动切换过去
-                fetch('/scenario/switch', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name: data.name})
-                })
+                fetch('/api/worlds/' + encodeURIComponent(data.id) + '/switch', {method: 'POST'})
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.success) location.reload();
-                    else msgEl.innerHTML = '<span class="text-yellow-400">剧本已创建，但切换失败，请手动切换</span>';
+                    else msgEl.innerHTML = '<span class="text-yellow-400">世界已创建，但切换失败，请手动切换</span>';
                 });
             } else {
-                msgEl.innerHTML = '<span class="text-red-400">' + (data.message || '创建失败') + '</span>';
+                msgEl.innerHTML = '<span class="text-red-400">' + (data.message || data.error || '创建失败') + '</span>';
             }
         })
         .catch(function(err) {
@@ -302,7 +292,6 @@
     // ==================== 文件编辑器 ====================
     function switchFileTab(fileName) {
         currentFile = fileName;
-        // 更新 tab 样式
         var tabs = document.querySelectorAll('.file-tab');
         tabs.forEach(function(t) {
             var isActive = t.getAttribute('data-file') === fileName;
@@ -317,17 +306,16 @@
     function loadCurrentFile() {
         var editor = document.getElementById('file-editor');
         if (!editor) return;
+        if (!currentWorldId) {
+            editor.value = '请先选择或创建一个世界。';
+            editor.disabled = false;
+            return;
+        }
         editor.value = '加载中...';
         editor.disabled = true;
 
-        fetch('/scenario/file?name=' + encodeURIComponent(currentFile))
-            .then(function(r) {
-                var contentType = r.headers.get('content-type') || '';
-                if (contentType.indexOf('application/json') === -1) {
-                    throw new Error('服务器返回了非JSON响应（可能尚未创建剧本）');
-                }
-                return r.json();
-            })
+        fetch('/api/worlds/' + encodeURIComponent(currentWorldId) + '/files/' + encodeURIComponent(currentFile))
+            .then(function(r) { return r.json(); })
             .then(function(data) {
                 editor.value = data.content || '';
                 editor.disabled = false;
@@ -335,23 +323,22 @@
                 if (statusEl) statusEl.textContent = currentFile + ' — 已加载';
             })
             .catch(function(err) {
-                editor.value = '当前没有活动剧本，请先创建或切换到一个剧本。';
+                editor.value = '加载失败: ' + err.message;
                 editor.disabled = false;
-                console.warn('loadCurrentFile failed:', err.message);
             });
     }
 
     function saveCurrentFile() {
         var editor = document.getElementById('file-editor');
-        if (!editor) return;
+        if (!editor || !currentWorldId) return;
         var content = editor.value;
         var statusEl = document.getElementById('file-save-status');
 
         statusEl.textContent = '保存中...';
-        fetch('/scenario/file', {
+        fetch('/api/worlds/' + encodeURIComponent(currentWorldId) + '/files/' + encodeURIComponent(currentFile), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: currentFile, content: content})
+            body: JSON.stringify({content: content})
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -366,61 +353,38 @@
         });
     }
 
-    // ==================== Mermaid 图加载 + 节点点击 ====================
+    // ==================== Mermaid 图 + 节点 ====================
     function loadTimelineGraph(event) {
         var data = JSON.parse(event.detail.xhr.responseText);
         if (!data.mermaid) return;
 
-        // 构建 shortId → fullId 映射
-        var nodeMap = {};
-        if (data.nodes) {
-            data.nodes.forEach(function(node) {
-                var shortId = toShortId(node.id);
-                nodeMap[shortId] = node.id;
-            });
-        }
-
-        // 渲染 Mermaid
         var graphEl = document.getElementById('timeline-graph');
         graphEl.innerHTML = '<div class="mermaid">' + data.mermaid + '</div>';
 
         mermaid.run({ querySelector: '.mermaid' }).then(function() {
-            // Mermaid 渲染完成后绑定点击
-            setTimeout(function() {
-                bindMermaidNodeClicks(nodeMap, data);
-            }, 100);
+            setTimeout(function() { bindMermaidNodeClicks(data); }, 100);
         });
 
-        // 渲染节点列表
-        renderNodeList(data.nodes, data.activeBranchId, nodeMap);
+        renderNodeList(data.nodes, data.activeBranchId);
     }
 
-    function bindMermaidNodeClicks(nodeMap, timelineData) {
+    function bindMermaidNodeClicks(timelineData) {
         var graphEl = document.getElementById('timeline-graph');
         if (!graphEl) return;
-
-        // Mermaid gitGraph 每个 commit 在 SVG 中是一个 <g> 包含 <text>
-        // 选择所有可能的 commit 标记
         var svg = graphEl.querySelector('svg');
         if (!svg) return;
 
-        // 方案：找到所有包含文本的 g 元素
         var allGroups = svg.querySelectorAll('g');
         allGroups.forEach(function(g) {
             var textEl = g.querySelector('text');
             if (!textEl) return;
             var text = textEl.textContent.trim();
-            // 检查文本是否匹配某个 shortId
-            var fullId = nodeMap[text];
-            if (!fullId) {
-                // 可能是 tag（节点名），需要进一步匹配
-                // 遍历 nodes 来找匹配的 name
-                if (timelineData && timelineData.nodes) {
-                    for (var i = 0; i < timelineData.nodes.length; i++) {
-                        if (text === timelineData.nodes[i].name || text === toShortId(timelineData.nodes[i].id)) {
-                            fullId = timelineData.nodes[i].id;
-                            break;
-                        }
+            var fullId = null;
+            if (timelineData && timelineData.nodes) {
+                for (var i = 0; i < timelineData.nodes.length; i++) {
+                    if (text === timelineData.nodes[i].id || text === timelineData.nodes[i].name || text === toShortId(timelineData.nodes[i].id)) {
+                        fullId = timelineData.nodes[i].id;
+                        break;
                     }
                 }
             }
@@ -429,67 +393,51 @@
                 g.addEventListener('click', (function(branchId) {
                     return function() { switchToBranch(branchId); };
                 })(fullId));
-                // 添加悬停效果
                 g.addEventListener('mouseenter', function() {
-                    this.querySelectorAll('text').forEach(function(t) {
-                        t.setAttribute('fill', '#34d399');
-                    });
+                    this.querySelectorAll('text').forEach(function(t) { t.setAttribute('fill', '#34d399'); });
                 });
                 g.addEventListener('mouseleave', function() {
-                    this.querySelectorAll('text').forEach(function(t) {
-                        t.setAttribute('fill', '');
-                    });
+                    this.querySelectorAll('text').forEach(function(t) { t.setAttribute('fill', ''); });
                 });
             }
         });
     }
 
     function switchToBranch(branchId) {
-        // 先加载节点详情
         fetch('/timeline/node?id=' + encodeURIComponent(branchId))
             .then(function(r) { return r.text(); })
             .then(function(html) {
                 var detail = document.getElementById('timeline-detail');
-                if (detail) detail.innerHTML = html;
-                // 重新处理 HTMX 元素
-                if (window.htmx) htmx.process(detail);
+                if (detail) { detail.innerHTML = html; if (window.htmx) htmx.process(detail); }
             });
-
-        // 高亮选中节点
         highlightSelectedNode(branchId);
     }
 
     function highlightSelectedNode(branchId) {
         var list = document.getElementById('timeline-node-list');
         if (!list) return;
-        var nodes = list.querySelectorAll('[data-node-id]');
-        nodes.forEach(function(n) {
+        list.querySelectorAll('[data-node-id]').forEach(function(n) {
             n.classList.remove('timeline-selected');
-            if (n.getAttribute('data-node-id') === branchId) {
-                n.classList.add('timeline-selected');
-            }
+            if (n.getAttribute('data-node-id') === branchId) n.classList.add('timeline-selected');
         });
     }
 
-    function renderNodeList(nodes, activeBranchId, nodeMap) {
+    function renderNodeList(nodes, activeBranchId) {
         var nodeList = document.getElementById('timeline-node-list');
         if (!nodeList) return;
         nodeList.innerHTML = '';
-
         if (!nodes || nodes.length === 0) {
             nodeList.innerHTML = '<div class="text-gray-600">无分支节点</div>';
             return;
         }
-
         nodes.forEach(function(node) {
             var activeClass = node.isActive
                 ? 'border-green-400 text-green-400'
                 : 'border-gray-600 text-gray-400 hover:border-gray-400';
-            var displayId = toShortId(node.id);
             var html = '<div class="border-l-2 ' + activeClass + ' pl-2 py-1 cursor-pointer"'
                 + ' data-node-id="' + node.id + '"'
                 + ' onclick="switchToBranch(\'' + node.id + '\')">'
-                + '<div class="font-bold">' + node.name + ' <span class="text-gray-600 font-normal">(' + displayId + ')</span></div>'
+                + '<div class="font-bold">' + node.id + '</div>'
                 + '<div class="text-gray-600">Turn ' + node.turn
                 + ' | ' + node.worldTime + '</div>'
                 + '</div>';
@@ -499,13 +447,7 @@
 
     function toShortId(id) {
         if (!id) return '?';
-        var dot = id.lastIndexOf('.');
-        if (dot < 0) return id;
-        var suffix = id.substring(dot + 1);
-        var prevDot = id.lastIndexOf('.', dot - 1);
-        if (prevDot >= 0) {
-            return id.substring(prevDot + 1).replace('.', '-');
-        }
-        return suffix;
+        // n0001 → stays as-is; dotted IDs get shortened
+        return id;
     }
 </script>

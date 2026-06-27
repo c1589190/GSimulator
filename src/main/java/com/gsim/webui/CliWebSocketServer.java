@@ -219,6 +219,21 @@ public class CliWebSocketServer {
             sendWs(out, historyJson);
         }
 
+        // 1b. 发送当前流式状态（如果存在 — 抗刷新丢失）
+        if (existingNodes != null) {
+            for (SessionNode node : existingNodes) {
+                if (node.type() == NodeType.LLM_STREAMING) {
+                    Object status = node.payload().get("status");
+                    if (status == NodeStatus.STREAMING || status == NodeStatus.PENDING) {
+                        String streamingJson = SessionNodeJsonRenderer.buildMessage("streamingState",
+                                Map.of("node", SessionNodeJsonRenderer.render(node)));
+                        sendWs(out, streamingJson);
+                        break;
+                    }
+                }
+            }
+        }
+
         // 2. 订阅 SessionPool 实时事件
         SessionNodeListener poolListener = new SessionNodeListener() {
             @Override

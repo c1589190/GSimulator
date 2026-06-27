@@ -1,6 +1,8 @@
 package com.gsim.interaction;
 
+import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
+import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 
@@ -48,6 +50,8 @@ public class ConsoleInteractionAdapter {
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
+    private LlmCommand llmCommand;
+    private AgentCommand agentCommand;
 
     private LineReader lineReader;
     private BufferedReader fallbackReader;
@@ -85,6 +89,12 @@ public class ConsoleInteractionAdapter {
         this.worldCommand = worldCommand;
         this.nodeCommand = nodeCommand;
         this.chatCommand = chatCommand;
+    }
+
+    /** Set config management commands. */
+    public void setConfigCommands(LlmCommand llmCommand, AgentCommand agentCommand) {
+        this.llmCommand = llmCommand;
+        this.agentCommand = agentCommand;
     }
 
     private void initJline() {
@@ -234,6 +244,24 @@ public class ConsoleInteractionAdapter {
                 String text = chatCommand.execute(args);
                 displayResult(InteractionResult.ok(text));
             }
+            case "llm" -> {
+                if (llmCommand == null) {
+                    out.println("LLM command not available.");
+                    out.println();
+                    return;
+                }
+                String text = llmCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
+            case "agent" -> {
+                if (agentCommand == null) {
+                    out.println("Agent command not available.");
+                    out.println();
+                    return;
+                }
+                String text = agentCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
             default -> displayResult(
                     InteractionResult.fail("Unknown command: /" + cmdName
                             + ". Type /help for available commands."));
@@ -252,13 +280,15 @@ public class ConsoleInteractionAdapter {
 
     private void printHelp() {
         out.println("Available commands:");
-        out.println("  /world [list|create|switch]   — World management");
+        out.println("  /world [list|create|switch]    — World management");
         out.println("  /node [status|list|goto|create] — Node management");
-        out.println("  /chat <message>               — Send message to LLM");
-        out.println("  /chat history [n]             — Show last n messages");
-        out.println("  /chat clear                   — Clear chat session");
-        out.println("  /exit                         — Exit");
-        out.println("  /help                         — Show this help");
+        out.println("  /chat <message>                — Send message to LLM");
+        out.println("  /chat history [n]              — Show last n messages");
+        out.println("  /chat clear                    — Clear chat session");
+        out.println("  /llm [list|show|set|test]      — LLM provider config");
+        out.println("  /agent [list|show|set|reload]  — Agent config management");
+        out.println("  /exit                          — Exit");
+        out.println("  /help                          — Show this help");
         out.println();
     }
 
