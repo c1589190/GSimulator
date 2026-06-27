@@ -201,10 +201,7 @@ public final class ChatCommand {
         for (Map<String, Object> m : session.messages()) {
             String role = (String) m.get("role");
             if ("system".equals(role)) continue;  // stale — regenerated fresh each run
-            String content = (String) m.get("content");
-            if (content != null) {
-                out.add(new LlmMessage(role, content));
-            }
+            out.add(LlmMessage.fromCacheMap(m));
         }
         return out;
     }

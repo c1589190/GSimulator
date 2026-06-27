@@ -786,6 +786,10 @@
 
         for (var i = 0; i < msgs.length; i++) {
             var m = msgs[i];
+            // 历史消息全部视为已完成 — streaming/pending 是上次会话中断残留
+            if (m.status === 'pending' || m.status === 'streaming') {
+                m.status = 'complete';
+            }
 
             if (m.role === 'user') {
                 var uc = new UserCard(m);
@@ -913,17 +917,14 @@
     function bindSessionWs(ws) {
         ws.onHistory(function(nodes) {
             console.log('[ClientCache] history:', nodes.length, 'nodes');
-            cards = [];
-            cardsById = {};
-            cardsByNodeId = {};
-            pendingAsstCard = null;
-            pendingToolCard = null;
-            subAgents = {};
-            var c = getContainer();
-            if (c) c.innerHTML = '';
-
+            // 不清空已有卡片 — Cache/localStorage 加载的消息已在 DOM 中
+            // 只回放非进度节点（USER_INPUT, AGENT_MESSAGE, SYSTEM）
+            // 跳过 LLM_STREAMING 和 TOOL_CALL — 它们是实时进度产物，不是消息
             for (var i = 0; i < nodes.length; i++) {
-                handleNodePush(nodes[i]);
+                var node = nodes[i];
+                if (node.type === 'LLM_STREAMING' || node.type === 'TOOL_CALL') continue;
+                if (cardsByNodeId[node.nodeId]) continue; // 已渲染，跳过
+                handleNodePush(node);
             }
             scrollBottom();
         });
@@ -943,7 +944,7 @@
 
         ws.onStreamingState(function(node) {
             // 抗刷新丢失：重连时收到正在流式中的节点
-            // 如果该节点不在 cardsByNodeId 中（新连接场景），渲染它
+            // 如果 DOM 中还没有该节点，渲染它
             if (!cardsByNodeId[node.nodeId]) {
                 console.log('[ClientCache] streamingState: rendering active stream node', node.nodeId);
                 handleNodePush(node);
@@ -962,6 +963,12 @@
 
         switch (nodeType) {
             case 'USER_INPUT':
+                // 新用户消息 → 上一轮助理卡片结束
+                if (pendingAsstCard) {
+                    pendingAsstCard.hideThink();
+                    pendingAsstCard.msg.status = 'complete';
+                    pendingAsstCard = null;
+                }
                 var userMsg = MessageStore.add({
                     msgId: nodeId,
                     role: 'user',
@@ -976,14 +983,25 @@
                 break;
 
             case 'LLM_STREAMING':
-                // 获取或创建 AssistantCard
+                // 复用已有卡片 — 多轮 LLM 调用不创建新卡片
+                if (pendingAsstCard) {
+                    cardsByNodeId[nodeId] = pendingAsstCard;
+                    pendingAsstCard.el.setAttribute('data-node-id', nodeId);
+                    pendingAsstCard.msg.status = 'streaming';
+                    pendingAsstCard.setThink('<span class="text-green-400">●</span> 生成中...');
+                    break;
+                }
+                // 首次创建：只有没有 pending 卡片时才新建
+                var nodeStatus = status;
+                var msgStatus = (nodeStatus === 'STREAMING' || nodeStatus === 'streaming') ? 'streaming' : 'pending';
+                var streamingContent = (typeof payload.content === 'string') ? payload.content : '';
                 var asstId = nodeId;
                 var asstMsg = MessageStore.add({
                     msgId: asstId,
                     role: 'assistant',
                     type: 'chat_assistant',
-                    content: '',
-                    status: 'pending'
+                    content: streamingContent,
+                    status: msgStatus
                 });
                 var ac = new AssistantCard(asstMsg);
                 ac.render();
@@ -1035,6 +1053,10 @@
                 syc.render();
                 addCard(syc);
                 cardsByNodeId[nodeId] = syc;
+                // finish_action 通过 → 本轮对话完成，恢复发送按钮
+                if (msgText.indexOf('finish_action') !== -1) {
+                    if (window._chatResetSendBtn) window._chatResetSendBtn();
+                }
                 break;
         }
     }
@@ -1057,6 +1079,8 @@
                 card.addBlock(card._streamBlock);
             }
             card._streamBlock.append(value);
+            // 同步到 MessageStore，使 localStorage 持久化包含实际内容
+            card.msg.content = (card.msg.content || '') + value;
         }
     }
 
@@ -1071,8 +1095,10 @@
                 pendingToolCard = null;
             }
             if (card instanceof AssistantCard || card.constructor.name === 'AssistantCard') {
-                pendingAsstCard = null;
-                card._streamBlock = null;
+                card.msg.status = 'complete';
+                card.hideThink();
+                // 不释放 pendingAsstCard — 下一轮复用
+                // 不恢复发送按钮 — 等 finish_action 或新一轮用户消息
             }
         } else if (newStatus === 'ERROR') {
             if (card instanceof ToolCard || card.constructor.name === 'ToolCard') {
@@ -1084,7 +1110,9 @@
                     card._streamBlock.append('\n[错误]');
                     card._streamBlock = null;
                 }
-                pendingAsstCard = null;
+                card.msg.status = 'error';
+                // 错误时不释放，等下一轮复用
+                if (window._chatResetSendBtn) window._chatResetSendBtn();
             }
         } else if (newStatus === 'STREAMING') {
             if (card instanceof ToolCard || card.constructor.name === 'ToolCard') {
@@ -1093,11 +1121,33 @@
         }
     }
 
+    /** 添加一条用户消息卡片（发送消息时立即调用，不等后端）。 */
+    function addUserMessage(text) {
+        removeEmpty();
+        var msg = MessageStore.add({
+            msgId: 'u' + Date.now(),
+            role: 'user',
+            type: 'chat_user',
+            content: text,
+            status: 'complete'
+        });
+        var uc = new UserCard(msg);
+        uc.render();
+        addCard(uc);
+        // 新用户消息 → 上一轮助理卡片结束，为新回复腾位置
+        if (pendingAsstCard) {
+            pendingAsstCard.hideThink();
+            pendingAsstCard.msg.status = 'complete';
+            pendingAsstCard = null;
+        }
+    }
+
     // ══════════════════════════════════════════
     // 导出
     // ══════════════════════════════════════════
 
     window.ClientCache = {
+        addUserMessage: addUserMessage,
         dispatch: dispatch,
         createAssistantCard: createAssistantCard,
         addCard: addCard,

@@ -214,12 +214,13 @@ public class AbstractAgent {
             }
 
             String content = response.content();
-            addMessage(messages, LlmMessage.assistant(content != null ? content : ""));
 
-            // parse tool calls
+            // parse tool calls — 优先 API 原生 tool_calls，fallback 文本提取
             List<ParsedToolCall> allParsed = new ArrayList<>();
+            List<LlmToolCall> nativeToolCalls = null;  // 保留引用以构造 tool 消息
             if (response.hasApiToolCalls()) {
-                for (LlmToolCall tc : response.toolCalls()) {
+                nativeToolCalls = response.toolCalls();
+                for (LlmToolCall tc : nativeToolCalls) {
                     allParsed.add(new ParsedToolCall(tc.name(),
                             tc.arguments() != null ? tc.arguments() : Map.of()));
                 }
@@ -229,6 +230,14 @@ public class AbstractAgent {
                 if (parsed != null) allParsed.add(parsed);
             }
 
+            // 记录 assistant 消息（含 tool_calls 如有 API 原生调用）
+            if (nativeToolCalls != null && !nativeToolCalls.isEmpty()) {
+                addMessage(messages, LlmMessage.assistantWithToolCalls(
+                        content != null ? content : "", nativeToolCalls));
+            } else {
+                addMessage(messages, LlmMessage.assistant(content != null ? content : ""));
+            }
+
             // ═══ 有工具调用 ═══
             if (!allParsed.isEmpty()) {
                 consecutiveNoTool = 0;
@@ -236,9 +245,14 @@ public class AbstractAgent {
                 boolean finishSeen = false;
                 String finishMsg = null;
 
-                for (ParsedToolCall parsed : allParsed) {
+                for (int i = 0; i < allParsed.size(); i++) {
+                    ParsedToolCall parsed = allParsed.get(i);
                     // 子类钩子：执行前检查
                     if (!beforeToolExecute(parsed, messages)) continue;
+
+                    // 通知前端工具已选中（SessionPoolBridge 创建 TOOL_CALL 节点）
+                    progressSink.onProgress(AgentProgressEvent.toolSelected(
+                            toolRound, maxRounds, parsed.tool()));
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = allTools.call(call);
@@ -251,7 +265,13 @@ public class AbstractAgent {
                                     result.error()));
 
                     String feedback = buildToolFeedback(parsed.tool(), result);
-                    addMessage(messages, LlmMessage.tool(feedback));
+                    // 如果有 API 原生 tool_call，使用 toolWithId 保留 tool_call_id
+                    if (nativeToolCalls != null && i < nativeToolCalls.size()) {
+                        LlmToolCall ntc = nativeToolCalls.get(i);
+                        addMessage(messages, LlmMessage.toolWithId(ntc.id(), ntc.name(), feedback));
+                    } else {
+                        addMessage(messages, LlmMessage.tool(feedback));
+                    }
 
                     // 子类钩子：执行后处理
                     afterToolExecute(parsed, result);

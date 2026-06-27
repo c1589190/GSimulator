@@ -251,6 +251,12 @@ public class ChatApiHandler implements HttpHandler {
                 if (m.containsKey("tool_calls")) {
                     msg.put("tool_calls", m.get("tool_calls"));
                 }
+                if (m.containsKey("tool_call_id")) {
+                    msg.put("tool_call_id", m.get("tool_call_id"));
+                }
+                if (m.containsKey("name")) {
+                    msg.put("name", m.get("name"));
+                }
                 messages.add(msg);
             }
         }
@@ -416,7 +422,8 @@ public class ChatApiHandler implements HttpHandler {
 
     private void handleListConversations(HttpExchange exchange) throws IOException {
         String wid = worldId.get();
-        List<CacheInfo> caches = cachesManager.listCaches(wid);
+        // 只列出主 Agent (orchestrator) 的 cache，子 Agent cache 不在此展示
+        List<CacheInfo> caches = cachesManager.listCaches(wid, "orchestrator");
         CacheSession active = activeCache.get();
         String activeSid = active != null ? active.sessionId() : null;
 

@@ -98,6 +98,7 @@ function loadMobilePage(name) {
         btn.type = 'button';
         btn.onclick = function() { window._chatSend && window._chatSend(); };
     }
+    window._chatResetSendBtn = resetSendBtn;
 
     function setCancelBtn() {
         var btn = getSendBtn();
@@ -188,8 +189,8 @@ function loadMobilePage(name) {
             var msgList = data.messages || [];
             console.log('[chat] loaded', msgList.length, 'messages from backend');
             MessageStore.loadFromJson(msgList);
-            // SessionWs 已经通过 history 事件渲染了 SessionNode 历史，
-            // 这里只做 localStorage 备份
+            // 用后端 Cache 的权威数据重新渲染 — 覆盖 localStorage 的临时渲染
+            ClientCache.renderAllMessages(MessageStore.getAll());
         })
         .catch(function(err) {
             console.warn('[chat] Failed to load history:', err.message);
@@ -272,7 +273,12 @@ function loadMobilePage(name) {
         input.value = '';
         clearUploadTags();
 
-        // 通过 SessionWs 发送消息到后端（POST /chat/send）
+        // 立即渲染用户消息卡片 — 不要等后端 Cache 刷新
+        if (window.ClientCache && window.ClientCache.addUserMessage) {
+            window.ClientCache.addUserMessage(msg);
+        }
+
+        // 发送到后端
         if (sessionWs) {
             sessionWs.send(msg).then(function(resp) {
                 console.log('[chat] message sent:', resp.sessionId);
@@ -280,7 +286,6 @@ function loadMobilePage(name) {
                 console.error('[chat] send error:', err.message);
             });
         } else {
-            // Fallback — 直接 POST
             fetch('/chat/send', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},

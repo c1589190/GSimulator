@@ -171,6 +171,8 @@ public class CliWebSocketServer {
             }
         };
         sessionPool.subscribe("default", poolListener);
+        // 也订阅 CLI 专属 session（用户输入节点推送到这里，避免泄漏到 Chat）
+        sessionPool.subscribe("cli", poolListener);
 
         // 发送欢迎消息
         sendWs(out, exec("/help"));
@@ -186,8 +188,8 @@ public class CliWebSocketServer {
                 break;
             }
 
-            // 推入用户输入节点
-            sessionPool.pushNode("default", NodeType.USER_INPUT,
+            // 推入用户输入节点（CLI 使用独立 sessionId 避免泄漏到 Chat）
+            sessionPool.pushNode("cli", NodeType.USER_INPUT,
                     Map.of("text", cmd, "source", "websocket"));
 
             // 创建临时 progress sink 用于实时推送事件
@@ -233,6 +235,10 @@ public class CliWebSocketServer {
                 }
             }
         }
+
+        // 1c. 清理已完成/出错的流式节点，避免无限累积
+        int pruned = sessionPool.pruneCompletedStreamNodes(sessionId);
+        if (pruned > 0) log.debug("Chat WS pruned {} completed stream nodes from session {}", pruned, sessionId);
 
         // 2. 订阅 SessionPool 实时事件
         SessionNodeListener poolListener = new SessionNodeListener() {

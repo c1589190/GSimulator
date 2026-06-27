@@ -208,4 +208,34 @@ public class SessionPool {
                     new IllegalStateException("Session cleared while waiting: " + sessionId));
         }
     }
+
+    /** 移除单个节点。 */
+    public boolean removeNode(String nodeId) {
+        SessionNode node = nodeIndex.remove(nodeId);
+        if (node == null) return false;
+        List<SessionNode> nodes = sessions.get(node.sessionId());
+        if (nodes != null) {
+            nodes.removeIf(n -> n.nodeId().equals(nodeId));
+        }
+        return true;
+    }
+
+    /** 移除指定 session 中所有已完成/出错/取消的 LLM_STREAMING 节点。 */
+    public int pruneCompletedStreamNodes(String sessionId) {
+        List<SessionNode> nodes = sessions.get(sessionId);
+        if (nodes == null) return 0;
+        int removed = 0;
+        var it = nodes.iterator();
+        while (it.hasNext()) {
+            SessionNode n = it.next();
+            if (n.type() != NodeType.LLM_STREAMING) continue;
+            Object s = n.payload().get("status");
+            if (s == NodeStatus.DONE || s == NodeStatus.ERROR) {
+                it.remove();
+                nodeIndex.remove(n.nodeId());
+                removed++;
+            }
+        }
+        return removed;
+    }
 }

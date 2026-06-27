@@ -272,8 +272,7 @@ public class GSimulatorApplication {
             CacheSession s = activeCache;
             if (s != null) {
                 com.gsim.cache.CacheStore.appendAndSave(worldsDir, wid, s,
-                        java.util.Map.of("role", msg.role(), "content",
-                                msg.content() != null ? msg.content() : ""));
+                        msg.toCacheMap());
             }
         });
 

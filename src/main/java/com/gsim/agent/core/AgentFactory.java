@@ -133,9 +133,7 @@ public class AgentFactory {
         // 设置 write-through 持久化
         final CacheSession cacheRef = subCache;
         agent.setMessageSaver(msg -> {
-            CacheStore.appendAndSave(worldsDir, wid, cacheRef,
-                    Map.of("role", msg.role(), "content",
-                            msg.content() != null ? msg.content() : ""));
+            CacheStore.appendAndSave(worldsDir, wid, cacheRef, msg.toCacheMap());
         });
 
         CompletableFuture<AgentResult> f = new CompletableFuture<>();
@@ -177,9 +175,7 @@ public class AgentFactory {
     private static List<LlmMessage> cacheMessagesToLlm(CacheSession session) {
         List<LlmMessage> result = new ArrayList<>();
         for (Map<String, Object> msg : session.messages()) {
-            String role = (String) msg.getOrDefault("role", "user");
-            String content = (String) msg.getOrDefault("content", "");
-            result.add(new LlmMessage(role, content));
+            result.add(LlmMessage.fromCacheMap(msg));
         }
         return result;
     }

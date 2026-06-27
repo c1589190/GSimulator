@@ -185,11 +185,36 @@ class Provider {
         List<Map<String, Object>> msgs = new ArrayList<>();
         for (LlmMessage msg : request.messages()) {
             Map<String, Object> m = new LinkedHashMap<>();
-            // "tool" role requires tool_call_id per OpenAI spec — our synthetic
-            // tool feedback uses [TOOL_RESULT] markers, so downgrade to "user".
-            String role = "tool".equals(msg.role()) ? "user" : msg.role();
-            m.put("role", role);
-            m.put("content", msg.content());
+            m.put("role", msg.role());
+            if (msg.content() != null) {
+                m.put("content", msg.content());
+            }
+
+            // assistant 消息的 tool_calls
+            if (msg.hasToolCalls()) {
+                List<Map<String, Object>> tcList = new ArrayList<>();
+                for (LlmToolCall tc : msg.toolCalls()) {
+                    Map<String, Object> tcMap = new LinkedHashMap<>();
+                    tcMap.put("id", tc.id());
+                    tcMap.put("type", "function");
+                    Map<String, Object> fnMap = new LinkedHashMap<>();
+                    fnMap.put("name", tc.name());
+                    fnMap.put("arguments", toArgsJson(tc.arguments()));
+                    tcMap.put("function", fnMap);
+                    tcList.add(tcMap);
+                }
+                m.put("tool_calls", tcList);
+            }
+
+            // tool 消息的 tool_call_id
+            if (msg.toolCallId() != null) {
+                m.put("tool_call_id", msg.toolCallId());
+            }
+            // tool 消息的 name（可选）
+            if (msg.name() != null) {
+                m.put("name", msg.name());
+            }
+
             msgs.add(m);
         }
         body.put("messages", msgs);
@@ -344,6 +369,16 @@ class Provider {
                 || lower.contains("超出上下文")
                 || (lower.contains("413") && lower.contains("request entity too large"))
                 || (lower.contains("400") && (lower.contains("token") && lower.contains("truncat")));
+    }
+
+    /** 将 Map 参数序列化为 JSON 字符串（用于请求体中的 function.arguments）。 */
+    private static String toArgsJson(Map<String, String> args) {
+        if (args == null || args.isEmpty()) return "{}";
+        try {
+            return MAPPER.writeValueAsString(args);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     @SuppressWarnings("unchecked")
