@@ -88,6 +88,7 @@ public record ToolGroup(
             "collect_sub_agent_results",
             "list_sub_agent_caches",
             "view_sub_agent_cache",
+            "view_sub_agent_output",
             "world_list",
             "world_create",
             "compact_cache",

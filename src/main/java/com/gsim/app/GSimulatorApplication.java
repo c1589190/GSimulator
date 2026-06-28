@@ -247,6 +247,8 @@ public class GSimulatorApplication {
                 ctx.getCachesManager(), worldIdSupplier));
         toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(
                 ctx.getCachesManager(), worldIdSupplier));
+        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(
+                ctx.getCachesManager(), worldIdSupplier));
 
         // LLM provider 列表 + 动态创建 SubAgent 配置
         toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(

@@ -31,6 +31,7 @@ public class ToolCategoryRegistry {
         // SubAgent cache
         CATEGORIES.put("list_sub_agent_caches", ToolCategory.READ_ONLY);
         CATEGORIES.put("view_sub_agent_cache", ToolCategory.READ_ONLY);
+        CATEGORIES.put("view_sub_agent_output", ToolCategory.READ_ONLY);
         // LLM providers
         CATEGORIES.put("list_llm_providers", ToolCategory.READ_ONLY);
         // World: read-only
