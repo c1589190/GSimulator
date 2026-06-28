@@ -101,10 +101,20 @@ public class GSimulatorApplication {
         // 注册 Agent 工具
         registerAgentTools(toolRegistry);
 
-        // Node change callback — shared between tools and commands
+        // Node change callback — 重建 WorldInformation 以反映节点变更
         Runnable onNodeChanged = () -> {
-            log.info("World/node changed — re-bootstrap needed");
-            // In a full implementation this would re-run Bootstrap.boot();
+            if (worldInfo == null) return;
+            try {
+                String wid = worldInfo.worldId();
+                var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, wid);
+                String activeNodeId = active != null ? active.nodeId() : worldInfo.activeNodeId();
+                var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
+                this.worldInfo = newWi;
+                log.info("WorldInformation rebuilt after node change: world={} activeNode={}",
+                        wid, activeNodeId);
+            } catch (Exception e) {
+                log.error("Failed to rebuild WorldInformation after node change: {}", e.getMessage());
+            }
         };
 
         // 注册 world info + node 管理工具
