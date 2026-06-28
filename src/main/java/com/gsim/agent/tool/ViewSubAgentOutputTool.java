@@ -67,6 +67,21 @@ public final class ViewSubAgentOutputTool implements AgentTool {
             return ToolResult.fail(name(), "Cache 未找到: " + cacheId + " (world=" + wid + ")");
         }
 
+        // 检查是否有更新的同类型缓存（强制只读最新输出）
+        String agentType = extractAgentType(session.agentName());
+        if (agentType != null) {
+            var cacheList = cachesManager.listCaches(wid, agentType);
+            if (!cacheList.isEmpty()) {
+                var latest = cacheList.get(0); // listCaches 已按 createdAt 降序
+                if (!latest.sessionId().equals(cacheId)) {
+                    return ToolResult.fail(name(),
+                            "此缓存已过期。该 SubAgent 有更新的输出: "
+                            + latest.sessionId() + " (created " + latest.createdAt() + ")。"
+                            + "请用新的 cacheId 重新调用。");
+                }
+            }
+        }
+
         int offset = Math.max(0, parseInt(call.param("offset"), 0));
         int limit = Math.min(Math.max(1, parseInt(call.param("limit"), 50)), 200);
 
@@ -132,6 +147,18 @@ public final class ViewSubAgentOutputTool implements AgentTool {
     }
 
     private record OutputSegment(int index, String role, String content, List<String> toolNames) {}
+
+    /** 从 agentName 提取类型前缀 (sim-1 → sim, search-2 → search)，非标准格式返回 null。 */
+    static String extractAgentType(String agentName) {
+        if (agentName == null) return null;
+        if (agentName.matches("^(sim|search)-\\d+.*")) {
+            return agentName.replaceAll("^(sim|search)-\\d+.*", "$1");
+        }
+        // 自定义 agent（如 zhangxiaoming-1）→ 取第一个 - 之前的部分
+        int dash = agentName.indexOf('-');
+        if (dash > 0) return agentName.substring(0, dash);
+        return agentName;
+    }
 
     private static int parseInt(String s, int def) {
         if (s == null || s.isBlank()) return def;
