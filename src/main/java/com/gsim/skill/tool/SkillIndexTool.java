@@ -55,7 +55,7 @@ public final class SkillIndexTool implements AgentTool {
     public ToolResult execute(ToolCall call) {
         String skillId = call.param("skillId", "").trim();
         if (skillId.isEmpty()) return ToolResult.fail(name(), "skillId 不能为空");
-        if (!skillId.matches("^[a-zA-Z0-9-]+$")) {
+        if (!skillId.matches("^[a-zA-Z0-9_-]+$")) {
             return ToolResult.fail(name(), "skillId 只能包含字母、数字、连字符");
         }
 

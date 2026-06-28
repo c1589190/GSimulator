@@ -49,7 +49,7 @@ public final class SkillReadTool implements AgentTool {
         if (skillId.isEmpty()) return ToolResult.fail(name(), "skillId 不能为空");
 
         // 安全检查：只允许 a-z 0-9 -
-        if (!skillId.matches("^[a-zA-Z0-9-]+$")) {
+        if (!skillId.matches("^[a-zA-Z0-9_-]+$")) {
             return ToolResult.fail(name(), "skillId 只能包含字母、数字、连字符");
         }
 

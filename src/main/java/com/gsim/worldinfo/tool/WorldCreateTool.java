@@ -47,7 +47,7 @@ public final class WorldCreateTool implements AgentTool {
         String name = call.param("name", "").trim();
 
         if (worldId.isEmpty()) return ToolResult.fail(name(), "worldId 不能为空");
-        if (!worldId.matches("^[a-zA-Z0-9-]+$")) {
+        if (!worldId.matches("^[a-zA-Z0-9_-]+$")) {
             return ToolResult.fail(name(), "worldId 只能包含字母、数字、连字符");
         }
         if (name.isEmpty()) return ToolResult.fail(name(), "name 不能为空");
