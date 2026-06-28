@@ -49,12 +49,16 @@ class CliPrintsConsolePrintMessageWithoutDebugPrefixTest {
     }
 
     @Test
-    @DisplayName("错误事件仍带 [Agent] 前缀")
+    @DisplayName("错误事件可见且包含工具名和错误信息")
     void errorEventsStillHaveAgentPrefix() {
         var failEvent = AgentProgressEvent.toolFailed(1, 5, "bad_tool", "some error");
         String formatted = CliAgentProgressSink.format(failEvent);
         assertNotNull(formatted);
-        assertTrue(formatted.contains("[Agent]"),
-                "Error events should retain [Agent] prefix: " + formatted);
+        assertTrue(formatted.contains("bad_tool"),
+                "Error events should include tool name: " + formatted);
+        assertTrue(formatted.contains("some error"),
+                "Error events should include error message: " + formatted);
+        assertTrue(formatted.contains("❌"),
+                "Error events should have ❌ marker: " + formatted);
     }
 }

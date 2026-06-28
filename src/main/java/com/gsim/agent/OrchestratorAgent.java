@@ -820,7 +820,8 @@ public class OrchestratorAgent extends AbstractAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, maxToolRounds, parsed.tool()));
+                            toolRound, maxToolRounds, parsed.tool(),
+                            buildParamsSummary(parsed.args())));
                 }
 
                 // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
@@ -940,7 +941,8 @@ public class OrchestratorAgent extends AbstractAgent {
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, maxToolRounds, parsed.tool()));
+                                toolRound, maxToolRounds, parsed.tool(),
+                                buildResultSummary(parsed.tool(), result)));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
                                 toolRound, maxToolRounds, parsed.tool(), result.error()));
@@ -1232,7 +1234,8 @@ public class OrchestratorAgent extends AbstractAgent {
                 // progress: LLM 选择了工具
                 for (ParsedToolCall parsed : allParsed) {
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, maxToolRounds, parsed.tool()));
+                            toolRound, maxToolRounds, parsed.tool(),
+                            buildParamsSummary(parsed.args())));
                 }
 
                 // === finish_action 混用检测：允许混用，但必须放在最末尾 ===
@@ -1285,7 +1288,8 @@ public class OrchestratorAgent extends AbstractAgent {
                     // progress: 工具结果
                     if (result.success()) {
                         progressSink.onProgress(AgentProgressEvent.toolSuccess(
-                                toolRound, maxToolRounds, parsed.tool()));
+                                toolRound, maxToolRounds, parsed.tool(),
+                                buildResultSummary(parsed.tool(), result)));
                     } else {
                         progressSink.onProgress(AgentProgressEvent.toolFailed(
                                 toolRound, maxToolRounds, parsed.tool(), result.error()));

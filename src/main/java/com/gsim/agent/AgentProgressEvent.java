@@ -53,8 +53,15 @@ public record AgentProgressEvent(
     }
 
     public static AgentProgressEvent toolSelected(int round, int maxRounds, String toolName) {
+        return toolSelected(round, maxRounds, toolName, "");
+    }
+
+    /** toolSelected with params summary for CLI display. */
+    public static AgentProgressEvent toolSelected(int round, int maxRounds,
+                                                  String toolName, String paramsSummary) {
         return new AgentProgressEvent(TOOL_SELECTED, round, maxRounds,
-                "LLM 选择工具：" + toolName, Map.of("tool", toolName));
+                "LLM 选择工具：" + toolName, Map.of("tool", toolName,
+                        "paramsSummary", paramsSummary != null ? paramsSummary : ""));
     }
 
     public static AgentProgressEvent toolExecuting(int round, int maxRounds, String toolName) {
@@ -63,8 +70,15 @@ public record AgentProgressEvent(
     }
 
     public static AgentProgressEvent toolSuccess(int round, int maxRounds, String toolName) {
+        return toolSuccess(round, maxRounds, toolName, "");
+    }
+
+    /** toolSuccess with result summary for CLI display. */
+    public static AgentProgressEvent toolSuccess(int round, int maxRounds,
+                                                  String toolName, String resultSummary) {
         return new AgentProgressEvent(TOOL_SUCCESS, round, maxRounds,
-                "工具成功：" + toolName, Map.of("tool", toolName));
+                "工具成功：" + toolName, Map.of("tool", toolName,
+                        "resultSummary", resultSummary != null ? resultSummary : ""));
     }
 
     public static AgentProgressEvent toolFailed(int round, int maxRounds,

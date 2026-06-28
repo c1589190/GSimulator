@@ -213,16 +213,18 @@ class CliStreamPreviewRendererTest {
     }
 
     @Test
-    @DisplayName("format quiet mode: 常规进度事件 null，公开消息/错误非 null")
+    @DisplayName("format quiet mode: 工具进度可见，静默事件保持静默，公开消息/错误非 null")
     void formatQuietModePreservesErrorsAndMessages() {
-        // Quiet: context/selection/execution/success → null
+        // Quiet: context/waiting → null
         assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.contextLoaded(1, 32, 5000, 3)));
         assertNull(CliAgentProgressSink.format(
                 AgentProgressEvent.waitingLlm(1, 32)));
-        assertNull(CliAgentProgressSink.format(
+
+        // Visible: tool selected / success (now shown to user)
+        assertNotNull(CliAgentProgressSink.format(
                 AgentProgressEvent.toolSelected(1, 32, "query_keyword")));
-        assertNull(CliAgentProgressSink.format(
+        assertNotNull(CliAgentProgressSink.format(
                 AgentProgressEvent.toolSuccess(1, 32, "query_keyword")));
 
         // Visible: public message
@@ -364,7 +366,8 @@ class CliStreamPreviewRendererTest {
         sink.onProgress(event);
 
         String output = baos.toString();
-        assertTrue(output.contains("[Agent]"), "错误事件应格式化 [Agent] 行: " + output);
+        assertTrue(output.contains("❌"), "错误事件应格式化错误行: " + output);
+        assertTrue(output.contains("bad_tool"), "错误事件应包含工具名: " + output);
     }
 
     @Test

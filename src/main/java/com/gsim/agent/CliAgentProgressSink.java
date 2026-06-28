@@ -17,6 +17,10 @@ public class CliAgentProgressSink implements AgentProgressSink {
     private static final String ANSI_GREY = "\033[90m";
     private static final String ANSI_BOLD = "\033[1m";
     private static final String ANSI_RESET = "\033[0m";
+    private static final String ANSI_YELLOW = "\033[33m";
+    private static final String ANSI_GREEN = "\033[32m";
+    private static final String ANSI_RED = "\033[31m";
+    private static final String ANSI_CYAN = "\033[36m";
 
     public CliAgentProgressSink(PrintStream out) {
         this(out, true);
@@ -117,7 +121,7 @@ public class CliAgentProgressSink implements AgentProgressSink {
         };
     }
 
-    /** 格式化非流式事件为简短状态行。仅输出错误、公开消息、被拒绝的 finish_action。 */
+    /** 格式化非流式事件为简短状态行。 */
     static String format(AgentProgressEvent event) {
         if (event == null) return null;
         return switch (event.phase()) {
@@ -125,7 +129,8 @@ public class CliAgentProgressSink implements AgentProgressSink {
             case AgentProgressEvent.TOOL_FAILED -> {
                 String tool = event.meta().getOrDefault("tool", "");
                 String error = event.meta().getOrDefault("error", "");
-                yield "[Agent] 工具失败：" + tool + (error.isBlank() ? "" : "，原因：" + error);
+                yield ANSI_RED + "❌ " + tool + ANSI_RESET
+                        + (error.isBlank() ? "" : " — " + error);
             }
             case AgentProgressEvent.LLM_STREAM_FAILED -> {
                 String error = event.meta().getOrDefault("error", "未知错误");
@@ -133,6 +138,22 @@ public class CliAgentProgressSink implements AgentProgressSink {
             }
             case AgentProgressEvent.ABORTED ->
                     "[Agent] " + event.detail();
+
+            // ── 工具调用（终端可见） ──
+            case AgentProgressEvent.TOOL_SELECTED -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String params = event.meta().getOrDefault("paramsSummary", "");
+                yield formatToolInvocation(tool, params);
+            }
+            case AgentProgressEvent.TOOL_EXECUTING -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                yield ANSI_YELLOW + "⏳ " + tool + ANSI_RESET + " 执行中...";
+            }
+            case AgentProgressEvent.TOOL_SUCCESS -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String resultSummary = event.meta().getOrDefault("resultSummary", "");
+                yield formatToolSuccess(tool, resultSummary);
+            }
 
             // ── 公开消息/推演内容（终端可见） ──
             case AgentProgressEvent.AGENT_PUBLIC_MESSAGE ->
@@ -146,9 +167,6 @@ public class CliAgentProgressSink implements AgentProgressSink {
             // ── 以下事件静默（写入 toolloop.log / debug.log，不打印到终端） ──
             case AgentProgressEvent.CONTEXT_LOADED,
                  AgentProgressEvent.WAITING_LLM,
-                 AgentProgressEvent.TOOL_SELECTED,
-                 AgentProgressEvent.TOOL_EXECUTING,
-                 AgentProgressEvent.TOOL_SUCCESS,
                  AgentProgressEvent.AWAITING_TOOL_CONFIRMATION,
                  AgentProgressEvent.AWAITING_FINISH_ACTION,
                  AgentProgressEvent.PLAIN_ANSWER_WITHOUT_FINISH,
@@ -172,6 +190,39 @@ public class CliAgentProgressSink implements AgentProgressSink {
                     "声称了未经真实工具执行支持的结果。";
             default -> reasonCode;
         };
+    }
+
+    // ══════════════════════════════════════════
+    // 工具调用格式化
+    // ══════════════════════════════════════════
+
+    /** 写入类工具：结果显示完整内容（不截断）。 */
+    private static final java.util.Set<String> WRITE_TOOLS = java.util.Set.of(
+            "write_element", "node_create", "create_checkpoint");
+
+    /** 格式化工具调用行: 🔧 toolName key=val key=val ... */
+    static String formatToolInvocation(String tool, String paramsSummary) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ANSI_YELLOW).append("🔧 ").append(tool).append(ANSI_RESET);
+        if (paramsSummary != null && !paramsSummary.isBlank()) {
+            sb.append("  ").append(ANSI_GREY).append(paramsSummary).append(ANSI_RESET);
+        }
+        return sb.toString();
+    }
+
+    /** 格式化工具成功行: ✅ toolName  result summary */
+    static String formatToolSuccess(String tool, String resultSummary) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ANSI_GREEN).append("✅ ").append(tool).append(ANSI_RESET);
+        if (resultSummary != null && !resultSummary.isBlank()) {
+            if (WRITE_TOOLS.contains(tool)) {
+                // 写入类工具：完整显示内容
+                sb.append("\n").append(ANSI_CYAN).append(resultSummary).append(ANSI_RESET);
+            } else {
+                sb.append("  ").append(ANSI_GREY).append(resultSummary).append(ANSI_RESET);
+            }
+        }
+        return sb.toString();
     }
 
     private static int parseIntMeta(java.util.Map<String, String> meta, String key) {

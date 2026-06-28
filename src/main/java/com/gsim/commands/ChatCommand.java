@@ -37,6 +37,9 @@ public final class ChatCommand {
     /** ESC / Ctrl+C 取消回调（由 GSimulatorApplication 注入 orchestrator::cancel）。 */
     private volatile Runnable cancelCallback;
 
+    /** 保存终端原始设置（stty -g 输出），用于精确恢复而非 stty sane。 */
+    private String savedTermSettings;
+
     public ChatCommand(Path worldsDir, Supplier<String> worldId, Supplier<CacheSession> activeCache) {
         this(worldsDir, worldId, activeCache, null);
     }
@@ -175,21 +178,41 @@ public final class ChatCommand {
     /** 将终端设为非 canonical 模式（逐字节读取，无回显，无缓冲行）。返回 true 表示成功。 */
     private boolean setTerminalNonCanonical() {
         try {
+            // 1. 保存当前终端设置（含 JLine 状态），用于精确恢复
+            Process save = new ProcessBuilder("stty", "-g")
+                    .redirectErrorStream(true).start();
+            savedTermSettings = new String(save.getInputStream().readAllBytes()).trim();
+            save.waitFor();
+            log.debug("[ChatCommand] saved terminal settings: {}", savedTermSettings);
+
+            // 2. 切换到非 canonical 模式
             new ProcessBuilder("stty", "-icanon", "-echo", "min", "0", "time", "1")
                     .inheritIO().start().waitFor();
             return true;
         } catch (Exception e) {
-            log.debug("[ChatCommand] stty raw failed: {}", e.getMessage());
+            log.debug("[ChatCommand] stty save/raw failed: {}", e.getMessage());
             return false;
         }
     }
 
-    /** 恢复终端为正常模式。 */
+    /** 恢复终端为正常模式（精确恢复到 stty -g 保存的状态）。 */
     private void restoreTerminal() {
+        if (savedTermSettings == null || savedTermSettings.isEmpty()) {
+            // fallback: 没有保存设置时用 sane
+            try {
+                new ProcessBuilder("stty", "sane").inheritIO().start().waitFor();
+            } catch (Exception ignored) {}
+            return;
+        }
         try {
-            new ProcessBuilder("stty", "sane").inheritIO().start().waitFor();
+            new ProcessBuilder("stty", savedTermSettings)
+                    .inheritIO().start().waitFor();
+            log.debug("[ChatCommand] terminal restored via stty saved settings");
         } catch (Exception e) {
-            log.debug("[ChatCommand] stty sane failed: {}", e.getMessage());
+            log.warn("[ChatCommand] stty restore failed, falling back to sane: {}", e.getMessage());
+            try {
+                new ProcessBuilder("stty", "sane").inheritIO().start().waitFor();
+            } catch (Exception ignored) {}
         }
     }
 

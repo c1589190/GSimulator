@@ -23,10 +23,8 @@ class CliPrintsToolFailedTest {
         String formatted = CliAgentProgressSink.format(event);
 
         assertNotNull(formatted);
-        assertTrue(formatted.contains("[Agent]"),
-                "Should have [Agent] prefix: " + formatted);
-        assertTrue(formatted.contains("工具失败"),
-                "Should mention tool failure: " + formatted);
+        assertTrue(formatted.contains("❌"),
+                "Should have ❌ marker: " + formatted);
         assertTrue(formatted.contains("write_element"),
                 "Should include tool name: " + formatted);
         assertTrue(formatted.contains("title 不能为空"),
@@ -43,8 +41,9 @@ class CliPrintsToolFailedTest {
         String formatted = CliAgentProgressSink.format(event);
 
         assertNotNull(formatted);
-        assertTrue(formatted.contains("工具失败：echo"));
-        assertFalse(formatted.contains("原因："),
+        assertTrue(formatted.contains("echo"),
+                "Should include tool name: " + formatted);
+        assertFalse(formatted.contains(" — "),
                 "Should NOT append reason when error is blank: " + formatted);
     }
 
@@ -57,8 +56,12 @@ class CliPrintsToolFailedTest {
         String formatted = CliAgentProgressSink.format(event);
 
         assertNotNull(formatted);
-        assertEquals("[Agent] 工具失败：branch_switch，原因：branch not found",
-                formatted);
+        assertTrue(formatted.contains("❌"),
+                "Should have ❌ marker: " + formatted);
+        assertTrue(formatted.contains("branch_switch"),
+                "Should include tool name: " + formatted);
+        assertTrue(formatted.contains("branch not found"),
+                "Should include error reason: " + formatted);
     }
 
     @Test
@@ -71,8 +74,9 @@ class CliPrintsToolFailedTest {
         String formatted = CliAgentProgressSink.format(event);
 
         assertNotNull(formatted);
-        assertTrue(formatted.contains("工具失败：x"));
-        assertFalse(formatted.contains("原因："),
+        assertTrue(formatted.contains("x"),
+                "Should include tool name: " + formatted);
+        assertFalse(formatted.contains(" — "),
                 "null/absent error should not show reason");
     }
 }

@@ -251,8 +251,9 @@ public class AbstractAgent {
                     if (!beforeToolExecute(parsed, messages)) continue;
 
                     // 通知前端工具已选中（SessionPoolBridge 创建 TOOL_CALL 节点）
+                    String paramsSummary = buildParamsSummary(parsed.args());
                     progressSink.onProgress(AgentProgressEvent.toolSelected(
-                            toolRound, maxRounds, parsed.tool()));
+                            toolRound, maxRounds, parsed.tool(), paramsSummary));
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = allTools.call(call);
@@ -260,7 +261,8 @@ public class AbstractAgent {
 
                     // 进度事件
                     progressSink.onProgress(result.success()
-                            ? AgentProgressEvent.toolSuccess(toolRound, maxRounds, parsed.tool())
+                            ? AgentProgressEvent.toolSuccess(toolRound, maxRounds,
+                                    parsed.tool(), buildResultSummary(parsed.tool(), result))
                             : AgentProgressEvent.toolFailed(toolRound, maxRounds, parsed.tool(),
                                     result.error()));
 
@@ -462,6 +464,45 @@ public class AbstractAgent {
             }
         }
         sb.append("[/TOOL_RESULT]\n\n请基于以上工具结果继续。已足够则调用 finish_action 结束。");
+        return sb.toString();
+    }
+
+    /** 构建参数摘要（单行，每值截断到 80 字符），供 CLI 显示。 */
+    protected static String buildParamsSummary(Map<String, String> args) {
+        if (args == null || args.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (var entry : args.entrySet()) {
+            if (sb.length() > 0) sb.append("  ");
+            sb.append(entry.getKey()).append("=");
+            String v = entry.getValue();
+            if (v != null) {
+                if (v.length() > 80) v = v.substring(0, 80) + "…";
+                sb.append(v);
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 构建结果摘要（提取第一个 item 的 snippet），供 CLI 显示。 */
+    protected static String buildResultSummary(String toolName, ToolResult result) {
+        if (result == null || !result.success()) return "";
+        if (result.items().isEmpty()) return "(ok)";
+        var item = result.items().get(0);
+        StringBuilder sb = new StringBuilder();
+        if (item.title() != null && !item.title().isBlank()) {
+            sb.append(item.title());
+        }
+        String snippet = item.snippet();
+        if (snippet != null && !snippet.isBlank()) {
+            if (sb.length() > 0) sb.append(" — ");
+            // 写入类工具不截断，其他工具截断到 200 字符
+            boolean isWriteTool = java.util.Set.of("write_element", "node_create", "create_checkpoint")
+                    .contains(toolName);
+            if (!isWriteTool && snippet.length() > 200) {
+                snippet = snippet.substring(0, 200) + "…";
+            }
+            sb.append(snippet);
+        }
         return sb.toString();
     }
 
