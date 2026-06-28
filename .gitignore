@@ -38,3 +38,8 @@ import/*
 
 .claude/settings.local.json
 worlds/
+caches/
+
+# Agent runtime configs (keep templates)
+agents/lihua.json
+agents/zhangxiaoming.json
