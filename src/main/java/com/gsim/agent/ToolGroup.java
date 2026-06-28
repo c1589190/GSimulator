@@ -90,6 +90,7 @@ public record ToolGroup(
             "view_sub_agent_cache",
             "world_list",
             "world_create",
+            "compact_cache",
             "world_switch",
             "skill_list",
             "skill_read",

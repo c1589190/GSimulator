@@ -7,7 +7,6 @@ import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.compact.ToolResultCompactor;
 import com.gsim.context.ContextRenderer;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.tool.ToolRegistry;
@@ -55,6 +54,8 @@ public class GSimulatorApplication {
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
+    private com.gsim.compact.CacheCompactor cacheCompactor;
+    private com.gsim.commands.CompactCommand compactCommand;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
@@ -193,18 +194,6 @@ public class GSimulatorApplication {
         this.orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
         this.orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
 
-        // Tool result compactor
-        if (config.isCompactEnabled() && ctx.getLlmManager() != null) {
-            var toolResultCompactor = new ToolResultCompactor(
-                    ctx.getLlmManager(),
-                    config.getCompactToolResultThreshold(),
-                    config.getCompactLlmModel(),
-                    config.getCompactLlmTemperature(),
-                    cliProgressSink);
-            this.orchestrator.setToolResultCompactor(toolResultCompactor);
-            this.orchestrator.setToolResultThreshold(config.getCompactToolResultThreshold());
-        }
-
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
 
         // MediaWiki search (Wikipedia + any MediaWiki site)
@@ -262,7 +251,23 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.skill.tool.SkillSearchTool(skillIndex, embeddingClient));
         toolRegistry.register(new com.gsim.skill.tool.SkillIndexTool(skillsDir, skillIndex, embeddingClient));
 
-        log.info("Registered 6 skill tools (skillsDir={}, embedding={})",
+        // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
+        var compactProvider = ctx.getLlmProviderRegistry().get("compact");
+        var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;
+        if (compactLlm != null) {
+            log.info("Using compact LLM provider: id={}", compactLlm.providerId());
+        } else {
+            compactLlm = ctx.getLlmManager();
+            log.info("No 'compact' provider in llms.json, using default LLM for compaction");
+        }
+        this.cacheCompactor = new com.gsim.compact.CacheCompactor(compactLlm, 4096);
+
+        // Compact Cache 工具（Agent 可调用）
+        toolRegistry.register(new com.gsim.agent.tool.CompactCacheTool(
+                ctx.getCachesManager(), cacheCompactor, compositeSink,
+                worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default"));
+
+        log.info("Registered 6 skill + 1 compact_cache tools (skillsDir={}, embedding={})",
                 skillsDir, embeddingClient != null && embeddingClient.isConfigured() ? "enabled" : "disabled");
     }
 
@@ -360,6 +365,16 @@ public class GSimulatorApplication {
         this.worldCommand = wc;
         this.nodeCommand = nc;
         this.chatCommand = cc;
+
+        // Compact command（如果 cacheCompactor 可用）
+        if (cacheCompactor != null) {
+            this.compactCommand = new com.gsim.commands.CompactCommand(
+                    ctx.getCachesManager(), cacheCompactor, compositeSink,
+                    (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages),
+                    worldsDir,
+                    () -> worldInfo != null ? worldInfo.worldId() : "default");
+            adapter.setCompactCommand(compactCommand);
+        }
         adapter.setNewCommands(wc, nc, cc);
 
         // Expose commands to ApplicationContext for WebUI handlers

@@ -52,6 +52,8 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("create_sub_agent_config", ToolCategory.MUTATING);
         CATEGORIES.put("update_sub_agent_config", ToolCategory.MUTATING);
         // Skill: mutating
+        // Cache: mutating
+        CATEGORIES.put("compact_cache", ToolCategory.MUTATING);
         // World: mutating
         CATEGORIES.put("world_create", ToolCategory.MUTATING);
         CATEGORIES.put("world_switch", ToolCategory.MUTATING);

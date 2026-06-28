@@ -2,7 +2,6 @@ package com.gsim.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.compact.ToolResultCompactor;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
@@ -64,11 +63,6 @@ public class OrchestratorAgent extends AbstractAgent {
 
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
-
-    /** 工具结果溢出保护（null = 未启用）。 */
-    private volatile ToolResultCompactor toolResultCompactor;
-    /** 工具结果压缩阈值（字符数，默认 3000）。 */
-    private volatile int toolResultThreshold = 3000;
 
     /** SubAgent 异步结果收集（agentId → future）。 */
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
@@ -184,16 +178,6 @@ public class OrchestratorAgent extends AbstractAgent {
     /** 获取流式输出开关。 */
     public boolean isStreamEnabled() {
         return streamEnabled;
-    }
-
-    /** 注入工具结果压缩器（null = 不启用工具结果溢出保护）。 */
-    public void setToolResultCompactor(ToolResultCompactor compactor) {
-        this.toolResultCompactor = compactor;
-    }
-
-    /** 设置工具结果压缩阈值（字符数，默认 3000）。 */
-    public void setToolResultThreshold(int threshold) {
-        this.toolResultThreshold = Math.max(500, threshold);
     }
 
     /** 取消当前 ToolLoop 及所有正在运行的 SubAgent（ESC / Ctrl+C）。 */
@@ -767,7 +751,7 @@ public class OrchestratorAgent extends AbstractAgent {
 
             if (!response.success()) {
                 if (response.isContextLengthExceeded()) {
-                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    String hint = "⚠️ 上下文窗口不足。\n原始错误: " + response.errorMessage();
                     log.warn("[LLM] context length exceeded: {}", response.errorMessage());
                     return new ChatResult(false, hint, toolCalls, trace, response.errorMessage());
                 }
@@ -949,9 +933,6 @@ public class OrchestratorAgent extends AbstractAgent {
                     }
 
                     String toolFeedback = buildToolResultFeedback(parsed.tool(), result);
-                    if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
-                        toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
-                    }
                     messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool() + " success=" + result.success()));
@@ -1181,7 +1162,7 @@ public class OrchestratorAgent extends AbstractAgent {
 
             if (!response.success()) {
                 if (response.isContextLengthExceeded()) {
-                    String hint = "⚠️ 上下文窗口不足。建议执行 /compact 压缩对话历史。\n原始错误: " + response.errorMessage();
+                    String hint = "⚠️ 上下文窗口不足。\n原始错误: " + response.errorMessage();
                     log.warn("[LLM] context length exceeded: {}", response.errorMessage());
                     trace.add(new MessageTrace("system", "error", hint));
                     return new SimResult(hint, toolCalls, trace);
@@ -1296,9 +1277,6 @@ public class OrchestratorAgent extends AbstractAgent {
                     }
 
                     String toolFeedback = buildToolResultFeedback(parsed.tool(), result);
-                    if (toolResultCompactor != null && toolFeedback.length() > toolResultThreshold) {
-                        toolFeedback = toolResultCompactor.compactIfNeeded(toolFeedback);
-                    }
                     messages.add(LlmMessage.user(toolFeedback));
                     trace.add(new MessageTrace("tool", "tool_result",
                             "tool=" + parsed.tool() + " success=" + result.success()));
