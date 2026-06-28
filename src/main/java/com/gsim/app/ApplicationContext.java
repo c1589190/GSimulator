@@ -173,6 +173,30 @@ public class ApplicationContext {
 
     public Path getWorldsDir() { return config.worldsDir(); }
 
+    // ── Embedding & Skill ──
+
+    private com.gsim.llm.EmbeddingClient embeddingClient;
+    private com.gsim.skill.SkillIndex skillIndex;
+
+    /** 获取或懒创建 EmbeddingClient（若配置了 EMBEDDING_* 环境变量）。 */
+    public com.gsim.llm.EmbeddingClient getEmbeddingClient() {
+        if (embeddingClient == null && config.isEmbeddingConfigured()) {
+            embeddingClient = new com.gsim.llm.EmbeddingClient(
+                    config.getEmbeddingBaseUrl(),
+                    config.getEmbeddingApiKey(),
+                    config.getEmbeddingModel() != null ? config.getEmbeddingModel() : "BAAI/bge-large-zh-v1.5");
+        }
+        return embeddingClient;
+    }
+
+    /** 获取或懒创建 SkillIndex。 */
+    public com.gsim.skill.SkillIndex getSkillIndex(Path skillsDir) {
+        if (skillIndex == null) {
+            skillIndex = new com.gsim.skill.SkillIndex(skillsDir);
+        }
+        return skillIndex;
+    }
+
     /**
      * 关闭所有资源：LLM client、event bus、API server。
      */

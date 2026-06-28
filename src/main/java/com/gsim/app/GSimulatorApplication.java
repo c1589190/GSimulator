@@ -234,6 +234,31 @@ public class GSimulatorApplication {
                 config.agentsDir(), agentConfigStore));
         toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(
                 config.agentsDir(), agentConfigStore));
+
+        // ── Skill 管理工具 ──
+        Path skillsDir = worldsDir.resolveSibling("skills");
+        try {
+            java.nio.file.Files.createDirectories(skillsDir);
+        } catch (java.io.IOException e) {
+            log.warn("Failed to create skills dir: {}", e.getMessage());
+        }
+        var embeddingClient = ctx.getEmbeddingClient();
+        var skillIndex = ctx.getSkillIndex(skillsDir);
+        try {
+            skillIndex.ensureDir();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to create embdb dir: {}", e.getMessage());
+        }
+
+        toolRegistry.register(new com.gsim.skill.tool.SkillListTool(skillsDir, skillIndex));
+        toolRegistry.register(new com.gsim.skill.tool.SkillReadTool(skillsDir));
+        toolRegistry.register(new com.gsim.skill.tool.SkillCreateTool(skillsDir));
+        toolRegistry.register(new com.gsim.skill.tool.SkillWriteTool(skillsDir));
+        toolRegistry.register(new com.gsim.skill.tool.SkillSearchTool(skillIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.skill.tool.SkillIndexTool(skillsDir, skillIndex, embeddingClient));
+
+        log.info("Registered 6 skill tools (skillsDir={}, embedding={})",
+                skillsDir, embeddingClient != null && embeddingClient.isConfigured() ? "enabled" : "disabled");
     }
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {

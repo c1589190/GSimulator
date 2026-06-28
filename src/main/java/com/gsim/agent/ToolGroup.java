@@ -60,10 +60,23 @@ public record ToolGroup(
             Set.of("wiki_search", "mediawiki_search")
     );
 
+    public static final ToolGroup SKILL_MGMT = new ToolGroup(
+            "skill_mgmt", "Skill 管理",
+            "浏览、创建、编辑、搜索 Skill 文件。"
+                    + "skill_list 列出所有 Skill，"
+                    + "skill_read 分段读取 Skill 内容，"
+                    + "skill_create 创建新 Skill（文件夹 + SKILL.md），"
+                    + "skill_write 修改 Skill 内容（替换/追加/覆盖），"
+                    + "skill_search 语义搜索 Skill（基于 embedding 向量），"
+                    + "skill_index 为 Skill 建立语义索引。",
+            Set.of("skill_list", "skill_read", "skill_create",
+                    "skill_write", "skill_search", "skill_index")
+    );
+
     // ===== 所有工具组列表 =====
 
     public static final List<ToolGroup> ALL_GROUPS = List.of(
-            WORLD_INFO, NODE_MGMT, IMPORT_DOC, SEARCH
+            WORLD_INFO, NODE_MGMT, IMPORT_DOC, SEARCH, SKILL_MGMT
     );
 
     // ===== 默认工具（无需激活，始终可用） =====
@@ -74,7 +87,13 @@ public record ToolGroup(
             "dispatch_sub_agent",
             "collect_sub_agent_results",
             "list_sub_agent_caches",
-            "view_sub_agent_cache"
+            "view_sub_agent_cache",
+            "skill_list",
+            "skill_read",
+            "skill_create",
+            "skill_write",
+            "skill_search",
+            "skill_index"
     );
 
     // ===== 工具名 → 所属组 key 查找表 =====

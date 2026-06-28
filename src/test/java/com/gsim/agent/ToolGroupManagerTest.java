@@ -100,11 +100,11 @@ class ToolGroupManagerTest {
     }
 
     @Test
-    @DisplayName("createWithAllGroupsActivated 预激活全部 4 组")
+    @DisplayName("createWithAllGroupsActivated 预激活全部 5 组")
     void createWithAllGroupsActivated() {
         ToolGroupManager allMgr = ToolGroupManager.createWithAllGroupsActivated();
         assertTrue(allMgr.hasActiveGroups());
-        assertEquals(4, allMgr.activeGroupKeys().size());
+        assertEquals(5, allMgr.activeGroupKeys().size());
 
         Set<String> tools = allMgr.computeAllowedTools();
         assertTrue(tools.containsAll(ToolGroup.DEFAULT_TOOLS));
