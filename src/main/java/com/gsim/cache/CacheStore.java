@@ -16,9 +16,18 @@ public final class CacheStore {
 
     private CacheStore() {}
 
+    /** Caches root directory — peer to worldsDir (e.g. ./caches/ instead of ./worlds/{id}/caches/). */
+    private static volatile Path cachesRoot = null;
+
+    /** Set the caches root directory explicitly (called at startup). */
+    public static void setCachesRoot(Path root) {
+        cachesRoot = root;
+    }
+
     /** Caches directory for a world. */
     public static Path cachesDir(Path worldsDir, String worldId) {
-        return worldsDir.resolve(worldId).resolve("caches");
+        Path root = cachesRoot != null ? cachesRoot : worldsDir.resolveSibling("caches");
+        return root.resolve(worldId);
     }
 
     /** Full path to a specific cache file. */

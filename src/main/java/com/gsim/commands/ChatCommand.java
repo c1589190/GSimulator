@@ -4,10 +4,6 @@ import com.gsim.agent.core.AgentResult;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.llm.LlmMessage;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.Attributes;
-import org.jline.terminal.Attributes.LocalFlag;
-import org.jline.terminal.Attributes.ControlChar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +37,8 @@ public final class ChatCommand {
     /** ESC / Ctrl+C 取消回调（由 GSimulatorApplication 注入 orchestrator::cancel）。 */
     private volatile Runnable cancelCallback;
 
-    /** JLine Terminal 引用（由 GSimulatorApplication wiring 阶段注入）。 */
-    private volatile Terminal jlineTerminal;
+    /** 保存的终端设置（stty -F /dev/tty -g 输出）。 */
+    private String savedTermSettings;
 
     public ChatCommand(Path worldsDir, Supplier<String> worldId, Supplier<CacheSession> activeCache) {
         this(worldsDir, worldId, activeCache, null);
@@ -59,11 +55,6 @@ public final class ChatCommand {
     /** 注入取消回调（由 GSimulatorApplication 在 wiring 阶段调用）。 */
     public void setCancelCallback(Runnable cb) {
         this.cancelCallback = cb;
-    }
-
-    /** 注入 JLine Terminal（由 GSimulatorApplication 在 wiring 阶段调用）。 */
-    public void setJlineTerminal(Terminal terminal) {
-        this.jlineTerminal = terminal;
     }
 
     /** 公开取消方法，供 HTTP API 调用。 */
@@ -122,27 +113,11 @@ public final class ChatCommand {
             }
         });
 
-        // 使用 JLine API 临时切换到 raw mode，保存原始属性
-        Attributes savedAttrs = null;
-        Terminal term = jlineTerminal;
-        if (term != null) {
-            try {
-                savedAttrs = term.getAttributes();
-                Attributes raw = new Attributes(savedAttrs);
-                raw.setLocalFlag(LocalFlag.ICANON, false);
-                raw.setLocalFlag(LocalFlag.ECHO, false);
-                raw.setControlChar(ControlChar.VMIN, 0);
-                raw.setControlChar(ControlChar.VTIME, 1);
-                term.setAttributes(raw);
-                log.debug("[ChatCommand] terminal raw mode set via JLine API");
-            } catch (Exception e) {
-                log.debug("[ChatCommand] failed to set raw mode: {}", e.getMessage());
-                savedAttrs = null;  // don't try to restore
-            }
-        }
+        // 临时将终端设为 raw mode（用 -F /dev/tty 显式指定设备，修复 pipe stdin 问题）
+        boolean rawMode = setTerminalRaw();
 
-        // ESC 监听线程 — 从 JLine terminal input stream 读取（或降级到 System.in）
-        final InputStream watchStream = (term != null) ? term.input() : System.in;
+        // ESC 监听线程 — 从 System.in 读取（raw mode 下 keystroke 立即可读）
+        final InputStream watchStream = System.in;
         Thread watcher = Thread.startVirtualThread(() -> {
             try {
                 while (agentThread.isAlive() && !cancelled.get()) {
@@ -174,15 +149,7 @@ public final class ChatCommand {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            // 通过 JLine API 精确恢复原始终端属性
-            if (savedAttrs != null && term != null) {
-                try {
-                    term.setAttributes(savedAttrs);
-                    log.debug("[ChatCommand] terminal attributes restored via JLine API");
-                } catch (Exception e) {
-                    log.warn("[ChatCommand] failed to restore terminal attributes: {}", e.getMessage());
-                }
-            }
+            if (rawMode) restoreTerminal();
         }
 
         AgentResult result;
@@ -205,6 +172,67 @@ public final class ChatCommand {
         }
         // success: streaming already printed content — return empty to avoid duplication
         return "";
+    }
+
+    /** 将终端设为 raw mode（逐字节读取，用于 ESC 检测）。返回 true 表示成功。 */
+    private boolean setTerminalRaw() {
+        try {
+            // 1. 保存当前设置（-F /dev/tty 确保操作真实终端而非 pipe）
+            Process save = new ProcessBuilder("stty", "-F", "/dev/tty", "-g")
+                    .redirectErrorStream(true).start();
+            savedTermSettings = new String(save.getInputStream().readAllBytes()).trim();
+            int exitCode = save.waitFor();
+            if (exitCode != 0 || savedTermSettings.isEmpty()
+                    || savedTermSettings.contains("Inappropriate ioctl")) {
+                log.debug("[ChatCommand] stty -F /dev/tty save failed (exit={}), falling back",
+                        exitCode);
+                return setTerminalRawFallback();
+            }
+            log.debug("[ChatCommand] saved terminal settings: {}", savedTermSettings);
+
+            // 2. 切换到 raw mode
+            new ProcessBuilder("stty", "-F", "/dev/tty", "-icanon", "-echo", "min", "0", "time", "1")
+                    .inheritIO().start().waitFor();
+            return true;
+        } catch (Exception e) {
+            log.debug("[ChatCommand] stty raw mode failed: {}", e.getMessage());
+            return setTerminalRawFallback();
+        }
+    }
+
+    /** Fallback: 尝试不带 -F 的 stty（某些环境 /dev/tty 不可用）。 */
+    private boolean setTerminalRawFallback() {
+        try {
+            Process save = new ProcessBuilder("stty", "-g")
+                    .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                    .redirectErrorStream(true).start();
+            savedTermSettings = new String(save.getInputStream().readAllBytes()).trim();
+            save.waitFor();
+            new ProcessBuilder("stty", "-icanon", "-echo", "min", "0", "time", "1")
+                    .inheritIO().start().waitFor();
+            log.debug("[ChatCommand] raw mode set via stty fallback");
+            return true;
+        } catch (Exception e) {
+            log.debug("[ChatCommand] stty fallback also failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /** 恢复终端设置。 */
+    private void restoreTerminal() {
+        if (savedTermSettings == null || savedTermSettings.isEmpty()) return;
+        try {
+            // 优先使用 /dev/tty
+            new ProcessBuilder("stty", "-F", "/dev/tty", savedTermSettings)
+                    .inheritIO().start().waitFor();
+            log.debug("[ChatCommand] terminal restored via stty -F /dev/tty");
+        } catch (Exception e) {
+            log.debug("[ChatCommand] stty -F /dev/tty restore failed, trying fallback");
+            try {
+                new ProcessBuilder("stty", savedTermSettings)
+                        .inheritIO().start().waitFor();
+            } catch (Exception ignored) {}
+        }
     }
 
     /** Load prior messages from cache, skipping the system prompt (regenerated each run). */

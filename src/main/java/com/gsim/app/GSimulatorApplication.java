@@ -94,6 +94,23 @@ public class GSimulatorApplication {
 
         ToolRegistry toolRegistry = ctx.getToolRegistry();
 
+        // 初始化 Cache 根目录（peer to worldsDir）
+        Path cachesRoot = worldsDir.resolveSibling("caches");
+        com.gsim.cache.CacheStore.setCachesRoot(cachesRoot);
+        // 迁移旧缓存（如有）
+        Path oldCachesDir = worldsDir.resolve("default").resolve("caches");
+        Path newCachesDir = cachesRoot.resolve("default");
+        if (java.nio.file.Files.isDirectory(oldCachesDir)
+                && !java.nio.file.Files.isDirectory(newCachesDir)) {
+            try {
+                java.nio.file.Files.createDirectories(cachesRoot);
+                java.nio.file.Files.move(oldCachesDir, newCachesDir);
+                log.info("Migrated caches: {} -> {}", oldCachesDir, newCachesDir);
+            } catch (Exception e) {
+                log.warn("Failed to migrate caches: {}", e.getMessage());
+            }
+        }
+
         // 创建 CLI 适配器（命令稍后注入）
         this.adapter = new ConsoleInteractionAdapter(null, ctx.getInteractionSession(),
                 config.getDataDir());
@@ -370,8 +387,6 @@ public class GSimulatorApplication {
                 () -> activeCache,
                 (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
         cc.setCancelCallback(orchestrator::cancel);
-        // 注入 JLine Terminal 到 ChatCommand（用于 ESC 取消监听，不破坏终端滚动）
-        cc.setJlineTerminal(adapter.getJlineTerminal());
         this.worldCommand = wc;
         this.nodeCommand = nc;
         this.chatCommand = cc;
