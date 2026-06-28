@@ -7,7 +7,6 @@ target/
 .vscode/
 
 # Configuration files (may contain secrets)
-gsim.properties
 *.local.properties
 *.key
 
