@@ -33,6 +33,8 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("view_sub_agent_cache", ToolCategory.READ_ONLY);
         // LLM providers
         CATEGORIES.put("list_llm_providers", ToolCategory.READ_ONLY);
+        // World: read-only
+        CATEGORIES.put("world_list", ToolCategory.READ_ONLY);
         // Skill: read-only
         CATEGORIES.put("skill_list", ToolCategory.READ_ONLY);
         CATEGORIES.put("skill_read", ToolCategory.READ_ONLY);
@@ -49,6 +51,10 @@ public class ToolCategoryRegistry {
         // Dynamic agent config
         CATEGORIES.put("create_sub_agent_config", ToolCategory.MUTATING);
         CATEGORIES.put("update_sub_agent_config", ToolCategory.MUTATING);
+        // Skill: mutating
+        // World: mutating
+        CATEGORIES.put("world_create", ToolCategory.MUTATING);
+        CATEGORIES.put("world_switch", ToolCategory.MUTATING);
         // Skill: mutating
         CATEGORIES.put("skill_create", ToolCategory.MUTATING);
         CATEGORIES.put("skill_write", ToolCategory.MUTATING);

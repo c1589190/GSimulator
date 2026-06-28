@@ -56,6 +56,10 @@ public class GSimulatorApplication {
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
 
+    /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
+    private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
+            new java.util.concurrent.atomic.AtomicReference<>("default");
+
     public GSimulatorApplication(AppConfig config) {
         this(config, true, false, false);
     }
@@ -82,6 +86,7 @@ public class GSimulatorApplication {
             this.worldInfo = bootResult.worldInfo();
             this.activeCache = bootResult.activeCache();
             this.contextRenderer = bootResult.contextRenderer();
+            this.activeWorldId.set(bootResult.worldId());
             // Wire into ApplicationContext so PageHandler/WebUI see the active world
             ctx.setActiveRootId(bootResult.worldId());
         }
@@ -262,6 +267,13 @@ public class GSimulatorApplication {
     }
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
+        // World management tools — don't depend on WorldInformation being loaded
+        toolRegistry.register(new com.gsim.worldinfo.tool.WorldListTool(
+                worldsDir, activeWorldId::get));
+        toolRegistry.register(new com.gsim.worldinfo.tool.WorldCreateTool(worldsDir));
+        toolRegistry.register(new com.gsim.worldinfo.tool.WorldSwitchTool(
+                worldsDir, this::switchToWorld));
+
         if (worldInfo == null) {
             log.warn("WorldInformation not available, skipping world info tool registration");
             return;
@@ -285,9 +297,44 @@ public class GSimulatorApplication {
         toolRegistry.register(new NodeSwitchTool(wiSupplier, worldsDir, onNodeChanged));
         toolRegistry.register(new NodeGotoParentTool(wiSupplier, worldsDir, onNodeChanged));
 
-        log.info("Registered 11 world info + node tools (query_node, query_checkpoint, " +
-                "query_keyword, query_element, write_element, create_checkpoint, " +
-                "node_list, node_status, node_create, node_switch, node_goto_parent)");
+        log.info("Registered 14 world info + node + world mgmt tools");
+    }
+
+    /**
+     * 切换到指定 world：重新 bootstrap，更新 worldInfo / activeCache / contextRenderer，
+     * 并将新的 system prompt 注入 orchestrator。返回 null 表示成功，否则返回错误消息。
+     */
+    private String switchToWorld(String worldId) {
+        try {
+            // 1. 验证 world 存在
+            var meta = com.gsim.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
+            if (meta == null) return "World 不存在: " + worldId;
+
+            // 2. 重新 bootstrap
+            Bootstrap bootstrap = new Bootstrap(worldsDir, config.promptsDir(), ctx.getCachesManager());
+            Bootstrap.BootstrapResult result = bootstrap.boot(null);
+
+            if (!result.worldId().equals(worldId)) {
+                return "Bootstrap 加载了错误的 world: " + result.worldId() + " (expected: " + worldId + ")";
+            }
+
+            // 3. 更新应用状态
+            this.worldInfo = result.worldInfo();
+            this.activeCache = result.activeCache();
+            this.contextRenderer = result.contextRenderer();
+            this.activeWorldId.set(worldId);
+            ctx.setActiveRootId(worldId);
+
+            // 4. System prompt 会在下次 orchestator.run() 时基于新的 worldInfo 自动重建
+
+            log.info("[switchToWorld] switched to world={} node={} root={}",
+                    worldId, result.activeNodeId(),
+                    worldInfo != null ? worldInfo.rootNodeId() : "?");
+            return null;  // success
+        } catch (Exception e) {
+            log.error("[switchToWorld] failed: {}", e.getMessage(), e);
+            return e.getMessage();
+        }
     }
 
     private void wireCommands(Runnable onNodeChanged) {
@@ -308,6 +355,8 @@ public class GSimulatorApplication {
                 () -> activeCache,
                 (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
         cc.setCancelCallback(orchestrator::cancel);
+        // 注入 JLine Terminal 到 ChatCommand（用于 ESC 取消监听，不破坏终端滚动）
+        cc.setJlineTerminal(adapter.getJlineTerminal());
         this.worldCommand = wc;
         this.nodeCommand = nc;
         this.chatCommand = cc;
