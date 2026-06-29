@@ -80,11 +80,14 @@ public class Main {
 
             // 4. CLI 缓存选择（交互终端下）
             String selectedSessionId = null;
+            String targetWorldId = null;
             if (ConfigLoader.isInteractiveTerminal()) {
-                selectedSessionId = selectOrchestratorCache(cachesManager, "default");
+                var selection = selectOrchestratorCache(cachesManager, worldsDir);
+                selectedSessionId = selection.sessionId();
+                targetWorldId = selection.worldId();
             }
 
-            Bootstrap.BootstrapResult bootResult = bootstrap.boot(selectedSessionId);
+            Bootstrap.BootstrapResult bootResult = bootstrap.boot(selectedSessionId, targetWorldId);
             System.out.println("World loaded: " + bootResult.worldId()
                 + ", active node: " + bootResult.activeNodeId()
                 + ", chain length: " + bootResult.worldInfo().branchChain().size());
@@ -110,10 +113,19 @@ public class Main {
         }
     }
 
-    /** CLI 交互：选择 Orchestrator 历史缓存或新建。 */
-    private static String selectOrchestratorCache(CachesManager cachesManager, String worldId) {
-        List<CacheInfo> caches = cachesManager.listCaches(worldId, "orchestrator");
-        if (caches.isEmpty()) return null; // 将自动新建
+    /** 缓存选择结果：sessionId + worldId 配对。 */
+    private record CacheSelection(String sessionId, String worldId) {}
+
+    /** CLI 交互：选择 Orchestrator 历史缓存或新建。
+     *  列出所有 world 下的缓存（而非仅 "default"），选中后自动使用缓存所属的 world。 */
+    private static CacheSelection selectOrchestratorCache(CachesManager cachesManager, Path worldsDir) {
+        // 列出所有 world 的 Orchestrator 缓存
+        List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
+        if (caches.isEmpty()) return new CacheSelection(null, null); // 将自动新建（使用默认 world）
+
+        // 获取可用 world 列表（用于新建会话时选择）
+        List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
+                com.gsim.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
 
         System.out.println();
         System.out.println("══════════════════════════════════════════");
@@ -121,8 +133,9 @@ public class Main {
         System.out.println("══════════════════════════════════════════");
         for (int i = 0; i < caches.size(); i++) {
             CacheInfo ci = caches.get(i);
-            System.out.printf("  [%d] %s  (%d messages, %s)%n",
-                    i + 1, ci.sessionId(), ci.messageCount(),
+            String worldLabel = ci.worldId() != null ? ci.worldId() : "?";
+            System.out.printf("  [%d] %s  world=%s  (%d messages, %s)%n",
+                    i + 1, ci.sessionId(), worldLabel, ci.messageCount(),
                     ci.createdAt().substring(0, Math.min(16, ci.createdAt().length())));
         }
         System.out.println("  [N] 新建会话");
@@ -132,19 +145,47 @@ public class Main {
             Scanner scanner = new Scanner(System.in);
             String line = scanner.nextLine().trim();
             if ("n".equalsIgnoreCase(line) || "N".equals(line)) {
-                System.out.println("  创建新会话...");
-                return null;
+                // 新建会话 — 选择 world
+                String selectedWorld = selectWorldForNewSession(scanner, worlds);
+                System.out.println("  创建新会话 (world=" + selectedWorld + ")...");
+                return new CacheSelection(null, selectedWorld);
             }
             int idx = Integer.parseInt(line) - 1;
             if (idx >= 0 && idx < caches.size()) {
-                System.out.println("  加载缓存: " + caches.get(idx).sessionId());
-                return caches.get(idx).sessionId();
+                CacheInfo chosen = caches.get(idx);
+                System.out.println("  加载缓存: " + chosen.sessionId()
+                        + " (world=" + chosen.worldId() + ")");
+                return new CacheSelection(chosen.sessionId(), chosen.worldId());
             }
         } catch (Exception e) {
             // fall through
         }
-        System.out.println("  输入无效，使用最新缓存。");
-        return caches.get(0).sessionId(); // fallback: 最新
+        CacheInfo fallback = caches.get(0);
+        System.out.println("  输入无效，使用最新缓存 (world=" + fallback.worldId() + ")。");
+        return new CacheSelection(fallback.sessionId(), fallback.worldId());
+    }
+
+    /** 选择 world（用于新建会话时）。 */
+    private static String selectWorldForNewSession(Scanner scanner,
+            List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
+        if (worlds.isEmpty()) return "default";
+        if (worlds.size() == 1) return worlds.get(0).id();
+
+        System.out.println();
+        System.out.println("  可用 World:");
+        for (int i = 0; i < worlds.size(); i++) {
+            System.out.printf("    [%d] %s (%s)%n", i + 1, worlds.get(i).id(), worlds.get(i).name());
+        }
+        System.out.print("  选择 World (1-" + worlds.size() + ", 回车=首个): ");
+        try {
+            String line = scanner.nextLine().trim();
+            if (line.isEmpty()) return worlds.get(0).id();
+            int idx = Integer.parseInt(line) - 1;
+            if (idx >= 0 && idx < worlds.size()) return worlds.get(idx).id();
+        } catch (Exception e) {
+            // fall through
+        }
+        return worlds.get(0).id();
     }
 
     private static void printUsage() {

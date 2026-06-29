@@ -7,7 +7,6 @@ import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.context.ContextRenderer;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.worldinfo.WorldInformation;
@@ -49,7 +48,6 @@ public class GSimulatorApplication {
     private OrchestratorAgent orchestrator;
     private WorldInformation worldInfo;
     private CacheSession activeCache;
-    private ContextRenderer contextRenderer;
     private Path worldsDir;
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
@@ -86,7 +84,6 @@ public class GSimulatorApplication {
         if (bootResult != null) {
             this.worldInfo = bootResult.worldInfo();
             this.activeCache = bootResult.activeCache();
-            this.contextRenderer = bootResult.contextRenderer();
             this.activeWorldId.set(bootResult.worldId());
             // Wire into ApplicationContext so PageHandler/WebUI see the active world
             ctx.setActiveRootId(bootResult.worldId());
@@ -140,8 +137,8 @@ public class GSimulatorApplication {
         // 创建命令并注入到 adapter
         wireCommands(onNodeChanged);
 
-        // 注入 FreeMarker 渲染的系统 prompt
-        injectSystemPrompt();
+        // 将静态系统提示词写入缓存（首次启动时，缓存为空）
+        initCacheSystemPrompt();
 
         // 创建 WebUiServer
         com.gsim.webui.WebUiConfig webUiConfig =
@@ -335,8 +332,8 @@ public class GSimulatorApplication {
     }
 
     /**
-     * 切换到指定 world：重新 bootstrap，更新 worldInfo / activeCache / contextRenderer，
-     * 并将新的 system prompt 注入 orchestrator。返回 null 表示成功，否则返回错误消息。
+     * 切换到指定 world：只加载世界数据，不触碰活跃缓存。
+     * 返回 null 表示成功，否则返回错误消息。
      */
     private String switchToWorld(String worldId) {
         try {
@@ -344,46 +341,32 @@ public class GSimulatorApplication {
             var meta = com.gsim.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
             if (meta == null) return "World 不存在: " + worldId;
 
-            // 2. 重新 bootstrap（获取新 world 的 worldInfo/contextRenderer）
-            Bootstrap bootstrap = new Bootstrap(worldsDir, config.promptsDir(), ctx.getCachesManager());
-            Bootstrap.BootstrapResult result = bootstrap.boot(null, worldId);
+            // 2. 加载目标 world 的 active state
+            var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, worldId);
+            String activeNodeId = active != null ? active.nodeId() : "n0000";
 
-            if (!result.worldId().equals(worldId)) {
-                return "Bootstrap 加载了错误的 world: " + result.worldId() + " (expected: " + worldId + ")";
+            // 3. Build WorldInformation（不经过 Bootstrap，避免触碰缓存）
+            var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);
+            if (newWi == null) {
+                return "Failed to load world: " + worldId;
             }
 
-            // 3. 更新应用状态
-            this.worldInfo = result.worldInfo();
-            this.contextRenderer = result.contextRenderer();
+            // 4. 更新应用状态（worldInfo / activeWorldId，不触碰 activeCache）
+            this.worldInfo = newWi;
             this.activeWorldId.set(worldId);
             ctx.setActiveRootId(worldId);
 
-            // 4. 保留当前活跃缓存，只更新其 worldId（缓存扁平存储，无需跨目录迁移）
-            if (this.activeCache != null && this.activeCache.messageCount() > 0) {
-                // 删除 Bootstrap 创建的空缓存（flat 目录下会产生孤儿文件）
-                String bootstrapSessionId = result.activeCache().sessionId();
-                if (!bootstrapSessionId.equals(this.activeCache.sessionId())) {
-                    ctx.getCachesManager().deleteCache(worldId, bootstrapSessionId);
-                }
-
-                this.activeCache.setWorldId(worldId);
-                this.activeCache.setNodeId(result.activeNodeId());
+            // 5. 更新缓存中的 nodeId（信息性字段，不影响对话内容）
+            if (this.activeCache != null) {
+                this.activeCache.setNodeId(activeNodeId);
                 com.gsim.cache.CacheStore.save(worldsDir, this.activeCache);
-
-                log.info("[switchToWorld] updated cache {} worldId->{} node->{} ({} messages)",
-                        this.activeCache.sessionId(), worldId, result.activeNodeId(),
-                        this.activeCache.messageCount());
-            } else {
-                this.activeCache = result.activeCache();
             }
 
-            // 5. 更新 messageSaver（使用缓存自身的 worldId 决定存储路径）
-            updateMessageSaver();
-
-            log.info("[switchToWorld] switched to world={} node={} root={}",
-                    worldId, result.activeNodeId(),
-                    worldInfo != null ? worldInfo.rootNodeId() : "?");
-            return null;  // success
+            log.info("[switchToWorld] switched to world={} node={} root={} (cache unchanged: {})",
+                    worldId, activeNodeId,
+                    worldInfo != null ? worldInfo.rootNodeId() : "?",
+                    this.activeCache != null ? this.activeCache.sessionId() : "none");
+            return null;
         } catch (Exception e) {
             log.error("[switchToWorld] failed: {}", e.getMessage(), e);
             return e.getMessage();
@@ -415,6 +398,10 @@ public class GSimulatorApplication {
                 () -> activeCache,
                 (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
         cc.setCancelCallback(orchestrator::cancel);
+        cc.setActiveCacheSetter(s -> {
+            this.activeCache = s;
+            updateMessageSaver();
+        });
         this.worldCommand = wc;
         this.nodeCommand = nc;
         this.chatCommand = cc;
@@ -448,58 +435,24 @@ public class GSimulatorApplication {
         log.info("Wired /world, /node, /chat, /llm, /agent commands into ConsoleInteractionAdapter");
     }
 
-    private void injectSystemPrompt() {
-        if (orchestrator == null) {
-            log.warn("Orchestrator not initialized, skipping system prompt injection");
-            return;
-        }
-        if (contextRenderer == null || worldInfo == null) {
-            log.warn("ContextRenderer or WorldInformation not available, skipping system prompt injection");
-            return;
-        }
-        try {
-            // 从 AgentConfigStore 读取 orchestrator 的完整配置
-            var orchConfig = (agentFactory != null && agentFactory.store() != null)
-                    ? agentFactory.store().get("orchestrator")
-                    : null;
+    /**
+     * 将静态系统提示词作为第一条消息写入缓存（仅当缓存为空时执行）。
+     * 以后每轮 Agent 运行都会从缓存的 prior messages 中自动加载，无需动态注入。
+     */
+    private void initCacheSystemPrompt() {
+        if (activeCache == null || orchestrator == null) return;
+        if (activeCache.messageCount() > 0) return;  // 已有内容，不重复注入
 
-            StringBuilder sb = new StringBuilder();
+        var orchConfig = (agentFactory != null && agentFactory.store() != null)
+                ? agentFactory.store().get("orchestrator")
+                : null;
+        String sp = orchConfig != null ? orchConfig.fullSystemPrompt() : null;
+        if (sp == null || sp.isBlank()) return;
 
-            // 前置 staticSystemPrompt（综合行为规则，纯文本）
-            if (orchConfig != null) {
-                String staticSys = orchConfig.staticSystemPrompt();
-                if (staticSys != null && !staticSys.isBlank()) {
-                    sb.append(staticSys);
-                }
-            }
-
-            // 渲染 systemPromptTemplate（FreeMarker 世界状态模板）
-            String template = null;
-            if (orchConfig != null) {
-                template = orchConfig.systemPromptTemplate();
-            }
-
-            if (template != null && !template.isBlank()) {
-                if (!sb.isEmpty()) sb.append("\n\n---\n\n");
-                String rendered = contextRenderer.renderInlineTemplate(template, worldInfo);
-                sb.append(rendered);
-            } else if (sb.isEmpty()) {
-                // Fallback: 使用文件系统模板（向后兼容）
-                log.warn("Orchestrator agent config has no prompt, using filesystem fallback");
-                String rendered = contextRenderer.renderSystemPrompt("OrchestratorAgent", worldInfo);
-                sb.append(rendered);
-            }
-
-            String fullPrompt = sb.toString();
-            if (!fullPrompt.isBlank()) {
-                orchestrator.setSystemPrompt(fullPrompt);
-                log.info("Injected system prompt into OrchestratorAgent ({} chars, config from {})",
-                        fullPrompt.length(),
-                        orchConfig != null ? "AgentConfigStore" : "filesystem fallback");
-            }
-        } catch (Exception e) {
-            log.error("Failed to inject system prompt: {}", e.getMessage(), e);
-        }
+        activeCache.addMessage(java.util.Map.of("role", "system", "content", sp));
+        com.gsim.cache.CacheStore.save(worldsDir, activeCache);
+        log.info("Prepended static system prompt to cache {} ({} chars)",
+                activeCache.sessionId(), sp.length());
     }
 
     /**

@@ -32,6 +32,7 @@ public final class ChatCommand {
     private final Path worldsDir;
     private final Supplier<String> worldId;
     private final Supplier<CacheSession> activeCache;
+    private java.util.function.Consumer<CacheSession> activeCacheSetter;
     private final java.util.function.BiFunction<String, List<LlmMessage>, AgentResult> agentRunner;
 
     /** ESC / Ctrl+C 取消回调（由 GSimulatorApplication 注入 orchestrator::cancel）。 */
@@ -55,6 +56,11 @@ public final class ChatCommand {
     /** 注入取消回调（由 GSimulatorApplication 在 wiring 阶段调用）。 */
     public void setCancelCallback(Runnable cb) {
         this.cancelCallback = cb;
+    }
+
+    /** 注入 activeCache 更新回调（由 GSimulatorApplication 在 wiring 阶段调用）。 */
+    public void setActiveCacheSetter(java.util.function.Consumer<CacheSession> setter) {
+        this.activeCacheSetter = setter;
     }
 
     /** 公开取消方法，供 HTTP API 调用。 */
@@ -235,14 +241,13 @@ public final class ChatCommand {
         }
     }
 
-    /** Load prior messages from cache, skipping the system prompt (regenerated each run). */
+    /** Load prior messages from cache. System prompt (if present) is loaded as-is —
+     *  it is static content written once at cache creation time. */
     private List<LlmMessage> loadPriorMessages() {
         List<LlmMessage> out = new ArrayList<>();
         CacheSession session = activeCache.get();
         if (session == null) return out;
         for (Map<String, Object> m : session.messages()) {
-            String role = (String) m.get("role");
-            if ("system".equals(role)) continue;  // stale — regenerated fresh each run
             out.add(LlmMessage.fromCacheMap(m));
         }
         return out;
@@ -273,6 +278,11 @@ public final class ChatCommand {
         fresh.previousSessionId(old.sessionId());
         fresh.compressionNote(summary);
         CacheStore.save(worldsDir, fresh);
+
+        // 更新活跃缓存引用，确保后续消息写入新缓存
+        if (activeCacheSetter != null) {
+            activeCacheSetter.accept(fresh);
+        }
         return "Cleared. New session: " + fresh.sessionId();
     }
 }

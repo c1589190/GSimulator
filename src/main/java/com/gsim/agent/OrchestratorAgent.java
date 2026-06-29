@@ -677,7 +677,7 @@ public class OrchestratorAgent extends AbstractAgent {
 
     /**
      * 基于已渲染的上下文执行推演。
-     * @param contextMarkdown BranchContextRenderer 输出的完整 markdown
+     * @param contextMarkdown 上下文 markdown
      * @param simNote 本轮 /sim 的推演备注
      */
 

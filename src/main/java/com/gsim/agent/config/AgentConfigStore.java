@@ -1,7 +1,6 @@
 package com.gsim.agent.config;
 
 import com.gsim.agent.core.AgentConfig;
-import com.gsim.resource.ResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,9 +131,8 @@ public class AgentConfigStore {
 
                       agentId              — 唯一标识（如 "orchestrator", "sim", "search"）
                       llmProvider          — 引用的 LLM provider ID（对应 data/llms.json 中的 id）
-                      staticSystemPrompt   — 静态系统提示词，不被 FreeMarker 渲染（可选）
-                      systemPromptTemplate — FreeMarker 模板路径或文本（可选）
-                      systemPrompt         — 兼容旧字段（systemPromptTemplate 不存在时使用）
+                      staticSystemPrompt   — 静态系统提示词，直接定义 Agent 行为（可选）
+                      systemPrompt         — 兼容旧字段（staticSystemPrompt 为空时使用）
                       userTemplate         — 用户 prompt 模板路径或文本（可选）
                       toolFilter           — { "mode": "all" | "read_only" | "custom", "allow": [...], "deny": [...] }
                       maxToolRounds        — 最大工具调用轮数
@@ -162,26 +160,9 @@ public class AgentConfigStore {
                 + json.substring(idx + 1);
     }
 
-    /** 解析 systemPrompt/userTemplate/staticSystemPrompt 中的 classpath 引用 */
-    private AgentConfig resolvePrompts(AgentConfig config) throws IOException {
-        // 解析 staticSystemPrompt
-        String staticSys = config.staticSystemPrompt();
-        if (staticSys != null && staticSys.startsWith("gsim/")) {
-            staticSys = ResourceManager.readText(staticSys);
-        }
-        // 解析 systemPromptTemplate（新字段优先）
-        String sys = config.effectiveSystemPromptTemplate();
-        if (sys != null && sys.startsWith("gsim/")) {
-            sys = ResourceManager.readText(sys);
-        }
-        String userTpl = config.userTemplate();
-        if (userTpl != null && userTpl.startsWith("gsim/")) {
-            userTpl = ResourceManager.readText(userTpl);
-        }
-        return new AgentConfig(config.agentId(), config.llmProvider(),
-                staticSys, sys, config.systemPrompt(),
-                userTpl, config.toolFilter(), config.maxToolRounds(),
-                config.temperature(), config.maxTokens());
+    /** Prompt 内容直接存储在 JSON 字段中，无需解析 classpath 引用。 */
+    private AgentConfig resolvePrompts(AgentConfig config) {
+        return config;
     }
 
     public AgentConfig get(String agentId) {

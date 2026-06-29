@@ -4,7 +4,6 @@ import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
-import com.gsim.context.ContextRenderer;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.WorldIndexManager;
@@ -26,7 +25,6 @@ public final class Bootstrap {
     // result
     private WorldInformation worldInfo;
     private CacheSession activeCache;
-    private ContextRenderer contextRenderer;
     private String worldId;
     private String activeNodeId;
 
@@ -90,40 +88,27 @@ public final class Bootstrap {
             throw new IllegalStateException("Failed to load world: " + worldId);
         }
 
-        // 5. Initialize context renderer
-        contextRenderer = new ContextRenderer(promptsDir);
-
-        // 6. Load Orchestrator cache — select or create
+        // 5. Load Orchestrator cache — 仅加载指定缓存或新建
+        //    不再自动选取最新缓存；调用方（Main CLI / WebUI）负责选择。
         if (selectedSessionId != null && !selectedSessionId.isBlank()) {
-            // 用户显式选择了某个 cache
             activeCache = cachesManager.loadCache(worldId, selectedSessionId);
             if (activeCache == null) {
-                System.out.println("⚠️  指定的缓存不存在: " + selectedSessionId + "，创建新缓存");
+                System.out.println("⚠️  指定的缓存不存在: " + selectedSessionId + "，将创建新缓存");
             }
         }
 
         if (activeCache == null) {
-            // 自动选择：最新 Orchestrator cache
-            List<CacheInfo> orchCaches = cachesManager.listCaches(worldId, "orchestrator");
-            if (!orchCaches.isEmpty()) {
-                // 取最新的（列表已按 createdAt 降序排列）
-                activeCache = cachesManager.loadCache(worldId, orchCaches.get(0).sessionId());
-            }
-        }
-
-        if (activeCache == null) {
-            // 新建
+            // 新建（无指定缓存 或 加载失败）
             activeCache = cachesManager.createCache(worldId, "Orchestrator", activeNodeId);
             CacheStore.save(worldsDir, activeCache);
         }
 
-        return new BootstrapResult(worldId, activeNodeId, worldInfo, activeCache, contextRenderer);
+        return new BootstrapResult(worldId, activeNodeId, worldInfo, activeCache);
     }
 
     // -- accessors (for use by Main after boot) --
     public WorldInformation worldInfo() { return worldInfo; }
     public CacheSession activeCache() { return activeCache; }
-    public ContextRenderer contextRenderer() { return contextRenderer; }
     public String worldId() { return worldId; }
 
     // -- result record --
@@ -131,7 +116,6 @@ public final class Bootstrap {
         String worldId,
         String activeNodeId,
         WorldInformation worldInfo,
-        CacheSession activeCache,
-        ContextRenderer contextRenderer
+        CacheSession activeCache
     ) {}
 }

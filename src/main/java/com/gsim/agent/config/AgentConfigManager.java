@@ -35,7 +35,6 @@ public class AgentConfigManager {
             m.put("maxTokens", c.maxTokens());
             m.put("toolFilterMode", c.toolFilter() != null ? c.toolFilter().mode() : "all");
             m.put("hasStaticPrompt", c.staticSystemPrompt() != null && !c.staticSystemPrompt().isBlank());
-            m.put("hasTemplate", c.systemPromptTemplate() != null && !c.systemPromptTemplate().isBlank());
             list.add(m);
         }
         return list;
@@ -61,9 +60,6 @@ public class AgentConfigManager {
             String preview = c.staticSystemPrompt();
             if (preview.length() > 200) preview = preview.substring(0, 200) + "...";
             m.put("staticSystemPromptPreview", preview);
-        }
-        if (c.systemPromptTemplate() != null && !c.systemPromptTemplate().isBlank()) {
-            m.put("systemPromptTemplate", c.systemPromptTemplate());
         }
         if (c.userTemplate() != null && !c.userTemplate().isBlank()) {
             m.put("userTemplate", c.userTemplate());
@@ -107,10 +103,9 @@ public class AgentConfigManager {
                     json.put("toolFilter", parseToolFilter(value));
                 }
                 case "staticSystemPrompt" -> json.put("staticSystemPrompt", value);
-                case "systemPromptTemplate" -> json.put("systemPromptTemplate", value);
                 default -> throw new IllegalArgumentException("Unknown field: " + field
                         + ". Valid: llmProvider, temperature, maxTokens, maxToolRounds,"
-                        + " toolFilter, staticSystemPrompt, systemPromptTemplate");
+                        + " toolFilter, staticSystemPrompt");
             }
 
             // 原子写入

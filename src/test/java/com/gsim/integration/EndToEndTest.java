@@ -5,7 +5,6 @@ import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
-import com.gsim.context.ContextRenderer;
 import com.gsim.worldinfo.Element;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.NodeLoader;
@@ -66,12 +65,6 @@ class EndToEndTest {
 
         CacheSession loaded = CacheStore.load(worldsDir, cache.sessionId());
         assertNotNull(loaded);
-        assertEquals(1, loaded.messageCount()); // user message only (system prompt injected dynamically)
-
-        // --- Context rendering ---
-        ContextRenderer renderer = result.contextRenderer();
-        String prompt = renderer.renderSystemPrompt("OrchestratorAgent", wi);
-        assertTrue(prompt.contains("default"));
-        assertTrue(prompt.contains("turn 0"));
+        assertEquals(1, loaded.messageCount());
     }
 }

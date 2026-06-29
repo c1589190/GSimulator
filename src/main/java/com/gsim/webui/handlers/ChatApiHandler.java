@@ -421,9 +421,8 @@ public class ChatApiHandler implements HttpHandler {
     // ── Conversation management (Task 3) ──
 
     private void handleListConversations(HttpExchange exchange) throws IOException {
-        String wid = worldId.get();
-        // 只列出主 Agent (orchestrator) 的 cache，子 Agent cache 不在此展示
-        List<CacheInfo> caches = cachesManager.listCaches(wid, "orchestrator");
+        // 扁平缓存：列出所有 orchestrator 缓存（不按 worldId 过滤），worldId 在响应中标注
+        List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
         CacheSession active = activeCache.get();
         String activeSid = active != null ? active.sessionId() : null;
 
@@ -433,6 +432,7 @@ public class ChatApiHandler implements HttpHandler {
             item.put("sessionId", c.sessionId());
             item.put("agentName", c.agentName());
             item.put("agentType", c.agentType());
+            item.put("worldId", c.worldId());
             item.put("nodeId", c.nodeId());
             item.put("createdAt", c.createdAt());
             item.put("messageCount", c.messageCount());
@@ -480,8 +480,8 @@ public class ChatApiHandler implements HttpHandler {
     }
 
     private void handleDeleteConversation(HttpExchange exchange, String sessionId) throws IOException {
-        String wid = worldId.get();
-        boolean deleted = cachesManager.deleteCache(wid, sessionId);
+        // 扁平缓存：不限制 worldId，按 sessionId 直接删除
+        boolean deleted = cachesManager.deleteCache(null, sessionId);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", deleted);
         if (!deleted) resp.put("error", "Conversation not found");

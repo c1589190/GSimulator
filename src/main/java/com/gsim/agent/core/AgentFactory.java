@@ -68,17 +68,13 @@ public class AgentFactory {
         AgentConfig config = configStore.get(agentId);
         if (config == null) throw new IllegalArgumentException("Unknown agent: " + agentId);
 
-        String systemPrompt = config.effectiveSystemPromptTemplate();
         String userPrompt = prompt != null ? prompt : "";
         if (config.userTemplate() != null && !config.userTemplate().isBlank() && userVars != null) {
             userPrompt = config.renderUserPrompt(userVars);
         }
 
-        // 包装 system + user 为一个完整配置
-        AgentConfig fullConfig = new AgentConfig(config.agentId(), config.llmProvider(),
-                config.staticSystemPrompt(), systemPrompt, config.systemPrompt(),
-                config.userTemplate(), config.toolFilter(),
-                config.maxToolRounds(), config.temperature(), config.maxTokens());
+        // 直接使用原始 config（系统提示词已是静态完整内容）
+        AgentConfig fullConfig = config;
 
         // 按 Agent 配置选择 LLM provider
         LlmProvider agentLlm = llmRegistry.get(config.llmProvider());

@@ -57,9 +57,6 @@ public class AbstractAgent {
     protected final String model;
     protected final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
-    /** Override for the system prompt injected via setSystemPrompt(). */
-    protected String systemPromptOverride = null;
-
     /** Progress sink — may be replaced post-construction via AgentFactory.dispatch(). */
     protected AgentProgressSink progressSink;
 
@@ -72,14 +69,6 @@ public class AbstractAgent {
     /** Set a write-through saver that persists each new message as it is added. */
     public void setMessageSaver(Consumer<LlmMessage> saver) {
         this.messageSaver = saver;
-    }
-
-    /**
-     * Override the empty AgentConfig system prompt with a rendered template.
-     * Used by OrchestratorAgent to inject FreeMarker-rendered context.
-     */
-    public void setSystemPrompt(String prompt) {
-        this.systemPromptOverride = prompt;
     }
 
     /**
@@ -154,22 +143,14 @@ public class AbstractAgent {
         List<ToolCallRecord> allToolCalls = new ArrayList<>();
         int maxRounds = effectiveMaxToolRounds();
 
-        // system prompt — build from staticSystemPrompt + rendered template
-        StringBuilder spBuilder = new StringBuilder();
-        String staticSys = config.staticSystemPrompt();
-        if (staticSys != null && !staticSys.isBlank()) {
-            spBuilder.append(staticSys);
-        }
-        String templatePart = systemPromptOverride != null
-                ? systemPromptOverride
-                : config.effectiveSystemPromptTemplate();
-        if (templatePart != null && !templatePart.isBlank()) {
-            if (!spBuilder.isEmpty()) spBuilder.append("\n\n---\n\n");
-            spBuilder.append(templatePart);
-        }
-        String sp = spBuilder.toString();
-        if (!sp.isBlank()) {
-            messages.add(LlmMessage.system(sp));  // system prompt is regenerated — never cached
+        // system prompt — 来自 AgentConfig 静态内容；若 priorMessages 已包含则跳过
+        boolean hasSystemInPrior = priorMessages.stream()
+                .anyMatch(m -> "system".equals(m.role()));
+        if (!hasSystemInPrior) {
+            String sp = config.fullSystemPrompt();
+            if (sp != null && !sp.isBlank()) {
+                messages.add(LlmMessage.system(sp));
+            }
         }
 
         // Replay prior conversation from cache (skip stale system messages)

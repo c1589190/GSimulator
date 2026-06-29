@@ -44,7 +44,7 @@ public final class AgentCommand {
               reload                    Reload all agent configs from disk
 
             Fields: llmProvider, temperature, maxTokens, maxToolRounds, toolFilter,
-                    staticSystemPrompt, systemPromptTemplate""";
+                    staticSystemPrompt""";
     }
 
     private String listAgents() {
