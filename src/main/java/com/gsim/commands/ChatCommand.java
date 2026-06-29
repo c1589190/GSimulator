@@ -272,7 +272,7 @@ public final class ChatCommand {
             "Orchestrator", old.nodeId());
         fresh.previousSessionId(old.sessionId());
         fresh.compressionNote(summary);
-        CacheStore.save(worldsDir, worldId.get(), fresh);
+        CacheStore.save(worldsDir, fresh);
         return "Cleared. New session: " + fresh.sessionId();
     }
 }

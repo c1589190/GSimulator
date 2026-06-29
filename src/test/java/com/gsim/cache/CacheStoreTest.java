@@ -18,9 +18,9 @@ class CacheStoreTest {
 
         session.addMessage(Map.of("role", "system", "content", "You are a simulation engine."));
         session.addMessage(Map.of("role", "user", "content", "Hello"));
-        CacheStore.save(tmpDir, "test-world", session);
+        CacheStore.save(tmpDir, session);
 
-        CacheSession loaded = CacheStore.load(tmpDir, "test-world", session.sessionId());
+        CacheSession loaded = CacheStore.load(tmpDir, session.sessionId());
         assertNotNull(loaded);
         assertEquals("Orchestrator", loaded.agentName());
         assertEquals(2, loaded.messageCount());
@@ -30,7 +30,7 @@ class CacheStoreTest {
 
     @Test
     void loadMissingReturnsNull() {
-        assertNull(CacheStore.load(tmpDir, "no-world", "nonexistent.json"));
+        assertNull(CacheStore.load(tmpDir, "nonexistent.json"));
     }
 
     @Test
@@ -42,10 +42,10 @@ class CacheStoreTest {
         fresh.previousSessionId(old.sessionId());
         fresh.compressionNote("Continuing from previous...");
 
-        CacheStore.save(tmpDir, "w", old);
-        CacheStore.save(tmpDir, "w", fresh);
+        CacheStore.save(tmpDir, old);
+        CacheStore.save(tmpDir, fresh);
 
-        CacheSession loaded = CacheStore.load(tmpDir, "w", fresh.sessionId());
+        CacheSession loaded = CacheStore.load(tmpDir, fresh.sessionId());
         assertEquals(old.sessionId(), loaded.previousSessionId());
         assertEquals("Continuing from previous...", loaded.compressionNote());
     }
@@ -53,6 +53,6 @@ class CacheStoreTest {
     @Test
     void createsCachesDirectory() {
         CacheStore.createNew(tmpDir, "w", "Sim", "n0000");
-        assertTrue(java.nio.file.Files.exists(CacheStore.cachesDir(tmpDir, "w")));
+        assertTrue(java.nio.file.Files.exists(CacheStore.cachesDir(tmpDir)));
     }
 }

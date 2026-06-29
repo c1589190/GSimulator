@@ -62,9 +62,9 @@ class EndToEndTest {
         // --- Cache ---
         CacheSession cache = result.activeCache();
         cache.addMessage(Map.of("role", "user", "content", "测试消息"));
-        CacheStore.save(worldsDir, "default", cache);
+        CacheStore.save(worldsDir, cache);
 
-        CacheSession loaded = CacheStore.load(worldsDir, "default", cache.sessionId());
+        CacheSession loaded = CacheStore.load(worldsDir, cache.sessionId());
         assertNotNull(loaded);
         assertEquals(1, loaded.messageCount()); // user message only (system prompt injected dynamically)
 

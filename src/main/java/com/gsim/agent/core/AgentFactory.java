@@ -117,7 +117,7 @@ public class AgentFactory {
         List<LlmMessage> priorMessages = List.of();
 
         if (cacheId != null && !cacheId.isBlank()) {
-            subCache = CacheStore.load(worldsDir, wid, cacheId);
+            subCache = CacheStore.load(worldsDir, cacheId);
             if (subCache != null) {
                 log.info("[AgentFactory] reusing cache {} for {}", cacheId, instanceId);
                 // 将历史消息转换为 LlmMessage 列表
@@ -133,7 +133,7 @@ public class AgentFactory {
         // 设置 write-through 持久化
         final CacheSession cacheRef = subCache;
         agent.setMessageSaver(msg -> {
-            CacheStore.appendAndSave(worldsDir, wid, cacheRef, msg.toCacheMap());
+            CacheStore.appendAndSave(worldsDir, cacheRef, msg.toCacheMap());
         });
 
         CompletableFuture<AgentResult> f = new CompletableFuture<>();

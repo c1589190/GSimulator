@@ -41,7 +41,7 @@ public class FileSystemCachesManager implements CachesManager {
 
     private List<CacheInfo> listCachesInternal(String worldId, String agentType) {
         List<CacheInfo> result = new ArrayList<>();
-        Path dir = CacheStore.cachesDir(worldsDir, worldId);
+        Path dir = CacheStore.cachesDir(worldsDir);
         if (!Files.isDirectory(dir)) return result;
 
         try (Stream<Path> files = Files.list(dir)) {
@@ -49,18 +49,20 @@ public class FileSystemCachesManager implements CachesManager {
                 String name = file.getFileName().toString();
                 if (!name.endsWith(".json")) continue;
                 try {
-                    CacheInfo info = readMeta(file, worldId);
+                    CacheInfo info = readMeta(file);
                     if (info != null) {
-                        if (agentType == null || agentType.equals(info.agentType())) {
-                            result.add(info);
-                        }
+                        // 按 worldId 过滤（null 表示不过滤）
+                        if (worldId != null && !worldId.equals(info.worldId())) continue;
+                        // 按 agentType 过滤
+                        if (agentType != null && !agentType.equals(info.agentType())) continue;
+                        result.add(info);
                     }
                 } catch (Exception e) {
                     log.debug("Skipping unreadable cache file: {}", name);
                 }
             }
         } catch (IOException e) {
-            log.error("Failed to list caches for world '{}': {}", worldId, e.getMessage());
+            log.error("Failed to list caches: {}", e.getMessage());
         }
 
         // 按 createdAt 降序（最新在前）
@@ -70,7 +72,12 @@ public class FileSystemCachesManager implements CachesManager {
 
     @Override
     public CacheSession loadCache(String worldId, String sessionId) {
-        return CacheStore.load(worldsDir, worldId, sessionId);
+        CacheSession session = CacheStore.load(worldsDir, sessionId);
+        if (session != null && worldId != null && !worldId.equals(session.worldId())) {
+            log.warn("Cache {} worldId mismatch: expected {}, got {}",
+                    sessionId, worldId, session.worldId());
+        }
+        return session;
     }
 
     @Override
@@ -80,7 +87,16 @@ public class FileSystemCachesManager implements CachesManager {
 
     @Override
     public boolean deleteCache(String worldId, String sessionId) {
-        Path file = CacheStore.cacheFile(worldsDir, worldId, sessionId);
+        // 可选：验证 worldId 匹配再删除
+        if (worldId != null) {
+            CacheSession session = CacheStore.load(worldsDir, sessionId);
+            if (session != null && !worldId.equals(session.worldId())) {
+                log.warn("Refusing to delete cache {}: worldId mismatch (expected {}, got {})",
+                        sessionId, worldId, session.worldId());
+                return false;
+            }
+        }
+        Path file = CacheStore.cacheFile(worldsDir, sessionId);
         try {
             return Files.deleteIfExists(file);
         } catch (IOException e) {
@@ -91,22 +107,28 @@ public class FileSystemCachesManager implements CachesManager {
 
     @Override
     public Optional<CacheInfo> getCacheInfo(String worldId, String sessionId) {
-        Path file = CacheStore.cacheFile(worldsDir, worldId, sessionId);
+        Path file = CacheStore.cacheFile(worldsDir, sessionId);
         if (!Files.exists(file)) return Optional.empty();
         try {
-            return Optional.ofNullable(readMeta(file, worldId));
+            CacheInfo info = readMeta(file);
+            if (info != null && worldId != null && !worldId.equals(info.worldId())) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(info);
         } catch (Exception e) {
             return Optional.empty();
         }
     }
 
-    /** 只解析顶层字段获取元信息（不加载 messages 数组）。 */
-    private CacheInfo readMeta(Path file, String worldId) {
+    /** 只解析顶层字段获取元信息（不加载 messages 数组）。
+     *  worldId 从文件内容中读取，不再从目录路径推断。 */
+    private CacheInfo readMeta(Path file) {
         try {
             // 使用轻量解析：只读顶层标量字段，跳过 messages
             String raw = Files.readString(file);
             String agentName = extractJsonString(raw, "agentName");
             String sessionId = extractJsonString(raw, "sessionId");
+            String fileWorldId = extractJsonString(raw, "worldId");
             String nodeId = extractJsonString(raw, "nodeId");
             String createdAt = extractJsonString(raw, "createdAt");
             String previousSessionId = extractJsonString(raw, "previousSessionId");
@@ -115,7 +137,7 @@ public class FileSystemCachesManager implements CachesManager {
                     agentName != null ? agentName : "unknown",
                     CacheInfo.inferType(agentName),
                     sessionId != null ? sessionId : file.getFileName().toString(),
-                    worldId,
+                    fileWorldId != null ? fileWorldId : "unknown",
                     nodeId != null ? nodeId : "n0000",
                     createdAt != null ? createdAt : "",
                     msgCount,

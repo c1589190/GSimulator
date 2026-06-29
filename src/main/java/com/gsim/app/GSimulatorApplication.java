@@ -344,9 +344,9 @@ public class GSimulatorApplication {
             var meta = com.gsim.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
             if (meta == null) return "World 不存在: " + worldId;
 
-            // 2. 重新 bootstrap
+            // 2. 重新 bootstrap（获取新 world 的 worldInfo/contextRenderer）
             Bootstrap bootstrap = new Bootstrap(worldsDir, config.promptsDir(), ctx.getCachesManager());
-            Bootstrap.BootstrapResult result = bootstrap.boot(null);
+            Bootstrap.BootstrapResult result = bootstrap.boot(null, worldId);
 
             if (!result.worldId().equals(worldId)) {
                 return "Bootstrap 加载了错误的 world: " + result.worldId() + " (expected: " + worldId + ")";
@@ -354,12 +354,31 @@ public class GSimulatorApplication {
 
             // 3. 更新应用状态
             this.worldInfo = result.worldInfo();
-            this.activeCache = result.activeCache();
             this.contextRenderer = result.contextRenderer();
             this.activeWorldId.set(worldId);
             ctx.setActiveRootId(worldId);
 
-            // 4. System prompt 会在下次 orchestator.run() 时基于新的 worldInfo 自动重建
+            // 4. 保留当前活跃缓存，只更新其 worldId（缓存扁平存储，无需跨目录迁移）
+            if (this.activeCache != null && this.activeCache.messageCount() > 0) {
+                // 删除 Bootstrap 创建的空缓存（flat 目录下会产生孤儿文件）
+                String bootstrapSessionId = result.activeCache().sessionId();
+                if (!bootstrapSessionId.equals(this.activeCache.sessionId())) {
+                    ctx.getCachesManager().deleteCache(worldId, bootstrapSessionId);
+                }
+
+                this.activeCache.setWorldId(worldId);
+                this.activeCache.setNodeId(result.activeNodeId());
+                com.gsim.cache.CacheStore.save(worldsDir, this.activeCache);
+
+                log.info("[switchToWorld] updated cache {} worldId->{} node->{} ({} messages)",
+                        this.activeCache.sessionId(), worldId, result.activeNodeId(),
+                        this.activeCache.messageCount());
+            } else {
+                this.activeCache = result.activeCache();
+            }
+
+            // 5. 更新 messageSaver（使用缓存自身的 worldId 决定存储路径）
+            updateMessageSaver();
 
             log.info("[switchToWorld] switched to world={} node={} root={}",
                     worldId, result.activeNodeId(),
@@ -371,18 +390,25 @@ public class GSimulatorApplication {
         }
     }
 
-    private void wireCommands(Runnable onNodeChanged) {
-        // Write-through cache saver: every Agent message persisted immediately
-        String wid = worldInfo != null ? worldInfo.worldId() : "default";
+    /** 更新 orchestrator 的 messageSaver，使其写入当前活跃 world 的缓存目录。
+     *  使用缓存自身的 worldId 决定路径，而非外部字段，确保一致性。 */
+    private void updateMessageSaver() {
+        if (orchestrator == null) return;
         orchestrator.setMessageSaver(msg -> {
             CacheSession s = activeCache;
             if (s != null) {
-                com.gsim.cache.CacheStore.appendAndSave(worldsDir, wid, s,
+                com.gsim.cache.CacheStore.appendAndSave(worldsDir, s,
                         msg.toCacheMap());
             }
         });
+    }
 
-        WorldCommand wc = new WorldCommand(worldsDir, onNodeChanged);
+    private void wireCommands(Runnable onNodeChanged) {
+        // Write-through cache saver: every Agent message persisted immediately
+        // 使用 activeWorldId（动态读取），而非捕获构造时的固定值
+        updateMessageSaver();
+
+        WorldCommand wc = new WorldCommand(worldsDir, this::switchToWorld);
         NodeCommand nc = new NodeCommand(worldsDir, () -> worldInfo, onNodeChanged);
         ChatCommand cc = new ChatCommand(worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default",

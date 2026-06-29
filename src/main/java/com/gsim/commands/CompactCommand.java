@@ -66,7 +66,7 @@ public final class CompactCommand {
         CacheSession session = cachesManager.loadCache(wid, cacheId);
         if (session == null) {
             // 尝试直接加载（可能是完整文件名）
-            session = CacheStore.load(worldsDir, wid, cacheId);
+            session = CacheStore.load(worldsDir, cacheId);
         }
         if (session == null) {
             return "Cache 未找到: " + cacheId + " (world=" + wid + ")";
@@ -87,7 +87,7 @@ public final class CompactCommand {
         newSession.previousSessionId(session.sessionId());
         newSession.compressionNote("compacted from " + session.sessionId()
                 + " (" + session.messageCount() + " messages → " + compacted.length() + " chars)");
-        CacheStore.save(worldsDir, wid, newSession);
+        CacheStore.save(worldsDir, newSession);
 
         progressSink.onProgress(com.gsim.agent.AgentProgressEvent.publicMessage(
                 "📝 新会话: " + newSession.sessionId()));

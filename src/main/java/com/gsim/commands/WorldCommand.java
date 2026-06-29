@@ -4,6 +4,7 @@ import com.gsim.worldinfo.loader.WorldIndexManager;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * /world — world management commands.
@@ -14,9 +15,9 @@ import java.util.List;
 public final class WorldCommand {
 
     private final Path worldsDir;
-    private final Runnable onWorldChanged; // callback to re-bootstrap
+    private final Function<String, String> onWorldChanged; // worldId → error message or null
 
-    public WorldCommand(Path worldsDir, Runnable onWorldChanged) {
+    public WorldCommand(Path worldsDir, Function<String, String> onWorldChanged) {
         this.worldsDir = worldsDir;
         this.onWorldChanged = onWorldChanged;
     }
@@ -58,8 +59,9 @@ public final class WorldCommand {
         if (WorldIndexManager.loadWorldMeta(worldsDir, id) == null) {
             return "World not found: " + id;
         }
-        // trigger re-bootstrap
-        onWorldChanged.run();
+        // trigger re-bootstrap with target world
+        String error = onWorldChanged.apply(id);
+        if (error != null) return "切换失败: " + error;
         return "Switched to world: " + id + ". Reloading...";
     }
 }

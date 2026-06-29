@@ -24,20 +24,19 @@ public final class CacheStore {
         cachesRoot = root;
     }
 
-    /** Caches directory for a world. */
-    public static Path cachesDir(Path worldsDir, String worldId) {
-        Path root = cachesRoot != null ? cachesRoot : worldsDir.resolveSibling("caches");
-        return root.resolve(worldId);
+    /** Caches root directory — flat, no world subdirectories. */
+    public static Path cachesDir(Path worldsDir) {
+        return cachesRoot != null ? cachesRoot : worldsDir.resolveSibling("caches");
     }
 
-    /** Full path to a specific cache file. */
-    public static Path cacheFile(Path worldsDir, String worldId, String sessionId) {
-        return cachesDir(worldsDir, worldId).resolve(sessionId);
+    /** Full path to a specific cache file (flat: caches/{sessionId}). */
+    public static Path cacheFile(Path worldsDir, String sessionId) {
+        return cachesDir(worldsDir).resolve(sessionId);
     }
 
     /** Load a cache session from disk. Returns null if not found. */
-    public static CacheSession load(Path worldsDir, String worldId, String sessionId) {
-        Path file = cacheFile(worldsDir, worldId, sessionId);
+    public static CacheSession load(Path worldsDir, String sessionId) {
+        Path file = cacheFile(worldsDir, sessionId);
         if (!Files.exists(file)) return null;
         try {
             return JsonUtils.fromJson(Files.readString(file), CacheSession.class);
@@ -47,8 +46,8 @@ public final class CacheStore {
     }
 
     /** Save a cache session to disk. Creates caches/ dir if needed. */
-    public static void save(Path worldsDir, String worldId, CacheSession session) {
-        Path file = cacheFile(worldsDir, worldId, session.sessionId());
+    public static void save(Path worldsDir, CacheSession session) {
+        Path file = cacheFile(worldsDir, session.sessionId());
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, JsonUtils.toJson(session));
@@ -66,14 +65,14 @@ public final class CacheStore {
         String finalNow = now;
 
         CacheSession session = new CacheSession(agentName, worldId, nodeId, sessionId, finalNow);
-        save(worldsDir, worldId, session);
+        save(worldsDir, session);
         return session;
     }
 
     /** Append messages and persist. Used for streaming incremental save. */
-    public static void appendAndSave(Path worldsDir, String worldId,
+    public static void appendAndSave(Path worldsDir,
                                       CacheSession session, Map<String, Object> message) {
         session.addMessage(message);
-        save(worldsDir, worldId, session);
+        save(worldsDir, session);
     }
 }

@@ -87,7 +87,7 @@ public final class CompactCacheTool implements AgentTool {
         // 加载
         CacheSession session = cachesManager.loadCache(wid, cacheId);
         if (session == null) {
-            session = CacheStore.load(worldsDir, wid, cacheId);
+            session = CacheStore.load(worldsDir, cacheId);
         }
         if (session == null) {
             return ToolResult.fail(name(), "Cache 未找到: " + cacheId);
@@ -106,7 +106,7 @@ public final class CompactCacheTool implements AgentTool {
         newSession.previousSessionId(session.sessionId());
         newSession.compressionNote("compacted by compact_cache from " + session.sessionId()
                 + " (" + session.messageCount() + " msgs → " + compacted.length() + " chars)");
-        CacheStore.save(worldsDir, wid, newSession);
+        CacheStore.save(worldsDir, newSession);
 
         // 返回压缩文本 + 新 cacheId
         String snippet = "压缩摘要:\n" + compacted
