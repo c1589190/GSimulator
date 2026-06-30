@@ -157,7 +157,7 @@ public class AbstractAgent {
         // Trim trailing orphan tool_calls — assistant messages whose tool results
         // were never saved (e.g. due to ESC cancel during blocking tool execution).
         if (priorMessages != null && !priorMessages.isEmpty()) {
-            List<LlmMessage> cleaned = trimTrailingOrphanToolCalls(priorMessages);
+            List<LlmMessage> cleaned = validateCacheMessages(priorMessages);
             for (LlmMessage m : cleaned) {
                 if (!"system".equals(m.role())) {
                     messages.add(m);
@@ -338,40 +338,50 @@ public class AbstractAgent {
     }
 
     /**
-     * Trim trailing orphan tool_calls from a cached message list.
-     * An orphan is an assistant message with tool_calls at the end of the list
-     * whose tool results were never saved (e.g. ESC cancelled during blocking tool).
+     * Validate and clean cached messages for API compatibility.
+     * Strips any assistant message whose tool_calls don't have corresponding
+     * tool result messages (orphaned by ESC cancel during blocking tool execution).
+     * Also strips orphan tool result messages with no preceding tool_call.
      */
-    static List<LlmMessage> trimTrailingOrphanToolCalls(List<LlmMessage> msgs) {
+    static List<LlmMessage> validateCacheMessages(List<LlmMessage> msgs) {
         if (msgs == null || msgs.isEmpty()) return msgs;
-        // Walk from end: track expected tool_call_ids
-        java.util.Set<String> expectedToolIds = new java.util.LinkedHashSet<>();
-        int trimFrom = msgs.size();
-        for (int i = msgs.size() - 1; i >= 0; i--) {
-            LlmMessage m = msgs.get(i);
+
+        // First pass: find which tool_call_ids are resolved by a later tool message
+        java.util.Set<String> resolvedIds = new java.util.HashSet<>();
+        for (LlmMessage m : msgs) {
             if ("tool".equals(m.role()) && m.toolCallId() != null) {
-                expectedToolIds.add(m.toolCallId());
-            } else if (m.toolCalls() != null && !m.toolCalls().isEmpty()) {
-                // assistant with tool_calls — check if all have corresponding tool responses
+                resolvedIds.add(m.toolCallId());
+            }
+        }
+
+        // Second pass: build clean list, stripping orphans
+        List<LlmMessage> clean = new ArrayList<>();
+        int stripped = 0;
+        for (LlmMessage m : msgs) {
+            if (m.toolCalls() != null && !m.toolCalls().isEmpty()) {
+                // Check if ALL tool_calls in this message have tool responses
+                boolean allResolved = true;
                 for (var tc : m.toolCalls()) {
-                    if (tc.id() != null && !expectedToolIds.remove(tc.id())) {
-                        // This tool_call has no tool response → orphan from here
-                        trimFrom = i;
+                    if (tc.id() != null && !resolvedIds.contains(tc.id())) {
+                        allResolved = false;
                         break;
                     }
                 }
-                if (trimFrom <= i) break;
-            } else {
-                // system/user/plain assistant — stop, everything before is fine
-                break;
+                if (!allResolved) {
+                    stripped++;
+                    continue;  // skip this orphan
+                }
             }
+            // Skip orphan tool results (no preceding assistant with matching tool_calls)
+            // They're harmless but can occur; we keep them unless they're the only pending ref
+            clean.add(m);
         }
-        if (trimFrom < msgs.size()) {
-            log.warn("Trimming {} orphan tool_calls from prior messages (cache incomplete)",
-                    msgs.size() - trimFrom);
-            return msgs.subList(0, trimFrom);
+
+        if (stripped > 0) {
+            log.warn("Stripped {} orphan tool_calls messages from cache (incomplete save)",
+                    stripped);
         }
-        return msgs;
+        return clean;
     }
 
     /** Add a message to the list and write-through to cache saver if configured. */
