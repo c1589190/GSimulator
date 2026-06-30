@@ -135,10 +135,10 @@ public class DocCacheManager {
         // 整个文本就是 @cache:xxx → 完整替换
         String trimmed = text.trim();
         if (trimmed.startsWith(CACHE_PREFIX)) {
-            // 提取 ID（去掉前缀，取到空格或行尾）
+            // 提取 ID（去掉前缀，取到空格、逗号、分号、句号或行尾）
             String rest = trimmed.substring(CACHE_PREFIX.length()).trim();
-            // 取第一个空白字符之前的部分作为 cacheId
-            String cacheId = rest.split("\\s+", 2)[0];
+            // 取第一个分隔符之前的部分作为 cacheId
+            String cacheId = rest.split("[\\s,;。\n]", 2)[0];
             String cached = get(cacheId);
             if (cached != null) {
                 // 如果 @cache: 后面还有附加文本，追加到缓存内容后
@@ -160,10 +160,19 @@ public class DocCacheManager {
             while ((pos = result.indexOf(CACHE_PREFIX, pos)) >= 0) {
                 int start = pos;
                 int end = start + CACHE_PREFIX.length();
-                while (end < result.length() && !Character.isWhitespace(result.charAt(end))) {
+                while (end < result.length()
+                        && !Character.isWhitespace(result.charAt(end))
+                        && result.charAt(end) != ','
+                        && result.charAt(end) != ';'
+                        && result.charAt(end) != '。'
+                        && result.charAt(end) != '\n') {
                     end++;
                 }
                 String cacheId = result.substring(start + CACHE_PREFIX.length(), end);
+                if (cacheId.isEmpty()) {
+                    pos = end; // 跳过无有效 ID 的 @cache: 文本
+                    continue;
+                }
                 String cached = get(cacheId);
                 if (cached != null) {
                     result = result.substring(0, start) + cached + result.substring(end);
