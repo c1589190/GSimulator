@@ -7,7 +7,6 @@ import com.gsim.llm.LlmMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +22,8 @@ import java.util.function.Supplier;
  *   /chat clear                    — compress and start new session
  *
  * <p>支持 ESC 取消：当 agentRunner 异步执行时，通过 JLine Terminal API 监听终端输入。
- * 使用 JLine 原生终端属性管理（替代 stty），不会破坏 JLine 的终端状态和滚动缓冲区。
+ * 使用 JLine 原生终端属性管理（不 shell out 到 stty），
+ * 确保 JLine 的内部终端状态不被破坏，滚动缓冲区保持正常。
  */
 public final class ChatCommand {
 
@@ -38,8 +38,8 @@ public final class ChatCommand {
     /** ESC / Ctrl+C 取消回调（由 GSimulatorApplication 注入 orchestrator::cancel）。 */
     private volatile Runnable cancelCallback;
 
-    /** 保存的终端设置（stty -F /dev/tty -g 输出）。 */
-    private String savedTermSettings;
+    /** JLine Terminal 引用（用于非阻塞 ESC 检测，避免与 JLine 终端状态冲突）。 */
+    private volatile org.jline.terminal.Terminal jlineTerminal;
 
     public ChatCommand(Path worldsDir, Supplier<String> worldId, Supplier<CacheSession> activeCache) {
         this(worldsDir, worldId, activeCache, null);
@@ -56,6 +56,11 @@ public final class ChatCommand {
     /** 注入取消回调（由 GSimulatorApplication 在 wiring 阶段调用）。 */
     public void setCancelCallback(Runnable cb) {
         this.cancelCallback = cb;
+    }
+
+    /** 注入 JLine Terminal（用于 ESC 检测，避免 stty 冲突）。 */
+    public void setJlineTerminal(org.jline.terminal.Terminal terminal) {
+        this.jlineTerminal = terminal;
     }
 
     /** 注入 activeCache 更新回调（由 GSimulatorApplication 在 wiring 阶段调用）。 */
@@ -103,7 +108,7 @@ public final class ChatCommand {
     /**
      * 在后台线程执行 agentRunner，同时监听终端 ESC/Ctrl+C 以支持取消。
      *
-     * <p>使用 JLine Terminal API 管理终端属性（不 shell out 到 stty），
+     * <p>使用 JLine Terminal API 管理终端输入（不 shell out 到 stty），
      * 确保 JLine 的内部终端状态不被破坏，滚动缓冲区保持正常。
      */
     private String executeWithCancelSupport(String message, List<LlmMessage> priorMessages) {
@@ -119,30 +124,22 @@ public final class ChatCommand {
             }
         });
 
-        // 临时将终端设为 raw mode（用 -F /dev/tty 显式指定设备，修复 pipe stdin 问题）
-        boolean rawMode = setTerminalRaw();
-
-        // ESC 监听线程 — 从 System.in 读取（raw mode 下 keystroke 立即可读）
-        final InputStream watchStream = System.in;
+        // ESC 监听线程 — 通过 JLine Terminal 读取（不修改终端属性，不与 stty 冲突）
+        final org.jline.terminal.Terminal term = this.jlineTerminal;
         Thread watcher = Thread.startVirtualThread(() -> {
             try {
                 while (agentThread.isAlive() && !cancelled.get()) {
-                    int avail = watchStream.available();
-                    if (avail > 0) {
-                        byte[] buf = new byte[Math.min(avail, 16)];
-                        int n = watchStream.read(buf);
-                        for (int i = 0; i < n; i++) {
-                            byte b = buf[i];
-                            if (b == 0x1B || b == 0x03) { // ESC or Ctrl+C
-                                cancelled.set(true);
-                                log.info("[ChatCommand] ESC/Ctrl+C detected, cancelling agent");
-                                Runnable cb = cancelCallback;
-                                if (cb != null) cb.run();
-                                break;
-                            }
+                    if (term != null) {
+                        // 非阻塞轮询 JLine 终端输入
+                        int ch = term.reader().read(150);
+                        if (ch == 0x1B || ch == 0x03) { // ESC or Ctrl+C
+                            cancelled.set(true);
+                            log.info("[ChatCommand] ESC/Ctrl+C detected (JLine), cancelling agent");
+                            Runnable cb = cancelCallback;
+                            if (cb != null) cb.run();
+                            break;
                         }
                     }
-                    Thread.sleep(150);
                 }
             } catch (Exception e) {
                 // watcher 被中断或终端不可用 — 忽略
@@ -154,8 +151,6 @@ public final class ChatCommand {
             agentThread.join();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } finally {
-            if (rawMode) restoreTerminal();
         }
 
         AgentResult result;
@@ -178,67 +173,6 @@ public final class ChatCommand {
         }
         // success: streaming already printed content — return empty to avoid duplication
         return "";
-    }
-
-    /** 将终端设为 raw mode（逐字节读取，用于 ESC 检测）。返回 true 表示成功。 */
-    private boolean setTerminalRaw() {
-        try {
-            // 1. 保存当前设置（-F /dev/tty 确保操作真实终端而非 pipe）
-            Process save = new ProcessBuilder("stty", "-F", "/dev/tty", "-g")
-                    .redirectErrorStream(true).start();
-            savedTermSettings = new String(save.getInputStream().readAllBytes()).trim();
-            int exitCode = save.waitFor();
-            if (exitCode != 0 || savedTermSettings.isEmpty()
-                    || savedTermSettings.contains("Inappropriate ioctl")) {
-                log.debug("[ChatCommand] stty -F /dev/tty save failed (exit={}), falling back",
-                        exitCode);
-                return setTerminalRawFallback();
-            }
-            log.debug("[ChatCommand] saved terminal settings: {}", savedTermSettings);
-
-            // 2. 切换到 raw mode
-            new ProcessBuilder("stty", "-F", "/dev/tty", "-icanon", "-echo", "min", "0", "time", "1")
-                    .inheritIO().start().waitFor();
-            return true;
-        } catch (Exception e) {
-            log.debug("[ChatCommand] stty raw mode failed: {}", e.getMessage());
-            return setTerminalRawFallback();
-        }
-    }
-
-    /** Fallback: 尝试不带 -F 的 stty（某些环境 /dev/tty 不可用）。 */
-    private boolean setTerminalRawFallback() {
-        try {
-            Process save = new ProcessBuilder("stty", "-g")
-                    .redirectInput(ProcessBuilder.Redirect.INHERIT)
-                    .redirectErrorStream(true).start();
-            savedTermSettings = new String(save.getInputStream().readAllBytes()).trim();
-            save.waitFor();
-            new ProcessBuilder("stty", "-icanon", "-echo", "min", "0", "time", "1")
-                    .inheritIO().start().waitFor();
-            log.debug("[ChatCommand] raw mode set via stty fallback");
-            return true;
-        } catch (Exception e) {
-            log.debug("[ChatCommand] stty fallback also failed: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /** 恢复终端设置。 */
-    private void restoreTerminal() {
-        if (savedTermSettings == null || savedTermSettings.isEmpty()) return;
-        try {
-            // 优先使用 /dev/tty
-            new ProcessBuilder("stty", "-F", "/dev/tty", savedTermSettings)
-                    .inheritIO().start().waitFor();
-            log.debug("[ChatCommand] terminal restored via stty -F /dev/tty");
-        } catch (Exception e) {
-            log.debug("[ChatCommand] stty -F /dev/tty restore failed, trying fallback");
-            try {
-                new ProcessBuilder("stty", savedTermSettings)
-                        .inheritIO().start().waitFor();
-            } catch (Exception ignored) {}
-        }
     }
 
     /** Load prior messages from cache. System prompt (if present) is loaded as-is —

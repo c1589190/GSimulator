@@ -199,7 +199,11 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
 
         // Agent progress sinks: CLI + EventBus (SSE) + SessionPool (unified async pool)
-        var cliProgressSink = new com.gsim.agent.CliAgentProgressSink(System.out, true);
+        // Use JLine terminal output for proper scroll/cursor coordination
+        var jlineTerminal = adapter.getJlineTerminal();
+        var cliProgressSink = jlineTerminal != null
+                ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
+                : new com.gsim.agent.CliAgentProgressSink(System.out, true);
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
         var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(
                 ctx.getSessionPool(), "default");
@@ -419,6 +423,7 @@ public class GSimulatorApplication {
                 () -> activeCache,
                 (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
         cc.setCancelCallback(orchestrator::cancel);
+        cc.setJlineTerminal(adapter.getJlineTerminal());
         cc.setActiveCacheSetter(s -> {
             this.activeCache = s;
             updateMessageSaver();

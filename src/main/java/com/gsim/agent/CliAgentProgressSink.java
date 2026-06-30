@@ -4,8 +4,12 @@ import java.io.PrintStream;
 
 /**
  * CLI 模式 AgentProgressSink 实现。
- * 格式化 AgentProgressEvent 为简短状态行打印到 System.out。
- * LLM 流式内容直接 inline 打印到控制台（不换行，打字机效果）。
+ * 格式化 AgentProgressEvent 为简短状态行打印到控制台。
+ * LLM 流式内容直接 inline 打印（不换行，打字机效果）。
+ *
+ * <p>当提供 JLine Terminal 时，通过 {@code terminal.output()} 输出，
+ * 确保与 JLine 终端状态（光标位置、滚动区）协调一致。
+ * 否则回退到 {@code System.out}。
  */
 public class CliAgentProgressSink implements AgentProgressSink {
 
@@ -29,6 +33,16 @@ public class CliAgentProgressSink implements AgentProgressSink {
     public CliAgentProgressSink(PrintStream out, boolean enabled) {
         this.out = out;
         this.enabled = enabled;
+    }
+
+    /**
+     * 使用 JLine Terminal 的输出流创建 sink。
+     * 这是推荐方式 — JLine 内部的终端状态能正确追踪滚动和光标。
+     */
+    public static CliAgentProgressSink fromJlineTerminal(
+            org.jline.terminal.Terminal terminal) {
+        return new CliAgentProgressSink(
+                new PrintStream(terminal.output(), true), true);
     }
 
     @Override
