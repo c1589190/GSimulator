@@ -42,3 +42,4 @@ caches/
 # Agent runtime configs (keep templates)
 agents/lihua.json
 agents/zhangxiaoming.json
+docs/.cache/
