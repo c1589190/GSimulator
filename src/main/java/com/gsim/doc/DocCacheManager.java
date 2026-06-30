@@ -82,6 +82,22 @@ public class DocCacheManager {
     }
 
     /**
+     * 尝试将 @cache:{id} 解析为文档内容。
+     * 如果 docId 以 @cache: 开头，提取缓存内容；否则返回 null。
+     * 用于任何接受 docId 参数的工具 — 直接调用此方法即可透明支持虚拟缓存文档。
+     */
+    public String resolveDocId(String rawDocId) {
+        if (rawDocId == null || rawDocId.isBlank()) return null;
+        String trimmed = rawDocId.trim();
+        if (trimmed.startsWith(CACHE_PREFIX)) {
+            String cacheId = trimmed.substring(CACHE_PREFIX.length()).trim();
+            if (cacheId.isEmpty()) return null;
+            return get(cacheId);
+        }
+        return null;
+    }
+
+    /**
      * 解析文本中的 @cache: 引用。
      * <ul>
      *   <li>整个文本以 @cache:{id} 开头 → 替换为缓存全文</li>

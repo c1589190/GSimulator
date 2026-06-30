@@ -97,10 +97,22 @@ public final class DocCropTool implements AgentTool {
         if (docId.isEmpty()) return ToolResult.fail(name(), "docId 不能为空");
         if (linesSpec.isEmpty()) return ToolResult.fail(name(), "lines 不能为空");
 
-        Document doc = store.get(docId);
-        if (doc == null) return ToolResult.fail(name(), "文档不存在: " + docId);
+        String content;
+        String docTitle;
 
-        String[] allLines = doc.content().split("\n", -1);
+        // @cache: 虚拟文档
+        String cached = cacheManager.resolveDocId(docId);
+        if (cached != null) {
+            content = cached;
+            docTitle = docId;
+        } else {
+            Document doc = store.get(docId);
+            if (doc == null) return ToolResult.fail(name(), "文档不存在: " + docId);
+            content = doc.content();
+            docTitle = doc.title();
+        }
+
+        String[] allLines = content.split("\n", -1);
 
         // Step 1: 解析保留行范围（原始文档行号），同时建立 origLine→croppedIndex 映射
         Set<Integer> keepLines = new LinkedHashSet<>();
@@ -258,7 +270,7 @@ public final class DocCropTool implements AgentTool {
         }
 
         return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                doc.title() + " (裁剪视图)", docId,
+                docTitle + " (裁剪视图)", docId,
                 output.toString(), 1.0)));
     }
 }
