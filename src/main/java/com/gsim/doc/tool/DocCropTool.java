@@ -173,6 +173,19 @@ public final class DocCropTool implements AgentTool {
                     result = result.replace(placeholders[i], from); // 回退原文
                 }
             }
+
+            // Pass 3: 收尾 — 折叠因替换产生的相邻重复词（如 "司徒王允"→王允换司徒→"司徒司徒"→"司徒"）
+            for (int i = 0; i < froms.length; i++) {
+                if (i < tos.length) {
+                    String to = tos[i].trim();
+                    if (!to.isEmpty()) {
+                        result = result.replaceAll(
+                                java.util.regex.Pattern.quote(to) + "("
+                                        + java.util.regex.Pattern.quote(to) + ")+",
+                                to);
+                    }
+                }
+            }
         }
 
         // Step 3: mask_words 遮蔽
