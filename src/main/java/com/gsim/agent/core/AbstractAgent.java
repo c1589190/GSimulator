@@ -154,8 +154,11 @@ public class AbstractAgent {
         }
 
         // Replay prior conversation from cache (skip stale system messages)
-        if (priorMessages != null) {
-            for (LlmMessage m : priorMessages) {
+        // Trim trailing orphan tool_calls — assistant messages whose tool results
+        // were never saved (e.g. due to ESC cancel during blocking tool execution).
+        if (priorMessages != null && !priorMessages.isEmpty()) {
+            List<LlmMessage> cleaned = trimTrailingOrphanToolCalls(priorMessages);
+            for (LlmMessage m : cleaned) {
                 if (!"system".equals(m.role())) {
                     messages.add(m);
                 }
@@ -332,6 +335,43 @@ public class AbstractAgent {
         }
 
         return AgentResult.ok(agentId, finalText, List.copyOf(rounds), allToolCalls.size());
+    }
+
+    /**
+     * Trim trailing orphan tool_calls from a cached message list.
+     * An orphan is an assistant message with tool_calls at the end of the list
+     * whose tool results were never saved (e.g. ESC cancelled during blocking tool).
+     */
+    static List<LlmMessage> trimTrailingOrphanToolCalls(List<LlmMessage> msgs) {
+        if (msgs == null || msgs.isEmpty()) return msgs;
+        // Walk from end: track expected tool_call_ids
+        java.util.Set<String> expectedToolIds = new java.util.LinkedHashSet<>();
+        int trimFrom = msgs.size();
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            LlmMessage m = msgs.get(i);
+            if ("tool".equals(m.role()) && m.toolCallId() != null) {
+                expectedToolIds.add(m.toolCallId());
+            } else if (m.toolCalls() != null && !m.toolCalls().isEmpty()) {
+                // assistant with tool_calls — check if all have corresponding tool responses
+                for (var tc : m.toolCalls()) {
+                    if (tc.id() != null && !expectedToolIds.remove(tc.id())) {
+                        // This tool_call has no tool response → orphan from here
+                        trimFrom = i;
+                        break;
+                    }
+                }
+                if (trimFrom <= i) break;
+            } else {
+                // system/user/plain assistant — stop, everything before is fine
+                break;
+            }
+        }
+        if (trimFrom < msgs.size()) {
+            log.warn("Trimming {} orphan tool_calls from prior messages (cache incomplete)",
+                    msgs.size() - trimFrom);
+            return msgs.subList(0, trimFrom);
+        }
+        return msgs;
     }
 
     /** Add a message to the list and write-through to cache saver if configured. */
