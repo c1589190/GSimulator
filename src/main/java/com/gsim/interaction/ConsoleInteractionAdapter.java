@@ -53,6 +53,7 @@ public class ConsoleInteractionAdapter {
     private LlmCommand llmCommand;
     private AgentCommand agentCommand;
     private com.gsim.commands.CompactCommand compactCommand;
+    private com.gsim.commands.BoardCommand boardCommand;
 
     private LineReader lineReader;
     private BufferedReader fallbackReader;
@@ -100,6 +101,10 @@ public class ConsoleInteractionAdapter {
 
     public void setCompactCommand(com.gsim.commands.CompactCommand cmd) {
         this.compactCommand = cmd;
+    }
+
+    public void setBoardCommand(com.gsim.commands.BoardCommand cmd) {
+        this.boardCommand = cmd;
     }
 
     private void initJline() {
@@ -277,6 +282,15 @@ public class ConsoleInteractionAdapter {
                 String text = agentCommand.execute(args);
                 displayResult(InteractionResult.ok(text));
             }
+            case "board" -> {
+                if (boardCommand == null) {
+                    out.println("Board command not available.");
+                    out.println();
+                    return;
+                }
+                String text = boardCommand.execute(args);
+                displayResult(InteractionResult.ok(text));
+            }
             default -> displayResult(
                     InteractionResult.fail("Unknown command: /" + cmdName
                             + ". Type /help for available commands."));
@@ -302,6 +316,7 @@ public class ConsoleInteractionAdapter {
         out.println("  /chat clear                    — Clear chat session");
         out.println("  /llm [list|show|set|test]      — LLM provider config");
         out.println("  /agent [list|show|set|reload]  — Agent config management");
+        out.println("  /board [list|read|create|write|append] — Public board management");
         out.println("  /exit                          — Exit");
         out.println("  /help                          — Show this help");
         out.println();

@@ -10,6 +10,7 @@ public enum DocType {
     TEMPLATE("template", "模板"),
     CONTEXT("context", "上下文片段"),
     RULE("rule", "规则文档"),
+    BOARD("board", "展示板"),
     OTHER("other", "其他");
 
     private final String key;

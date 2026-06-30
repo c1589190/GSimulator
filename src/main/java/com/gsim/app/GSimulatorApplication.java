@@ -296,7 +296,8 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.doc.tool.DocListTool(docStore));
         toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore, docCacheManager));
         toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore, docCacheManager,
+                compositeSink));
         toolRegistry.register(new com.gsim.doc.tool.DocSearchTool(docStore, docIndex, embeddingClient));
         toolRegistry.register(new com.gsim.doc.tool.DocIndexTool(docStore, docIndex, embeddingClient));
         toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore, docCacheManager));
@@ -440,6 +441,12 @@ public class GSimulatorApplication {
                     worldsDir,
                     () -> worldInfo != null ? worldInfo.worldId() : "default");
             adapter.setCompactCommand(compactCommand);
+
+            // Board 指令（公开展示板）
+            var boardDocsDir = worldsDir.resolveSibling("docs");
+            var boardDocStore = ctx.getDocStore(boardDocsDir);
+            var boardCommand = new com.gsim.commands.BoardCommand(boardDocStore, worldInfo);
+            adapter.setBoardCommand(boardCommand);
         }
         adapter.setNewCommands(wc, nc, cc);
 

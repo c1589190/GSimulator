@@ -17,10 +17,13 @@ public final class DocWriteTool implements AgentTool {
 
     private final DocStore store;
     private final com.gsim.doc.DocCacheManager cacheManager;
+    private final com.gsim.agent.AgentProgressSink progressSink;
 
-    public DocWriteTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
+    public DocWriteTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager,
+                         com.gsim.agent.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
+        this.progressSink = progressSink;
     }
 
     @Override
@@ -70,6 +73,9 @@ public final class DocWriteTool implements AgentTool {
         Document old = store.get(docId);
         if (old == null) return ToolResult.fail(name(), "文档不存在: " + docId);
 
+        // board 类型文档 → 自动推送公开消息给用户
+        boolean isBoard = old != null && old.type() == com.gsim.doc.DocType.BOARD;
+
         try {
             String newContent = switch (mode) {
                 case "append" -> old.content() + "\n" + content;
@@ -97,6 +103,14 @@ public final class DocWriteTool implements AgentTool {
             Document updated = store.updateContent(docId, newContent);
             if (updated == null) {
                 return ToolResult.fail(name(), "更新失败: " + docId);
+            }
+
+            // board 类型 → 自动推送公开消息
+            if (isBoard) {
+                String boardTitle = !newTitle.isEmpty() ? newTitle
+                        : (old != null ? old.title() : docId);
+                progressSink.onProgress(com.gsim.agent.AgentProgressEvent.publicMessage(
+                        "\n📋 " + boardTitle + "\n" + content));
             }
 
             // 同时更新元数据
