@@ -43,3 +43,7 @@ caches/
 agents/lihua.json
 agents/zhangxiaoming.json
 docs/.cache/
+docs/.embdb/
+docs/character/
+docs/skill/
+docs/other/
