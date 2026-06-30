@@ -255,27 +255,38 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(
                 config.agentsDir(), agentConfigStore));
 
-        // ── Skill 管理工具 ──
-        Path skillsDir = worldsDir.resolveSibling("skills");
+        // ── 统一文档管理工具（docs 工具组）──
+        Path docsDir = worldsDir.resolveSibling("docs");
+        var docStore = ctx.getDocStore(docsDir);
         try {
-            java.nio.file.Files.createDirectories(skillsDir);
+            docStore.init();
+            // 迁移旧 skills/ 目录（如有）
+            Path oldSkillsDir = worldsDir.resolveSibling("skills");
+            if (java.nio.file.Files.isDirectory(oldSkillsDir)) {
+                int migrated = docStore.migrateFromSkills(oldSkillsDir);
+                if (migrated > 0) {
+                    log.info("Migrated {} skills from {} to docs/", migrated, oldSkillsDir);
+                }
+            }
         } catch (java.io.IOException e) {
-            log.warn("Failed to create skills dir: {}", e.getMessage());
+            log.warn("Failed to init DocStore: {}", e.getMessage());
         }
         var embeddingClient = ctx.getEmbeddingClient();
-        var skillIndex = ctx.getSkillIndex(skillsDir);
+        var docIndex = ctx.getSkillIndex(docsDir);  // SkillIndex reused for docs embdb
         try {
-            skillIndex.ensureDir();
+            docIndex.ensureDir();
         } catch (java.io.IOException e) {
             log.warn("Failed to create embdb dir: {}", e.getMessage());
         }
 
-        toolRegistry.register(new com.gsim.skill.tool.SkillListTool(skillsDir, skillIndex));
-        toolRegistry.register(new com.gsim.skill.tool.SkillReadTool(skillsDir));
-        toolRegistry.register(new com.gsim.skill.tool.SkillCreateTool(skillsDir));
-        toolRegistry.register(new com.gsim.skill.tool.SkillWriteTool(skillsDir));
-        toolRegistry.register(new com.gsim.skill.tool.SkillSearchTool(skillIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.skill.tool.SkillIndexTool(skillsDir, skillIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.doc.tool.DocListTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocSearchTool(docStore, docIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.doc.tool.DocIndexTool(docStore, docIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore));
 
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
@@ -293,8 +304,8 @@ public class GSimulatorApplication {
                 ctx.getCachesManager(), cacheCompactor, compositeSink,
                 worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default"));
 
-        log.info("Registered 6 skill + 1 compact_cache tools (skillsDir={}, embedding={})",
-                skillsDir, embeddingClient != null && embeddingClient.isConfigured() ? "enabled" : "disabled");
+        log.info("Registered 8 docs + 1 compact_cache tools (docsDir={}, embedding={})",
+                docsDir, embeddingClient != null && embeddingClient.isConfigured() ? "enabled" : "disabled");
     }
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {

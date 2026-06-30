@@ -1,7 +1,10 @@
-package com.gsim.skill.tool;
+package com.gsim.doc.tool;
 
+import com.gsim.doc.DocStore;
+import com.gsim.doc.Document;
 import com.gsim.llm.EmbeddingClient;
 import com.gsim.skill.SkillIndex;
+import com.gsim.skill.SkillIndex.SearchResult;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -12,29 +15,31 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 语义搜索 Skill — 基于 embedding 向量做余弦相似度搜索。
- * 若无 EmbeddingClient，降级为关键词匹配。
+ * 搜索文档 — 基于 embedding 向量语义搜索（含关键词降级）。
+ * 复用现有 SkillIndex 作为索引引擎。
  */
-public final class SkillSearchTool implements AgentTool {
+public final class DocSearchTool implements AgentTool {
 
+    private final DocStore store;
     private final SkillIndex index;
     private final EmbeddingClient embeddingClient;
 
-    public SkillSearchTool(SkillIndex index, EmbeddingClient embeddingClient) {
+    public DocSearchTool(DocStore store, SkillIndex index, EmbeddingClient embeddingClient) {
+        this.store = store;
         this.index = index;
         this.embeddingClient = embeddingClient;
     }
 
     @Override
-    public String name() { return "skill_search"; }
+    public String name() { return "doc_search"; }
 
     @Override
     public String description() {
-        return "语义搜索 Skill：根据查询文本找到最相关的 Skill。"
-                + "参数: query (搜索文本, 必填), topK (返回数量, 默认5)。"
+        return "搜索文档：根据查询文本找到最相关的文档。"
+                + "参数: query (搜索文本, 必填), topK (返回数量, 默认5, 最大20)。"
                 + (embeddingClient != null && embeddingClient.isConfigured()
                         ? " 当前使用 embedding 向量语义搜索。"
-                        : " 当前降级为关键词匹配。配置 EMBEDDING_BASE_URL 环境变量以启用语义搜索。");
+                        : " 当前降级为关键词匹配。");
     }
 
     @Override
@@ -43,7 +48,7 @@ public final class SkillSearchTool implements AgentTool {
                 "type", "object",
                 "properties", Map.of(
                         "query", Map.of("type", "string", "description", "搜索查询文本"),
-                        "topK", Map.of("type", "integer", "description", "返回结果数量，默认 5，最大 20")
+                        "topK", Map.of("type", "integer", "description", "返回数量，默认 5，最大 20")
                 ),
                 "required", List.of("query")
         );
@@ -59,18 +64,15 @@ public final class SkillSearchTool implements AgentTool {
 
         if (index.count() == 0) {
             return ToolResult.fail(name(),
-                    "暂无已索引的 Skill。请先用 skill_index 工具索引已有的 Skill。");
+                    "暂无已索引的文档。请先用 doc_index 工具为文档建立索引。");
         }
 
-        List<SkillIndex.SearchResult> results;
-
-        // 尝试 embedding 搜索
+        List<SearchResult> results;
         if (embeddingClient != null && embeddingClient.isConfigured()) {
             try {
                 float[] queryVec = embeddingClient.embed(query);
                 results = index.search(queryVec, topK);
             } catch (IOException e) {
-                // embedding 失败 → 降级
                 results = index.keywordSearch(query, topK);
             }
         } else {
@@ -79,12 +81,15 @@ public final class SkillSearchTool implements AgentTool {
 
         if (results.isEmpty()) {
             return ToolResult.ok(name(), List.of(
-                    new ToolResult.Item("无结果", "", "未找到匹配的 Skill", 0)));
+                    new ToolResult.Item("无结果", "", "未找到匹配的文档", 0)));
         }
 
         List<ToolResult.Item> items = new ArrayList<>();
         for (var r : results) {
-            String snippet = String.format("score=%.3f | %s", r.score(), r.summary());
+            Document doc = store.get(r.id());
+            String typeStr = doc != null ? doc.type().key() : "?";
+            String snippet = String.format("score=%.3f | type=%s | %s",
+                    r.score(), typeStr, r.summary());
             items.add(new ToolResult.Item(r.name(), r.id(), snippet, r.score()));
         }
 

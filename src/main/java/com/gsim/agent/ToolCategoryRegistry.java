@@ -36,10 +36,10 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("list_llm_providers", ToolCategory.READ_ONLY);
         // World: read-only
         CATEGORIES.put("world_list", ToolCategory.READ_ONLY);
-        // Skill: read-only
-        CATEGORIES.put("skill_list", ToolCategory.READ_ONLY);
-        CATEGORIES.put("skill_read", ToolCategory.READ_ONLY);
-        CATEGORIES.put("skill_search", ToolCategory.READ_ONLY);
+        // Docs: read-only
+        CATEGORIES.put("doc_list", ToolCategory.READ_ONLY);
+        CATEGORIES.put("doc_read", ToolCategory.READ_ONLY);
+        CATEGORIES.put("doc_search", ToolCategory.READ_ONLY);
 
         // === MUTATING ===
         // WorldInfo: write
@@ -58,10 +58,12 @@ public class ToolCategoryRegistry {
         // World: mutating
         CATEGORIES.put("world_create", ToolCategory.MUTATING);
         CATEGORIES.put("world_switch", ToolCategory.MUTATING);
-        // Skill: mutating
-        CATEGORIES.put("skill_create", ToolCategory.MUTATING);
-        CATEGORIES.put("skill_write", ToolCategory.MUTATING);
-        CATEGORIES.put("skill_index", ToolCategory.MUTATING);
+        // Docs: mutating
+        CATEGORIES.put("doc_create", ToolCategory.MUTATING);
+        CATEGORIES.put("doc_write", ToolCategory.MUTATING);
+        CATEGORIES.put("doc_index", ToolCategory.MUTATING);
+        CATEGORIES.put("doc_crop", ToolCategory.READ_ONLY);     // 裁剪只读，不修改原文档
+        CATEGORIES.put("doc_template", ToolCategory.READ_ONLY); // 模板实例化只读
 
         // === CONTROL ===
         CATEGORIES.put("finish_action", ToolCategory.CONTROL);

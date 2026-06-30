@@ -60,23 +60,27 @@ public record ToolGroup(
             Set.of("wiki_search", "mediawiki_search")
     );
 
-    public static final ToolGroup SKILL_MGMT = new ToolGroup(
-            "skill_mgmt", "Skill 管理",
-            "浏览、创建、编辑、搜索 Skill 文件。"
-                    + "skill_list 列出所有 Skill，"
-                    + "skill_read 分段读取 Skill 内容，"
-                    + "skill_create 创建新 Skill（文件夹 + SKILL.md），"
-                    + "skill_write 修改 Skill 内容（替换/追加/覆盖），"
-                    + "skill_search 语义搜索 Skill（基于 embedding 向量），"
-                    + "skill_index 为 Skill 建立语义索引。",
-            Set.of("skill_list", "skill_read", "skill_create",
-                    "skill_write", "skill_search", "skill_index")
+    public static final ToolGroup DOCS = new ToolGroup(
+            "docs", "文档管理",
+            "统一文档管理：浏览、创建、编辑、搜索、索引所有 Agent 可读写的文本资产"
+                    + "（角色设定、Skill、世界态势、模板、上下文片段、规则等）。"
+                    + "doc_list 列出文档（按 type/tag 过滤），"
+                    + "doc_read 分段读取文档（支持行号），"
+                    + "doc_create 创建新文档，"
+                    + "doc_write 修改文档（替换/追加/行范围覆盖），"
+                    + "doc_search 语义搜索文档，"
+                    + "doc_index 为文档建立语义索引，"
+                    + "doc_crop 行裁剪 + 关键词遮蔽 + 选择性替换（信息隐藏），"
+                    + "doc_template 从模板创建文档。",
+            Set.of("doc_list", "doc_read", "doc_create",
+                    "doc_write", "doc_search", "doc_index",
+                    "doc_crop", "doc_template")
     );
 
     // ===== 所有工具组列表 =====
 
     public static final List<ToolGroup> ALL_GROUPS = List.of(
-            WORLD_INFO, NODE_MGMT, IMPORT_DOC, SEARCH, SKILL_MGMT
+            WORLD_INFO, NODE_MGMT, IMPORT_DOC, SEARCH, DOCS
     );
 
     // ===== 默认工具（无需激活，始终可用） =====
@@ -93,12 +97,12 @@ public record ToolGroup(
             "world_create",
             "compact_cache",
             "world_switch",
-            "skill_list",
-            "skill_read",
-            "skill_create",
-            "skill_write",
-            "skill_search",
-            "skill_index"
+            "doc_list",
+            "doc_read",
+            "doc_create",
+            "doc_write",
+            "doc_search",
+            "doc_index"
     );
 
     // ===== 工具名 → 所属组 key 查找表 =====

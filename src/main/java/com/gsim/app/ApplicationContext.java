@@ -177,6 +177,7 @@ public class ApplicationContext {
 
     private com.gsim.llm.EmbeddingClient embeddingClient;
     private com.gsim.skill.SkillIndex skillIndex;
+    private com.gsim.doc.DocStore docStore;
 
     /** 获取或懒创建 EmbeddingClient（若配置了 EMBEDDING_* 环境变量）。 */
     public com.gsim.llm.EmbeddingClient getEmbeddingClient() {
@@ -189,12 +190,20 @@ public class ApplicationContext {
         return embeddingClient;
     }
 
-    /** 获取或懒创建 SkillIndex。 */
-    public com.gsim.skill.SkillIndex getSkillIndex(Path skillsDir) {
+    /** 获取或懒创建 SkillIndex（复用为 doc 索引引擎）。 */
+    public com.gsim.skill.SkillIndex getSkillIndex(Path docsDir) {
         if (skillIndex == null) {
-            skillIndex = new com.gsim.skill.SkillIndex(skillsDir);
+            skillIndex = new com.gsim.skill.SkillIndex(docsDir);
         }
         return skillIndex;
+    }
+
+    /** 获取或懒创建 DocStore。 */
+    public com.gsim.doc.DocStore getDocStore(Path docsDir) {
+        if (docStore == null) {
+            docStore = new com.gsim.doc.DocStore(docsDir);
+        }
+        return docStore;
     }
 
     /**
