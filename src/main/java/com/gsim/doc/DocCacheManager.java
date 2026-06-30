@@ -83,16 +83,40 @@ public class DocCacheManager {
 
     /**
      * 尝试将 @cache:{id} 解析为文档内容。
-     * 如果 docId 以 @cache: 开头，提取缓存内容；否则返回 null。
+     * 扫描 rawDocId 中任意位置的 @cache:{id} 引用，解析后返回缓存全文。
+     * 返回 null 表示不含有效 @cache: 引用。
      * 用于任何接受 docId 参数的工具 — 直接调用此方法即可透明支持虚拟缓存文档。
      */
     public String resolveDocId(String rawDocId) {
         if (rawDocId == null || rawDocId.isBlank()) return null;
         String trimmed = rawDocId.trim();
+
+        // 如果整个 docId 就是 @cache:xxx → 直接返回全文
         if (trimmed.startsWith(CACHE_PREFIX)) {
             String cacheId = trimmed.substring(CACHE_PREFIX.length()).trim();
-            if (cacheId.isEmpty()) return null;
-            return get(cacheId);
+            if (!cacheId.isEmpty()) {
+                String cached = get(cacheId);
+                if (cached != null) return cached;
+            }
+        }
+
+        // 扫描 docId 中内嵌的 @cache:xxx 引用
+        int pos = 0;
+        while ((pos = trimmed.indexOf(CACHE_PREFIX, pos)) >= 0) {
+            int idStart = pos + CACHE_PREFIX.length();
+            int idEnd = idStart;
+            while (idEnd < trimmed.length()
+                    && !Character.isWhitespace(trimmed.charAt(idEnd))
+                    && trimmed.charAt(idEnd) != ','
+                    && trimmed.charAt(idEnd) != ';') {
+                idEnd++;
+            }
+            if (idEnd > idStart) {
+                String cacheId = trimmed.substring(idStart, idEnd);
+                String cached = get(cacheId);
+                if (cached != null) return cached;
+            }
+            pos = idEnd;
         }
         return null;
     }
