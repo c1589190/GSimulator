@@ -29,9 +29,11 @@ import java.util.Set;
 public final class DocCropTool implements AgentTool {
 
     private final DocStore store;
+    private final com.gsim.doc.DocCacheManager cacheManager;
 
-    public DocCropTool(DocStore store) {
+    public DocCropTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
         this.store = store;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -232,11 +234,27 @@ public final class DocCropTool implements AgentTool {
             }
         }
 
+        // 缓存原始文本
+        String rawText = result;
+        String cacheId = null;
+        try {
+            cacheId = cacheManager.put("crop", rawText);
+        } catch (java.io.IOException e) {
+            // 缓存失败不阻塞，继续返回完整文本
+        }
+
         // 格式化输出：重新编号
-        String[] resultLines = result.split("\n", -1);
+        String[] resultLines = rawText.split("\n", -1);
         StringBuilder output = new StringBuilder();
+        if (cacheId != null) {
+            output.append("[@cache:").append(cacheId).append("]\n");
+        }
         for (int i = 0; i < resultLines.length; i++) {
             output.append(String.format("%6d| ", i)).append(resultLines[i]).append("\n");
+        }
+        if (cacheId != null) {
+            output.append("\n---\n使用 @cache:").append(cacheId)
+                    .append(" 在后续工具调用中引用此文本，无需复制全文。");
         }
 
         return ToolResult.ok(name(), List.of(new ToolResult.Item(

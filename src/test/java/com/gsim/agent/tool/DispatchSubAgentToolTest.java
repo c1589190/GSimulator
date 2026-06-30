@@ -81,7 +81,7 @@ class DispatchSubAgentToolTest {
 
         tool = new DispatchSubAgentTool(llm, tools, "test-model",
                 AgentProgressSink.NOOP, runningSubAgents, subAgentCounter,
-                agentFactory, configStore);
+                agentFactory, configStore, null);
     }
 
     @Test

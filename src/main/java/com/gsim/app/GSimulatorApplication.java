@@ -54,6 +54,7 @@ public class GSimulatorApplication {
     private ChatCommand chatCommand;
     private com.gsim.compact.CacheCompactor cacheCompactor;
     private com.gsim.commands.CompactCommand compactCommand;
+    private com.gsim.doc.DocCacheManager docCacheManager;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
@@ -234,7 +235,17 @@ public class GSimulatorApplication {
                 agentConfigStore, ctx.getLlmProviderRegistry(), toolRegistry,
                 compositeSink, config.getLlmModel(),
                 worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default");
-        this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory);
+        // DocCacheManager 需在 doc 工具注册前创建
+        Path docsDir = worldsDir.resolveSibling("docs");
+        this.docCacheManager = new com.gsim.doc.DocCacheManager(
+                docsDir.resolve(".cache"));
+        try {
+            this.docCacheManager.init();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
+        }
+        this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory,
+                this.docCacheManager);
 
         // SubAgent cache 管理工具
         var worldIdSupplier = new java.util.function.Supplier<String>() {
@@ -256,7 +267,6 @@ public class GSimulatorApplication {
                 config.agentsDir(), agentConfigStore));
 
         // ── 统一文档管理工具（docs 工具组）──
-        Path docsDir = worldsDir.resolveSibling("docs");
         var docStore = ctx.getDocStore(docsDir);
         try {
             docStore.init();
@@ -280,13 +290,13 @@ public class GSimulatorApplication {
         }
 
         toolRegistry.register(new com.gsim.doc.tool.DocListTool(docStore));
-        toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore));
-        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore));
-        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore, docCacheManager));
         toolRegistry.register(new com.gsim.doc.tool.DocSearchTool(docStore, docIndex, embeddingClient));
         toolRegistry.register(new com.gsim.doc.tool.DocIndexTool(docStore, docIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore));
-        toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore));
+        toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore, docCacheManager));
 
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");

@@ -80,12 +80,13 @@ public class OrchestratorAgent extends AbstractAgent {
      * 注册子代理派发/收集工具到 ToolRegistry。
      * 由 GSimulatorApplication 在构造后调用。
      */
-    public void registerSubAgentTools(ToolRegistry registry, AgentFactory agentFactory) {
+    public void registerSubAgentTools(ToolRegistry registry, AgentFactory agentFactory,
+                                       com.gsim.doc.DocCacheManager docCacheManager) {
         this.agentFactory = agentFactory;
         registry.register(new DispatchSubAgentTool(
                 llmManager, toolRegistry, model, progressSink,
                 runningSubAgents, subAgentCounter, agentFactory,
-                agentFactory.store()));
+                agentFactory.store(), docCacheManager));
         registry.register(new CollectSubAgentResultsTool(runningSubAgents));
     }
 

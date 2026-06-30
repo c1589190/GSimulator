@@ -52,13 +52,15 @@ public class DispatchSubAgentTool implements AgentTool {
     private final AtomicInteger subAgentCounter;
     private final AgentFactory agentFactory;
     private final AgentConfigStore configStore;
+    private final com.gsim.doc.DocCacheManager docCacheManager;
 
     public DispatchSubAgentTool(LlmManager llmManager, ToolRegistry toolRegistry,
                                 String model, AgentProgressSink progressSink,
                                 Map<String, CompletableFuture<AgentResult>> runningSubAgents,
                                 AtomicInteger subAgentCounter,
                                 AgentFactory agentFactory,
-                                AgentConfigStore configStore) {
+                                AgentConfigStore configStore,
+                                com.gsim.doc.DocCacheManager docCacheManager) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;
@@ -67,6 +69,7 @@ public class DispatchSubAgentTool implements AgentTool {
         this.subAgentCounter = subAgentCounter;
         this.agentFactory = agentFactory;
         this.configStore = configStore;
+        this.docCacheManager = docCacheManager;
     }
 
     @Override
@@ -123,6 +126,11 @@ public class DispatchSubAgentTool implements AgentTool {
         String prompt = call.param("prompt", "").trim();
         String cacheId = call.param("cacheId", "").trim();
         if (cacheId.isEmpty()) cacheId = null;
+
+        // 解析 @cache: 引用
+        if (docCacheManager != null) {
+            prompt = docCacheManager.resolve(prompt);
+        }
 
         // Dynamic validation against AgentConfigStore
         if (configStore.get(type) == null) {

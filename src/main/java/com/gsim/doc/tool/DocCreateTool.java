@@ -17,9 +17,11 @@ import java.util.Map;
 public final class DocCreateTool implements AgentTool {
 
     private final DocStore store;
+    private final com.gsim.doc.DocCacheManager cacheManager;
 
-    public DocCreateTool(DocStore store) {
+    public DocCreateTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
         this.store = store;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -62,6 +64,9 @@ public final class DocCreateTool implements AgentTool {
             return ToolResult.fail(name(), "docId 只能包含字母、数字、连字符、下划线");
         }
         if (title.isEmpty()) return ToolResult.fail(name(), "title 不能为空");
+
+        // 解析 @cache: 引用
+        content = cacheManager.resolve(content);
 
         DocType type = typeStr.isEmpty() ? DocType.OTHER : DocType.fromKey(typeStr);
 

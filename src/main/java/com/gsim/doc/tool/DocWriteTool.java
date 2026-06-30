@@ -16,9 +16,11 @@ import java.util.Map;
 public final class DocWriteTool implements AgentTool {
 
     private final DocStore store;
+    private final com.gsim.doc.DocCacheManager cacheManager;
 
-    public DocWriteTool(DocStore store) {
+    public DocWriteTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
         this.store = store;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -61,6 +63,9 @@ public final class DocWriteTool implements AgentTool {
         String tagsStr = call.param("tags", "").trim();
 
         if (docId.isEmpty()) return ToolResult.fail(name(), "docId 不能为空");
+
+        // 解析 @cache: 引用
+        content = cacheManager.resolve(content);
 
         Document old = store.get(docId);
         if (old == null) return ToolResult.fail(name(), "文档不存在: " + docId);

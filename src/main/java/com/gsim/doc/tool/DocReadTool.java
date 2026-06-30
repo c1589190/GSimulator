@@ -15,9 +15,11 @@ import java.util.Map;
 public final class DocReadTool implements AgentTool {
 
     private final DocStore store;
+    private final com.gsim.doc.DocCacheManager cacheManager;
 
-    public DocReadTool(DocStore store) {
+    public DocReadTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
         this.store = store;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -64,12 +66,35 @@ public final class DocReadTool implements AgentTool {
         int start = Math.max(0, Math.min(offset, totalLines));
         int end = Math.min(start + limit, totalLines);
 
-        StringBuilder sb = new StringBuilder();
+        // 构建原始文本（无行号）供缓存
+        StringBuilder rawText = new StringBuilder();
         for (int i = start; i < end; i++) {
-            sb.append(String.format("%6d| ", i)).append(lines[i]).append("\n");
+            rawText.append(lines[i]);
+            if (i < end - 1) rawText.append("\n");
         }
 
-        String snippet = sb.toString();
+        String cacheId = null;
+        if (rawText.length() > 200) {  // 短文本不缓存
+            try {
+                cacheId = cacheManager.put("read", rawText.toString());
+            } catch (java.io.IOException ignored) {
+            }
+        }
+
+        // 格式化显示（带行号）
+        StringBuilder output = new StringBuilder();
+        if (cacheId != null) {
+            output.append("[@cache:").append(cacheId).append("]\n");
+        }
+        for (int i = start; i < end; i++) {
+            output.append(String.format("%6d| ", i)).append(lines[i]).append("\n");
+        }
+        if (cacheId != null) {
+            output.append("\n---\n使用 @cache:").append(cacheId)
+                    .append(" 在后续工具调用中引用此文本。");
+        }
+
+        String snippet = output.toString();
         if (snippet.isEmpty()) snippet = "(文档为空)";
 
         String title = doc.title() + " (" + docId + ") lines " + start + "-"

@@ -23,9 +23,11 @@ public final class DocTemplateTool implements AgentTool {
 
     private static final String TEMPLATE_BASE = "gsim/templates/";
     private final DocStore store;
+    private final com.gsim.doc.DocCacheManager cacheManager;
 
-    public DocTemplateTool(DocStore store) {
+    public DocTemplateTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
         this.store = store;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -114,11 +116,24 @@ public final class DocTemplateTool implements AgentTool {
             if (doc == null) {
                 return ToolResult.fail(name(), "文档已存在: " + docId);
             }
+
+            // 缓存生成的文本
+            String cacheId = null;
+            try {
+                cacheId = cacheManager.put("tmpl", templateText);
+            } catch (java.io.IOException ignored) {
+            }
+
+            String msg = "从模板 " + templateName + " 创建: type=" + type.key()
+                    + " v" + doc.version();
+            if (cacheId != null) {
+                msg = "[@cache:" + cacheId + "]\n" + msg
+                        + "\n\n---\n使用 @cache:" + cacheId
+                        + " 在后续工具调用中引用此文本。";
+            }
+
             return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                    finalTitle, docId,
-                    "从模板 " + templateName + " 创建: type=" + type.key()
-                            + " v" + doc.version(),
-                    1.0)));
+                    finalTitle, docId, msg, 1.0)));
         } catch (IOException e) {
             return ToolResult.fail(name(), "创建失败: " + e.getMessage());
         }
