@@ -246,13 +246,67 @@ public class CliAgentProgressSink implements AgentProgressSink {
         return agentId.matches("^(sim|search)-\\d+$");
     }
 
-    /** 处理 SubAgent 事件 — 仅错误输出到终端。 */
+    /** 处理 SubAgent 事件 — 流式输出和工具进度正常显示，仅折叠重复的状态行。 */
     private void handleSubAgentEvent(AgentProgressEvent event, String agentId) {
         switch (event.phase()) {
+            case AgentProgressEvent.LLM_STREAM_STARTED -> {
+                if (subAgentSeen.add(agentId)) {
+                    out.print("[" + agentId + "] ");
+                    out.flush();
+                }
+            }
+            case AgentProgressEvent.LLM_CONTENT_DELTA -> {
+                if (!contentBold) {
+                    out.print(ANSI_BOLD);
+                    contentBold = true;
+                }
+                String delta = event.detail();
+                if (delta != null && !delta.isEmpty()) {
+                    out.print(delta);
+                    out.flush();
+                }
+            }
+            case AgentProgressEvent.LLM_REASONING_DELTA -> {
+                String delta = event.detail();
+                if (delta != null && !delta.isEmpty()) {
+                    if (!reasoningOpen) {
+                        out.print(ANSI_GREY + "[" + agentId + "] Thinking: ");
+                        reasoningOpen = true;
+                    }
+                    out.print(delta);
+                    out.flush();
+                }
+            }
+            case AgentProgressEvent.LLM_STREAM_COMPLETED -> {
+                subAgentSeen.remove(agentId);
+                if (reasoningOpen || contentBold) {
+                    out.print(ANSI_RESET);
+                    reasoningOpen = false;
+                    contentBold = false;
+                }
+                out.println();
+            }
             case AgentProgressEvent.LLM_STREAM_FAILED -> {
                 subAgentSeen.remove(agentId);
+                if (reasoningOpen || contentBold) {
+                    out.print(ANSI_RESET);
+                    reasoningOpen = false;
+                    contentBold = false;
+                }
                 String error = event.meta().getOrDefault("error", "unknown");
-                out.println("[SubAgent " + agentId + "] failed: " + error);
+                out.println("\n[SubAgent " + agentId + "] failed: " + error);
+            }
+            case AgentProgressEvent.TOOL_SELECTED -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String params = event.meta().getOrDefault("paramsSummary", "");
+                out.println("[" + agentId + "] " + formatToolInvocation(tool, params));
+            }
+            case AgentProgressEvent.TOOL_SUCCESS -> {
+                String tool = event.meta().getOrDefault("tool", "");
+                String resultSummary = event.meta().getOrDefault("resultSummary", "");
+                if (resultSummary != null && !resultSummary.isBlank()) {
+                    out.println("[" + agentId + "] ✅ " + tool + " — " + resultSummary);
+                }
             }
             case AgentProgressEvent.TOOL_FAILED -> {
                 String tool = event.meta().getOrDefault("tool", "");
@@ -260,7 +314,7 @@ public class CliAgentProgressSink implements AgentProgressSink {
                 out.println("[SubAgent " + agentId + "] tool failed: " + tool
                         + (error.isBlank() ? "" : " — " + error));
             }
-            // 所有其他事件静默（写入日志文件但不打印到终端）
+            // 其他状态事件静默（contextLoaded, waitingLlm 等仅写入日志）
             default -> {}
         }
     }
