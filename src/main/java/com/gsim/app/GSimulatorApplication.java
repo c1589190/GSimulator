@@ -295,7 +295,8 @@ public class GSimulatorApplication {
 
         toolRegistry.register(new com.gsim.doc.tool.DocListTool(docStore));
         toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore, docCacheManager,
+                compositeSink));
         toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore, docCacheManager,
                 compositeSink));
         toolRegistry.register(new com.gsim.doc.tool.DocSearchTool(docStore, docIndex, embeddingClient));
