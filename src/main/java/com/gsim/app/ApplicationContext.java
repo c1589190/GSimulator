@@ -110,7 +110,9 @@ public class ApplicationContext {
         // HTTP API
         ApiConfig apiConfig = new ApiConfig(
                 config.getApiHost(), config.getApiPort(), config.isApiEnabled());
-        this.apiManager = new ApiManager(apiConfig, this, eventBus);
+        this.apiManager = new ApiManager(apiConfig, this, eventBus,
+                config.worldsDir(), config.getImportDir(),
+                () -> activeRootId != null ? activeRootId : "default");
     }
 
     /**

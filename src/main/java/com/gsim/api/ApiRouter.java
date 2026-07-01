@@ -7,6 +7,9 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
+import java.nio.file.Path;
+import java.util.function.Supplier;
+
 /**
  * API 路由注册器 — 将所有 API handler 注册到 HttpServer。
  */
@@ -17,14 +20,21 @@ public class ApiRouter {
     private final EventBus eventBus;
     private final SessionManager sessionManager;
     private final TaskManager taskManager;
+    private final Path worldsDir;
+    private final Path importDir;
+    private final Supplier<String> activeWorldId;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
-                     SessionManager sessionManager, TaskManager taskManager) {
+                     SessionManager sessionManager, TaskManager taskManager,
+                     Path worldsDir, Path importDir, Supplier<String> activeWorldId) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
         this.sessionManager = sessionManager;
         this.taskManager = taskManager;
+        this.worldsDir = worldsDir;
+        this.importDir = importDir;
+        this.activeWorldId = activeWorldId;
     }
 
     /**
@@ -84,6 +94,15 @@ public class ApiRouter {
 
         // 工具
         register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
+
+        // World 管理 (CRUD + Node 操作)
+        register("/api/world-manager", new WorldManagerApiHandler(worldsDir, activeWorldId));
+
+        // World 数据 (Checkpoint + Element 查询与写入)
+        register("/api/world-manager-data", new WorldDataApiHandler(worldsDir));
+
+        // 文档管理 (CRUD + 搜索 + Web 导入)
+        register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
     }
 
     /**

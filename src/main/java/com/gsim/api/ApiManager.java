@@ -8,15 +8,17 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /**
  * HTTP API 管理器 — 负责 HttpServer 生命周期和路由注册。
  *
  * <p>使用方式：
  * <pre>
- *   ApiManager apiManager = new ApiManager(config, ctx, eventBus);
+ *   ApiManager apiManager = new ApiManager(config, ctx, eventBus, worldsDir, importDir, activeWorldId);
  *   apiManager.start();
  *   // ...
  *   apiManager.stop();
@@ -31,16 +33,23 @@ public class ApiManager {
     private final EventBus eventBus;
     private final SessionManager sessionManager;
     private final TaskManager taskManager;
+    private final Path worldsDir;
+    private final Path importDir;
+    private final Supplier<String> activeWorldId;
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
 
-    public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus) {
+    public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus,
+                      Path worldsDir, Path importDir, Supplier<String> activeWorldId) {
         this.apiConfig = apiConfig;
         this.ctx = ctx;
         this.eventBus = eventBus;
         this.sessionManager = new SessionManager(ctx);
         this.taskManager = new TaskManager(ctx, sessionManager, eventBus);
+        this.worldsDir = worldsDir;
+        this.importDir = importDir;
+        this.activeWorldId = activeWorldId;
     }
 
     /**
@@ -56,7 +65,8 @@ public class ApiManager {
         server = HttpServer.create(address, 0);  // 0 = default backlog
 
         // 注册所有路由
-        ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager);
+        ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
+                worldsDir, importDir, activeWorldId);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)
