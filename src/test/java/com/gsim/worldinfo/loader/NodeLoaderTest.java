@@ -20,7 +20,7 @@ class NodeLoaderTest {
 
     @Test
     void saveAndLoadRoundtrip() throws Exception {
-        Element el = new Element("k", "text", "v", List.of("a"), List.of("b"));
+        Element el = new Element("k", "text", "v", List.of("a"), List.of("b"), null, null);
         Checkpoint cp = new Checkpoint("cp1", "player", List.of(el));
         NodeSnapshot node = new NodeSnapshot("n0000", null, 0, "origin",
             "initial", "2026-01-01T00:00:00Z", Map.of("cp1", cp));

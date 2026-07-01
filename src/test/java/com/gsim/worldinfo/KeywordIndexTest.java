@@ -12,7 +12,7 @@ class KeywordIndexTest {
     void searchFindsMatchingElements() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("worldview", new Checkpoint("世界观", "worldview", List.of(
-                new Element("k0", "text", "中原大旱蝗灾四起", List.of("气候", "灾害"), List.of())
+                new Element("k0", "text", "中原大旱蝗灾四起", List.of("气候", "灾害"), List.of(), null, null)
             ))));
 
         KeywordIndex idx = KeywordIndex.build(List.of(n0));
@@ -28,8 +28,8 @@ class KeywordIndexTest {
     void searchMultipleKeywordsOrSemantics() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("p", new Checkpoint("p", "player", List.of(
-                new Element("k1", "action", "曹操自陈留起兵", List.of("曹操", "军事"), List.of()),
-                new Element("k2", "action", "皇甫嵩固守长社", List.of("皇甫嵩", "军事"), List.of())
+                new Element("k1", "action", "曹操自陈留起兵", List.of("曹操", "军事"), List.of(), null, null),
+                new Element("k2", "action", "皇甫嵩固守长社", List.of("皇甫嵩", "军事"), List.of(), null, null)
             ))));
 
         KeywordIndex idx = KeywordIndex.build(List.of(n0));
@@ -43,9 +43,9 @@ class KeywordIndexTest {
     void paginationWithOffset() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("p", new Checkpoint("p", "player", List.of(
-                new Element("a", "action", "曹操起兵", List.of("曹操"), List.of()),
-                new Element("b", "action", "曹操会合", List.of("曹操"), List.of()),
-                new Element("c", "action", "曹操大破", List.of("曹操"), List.of())
+                new Element("a", "action", "曹操起兵", List.of("曹操"), List.of(), null, null),
+                new Element("b", "action", "曹操会合", List.of("曹操"), List.of(), null, null),
+                new Element("c", "action", "曹操大破", List.of("曹操"), List.of(), null, null)
             ))));
 
         KeywordIndex idx = KeywordIndex.build(List.of(n0));
@@ -61,7 +61,7 @@ class KeywordIndexTest {
     void searchByTag() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("p", new Checkpoint("p", "player", List.of(
-                new Element("k1", "action", "some text", List.of("曹操", "军事"), List.of())
+                new Element("k1", "action", "some text", List.of("曹操", "军事"), List.of(), null, null)
             ))));
 
         KeywordIndex idx = KeywordIndex.build(List.of(n0));
@@ -73,7 +73,7 @@ class KeywordIndexTest {
     void noMatchReturnsEmpty() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("p", new Checkpoint("p", "player", List.of(
-                new Element("k1", "action", "hello world", List.of(), List.of())
+                new Element("k1", "action", "hello world", List.of(), List.of(), null, null)
             ))));
 
         KeywordIndex idx = KeywordIndex.build(List.of(n0));

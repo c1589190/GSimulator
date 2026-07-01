@@ -19,16 +19,16 @@ class QueryToolsTest {
     void setUp() {
         NodeSnapshot n0 = new NodeSnapshot("n0000", null, 0, "origin", "initial", "t0",
             Map.of("worldview", new Checkpoint("世界观", "worldview", List.of(
-                new Element("气候.中原", "text", "中原大旱", List.of("气候"), List.of())
+                new Element("气候.中原", "text", "中原大旱", List.of("气候"), List.of(), null, null)
             ))));
         NodeSnapshot n1 = new NodeSnapshot("n0001", "n0000", 1, "t1", "simulated", "t1",
             Map.of("player.曹操", new Checkpoint("曹操", "player", List.of(
                 new Element("曹操.行动.起兵", "action", "曹操自陈留起兵", List.of("曹操", "军事"),
-                    List.of("narrative.main"))
+                    List.of("narrative.main"), null, null)
             )),
             "narrative", new Checkpoint("推文", "narrative", List.of(
                 new Element("narrative.main", "narrative", "曹操起兵，天下震动", List.of("推文"),
-                    List.of("player.曹操.elements.0"))
+                    List.of("player.曹操.elements.0"), null, null)
             ))));
 
         wi = new WorldInformation("test", List.of(n0, n1));

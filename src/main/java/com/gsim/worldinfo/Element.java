@@ -11,7 +11,9 @@ public record Element(
     @JsonProperty("type") String type,
     @JsonProperty("value") String value,
     @JsonProperty("tags") List<String> tags,
-    @JsonProperty("links") List<String> links
+    @JsonProperty("links") List<String> links,
+    @JsonProperty("createdAt") String createdAt,
+    @JsonProperty("updatedAt") String updatedAt
 ) {
     public Element {
         if (key == null || key.isBlank()) throw new IllegalArgumentException("key must not be blank");
@@ -23,6 +25,6 @@ public record Element(
 
     /** An element with neither tags nor links. */
     public static Element simple(String key, String type, String value) {
-        return new Element(key, type, value, List.of(), List.of());
+        return new Element(key, type, value, List.of(), List.of(), null, null);
     }
 }

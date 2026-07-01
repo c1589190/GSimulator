@@ -284,7 +284,9 @@ public class WorldDataApiHandler implements HttpHandler {
                 "type", found.type(),
                 "value", found.value(),
                 "tags", found.tags(),
-                "links", found.links()));
+                "links", found.links(),
+                "createdAt", found.createdAt() != null ? found.createdAt() : "",
+                "updatedAt", found.updatedAt() != null ? found.updatedAt() : ""));
         BaseApiHandler.sendOk(exchange, "Element found: " + key, data);
     }
 
@@ -335,7 +337,26 @@ public class WorldDataApiHandler implements HttpHandler {
                 ? Arrays.asList(linksStr.split(","))
                 : List.of();
 
-        Element element = new Element(key, type, value, tags, links);
+        String now = java.time.Instant.now().toString();
+        String createdAt = now;
+
+        // replace 模式时保留原始 createdAt
+        if (!"append".equalsIgnoreCase(mode)) {
+            var node = wi.nodeById(nodeId);
+            if (node != null) {
+                var cp = node.checkpoint(checkpointId);
+                if (cp != null) {
+                    for (var el : cp.elements()) {
+                        if (el.key().equals(key) && el.createdAt() != null) {
+                            createdAt = el.createdAt();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Element element = new Element(key, type, value, tags, links, createdAt, now);
 
         boolean replaced;
         if ("append".equalsIgnoreCase(mode)) {
@@ -444,6 +465,8 @@ public class WorldDataApiHandler implements HttpHandler {
         m.put("value", ref.element().value());
         m.put("tags", ref.element().tags());
         m.put("links", ref.element().links());
+        m.put("createdAt", ref.element().createdAt());
+        m.put("updatedAt", ref.element().updatedAt());
         return m;
     }
 

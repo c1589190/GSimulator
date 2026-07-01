@@ -49,7 +49,7 @@ class EndToEndTest {
         WorldInformation wi = result.worldInfo();
         wi.appendElement("n0000", "worldview",
             new Element("气候", "text", "中原大旱",
-                List.of("气候"), List.of()));
+                List.of("气候"), List.of(), null, null));
 
         // persist
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, "default", "n0000"), wi.nodeById("n0000"));

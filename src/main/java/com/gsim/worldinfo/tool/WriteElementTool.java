@@ -90,7 +90,26 @@ public final class WriteElementTool implements AgentTool {
             ? Arrays.asList(linksStr.split(","))
             : List.of();
 
-        Element element = new Element(key, type != null ? type : "text", value, tags, links);
+        String now = java.time.Instant.now().toString();
+        String createdAt = now;
+
+        // replace 模式时保留原始 createdAt
+        if (!"append".equalsIgnoreCase(mode)) {
+            var node = wi.nodeById(nodeId);
+            if (node != null) {
+                var cp = node.checkpoint(checkpointId);
+                if (cp != null) {
+                    for (var el : cp.elements()) {
+                        if (el.key().equals(key) && el.createdAt() != null) {
+                            createdAt = el.createdAt();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Element element = new Element(key, type != null ? type : "text", value, tags, links, createdAt, now);
 
         boolean replaced;
         if ("append".equalsIgnoreCase(mode)) {
