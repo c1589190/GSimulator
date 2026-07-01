@@ -15,14 +15,6 @@ import java.util.function.Supplier;
 
 /**
  * HTTP API 管理器 — 负责 HttpServer 生命周期和路由注册。
- *
- * <p>使用方式：
- * <pre>
- *   ApiManager apiManager = new ApiManager(config, ctx, eventBus, worldsDir, importDir, activeWorldId);
- *   apiManager.start();
- *   // ...
- *   apiManager.stop();
- * </pre>
  */
 public class ApiManager {
 
@@ -36,12 +28,14 @@ public class ApiManager {
     private final Path worldsDir;
     private final Path importDir;
     private final Supplier<String> activeWorldId;
+    private final Supplier<com.gsim.doc.DocStore> docStore;
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
 
     public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus,
-                      Path worldsDir, Path importDir, Supplier<String> activeWorldId) {
+                      Path worldsDir, Path importDir, Supplier<String> activeWorldId,
+                      Supplier<com.gsim.doc.DocStore> docStore) {
         this.apiConfig = apiConfig;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -50,6 +44,7 @@ public class ApiManager {
         this.worldsDir = worldsDir;
         this.importDir = importDir;
         this.activeWorldId = activeWorldId;
+        this.docStore = docStore;
     }
 
     /**
@@ -66,7 +61,7 @@ public class ApiManager {
 
         // 注册所有路由
         ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
-                worldsDir, importDir, activeWorldId);
+                worldsDir, importDir, activeWorldId, docStore);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)

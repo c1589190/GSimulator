@@ -37,7 +37,8 @@ class CorsPreflightTest {
 
         ApiConfig apiConfig = new ApiConfig("127.0.0.1", 0, true);
         apiManager = new ApiManager(apiConfig, ctx, ctx.getEventBus(),
-                config.worldsDir(), config.getImportDir(), () -> "default");
+                config.worldsDir(), config.getImportDir(), () -> "default",
+                () -> ctx.getDocStore(config.worldsDir().resolveSibling("docs")));
         apiManager.forceEnable();
         apiManager.start();
 

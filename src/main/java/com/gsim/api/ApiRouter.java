@@ -23,10 +23,12 @@ public class ApiRouter {
     private final Path worldsDir;
     private final Path importDir;
     private final Supplier<String> activeWorldId;
+    private final Supplier<com.gsim.doc.DocStore> docStore;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
-                     Path worldsDir, Path importDir, Supplier<String> activeWorldId) {
+                     Path worldsDir, Path importDir, Supplier<String> activeWorldId,
+                     Supplier<com.gsim.doc.DocStore> docStore) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -35,6 +37,7 @@ public class ApiRouter {
         this.worldsDir = worldsDir;
         this.importDir = importDir;
         this.activeWorldId = activeWorldId;
+        this.docStore = docStore;
     }
 
     /**
@@ -103,6 +106,15 @@ public class ApiRouter {
 
         // 文档管理 (CRUD + 搜索 + Web 导入)
         register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
+
+        // 统一 @ 引用解析
+        register("/api/ref", new RefApiHandler(worldsDir, activeWorldId, importDir, docStore));
+
+        // 统一跨源搜索
+        register("/api/search", new UnifiedSearchHandler(worldsDir, activeWorldId, importDir, docStore));
+
+        // 操作日志
+        register("/api/logs/operations", new OperationsLogHandler());
     }
 
     /**

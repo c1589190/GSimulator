@@ -304,6 +304,10 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore, docCacheManager));
         toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore, docCacheManager));
 
+        // 统一 @ 引用解析
+        toolRegistry.register(new com.gsim.ref.ResolveRefTool(
+                worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
+
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
         var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;

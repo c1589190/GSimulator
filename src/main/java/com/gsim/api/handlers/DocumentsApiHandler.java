@@ -2,6 +2,7 @@ package com.gsim.api.handlers;
 
 import com.gsim.api.ApiResponse;
 import com.gsim.api.JsonBodyParser;
+import com.gsim.api.OperationLog;
 import com.gsim.api.dto.ImportUrlRequest;
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
@@ -240,6 +241,9 @@ public class DocumentsApiHandler implements HttpHandler {
         data.put("documentId", safeName);
         data.put("name", safeName);
         data.put("sizeBytes", Files.size(targetFile));
+        OperationLog.get().record(null, "document.upload", "POST",
+                "/api/documents", "uploaded: " + safeName,
+                Map.of("name", safeName, "sizeBytes", Files.size(targetFile)), true);
         BaseApiHandler.sendOk(exchange, "Document uploaded: " + safeName, data);
     }
 
@@ -257,6 +261,8 @@ public class DocumentsApiHandler implements HttpHandler {
         Files.delete(file);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("documentId", documentId);
+        OperationLog.get().record(null, "document.delete", "DELETE",
+                "/api/documents/" + documentId, "deleted: " + documentId, null, true);
         BaseApiHandler.sendOk(exchange, "Document deleted: " + documentId, data);
     }
 
@@ -304,6 +310,10 @@ public class DocumentsApiHandler implements HttpHandler {
                     Map.of("message", "URL import completed: " + result.pagesFetched() + " pages fetched")));
         }
 
+        OperationLog.get().record(null, "document.import_url", "POST",
+                "/api/documents/import-url", "imported from: " + req.url(),
+                Map.of("url", req.url(), "pagesFetched", result.pagesFetched(),
+                        "filesWritten", result.filesWritten()), true);
         BaseApiHandler.sendOk(exchange, "URL import completed", data);
     }
 

@@ -1,6 +1,7 @@
 package com.gsim.api.handlers;
 
 import com.gsim.api.JsonBodyParser;
+import com.gsim.api.OperationLog;
 import com.gsim.util.JsonUtils;
 import com.gsim.worldinfo.Checkpoint;
 import com.gsim.worldinfo.Element;
@@ -187,6 +188,10 @@ public class WorldDataApiHandler implements HttpHandler {
         data.put("checkpointId", checkpointId);
         data.put("label", label);
         data.put("type", type);
+        OperationLog.get().record(worldId, "checkpoint.create", "POST",
+                "/api/world-manager-data/" + worldId + "/checkpoints",
+                "created checkpoint: " + checkpointId + " in " + nodeId,
+                Map.of("nodeId", nodeId, "checkpointId", checkpointId, "type", type), true);
         BaseApiHandler.sendOk(exchange, "Checkpoint created: " + checkpointId, data);
     }
 
@@ -349,6 +354,10 @@ public class WorldDataApiHandler implements HttpHandler {
         data.put("ref", unifiedId);
         data.put("action", replaced ? "replaced" : "appended");
         data.put("key", key);
+        OperationLog.get().record(worldId, "element.write", "POST",
+                "/api/world-manager-data/" + worldId + "/elements",
+                "wrote " + unifiedId + " (" + (replaced ? "replaced" : "appended") + ")",
+                Map.of("ref", unifiedId, "mode", replaced ? "replace" : "append", "type", type), true);
         BaseApiHandler.sendOk(exchange, "Element " + (replaced ? "replaced" : "appended") + ": " + key, data);
     }
 

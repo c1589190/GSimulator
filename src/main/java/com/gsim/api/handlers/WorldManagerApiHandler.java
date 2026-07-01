@@ -2,6 +2,7 @@ package com.gsim.api.handlers;
 
 import com.gsim.api.ApiResponse;
 import com.gsim.api.JsonBodyParser;
+import com.gsim.api.OperationLog;
 import com.gsim.util.IdGenerator;
 import com.gsim.util.JsonUtils;
 import com.gsim.worldinfo.NodeSnapshot;
@@ -126,6 +127,8 @@ public class WorldManagerApiHandler implements HttpHandler {
             data.put("name", meta.name());
             data.put("createdAt", meta.createdAt());
             data.put("currentNodeId", meta.currentNodeId());
+            OperationLog.get().record(id, "world.create", "POST",
+                    "/api/world-manager", "created world: " + id, Map.of("name", name), true);
             BaseApiHandler.sendOk(exchange, "World created: " + id, data);
         } catch (IllegalArgumentException e) {
             BaseApiHandler.sendError(exchange, 400, e.getMessage());
@@ -152,6 +155,8 @@ public class WorldManagerApiHandler implements HttpHandler {
         }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("deleted", worldId);
+        OperationLog.get().record(worldId, "world.delete", "DELETE",
+                "/api/world-manager/" + worldId, "deleted world: " + worldId, null, true);
         BaseApiHandler.sendOk(exchange, "World deleted: " + worldId, data);
     }
 
@@ -332,6 +337,10 @@ public class WorldManagerApiHandler implements HttpHandler {
         data.put("worldTime", worldTime);
         if (title != null && !title.isBlank()) data.put("title", title);
         if (note != null && !note.isBlank()) data.put("note", note);
+        OperationLog.get().record(worldId, "node.create", "POST",
+                "/api/world-manager/" + worldId + "/nodes",
+                "created node " + newNodeId + " (turn " + nextTurn + ", parent=" + parentId + ")",
+                Map.of("nodeId", newNodeId, "turn", nextTurn, "worldTime", worldTime), true);
         BaseApiHandler.sendOk(exchange, "Node created: " + newNodeId, data);
     }
 
@@ -374,6 +383,10 @@ public class WorldManagerApiHandler implements HttpHandler {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("previousNodeId", current.nodeId());
         data.put("activeNodeId", targetNodeId);
+        OperationLog.get().record(worldId, "node.switch", "POST",
+                "/api/world-manager/" + worldId + "/nodes/active",
+                "switched node: " + current.nodeId() + " → " + targetNodeId,
+                Map.of("from", current.nodeId(), "to", targetNodeId), true);
         BaseApiHandler.sendOk(exchange, "Switched to node: " + targetNodeId, data);
     }
 
@@ -409,6 +422,10 @@ public class WorldManagerApiHandler implements HttpHandler {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("previousNodeId", nodeId);
         data.put("newActiveNodeId", parentId);
+        OperationLog.get().record(worldId, "node.goto_parent", "POST",
+                "/api/world-manager/" + worldId + "/nodes/" + nodeId + "/goto-parent",
+                "moved to parent: " + nodeId + " → " + parentId,
+                Map.of("from", nodeId, "to", parentId), true);
         BaseApiHandler.sendOk(exchange, "Moved to parent: " + parentId, data);
     }
 

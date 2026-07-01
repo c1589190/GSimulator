@@ -112,7 +112,8 @@ public class ApplicationContext {
                 config.getApiHost(), config.getApiPort(), config.isApiEnabled());
         this.apiManager = new ApiManager(apiConfig, this, eventBus,
                 config.worldsDir(), config.getImportDir(),
-                () -> activeRootId != null ? activeRootId : "default");
+                () -> activeRootId != null ? activeRootId : "default",
+                this::getDocStore);
     }
 
     /**
@@ -207,6 +208,23 @@ public class ApplicationContext {
         }
         return docStore;
     }
+
+    /** 获取当前的 DocStore（懒初始化，无参）。 */
+    public com.gsim.doc.DocStore getDocStore() {
+        if (docStore == null) {
+            Path docsDir = config.worldsDir().resolveSibling("docs");
+            docStore = new com.gsim.doc.DocStore(docsDir);
+            try {
+                docStore.init();
+            } catch (java.io.IOException e) {
+                System.err.println("[DocStore] Lazy init failed: " + e.getMessage());
+            }
+        }
+        return docStore;
+    }
+
+    /** 设置 DocStore（由 GSimulatorApplication 在初始化后调用，覆盖懒初始化结果）。 */
+    public void setDocStore(com.gsim.doc.DocStore ds) { this.docStore = ds; }
 
     /**
      * 关闭所有资源：LLM client、event bus、API server。
