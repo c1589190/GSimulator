@@ -20,6 +20,7 @@ public class RefApiHandler implements HttpHandler {
     private final Supplier<String> activeWorldId;
     private final Path importDir;
     private final Supplier<com.gsim.doc.DocStore> docStore;
+    private final Path cacheDir;
 
     public RefApiHandler(Path worldsDir, Supplier<String> activeWorldId,
                          Path importDir, Supplier<com.gsim.doc.DocStore> docStore) {
@@ -27,6 +28,7 @@ public class RefApiHandler implements HttpHandler {
         this.activeWorldId = activeWorldId;
         this.importDir = importDir;
         this.docStore = docStore;
+        this.cacheDir = worldsDir.resolveSibling("docs").resolve(".cache");
     }
 
     @Override
@@ -48,7 +50,7 @@ public class RefApiHandler implements HttpHandler {
 
         try {
             ResolvedRef resolved = RefResolver.resolve(ref,
-                    worldsDir, resolvedWorldId, importDir, docStore.get());
+                    worldsDir, resolvedWorldId, importDir, docStore.get(), cacheDir);
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("source", resolved.source());

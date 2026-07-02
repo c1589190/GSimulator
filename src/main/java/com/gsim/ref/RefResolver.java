@@ -11,6 +11,7 @@ import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.WorldInfoBuilder;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -22,6 +23,7 @@ import java.nio.file.Path;
  *   <li>{@code @world:<nodeId>:<cpId>:<key>} — World 元素（3 段）</li>
  *   <li>{@code @world:<cpId>:<key>} — World 元素（2 段，默认活跃节点）</li>
  *   <li>{@code @doc:<docId>} — Doc/Board 文档</li>
+ *   <li>{@code @cache:<id>} — 缓存文本（来自 write_element 等的大文本输出）</li>
  * </ul>
  */
 public final class RefResolver {
@@ -32,16 +34,11 @@ public final class RefResolver {
 
     /**
      * 解析 @ 引用并返回统一结果。
-     *
-     * @param ref        完整的 @ 引用字符串
-     * @param worldsDir   worlds 数据目录
-     * @param activeWorldId 当前活跃 worldId
-     * @param importDir   import 目录
-     * @param docStore    DocStore 实例（可为 null，则 @doc: 不可用）
      */
     public static ResolvedRef resolve(String ref,
                                        Path worldsDir, String activeWorldId,
-                                       Path importDir, DocStore docStore) {
+                                       Path importDir, DocStore docStore,
+                                       Path cacheDir) {
         if (ref == null || ref.isBlank()) {
             throw new IllegalArgumentException("ref must not be blank");
         }
@@ -52,9 +49,11 @@ public final class RefResolver {
             return resolveWorld(ref.substring(7), worldsDir, activeWorldId);
         } else if (ref.startsWith("@doc:")) {
             return resolveDoc(ref.substring(5), docStore);
+        } else if (ref.startsWith("@cache:")) {
+            return resolveCache(ref.substring(7), cacheDir);
         } else {
             throw new IllegalArgumentException(
-                    "Unknown ref prefix. Expected @import:, @world:, or @doc:. Got: " + ref);
+                    "Unknown ref prefix. Expected @import:, @world:, @doc:, or @cache:. Got: " + ref);
         }
     }
 
@@ -147,5 +146,22 @@ public final class RefResolver {
         }
         String title = doc.title() + " (" + doc.id() + ")";
         return new ResolvedRef("doc", docId, title, doc.content());
+    }
+
+    // ── @cache:<id> ──
+
+    private static ResolvedRef resolveCache(String cacheId, Path cacheDir) {
+        if (cacheId.isBlank()) throw new IllegalArgumentException("@cache: id must not be blank");
+        if (cacheDir == null) throw new IllegalStateException("Cache directory is not available");
+        Path file = cacheDir.resolve(cacheId + ".txt");
+        if (!Files.exists(file)) {
+            throw new IllegalArgumentException("Cache entry not found: " + cacheId);
+        }
+        try {
+            String content = Files.readString(file);
+            return new ResolvedRef("cache", cacheId, "@cache:" + cacheId, content);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read cache: " + cacheId, e);
+        }
     }
 }

@@ -46,6 +46,7 @@ public final class ResolveRefTool implements AgentTool {
               @world:<nodeId>:<cpId>:<key>  — 读取指定节点的 World 元素
               @world:<cpId>:<key>           — 读取当前活跃节点的 World 元素
               @doc:<docId>                  — 读取 Doc/Board 文档
+              @cache:<id>                   — 读取缓存文本 (大段工具输出的短引用)
             """;
     }
 
@@ -55,7 +56,7 @@ public final class ResolveRefTool implements AgentTool {
                 "type", "object",
                 "properties", Map.of(
                         "ref", Map.of("type", "string",
-                                "description", "引用字符串: @import:<id> / @world:<ref> / @doc:<id>")
+                                "description", "引用字符串: @import:<id> / @world:<ref> / @doc:<id> / @cache:<id>")
                 ),
                 "required", List.of("ref")
         );
@@ -69,8 +70,9 @@ public final class ResolveRefTool implements AgentTool {
         }
 
         try {
+            Path cacheDir = worldsDir.resolveSibling("docs").resolve(".cache");
             ResolvedRef resolved = RefResolver.resolve(ref,
-                    worldsDir, activeWorldId, importDir, docStore);
+                    worldsDir, activeWorldId, importDir, docStore, cacheDir);
 
             String cacheId = null;
             if (resolved.content().length() > 200 && cacheManager != null) {
