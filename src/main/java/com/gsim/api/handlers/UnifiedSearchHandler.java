@@ -56,12 +56,13 @@ public class UnifiedSearchHandler implements HttpHandler {
         String scope = parseQueryParam(exchange, "scope");
         if (scope == null || scope.isBlank()) scope = "all";
         int limit = parseInt(parseQueryParam(exchange, "limit"), 10);
+        String explicitWorldId = parseQueryParam(exchange, "worldId");
 
         try {
             List<Map<String, Object>> results = new ArrayList<>();
 
             if ("all".equals(scope) || "world".equals(scope)) {
-                results.addAll(searchWorld(query, limit));
+                results.addAll(searchWorld(query, limit, explicitWorldId));
             }
             if ("all".equals(scope) || "import".equals(scope)) {
                 results.addAll(searchImport(query, limit));
@@ -88,10 +89,10 @@ public class UnifiedSearchHandler implements HttpHandler {
 
     // ── World search ──
 
-    private List<Map<String, Object>> searchWorld(String query, int limit) {
+    private List<Map<String, Object>> searchWorld(String query, int limit, String explicitWorldId) {
         List<Map<String, Object>> results = new ArrayList<>();
         try {
-            String worldId = activeWorldId.get();
+            String worldId = explicitWorldId != null ? explicitWorldId : activeWorldId.get();
             if (worldId == null || !Files.exists(WorldIndexManager.worldFile(worldsDir, worldId))) {
                 return results;
             }

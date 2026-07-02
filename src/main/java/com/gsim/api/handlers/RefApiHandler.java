@@ -43,9 +43,12 @@ public class RefApiHandler implements HttpHandler {
             return;
         }
 
+        String worldId = parseQueryParam(exchange, "worldId");
+        String resolvedWorldId = worldId != null ? worldId : activeWorldId.get();
+
         try {
             ResolvedRef resolved = RefResolver.resolve(ref,
-                    worldsDir, activeWorldId.get(), importDir, docStore.get());
+                    worldsDir, resolvedWorldId, importDir, docStore.get());
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("source", resolved.source());
