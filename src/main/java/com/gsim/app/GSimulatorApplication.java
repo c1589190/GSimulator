@@ -308,6 +308,10 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.ref.ResolveRefTool(
                 worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
 
+        // 通用文本编辑工具（@cache: ← text_edit → @cache:）
+        toolRegistry.register(new com.gsim.text.TextEditTool(
+                worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
+
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
         var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;
@@ -349,7 +353,7 @@ public class GSimulatorApplication {
         toolRegistry.register(new QueryElementTool(wiSupplier));
 
         // Write tools
-        toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir));
+        toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir, docCacheManager));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
 
         // Node management tools

@@ -1,5 +1,6 @@
 package com.gsim.worldinfo.tool;
 
+import com.gsim.doc.DocCacheManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -16,15 +17,20 @@ import java.util.function.Supplier;
 
 /**
  * write_element — LLM writes a new element to a checkpoint in a node.
+ *
+ * <p>value 参数支持 {@code @cache:id} 引用，自动解析为缓存全文。
  */
 public final class WriteElementTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
     private final Path worldsDir;
+    private final DocCacheManager cacheManager;
 
-    public WriteElementTool(Supplier<WorldInformation> worldInfo, Path worldsDir) {
+    public WriteElementTool(Supplier<WorldInformation> worldInfo, Path worldsDir,
+                            DocCacheManager cacheManager) {
         this.worldInfo = worldInfo;
         this.worldsDir = worldsDir;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -81,6 +87,11 @@ public final class WriteElementTool implements AgentTool {
 
         if (value == null || value.isBlank()) {
             return ToolResult.fail("write_element", "value is required");
+        }
+
+        // 解析 @cache: 引用
+        if (cacheManager != null) {
+            value = cacheManager.resolve(value);
         }
 
         List<String> tags = tagsStr != null && !tagsStr.isBlank()

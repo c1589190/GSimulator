@@ -87,6 +87,9 @@ public class ApiRouter {
 
         // ── LLM Provider 管理 ──
         register("/api/llm", new LlmApiHandler(llmConfigManager, llmRegistry));
+
+        // ── 文本缓存管理 ──
+        register("/api/caches", new CachesHandler(worldsDir));
     }
 
     private void register(String path, HttpHandler handler) {

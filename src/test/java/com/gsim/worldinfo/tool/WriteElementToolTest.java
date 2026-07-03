@@ -31,7 +31,7 @@ class WriteElementToolTest {
 
     @Test
     void writeElementAppendsToCheckpoint() {
-        var tool = new WriteElementTool(() -> wi, tmpDir);
+        var tool = new WriteElementTool(() -> wi, tmpDir, null);
         ToolResult r = tool.execute(new ToolCall("write_element", Map.of(
             "ref", "n0000:worldview:气候.中原",
             "value", "中原大旱蝗灾四起",
@@ -51,7 +51,7 @@ class WriteElementToolTest {
 
     @Test
     void writeElementWithReplaceModeUpsertsExistingKey() {
-        var tool = new WriteElementTool(() -> wi, tmpDir);
+        var tool = new WriteElementTool(() -> wi, tmpDir, null);
 
         // first write
         tool.execute(new ToolCall("write_element", Map.of(
@@ -71,7 +71,7 @@ class WriteElementToolTest {
 
     @Test
     void writeElementWithAppendModeAlwaysAdds() {
-        var tool = new WriteElementTool(() -> wi, tmpDir);
+        var tool = new WriteElementTool(() -> wi, tmpDir, null);
 
         // first write
         tool.execute(new ToolCall("write_element", Map.of(
@@ -90,7 +90,7 @@ class WriteElementToolTest {
 
     @Test
     void writeElementShortRefDefaultsToActiveNode() {
-        var tool = new WriteElementTool(() -> wi, tmpDir);
+        var tool = new WriteElementTool(() -> wi, tmpDir, null);
         // Use short ref: checkpointId:key — should default to current active node (n0000)
         ToolResult r = tool.execute(new ToolCall("write_element", Map.of(
             "ref", "worldview:默认世界",
