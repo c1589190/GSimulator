@@ -5,6 +5,7 @@ import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
 import com.gsim.llm.LlmConfigManager;
 import com.gsim.llm.LlmProviderRegistry;
+import com.gsim.worldinfo.manager.WorldManager;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -28,6 +29,7 @@ public class ApiRouter {
     private final Supplier<com.gsim.doc.DocStore> docStore;
     private final LlmConfigManager llmConfigManager;
     private final LlmProviderRegistry llmRegistry;
+    private final WorldManager worldManager;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
@@ -45,92 +47,48 @@ public class ApiRouter {
         this.docStore = docStore;
         this.llmConfigManager = llmConfigManager;
         this.llmRegistry = llmRegistry;
+        this.worldManager = new WorldManager(worldsDir);
     }
 
-    /**
-     * 注册所有路由。
-     */
     public void registerAll() {
-        // 状态
+        // ── 基础 ──
         register("/api/status", new StatusApiHandler(ctx));
+        register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
 
-        // 帮助 — 列出所有命令
-        register("/api/help", new HelpApiHandler(ctx));
-
-        // 当前位置信息
-        register("/api/where", new WhereApiHandler(ctx, sessionManager));
-
-        // 命令（旧接口，保留兼容）
+        // ── 命令（旧接口，保留兼容）──
         register("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
         register("/api/command/stream",
                 new StreamCommandHandler(ctx, eventBus, sessionManager, taskManager));
 
-        // 任务 API（新接口，推荐使用）
+        // ── 任务 API ──
         register("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
 
-        // Import
+        // ── Import ──
         register("/api/import", new ImportApiHandler(ctx, eventBus));
 
-        // Logs & Outputs
+        // ── Logs ──
         register("/api/logs", new LogsOutputsApiHandler(ctx));
         register("/api/outputs", new LogsOutputsApiHandler(ctx));
-
-        // 配置管理
-        register("/api/config", new ConfigApiHandler(ctx, sessionManager));
-
-        // 技能
-        register("/api/skills", new SkillsApiHandler(ctx, sessionManager));
-
-        // 经验
-        register("/api/experiences", new ExperiencesApiHandler(ctx, sessionManager));
-
-        // 玩家档案
-        register("/api/players", new PlayersApiHandler(ctx, sessionManager));
-
-        // 手动保存
-        register("/api/save", new SaveApiHandler(ctx, sessionManager));
-
-        // 压缩上下文
-        register("/api/compact", new CompactApiHandler(ctx, sessionManager));
-
-        // 硬约束（Pins）
-        register("/api/pins", new PinsApiHandler(ctx, sessionManager));
-
-        // 消息历史
-        register("/api/messages", new MessagesApiHandler(ctx, sessionManager));
-
-        // 根节点工作区
-        register("/api/roots", new RootsApiHandler(ctx, sessionManager));
-
-        // 工具
-        register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
-
-        // World 管理 (CRUD + Node 操作)
-        register("/api/world-manager", new WorldManagerApiHandler(worldsDir, activeWorldId));
-
-        // World 数据 (Checkpoint + Element 查询与写入)
-        register("/api/world-manager-data", new WorldDataApiHandler(worldsDir));
-
-        // 文档管理 (CRUD + 搜索 + Web 导入)
-        register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
-
-        // 统一 @ 引用解析
-        register("/api/ref", new RefApiHandler(worldsDir, activeWorldId, importDir, docStore));
-
-        // 统一跨源搜索
-        register("/api/search", new UnifiedSearchHandler(worldsDir, activeWorldId, importDir, docStore));
-
-        // 操作日志
         register("/api/logs/operations", new OperationsLogHandler());
 
-        // LLM Provider 管理
+        // ── World API v2（统一层级入口）──
+        register("/api/world", new WorldApiV2Handler(worldManager));
+
+        // ── World API v1（向后兼容）──
+        register("/api/world-manager", new WorldManagerApiHandler(worldsDir, activeWorldId));
+        register("/api/world-manager-data", new WorldDataApiHandler(worldsDir));
+
+        // ── 文档管理 ──
+        register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
+
+        // ── 统一引用 + 搜索 ──
+        register("/api/ref", new RefApiHandler(worldsDir, activeWorldId, importDir, docStore));
+        register("/api/search", new UnifiedSearchHandler(worldsDir, activeWorldId, importDir, docStore));
+
+        // ── LLM Provider 管理 ──
         register("/api/llm", new LlmApiHandler(llmConfigManager, llmRegistry));
     }
 
-    /**
-     * 注册 handler，自动包装 CORS 预检处理。
-     * 对 OPTIONS 请求返回 204 + CORS headers，其他请求委托给真实 handler。
-     */
     private void register(String path, HttpHandler handler) {
         server.createContext(path, exchange -> {
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
