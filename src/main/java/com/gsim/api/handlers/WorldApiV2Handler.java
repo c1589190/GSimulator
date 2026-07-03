@@ -1,12 +1,14 @@
 package com.gsim.api.handlers;
 
 import com.gsim.api.OperationLog;
+import com.gsim.doc.DocCacheManager;
 import com.gsim.util.JsonUtils;
 import com.gsim.worldinfo.manager.WorldManager;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,9 +40,13 @@ public class WorldApiV2Handler implements HttpHandler {
     private static final String PREFIX = "/api/world";
 
     private final WorldManager wm;
+    private final DocCacheManager cacheManager;
 
-    public WorldApiV2Handler(WorldManager wm) {
+    public WorldApiV2Handler(WorldManager wm, Path worldsDir) {
         this.wm = wm;
+        this.cacheManager = new DocCacheManager(
+                worldsDir.resolveSibling("docs").resolve(".cache"));
+        try { this.cacheManager.init(); } catch (IOException ignored) {}
     }
 
     @Override
@@ -181,6 +187,9 @@ public class WorldApiV2Handler implements HttpHandler {
                 BaseApiHandler.sendError(exchange, 400, "value is required");
                 return;
             }
+
+            // 解析 @cache: 引用
+            value = cacheManager.resolve(value);
 
             List<String> tags = tagsStr != null ? Arrays.asList(tagsStr.split(",")) : List.of();
             List<String> links = linksStr != null ? Arrays.asList(linksStr.split(",")) : List.of();

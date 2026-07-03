@@ -1,5 +1,6 @@
 package com.gsim.api.handlers;
 
+import com.gsim.doc.DocCacheManager;
 import com.gsim.doc.DocStore;
 import com.gsim.doc.DocType;
 import com.gsim.doc.Document;
@@ -7,6 +8,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,9 +33,13 @@ public class DocsHandler implements HttpHandler {
     private static final String PREFIX = "/api/docs";
 
     private final Supplier<DocStore> docStoreSupplier;
+    private final DocCacheManager cacheManager;
 
-    public DocsHandler(Supplier<DocStore> docStoreSupplier) {
+    public DocsHandler(Supplier<DocStore> docStoreSupplier, Path worldsDir) {
         this.docStoreSupplier = docStoreSupplier;
+        this.cacheManager = new DocCacheManager(
+                worldsDir.resolveSibling("docs").resolve(".cache"));
+        try { this.cacheManager.init(); } catch (IOException ignored) {}
     }
 
     @Override
@@ -209,6 +215,9 @@ public class DocsHandler implements HttpHandler {
         }
         if (title.isEmpty()) title = docId;
 
+        // 解析 @cache: 引用
+        if (!content.isEmpty()) content = cacheManager.resolve(content);
+
         DocType type = typeStr.isEmpty() ? DocType.OTHER : DocType.fromKey(typeStr);
         List<String> tags = List.of();
         if (!tagsStr.isEmpty()) tags = List.of(tagsStr.split("\\s*,\\s*"));
@@ -246,6 +255,9 @@ public class DocsHandler implements HttpHandler {
         String content = str(req, "content");
         String title = str(req, "title");
         String tagsStr = str(req, "tags");
+
+        // 解析 @cache: 引用
+        if (!content.isEmpty()) content = cacheManager.resolve(content);
 
         try {
             Document updated = null;

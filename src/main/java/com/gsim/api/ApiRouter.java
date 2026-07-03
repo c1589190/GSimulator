@@ -72,7 +72,7 @@ public class ApiRouter {
         register("/api/logs/operations", new OperationsLogHandler());
 
         // ── World API v2（统一层级入口）──
-        register("/api/world", new WorldApiV2Handler(worldManager));
+        register("/api/world", new WorldApiV2Handler(worldManager, worldsDir));
 
         // ── World API v1（向后兼容）──
         register("/api/world-manager", new WorldManagerApiHandler(worldsDir, activeWorldId));
@@ -80,7 +80,7 @@ public class ApiRouter {
 
         // ── 文档管理 ──
         register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
-        register("/api/docs", new DocsHandler(docStore));
+        register("/api/docs", new DocsHandler(docStore, worldsDir));
 
         // ── 统一引用 + 搜索 ──
         register("/api/ref", new RefApiHandler(worldsDir, activeWorldId, importDir, docStore));
