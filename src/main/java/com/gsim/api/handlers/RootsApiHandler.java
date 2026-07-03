@@ -1,39 +1,43 @@
 package com.gsim.api.handlers;
 
-import com.gsim.api.ApiResponse;
-import com.gsim.api.SessionManager;
-import com.gsim.app.ApplicationContext;
-import com.gsim.interaction.InteractionResult;
-import com.gsim.interaction.InteractionSession;
 import com.gsim.util.JsonUtils;
+import com.gsim.worldinfo.manager.WorldManager;
+import com.gsim.worldinfo.loader.WorldIndexManager;
+import com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
- * /api/roots — 根节点工作区管理 API。
+ * 根节点/World 工作区管理 API — 直接调 WorldManager。
  *
  * <p>端点：
  * <ul>
- *   <li>GET    /api/roots         — 列出所有根节点</li>
- *   <li>GET    /api/roots/status  — 根节点状态</li>
- *   <li>POST   /api/roots         — 创建根节点</li>
- *   <li>POST   /api/roots/switch  — 切换根节点</li>
- *   <li>DELETE /api/roots/{id}    — 删除根节点</li>
+ *   <li>GET /api/roots — 列出所有 World</li>
+ *   <li>POST /api/roots — 创建 World</li>
+ *   <li>DELETE /api/roots/{worldId} — 删除 World</li>
  * </ul>
  */
 public class RootsApiHandler implements HttpHandler {
 
     private static final String PREFIX = "/api/roots";
 
-    private final ApplicationContext ctx;
-    private final SessionManager sessionManager;
+    private final WorldManager wm;
+    private final Path worldsDir;
+    private final Supplier<String> activeWorldId;
 
-    public RootsApiHandler(ApplicationContext ctx, SessionManager sessionManager) {
-        this.ctx = ctx;
-        this.sessionManager = sessionManager;
+    public RootsApiHandler(WorldManager wm, Path worldsDir, Supplier<String> activeWorldId) {
+        this.wm = wm;
+        this.worldsDir = worldsDir;
+        this.activeWorldId = activeWorldId;
     }
 
     @Override
@@ -42,71 +46,77 @@ public class RootsApiHandler implements HttpHandler {
         String[] segs = BaseApiHandler.pathSegments(exchange, PREFIX);
 
         try {
-            InteractionSession session = sessionManager.getOrCreateSession(BaseApiHandler.resolveSessionId(exchange));
-
-            if (segs.length == 0) {
-                if ("GET".equals(method)) {
-                    InteractionResult result = ctx.getInteractionManager().handle("/root list", session);
-                    BaseApiHandler.sendOk(exchange, result.message(),
-                            Map.of("displayText", result.displayText(), "success", result.success()));
-                } else if ("POST".equals(method)) {
-                    String body = BaseApiHandler.readBody(exchange);
-                    Map<?, ?> reqMap = JsonUtils.fromJson(body, Map.class);
-                    Object rawRootId = reqMap != null ? reqMap.get("rootId") : null;
-                    Object rawDescription = reqMap != null ? reqMap.get("description") : null;
-                    String rootId = rawRootId != null ? rawRootId.toString() : "";
-                    String description = rawDescription != null ? rawDescription.toString() : "";
-
-                    if (rootId.isBlank()) {
-                        BaseApiHandler.sendError(exchange, 400, "Missing required field: rootId");
-                        return;
-                    }
-
-                    InteractionResult result = ctx.getInteractionManager().handle(
-                            "/root create " + rootId + " " + description, session);
-                    BaseApiHandler.sendOk(exchange, result.success() ? "Root created" : "Root creation failed",
-                            Map.of("rootId", rootId, "success", result.success(), "message", result.displayText()));
-                } else {
-                    BaseApiHandler.sendError(exchange, 405, "Method not allowed");
-                }
-            } else if (segs.length == 1) {
-                if ("status".equals(segs[0])) {
-                    InteractionResult result = ctx.getInteractionManager().handle("/root status", session);
-                    BaseApiHandler.sendOk(exchange, result.message(),
-                            Map.of("displayText", result.displayText(), "success", result.success()));
-                } else if ("switch".equals(segs[0])) {
-                    if (!"POST".equals(method)) {
-                        BaseApiHandler.sendError(exchange, 405, "Method not allowed. Use POST.");
-                        return;
-                    }
-                    String body = BaseApiHandler.readBody(exchange);
-                    Map<?, ?> reqMap = JsonUtils.fromJson(body, Map.class);
-                    Object rawRootId2 = reqMap != null ? reqMap.get("rootId") : null;
-                    String rootId2 = rawRootId2 != null ? rawRootId2.toString() : "";
-
-                    if (rootId2.isBlank()) {
-                        BaseApiHandler.sendError(exchange, 400, "Missing required field: rootId");
-                        return;
-                    }
-
-                    InteractionResult result = ctx.getInteractionManager().handle("/root switch " + rootId2, session);
-                    BaseApiHandler.sendOk(exchange, result.success() ? "Root switched" : "Root switch failed",
-                            Map.of("rootId", rootId2, "success", result.success(), "message", result.displayText()));
-                } else {
-                    // DELETE /api/roots/{id}
-                    if (!"DELETE".equals(method)) {
-                        BaseApiHandler.sendError(exchange, 405, "Method not allowed");
-                        return;
-                    }
-                    InteractionResult result = ctx.getInteractionManager().handle("/root delete " + segs[0], session);
-                    BaseApiHandler.sendOk(exchange, result.success() ? "Root deleted" : "Root delete failed",
-                            Map.of("rootId", segs[0], "success", result.success(), "message", result.displayText()));
-                }
+            if (segs.length == 0 && "GET".equals(method)) {
+                handleList(exchange);
+            } else if (segs.length == 0 && "POST".equals(method)) {
+                handleCreate(exchange);
+            } else if (segs.length == 1 && "DELETE".equals(method)) {
+                handleDelete(exchange, segs[0]);
             } else {
                 BaseApiHandler.sendNotFound(exchange, "Unknown roots endpoint");
             }
         } catch (Exception e) {
             BaseApiHandler.sendError(exchange, 500, "Internal error: " + e.getMessage());
         }
+    }
+
+    private void handleList(HttpExchange exchange) throws IOException {
+        List<WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
+        String active = activeWorldId.get();
+        List<Map<String, Object>> roots = new ArrayList<>();
+        for (var e : entries) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("id", e.id());
+            r.put("name", e.name());
+            r.put("createdAt", e.createdAt());
+            r.put("isActive", e.id().equals(active));
+            roots.add(r);
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("count", roots.size());
+        data.put("roots", roots);
+        data.put("activeRoot", active);
+        BaseApiHandler.sendOk(exchange, "Roots listed", data);
+    }
+
+    private void handleCreate(HttpExchange exchange) throws IOException {
+        String body = BaseApiHandler.readBody(exchange);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> req = body.isBlank() ? Map.of() : JsonUtils.fromJson(body, Map.class);
+        String id = str(req, "id");
+        String name = str(req, "name");
+        if (id.isEmpty()) {
+            BaseApiHandler.sendError(exchange, 400, "id is required");
+            return;
+        }
+        if (!id.matches("[a-zA-Z0-9_\\-]+")) {
+            BaseApiHandler.sendError(exchange, 400, "id must contain only alphanumeric, dash, or underscore");
+            return;
+        }
+        if (Files.exists(worldsDir.resolve(id))) {
+            BaseApiHandler.sendError(exchange, 409, "World already exists: " + id);
+            return;
+        }
+        try {
+            var data = wm.createWorld(id, name.isEmpty() ? id : name);
+            BaseApiHandler.sendOk(exchange, "World created: " + id, data);
+        } catch (IllegalArgumentException e) {
+            BaseApiHandler.sendError(exchange, 400, e.getMessage());
+        }
+    }
+
+    private void handleDelete(HttpExchange exchange, String worldId) throws IOException {
+        try {
+            wm.deleteWorld(worldId);
+            BaseApiHandler.sendOk(exchange, "World deleted: " + worldId,
+                    Map.of("worldId", worldId, "deleted", true));
+        } catch (IllegalArgumentException e) {
+            BaseApiHandler.sendError(exchange, 404, e.getMessage());
+        }
+    }
+
+    private static String str(Map<String, Object> m, String key) {
+        Object v = m.get(key);
+        return v instanceof String s && !s.isBlank() ? s : "";
     }
 }

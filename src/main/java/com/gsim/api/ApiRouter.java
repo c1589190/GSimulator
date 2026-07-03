@@ -91,6 +91,10 @@ public class ApiRouter {
 
         // ── 文本缓存管理 ──
         register("/api/caches", new CachesHandler(worldsDir));
+
+        // ── Roots + Skills（直调 Manager）──
+        register("/api/roots", new RootsApiHandler(worldManager, worldsDir, activeWorldId));
+        register("/api/skills", new SkillsApiHandler(docStore));
     }
 
     private void register(String path, HttpHandler handler) {
