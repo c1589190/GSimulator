@@ -80,6 +80,7 @@ public class ApiRouter {
 
         // ── 文档管理 ──
         register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
+        register("/api/docs", new DocsHandler(docStore));
 
         // ── 统一引用 + 搜索 ──
         register("/api/ref", new RefApiHandler(worldsDir, activeWorldId, importDir, docStore));
