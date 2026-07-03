@@ -3,6 +3,8 @@ package com.gsim.api;
 import com.gsim.api.handlers.*;
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
+import com.gsim.llm.LlmConfigManager;
+import com.gsim.llm.LlmProviderRegistry;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -24,11 +26,14 @@ public class ApiRouter {
     private final Path importDir;
     private final Supplier<String> activeWorldId;
     private final Supplier<com.gsim.doc.DocStore> docStore;
+    private final LlmConfigManager llmConfigManager;
+    private final LlmProviderRegistry llmRegistry;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
                      Path worldsDir, Path importDir, Supplier<String> activeWorldId,
-                     Supplier<com.gsim.doc.DocStore> docStore) {
+                     Supplier<com.gsim.doc.DocStore> docStore,
+                     LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -38,6 +43,8 @@ public class ApiRouter {
         this.importDir = importDir;
         this.activeWorldId = activeWorldId;
         this.docStore = docStore;
+        this.llmConfigManager = llmConfigManager;
+        this.llmRegistry = llmRegistry;
     }
 
     /**
@@ -115,6 +122,9 @@ public class ApiRouter {
 
         // 操作日志
         register("/api/logs/operations", new OperationsLogHandler());
+
+        // LLM Provider 管理
+        register("/api/llm", new LlmApiHandler(llmConfigManager, llmRegistry));
     }
 
     /**

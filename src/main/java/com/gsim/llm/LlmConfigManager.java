@@ -161,6 +161,58 @@ public class LlmConfigManager {
         }
     }
 
+    /** 添加新 provider。原子写入。 */
+    public UpdateResult addProvider(String id, String name, String baseUrl,
+                                     String apiKey, String model) {
+        if (id == null || id.isBlank()) return UpdateResult.fail("id is required");
+        if (baseUrl == null || baseUrl.isBlank()) return UpdateResult.fail("baseUrl is required");
+        if (model == null || model.isBlank()) return UpdateResult.fail("model is required");
+
+        LlmsConfigFile file = load();
+        if (file.find(id) != null) return UpdateResult.fail("Provider already exists: " + id);
+
+        List<LlmConfig> providers = new ArrayList<>(file.providers());
+        boolean isDefault = providers.isEmpty();
+        LlmConfig cfg = new LlmConfig(id,
+                name != null ? name : id,
+                baseUrl,
+                apiKey != null ? apiKey : "",
+                model,
+                0.3, 4096, null, null, isDefault);
+        providers.add(cfg);
+        file.setProviders(providers);
+        saveAtomically(file);
+
+        return UpdateResult.ok("Added provider " + id + (isDefault ? " (default)" : ""));
+    }
+
+    /** 删除 provider。不允许删除最后一个。 */
+    public UpdateResult removeProvider(String id) {
+        LlmsConfigFile file = load();
+        LlmConfig target = file.find(id);
+        if (target == null) return UpdateResult.fail("Provider not found: " + id);
+
+        List<LlmConfig> providers = new ArrayList<>(file.providers());
+        if (providers.size() <= 1) {
+            return UpdateResult.fail("Cannot remove the last provider");
+        }
+
+        providers.removeIf(p -> p.id().equals(id));
+
+        // If we removed the default, make the first remaining one default
+        if (target.isDefault()) {
+            LlmConfig first = providers.get(0);
+            providers.set(0, new LlmConfig(first.id(), first.name(), first.baseUrl(),
+                    first.apiKey(), first.model(), first.defaultTemperature(),
+                    first.defaultMaxTokens(), first.extraBody(), first.thinking(), true));
+        }
+
+        file.setProviders(providers);
+        saveAtomically(file);
+
+        return UpdateResult.ok("Removed provider " + id);
+    }
+
     public record UpdateResult(boolean success, String message) {
         public static UpdateResult ok(String msg) { return new UpdateResult(true, msg); }
         public static UpdateResult fail(String msg) { return new UpdateResult(false, msg); }

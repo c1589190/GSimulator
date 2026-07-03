@@ -113,7 +113,9 @@ public class ApplicationContext {
         this.apiManager = new ApiManager(apiConfig, this, eventBus,
                 config.worldsDir(), config.getImportDir(),
                 () -> activeRootId != null ? activeRootId : "default",
-                this::getDocStore);
+                this::getDocStore,
+                new com.gsim.llm.LlmConfigManager(config.getLlmsPath()),
+                llmProviderRegistry);
     }
 
     /**

@@ -2,6 +2,8 @@ package com.gsim.api;
 
 import com.gsim.app.ApplicationContext;
 import com.gsim.event.EventBus;
+import com.gsim.llm.LlmConfigManager;
+import com.gsim.llm.LlmProviderRegistry;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,13 +31,16 @@ public class ApiManager {
     private final Path importDir;
     private final Supplier<String> activeWorldId;
     private final Supplier<com.gsim.doc.DocStore> docStore;
+    private final LlmConfigManager llmConfigManager;
+    private final LlmProviderRegistry llmRegistry;
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
 
     public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus,
                       Path worldsDir, Path importDir, Supplier<String> activeWorldId,
-                      Supplier<com.gsim.doc.DocStore> docStore) {
+                      Supplier<com.gsim.doc.DocStore> docStore,
+                      LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry) {
         this.apiConfig = apiConfig;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -45,6 +50,8 @@ public class ApiManager {
         this.importDir = importDir;
         this.activeWorldId = activeWorldId;
         this.docStore = docStore;
+        this.llmConfigManager = llmConfigManager;
+        this.llmRegistry = llmRegistry;
     }
 
     /**
@@ -61,7 +68,8 @@ public class ApiManager {
 
         // 注册所有路由
         ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
-                worldsDir, importDir, activeWorldId, docStore);
+                worldsDir, importDir, activeWorldId, docStore,
+                llmConfigManager, llmRegistry);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)

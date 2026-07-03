@@ -36,9 +36,11 @@ class CorsPreflightTest {
         ctx.getApiManager().stop();
 
         ApiConfig apiConfig = new ApiConfig("127.0.0.1", 0, true);
+        var llmCfg = new com.gsim.llm.LlmConfigManager(config.getLlmsPath());
         apiManager = new ApiManager(apiConfig, ctx, ctx.getEventBus(),
                 config.worldsDir(), config.getImportDir(), () -> "default",
-                () -> ctx.getDocStore(config.worldsDir().resolveSibling("docs")));
+                () -> ctx.getDocStore(config.worldsDir().resolveSibling("docs")),
+                llmCfg, ctx.getLlmProviderRegistry());
         apiManager.forceEnable();
         apiManager.start();
 
