@@ -13,9 +13,9 @@ import java.util.Map;
 
 /**
  * /api/save — 手动保存状态 API。
- *
- * <p>端点：POST /api/save
+ * @deprecated 从未注册到 ApiRouter，持久化已自动完成无需手动触发。
  */
+@Deprecated
 public class SaveApiHandler implements HttpHandler {
 
     private final ApplicationContext ctx;

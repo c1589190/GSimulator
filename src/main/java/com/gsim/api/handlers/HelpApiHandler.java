@@ -11,9 +11,9 @@ import java.util.*;
 
 /**
  * /api/help — 帮助 API，返回所有已注册命令列表。
- *
- * <p>端点：GET /api/help
+ * @deprecated 从未注册到 ApiRouter，功能由 /api/status 替代。
  */
+@Deprecated
 public class HelpApiHandler implements HttpHandler {
 
     private final ApplicationContext ctx;

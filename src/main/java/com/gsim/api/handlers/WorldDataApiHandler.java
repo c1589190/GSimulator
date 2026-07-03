@@ -27,19 +27,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * World 数据 API — Checkpoint + Element 查询与写入。
- *
- * <p>端点：
- * <ul>
- *   <li>GET /api/world-manager-data/{worldId}/checkpoints — 列出 checkpoint ID</li>
- *   <li>GET /api/world-manager-data/{worldId}/checkpoints/{checkpointId} — 查询 checkpoint 历史</li>
- *   <li>POST /api/world-manager-data/{worldId}/checkpoints — 创建 checkpoint</li>
- *   <li>GET /api/world-manager-data/{worldId}/elements?ref=... — 按 ref 查询 element</li>
- *   <li>POST /api/world-manager-data/{worldId}/elements — 写入/更新 element</li>
- *   <li>GET /api/world-manager-data/{worldId}/elements/by-tag/{tag} — 按 tag 查询</li>
- *   <li>GET /api/world-manager-data/{worldId}/elements/search?keywords=... — 关键词搜索</li>
- * </ul>
+ * World 数据 API (v1) — Checkpoint + Element 查询与写入。
+ * @deprecated 由 WorldApiV2Handler (/api/world) 替代，保留向后兼容。
  */
+@Deprecated
 public class WorldDataApiHandler implements HttpHandler {
 
     private static final String PREFIX = "/api/world-manager-data";

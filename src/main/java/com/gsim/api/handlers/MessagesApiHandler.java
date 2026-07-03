@@ -13,13 +13,9 @@ import java.util.Map;
 
 /**
  * /api/messages — 消息历史 API。
- *
- * <p>端点：
- * <ul>
- *   <li>GET /api/messages           — 当前分支消息历史</li>
- *   <li>GET /api/messages/{branchId} — 指定分支消息历史</li>
- * </ul>
+ * @deprecated 从未注册到 ApiRouter，功能由 Session API 替代。
  */
+@Deprecated
 public class MessagesApiHandler implements HttpHandler {
 
     private static final String PREFIX = "/api/messages";

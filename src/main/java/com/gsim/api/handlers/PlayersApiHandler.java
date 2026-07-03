@@ -14,16 +14,10 @@ import java.util.Map;
 
 /**
  * /api/players — 玩家档案管理 API。
- *
- * <p>端点：
- * <ul>
- *   <li>GET    /api/players          — 列出所有玩家档案</li>
- *   <li>GET    /api/players/{name}   — 查看玩家档案</li>
- *   <li>POST   /api/players/{name}   — 更新玩家档案字段</li>
- * </ul>
+ * @deprecated 从未注册到 ApiRouter，功能由 World element (players checkpoint) 替代。
  */
+@Deprecated
 public class PlayersApiHandler implements HttpHandler {
-
     private static final String PREFIX = "/api/players";
 
     private final ApplicationContext ctx;

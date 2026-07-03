@@ -16,14 +16,9 @@ import java.util.Map;
 /**
  * /api/experiences — 经验管理 API。
  *
- * <p>端点：
- * <ul>
- *   <li>GET    /api/experiences            — 列出所有经验</li>
- *   <li>GET    /api/experiences/{id}       — 查看经验详情</li>
- *   <li>GET    /api/experiences/search?q=  — 搜索经验</li>
- *   <li>POST   /api/experiences            — 添加经验</li>
- * </ul>
+ * @deprecated 从未注册到 ApiRouter，功能由 Doc API 替代。
  */
+@Deprecated
 public class ExperiencesApiHandler implements HttpHandler {
 
     private static final String PREFIX = "/api/experiences";

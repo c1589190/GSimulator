@@ -13,9 +13,9 @@ import java.util.Map;
 
 /**
  * /api/where — 当前位置信息 API。
- *
- * <p>端点：GET /api/where
+ * @deprecated 从未注册到 ApiRouter，功能由 /api/world/{id} 替代。
  */
+@Deprecated
 public class WhereApiHandler implements HttpHandler {
 
     private final ApplicationContext ctx;

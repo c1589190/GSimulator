@@ -30,21 +30,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * World 管理 API — World CRUD + Node 操作。
- *
- * <p>端点：
- * <ul>
- *   <li>GET /api/world-manager — 列出所有 World</li>
- *   <li>POST /api/world-manager — 创建 World</li>
- *   <li>DELETE /api/world-manager/{worldId} — 删除 World</li>
- *   <li>GET /api/world-manager/{worldId}/nodes — 节点列表</li>
- *   <li>GET /api/world-manager/{worldId}/nodes/active — 活跃节点</li>
- *   <li>GET /api/world-manager/{worldId}/nodes/{nodeId} — 获取节点</li>
- *   <li>POST /api/world-manager/{worldId}/nodes — 创建子节点</li>
- *   <li>POST /api/world-manager/{worldId}/nodes/active — 切换活跃节点</li>
- *   <li>POST /api/world-manager/{worldId}/nodes/{nodeId}/goto-parent — 回到父节点</li>
- * </ul>
+ * World 管理 API (v1) — World CRUD + Node 操作。
+ * @deprecated 由 WorldApiV2Handler (/api/world) 替代，保留向后兼容。
  */
+@Deprecated
 public class WorldManagerApiHandler implements HttpHandler {
 
     private static final String PREFIX = "/api/world-manager";
