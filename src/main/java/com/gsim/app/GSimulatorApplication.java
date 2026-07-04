@@ -39,6 +39,7 @@ public class GSimulatorApplication {
     private final boolean cliMode;
     private final boolean httpMode;
     private final boolean webuiMode;
+    private final boolean monitorMode;
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
     private com.gsim.agent.CompositeAgentProgressSink compositeSink;
@@ -61,23 +62,29 @@ public class GSimulatorApplication {
             new java.util.concurrent.atomic.AtomicReference<>("default");
 
     public GSimulatorApplication(AppConfig config) {
-        this(config, true, false, false);
+        this(config, true, false, false, false, null);
     }
 
     public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode) {
-        this(config, cliMode, httpMode, false);
+        this(config, cliMode, httpMode, false, false, null);
     }
 
     public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode) {
-        this(config, cliMode, httpMode, webuiMode, null);
+        this(config, cliMode, httpMode, webuiMode, false, null);
     }
 
     public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode,
                                   Bootstrap.BootstrapResult bootResult) {
+        this(config, cliMode, httpMode, webuiMode, false, bootResult);
+    }
+
+    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode,
+                                  boolean monitorMode, Bootstrap.BootstrapResult bootResult) {
         this.config = config;
         this.cliMode = cliMode;
         this.httpMode = httpMode;
         this.webuiMode = webuiMode;
+        this.monitorMode = monitorMode;
         this.ctx = new ApplicationContext(config);
         this.worldsDir = config.worldsDir();
 
@@ -504,6 +511,9 @@ public class GSimulatorApplication {
         ctx.initialize();
 
         if (httpMode) {
+            if (monitorMode) {
+                ctx.getApiManager().setMonitorMode(true);
+            }
             ctx.getApiManager().forceEnable();
             ctx.getApiManager().start();
         }

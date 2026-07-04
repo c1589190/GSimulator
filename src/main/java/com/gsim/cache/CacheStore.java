@@ -56,7 +56,7 @@ public final class CacheStore {
         }
     }
 
-    /** Create a new empty session with timestamp-based sessionId. */
+    /** Create a new empty session with timestamp-based sessionId. Does NOT auto-save — only persisted on first appendAndSave(). */
     public static CacheSession createNew(Path worldsDir, String worldId,
                                           String agentName, String nodeId) {
         String now = Instant.now().toString();
@@ -65,7 +65,6 @@ public final class CacheStore {
         String finalNow = now;
 
         CacheSession session = new CacheSession(agentName, worldId, nodeId, sessionId, finalNow);
-        save(worldsDir, session);
         return session;
     }
 

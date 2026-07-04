@@ -98,12 +98,13 @@ public class Main {
 
             // 5. 确定启动模式
             // 未指定任何模式标志时，默认启用 CLI + HTTP API + WebUI
-            boolean cliMode = cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui());
-            boolean httpMode = cliArgs.http() || (!cliArgs.cli() && !cliArgs.webui());
+            boolean monitorMode = cliArgs.monitor();
+            boolean cliMode = monitorMode ? false : (cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui()));
+            boolean httpMode = monitorMode || cliArgs.http() || (!cliArgs.cli() && !cliArgs.webui());
             boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http());
 
             // 6. 启动应用
-            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, bootResult);
+            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, monitorMode, bootResult);
             app.start();
 
         } catch (Exception e) {
@@ -203,6 +204,7 @@ public class Main {
         System.out.println("  --cli              仅 CLI（兼容旧行为）");
         System.out.println("  --http             仅 HTTP API（兼容旧行为）");
         System.out.println("  --webui            仅 Web GUI（兼容旧行为）");
+        System.out.println("  --monitor          监控模式：仅 HTTP API，终端实时显示请求/响应");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
         System.out.println("API 配置环境变量:");

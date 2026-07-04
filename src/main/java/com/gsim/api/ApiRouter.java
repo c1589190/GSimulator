@@ -30,12 +30,14 @@ public class ApiRouter {
     private final LlmConfigManager llmConfigManager;
     private final LlmProviderRegistry llmRegistry;
     private final WorldManager worldManager;
+    private final ApiMonitorFilter monitorFilter;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
                      Path worldsDir, Path importDir, Supplier<String> activeWorldId,
                      Supplier<com.gsim.doc.DocStore> docStore,
-                     LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry) {
+                     LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry,
+                     boolean monitorMode) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -48,6 +50,7 @@ public class ApiRouter {
         this.llmConfigManager = llmConfigManager;
         this.llmRegistry = llmRegistry;
         this.worldManager = new WorldManager(worldsDir);
+        this.monitorFilter = monitorMode ? new ApiMonitorFilter() : null;
     }
 
     public void registerAll() {
@@ -98,12 +101,15 @@ public class ApiRouter {
     }
 
     private void register(String path, HttpHandler handler) {
-        server.createContext(path, exchange -> {
+        var context = server.createContext(path, exchange -> {
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 com.gsim.api.handlers.BaseApiHandler.handlePreflight(exchange);
             } else {
                 handler.handle(exchange);
             }
         });
+        if (monitorFilter != null) {
+            context.getFilters().add(monitorFilter);
+        }
     }
 }

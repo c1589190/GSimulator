@@ -36,6 +36,7 @@ public class ApiManager {
     private HttpServer server;
     private ExecutorService executor;
     private boolean forceEnabled = false;
+    private boolean monitorMode = false;
 
     public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus,
                       Path worldsDir, Path importDir, Supplier<String> activeWorldId,
@@ -69,7 +70,7 @@ public class ApiManager {
         // 注册所有路由
         ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
                 worldsDir, importDir, activeWorldId, docStore,
-                llmConfigManager, llmRegistry);
+                llmConfigManager, llmRegistry, monitorMode);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)
@@ -108,12 +109,17 @@ public class ApiManager {
     }
 
     /**
-     * 强制启用 API（覆盖配置中的 enabled=false）。
-     * 当 CLI 指定 --http 时调用。
+     * 强制启用 HTTP API（即使配置中 api.enabled=false）。
      */
     public void forceEnable() {
         this.forceEnabled = true;
-        log.info("API force-enabled via --http CLI flag");
+    }
+
+    /**
+     * 启用监控模式（终端实时打印 HTTP 请求/响应）。
+     */
+    public void setMonitorMode(boolean enabled) {
+        this.monitorMode = enabled;
     }
 
     public int getPort() {
