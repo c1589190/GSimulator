@@ -59,6 +59,7 @@ public class ApiRouter {
         // ── 基础 ──
         register("/api/status", new StatusApiHandler(ctx));
         register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
+        register("/api/help", new HelpHandler(docStore));
 
         // ── 命令 + 任务（monitor 模式下禁用 Agent 对话）──
         if (monitorMode) {
