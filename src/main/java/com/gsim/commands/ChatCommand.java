@@ -80,6 +80,10 @@ public final class ChatCommand {
         if (args.isEmpty()) return "Usage: /chat [message|history|clear] ...";
         String sub = args.get(0);
         if ("history".equals(sub)) {
+            CacheSession session = activeCache.get();
+            if (session == null) {
+                return "没有活跃的对话缓存。请先在启动时选择一个 Orchestrator 缓存，或使用 /chat clear 创建新会话。";
+            }
             int n = 10;
             if (args.size() > 1) {
                 try {
@@ -95,6 +99,12 @@ public final class ChatCommand {
         }
         // default: the whole args is the message
         String message = String.join(" ", args);
+
+        // 必须存在活跃缓存才能对话
+        CacheSession session = activeCache.get();
+        if (session == null) {
+            return "没有活跃的对话缓存。请先在启动时选择一个 Orchestrator 缓存，或使用 /chat clear 创建新会话。";
+        }
 
         // Load prior conversation from cache (skip stale system prompt)
         List<LlmMessage> priorMessages = loadPriorMessages();
