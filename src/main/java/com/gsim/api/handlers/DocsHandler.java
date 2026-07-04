@@ -35,6 +35,7 @@ public class DocsHandler implements HttpHandler {
     private final Supplier<DocStore> docStoreSupplier;
     private final DocCacheManager cacheManager;
     private final Path worldsDir;
+    private com.gsim.worldinfo.manager.WorldManager worldManager;
 
     public DocsHandler(Supplier<DocStore> docStoreSupplier, Path worldsDir) {
         this.docStoreSupplier = docStoreSupplier;
@@ -42,6 +43,13 @@ public class DocsHandler implements HttpHandler {
         this.cacheManager = new DocCacheManager(
                 worldsDir.resolveSibling("docs").resolve(".cache"));
         try { this.cacheManager.init(); } catch (IOException ignored) {}
+    }
+
+    private com.gsim.worldinfo.manager.WorldManager getWorldManager() {
+        if (worldManager == null) {
+            worldManager = new com.gsim.worldinfo.manager.WorldManager(worldsDir);
+        }
+        return worldManager;
     }
 
     @Override
@@ -62,16 +70,17 @@ public class DocsHandler implements HttpHandler {
                 handleSearch(exchange);
                 return;
             }
-            if (segs.length == 1 && "GET".equals(method)) {
-                handleRead(exchange, segs[0]);
+            // GET/PATCH/DELETE: subdirectory paths (e.g. /api/docs/sub/dir/id)
+            if (segs.length >= 1 && "GET".equals(method)) {
+                handleRead(exchange, String.join("/", segs));
                 return;
             }
-            if (segs.length == 1 && "PATCH".equals(method)) {
-                handleUpdate(exchange, segs[0]);
+            if (segs.length >= 1 && "PATCH".equals(method)) {
+                handleUpdate(exchange, String.join("/", segs));
                 return;
             }
-            if (segs.length == 1 && "DELETE".equals(method)) {
-                handleDelete(exchange, segs[0]);
+            if (segs.length >= 1 && "DELETE".equals(method)) {
+                handleDelete(exchange, String.join("/", segs));
                 return;
             }
             BaseApiHandler.sendNotFound(exchange, "Unknown docs endpoint");
@@ -212,8 +221,8 @@ public class DocsHandler implements HttpHandler {
             BaseApiHandler.sendError(exchange, 400, "docId is required");
             return;
         }
-        if (!docId.matches("^[a-zA-Z0-9_-]+$")) {
-            BaseApiHandler.sendError(exchange, 400, "docId must contain only alphanumeric, dash, or underscore");
+        if (!docId.matches("^[a-zA-Z0-9_/-]+$")) {
+            BaseApiHandler.sendError(exchange, 400, "docId must contain only alphanumeric, dash, underscore, or slash");
             return;
         }
         if (title.isEmpty()) title = docId;
@@ -237,7 +246,27 @@ public class DocsHandler implements HttpHandler {
                 BaseApiHandler.sendError(exchange, 409, "Document already exists: " + docId);
                 return;
             }
-            BaseApiHandler.sendOk(exchange, "Document created: " + docId, docToMap(doc));
+            Map<String, Object> resp = docToMap(doc);
+
+            // X-GSim-World-Ref: auto-route doc to World element
+            String worldRef = exchange.getRequestHeaders().getFirst("X-GSim-World-Ref");
+            if (worldRef != null && !worldRef.isBlank()) {
+                try {
+                    String[] parts = worldRef.replace("@world:", "").split(":", 3);
+                    if (parts.length == 3) {
+                        var wm = getWorldManager();
+                        var elemResult = wm.writeElement(parts[0], parts[1], parts[2],
+                                doc.title(), "@doc:" + doc.id(), "route_to_doc",
+                                java.util.List.of(), java.util.List.of(), false);
+                        resp.put("worldRef", worldRef);
+                        resp.put("worldElement", elemResult);
+                    }
+                } catch (Exception e) {
+                    resp.put("worldRefError", e.getMessage());
+                }
+            }
+
+            BaseApiHandler.sendOk(exchange, "Document created: " + docId, resp);
         } catch (IOException e) {
             BaseApiHandler.sendError(exchange, 500, "Failed to create document: " + e.getMessage());
         }

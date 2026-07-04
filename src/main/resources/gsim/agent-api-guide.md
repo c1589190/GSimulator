@@ -127,13 +127,22 @@ GET /api/ref?ref=@world:n0002:characters:曹操
 GET /api/search?q=曹操&scope=world
 ```
 
-### Doc（文档/技能/角色）
+### Doc（文档/技能/角色/子目录）
 
 ```
 GET /api/docs                          → 列出所有
 GET /api/docs/search?q=关键词          → 关键词搜索
-GET /api/docs/{docId}?offset=0&limit=200 → 分页读取
-GET /api/ref?ref=@doc:char_zhaoyun     → 一步读取全文
+GET /api/docs/{docId}                  → 分页读取
+GET /api/docs/{sub/dir/docId}          → 子目录读取
+GET /api/ref?ref=@doc:sub/dir/docId    → 一步读取
+
+# 创建时自动路由到 World（省去两步操作）
+POST /api/docs
+Content-Type: application/json
+X-GSim-World-Ref: @world:arknights:n0000:characters:新角色
+
+{"docId": "sub/victoria/duke", "content": "..."}
+→ 自动在指定 World checkpoint 创建 route_to_doc 元素
 ```
 
 ### Cache（编辑中间文本）

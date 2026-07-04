@@ -340,10 +340,17 @@ public class WorldManager {
 
         NodeSnapshot node = NodeLoader.load(nodeFile);
         Checkpoint cp = node.checkpoint(checkpointId);
-        if (cp == null)
-            throw new IllegalArgumentException(
-                    "Checkpoint not found: " + checkpointId
-                    + ". Use POST /api/world/" + worldId + "/nodes/" + nodeId + "/" + checkpointId + " to create it first.");
+
+        // 自动创建缺失的 checkpoint
+        if (cp == null) {
+            NodeSnapshot newNode = NodeLoader.load(nodeFile);  // re-read to avoid stale
+            newNode.checkpoints().put(checkpointId,
+                    new Checkpoint(checkpointId, type != null ? type : "misc", new ArrayList<>()));
+            NodeLoader.save(nodeFile, newNode);
+            cp = newNode.checkpoint(checkpointId);
+            System.err.println("[AUTO-CP] node=" + nodeId + " checkpoint=" + checkpointId
+                    + " → auto-created before writeElement");
+        }
 
         // autoDoc：value 非 @doc: 开头 → 自动创建 Doc 并改写
         String docRef = null;

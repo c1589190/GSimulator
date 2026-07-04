@@ -40,7 +40,11 @@ public class DocStore {
                 if (file.getParent().getFileName() == null) continue;
                 try {
                     Document doc = Document.fromFile(file);
-                    cache.put(doc.id(), doc);
+                    // docId = relative path from docsDir, strip .md
+                    String relPath = docsDir.relativize(file).toString();
+                    String docId = relPath.substring(0, relPath.length() - 3); // strip .md
+                    doc = Document.create(docId, doc.type(), doc.title(), doc.content(), doc.tags());
+                    cache.put(docId, doc);
                 } catch (Exception e) {
                     log.warn("[DocStore] Failed to parse {}, skipping: {}", file, e.getMessage());
                 }
