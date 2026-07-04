@@ -56,6 +56,11 @@ public class DocCacheManager {
         init();
         String id = generateId(toolName);
         Path file = cacheDir.resolve(id + ".txt");
+        // 空文本不写盘，避免产生垃圾空文件导致 resolve() 返回空串
+        if (text == null || text.isBlank()) {
+            log.debug("[DocCache] skipped empty cache for {}", id);
+            return id;
+        }
         Files.writeString(file, text);
         log.debug("[DocCache] cached {} chars to {}", text.length(), id);
         return id;
@@ -140,7 +145,7 @@ public class DocCacheManager {
             // 取第一个分隔符之前的部分作为 cacheId
             String cacheId = rest.split("[\\s,;。\n]", 2)[0];
             String cached = get(cacheId);
-            if (cached != null) {
+            if (cached != null && !cached.isBlank()) {
                 // 如果 @cache: 后面还有附加文本，追加到缓存内容后
                 String suffix = rest.substring(cacheId.length()).trim();
                 if (!suffix.isEmpty()) {
@@ -148,8 +153,8 @@ public class DocCacheManager {
                 }
                 return cached;
             }
-            // 缓存未找到 → 返回原始引用 + 警告
-            log.warn("[DocCache] unresolved reference: {}", cacheId);
+            // 缓存未找到或为空 → 返回原始引用 + 警告
+            log.warn("[DocCache] unresolved or empty reference: {}", cacheId);
             return text;
         }
 
@@ -174,7 +179,7 @@ public class DocCacheManager {
                     continue;
                 }
                 String cached = get(cacheId);
-                if (cached != null) {
+                if (cached != null && !cached.isBlank()) {
                     result = result.substring(0, start) + cached + result.substring(end);
                     pos = start + cached.length();
                 } else {
