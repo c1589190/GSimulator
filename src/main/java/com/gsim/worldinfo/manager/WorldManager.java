@@ -1,6 +1,8 @@
 package com.gsim.worldinfo.manager;
 
 import com.gsim.util.IdGenerator;
+import com.gsim.doc.DocStore;
+import com.gsim.doc.Document;
 import com.gsim.worldinfo.Checkpoint;
 import com.gsim.worldinfo.Element;
 import com.gsim.worldinfo.NodeSnapshot;
@@ -35,9 +37,30 @@ public class WorldManager {
     private static final int DEFAULT_TRUNCATE = 200;
 
     private final Path worldsDir;
+    private DocStore docStore;
 
     public WorldManager(Path worldsDir) {
         this.worldsDir = worldsDir;
+    }
+
+    /** route_to_doc 元素：检测 value 是否为 @doc:xxx，是则注入 renderedContent。 */
+    private void injectRenderedContent(Map<String, Object> elementMap, Element el) {
+        if (!"route_to_doc".equals(el.type())) return;
+        String val = el.value();
+        if (val == null || !val.startsWith("@doc:")) return;
+        String docId = val.substring(5).trim();
+        if (docId.isEmpty()) return;
+        // 懒初始化 DocStore
+        if (docStore == null) {
+            Path docsDir = worldsDir.resolveSibling("docs");
+            docStore = new DocStore(docsDir);
+            try { docStore.init(); } catch (java.io.IOException ignored) {}
+        }
+        Document doc = docStore.get(docId);
+        if (doc != null) {
+            elementMap.put("renderedContent", doc.content());
+            elementMap.put("renderedTitle", doc.title());
+        }
     }
 
     // ────────── Read ──────────
@@ -127,6 +150,7 @@ public class WorldManager {
                 e.put("value", el.value());
                 e.put("truncated", false);
             }
+            injectRenderedContent(e, el);
             elements.add(e);
         }
 
@@ -169,6 +193,7 @@ public class WorldManager {
         result.put("checkpointId", checkpointId);
         result.put("turn", node.turn());
         result.put("worldTime", node.worldTime());
+        injectRenderedContent(result, found);
         return result;
     }
 

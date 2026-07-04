@@ -46,7 +46,7 @@ public final class RefResolver {
         if (ref.startsWith("@import:")) {
             return resolveImport(ref.substring(8), importDir);
         } else if (ref.startsWith("@world:")) {
-            return resolveWorld(ref.substring(7), worldsDir, activeWorldId);
+            return resolveWorld(ref.substring(7), worldsDir, activeWorldId, docStore);
         } else if (ref.startsWith("@doc:")) {
             return resolveDoc(ref.substring(5), docStore);
         } else if (ref.startsWith("@cache:")) {
@@ -73,7 +73,8 @@ public final class RefResolver {
 
     // ── @world:<nodeId>:<cpId>:<key>  or  @world:<cpId>:<key> ──
 
-    private static ResolvedRef resolveWorld(String path, Path worldsDir, String activeWorldId) {
+    private static ResolvedRef resolveWorld(String path, Path worldsDir, String activeWorldId,
+                                             DocStore docStore) {
         if (path.isBlank()) throw new IllegalArgumentException("@world: path must not be blank");
 
         if (activeWorldId == null || activeWorldId.isBlank()) {
@@ -132,7 +133,21 @@ public final class RefResolver {
 
         String id = resolveNodeId + ":" + checkpointId + ":" + key;
         String title = key + " @" + resolveNodeId + " (turn " + node.turn() + ")";
-        return new ResolvedRef("world", id, title, found.value());
+
+        // route_to_doc：自动解析 @doc:xxx → Doc 全文
+        String content = found.value();
+        if ("route_to_doc".equals(found.type()) && content != null && content.startsWith("@doc:") && docStore != null) {
+            String docId = content.substring(5).trim();
+            if (!docId.isEmpty()) {
+                Document doc = docStore.get(docId);
+                if (doc != null) {
+                    content = doc.content();
+                    title = doc.title() + " (via " + id + ")";
+                }
+            }
+        }
+
+        return new ResolvedRef("world", id, title, content);
     }
 
     // ── @doc:<docId> ──
