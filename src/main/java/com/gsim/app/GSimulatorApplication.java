@@ -289,6 +289,18 @@ public class GSimulatorApplication {
                     log.info("Migrated {} skills from {} to docs/", migrated, oldSkillsDir);
                 }
             }
+            // 确保 agent-api-guide 存在（首次启动自动创建）
+            if (docStore.get("agent-api-guide") == null) {
+                var guideResource = getClass().getClassLoader()
+                        .getResourceAsStream("gsim/agent-api-guide.md");
+                if (guideResource != null) {
+                    String guideContent = new String(guideResource.readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    docStore.create("agent-api-guide", com.gsim.doc.DocType.OTHER,
+                            "Agent API 引导手册", guideContent, java.util.List.of("guide", "api", "agent"));
+                    log.info("Auto-created agent-api-guide doc");
+                }
+            }
         } catch (java.io.IOException e) {
             log.warn("Failed to init DocStore: {}", e.getMessage());
         }
