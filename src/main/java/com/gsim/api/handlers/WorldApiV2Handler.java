@@ -182,6 +182,8 @@ public class WorldApiV2Handler implements HttpHandler {
             String type = str(req, "type");
             String tagsStr = str(req, "tags");
             String linksStr = str(req, "links");
+            boolean autoDoc = "true".equalsIgnoreCase(
+                    req.get("autoDoc") instanceof String s ? s : "");
 
             if (value == null || value.isBlank()) {
                 BaseApiHandler.sendError(exchange, 400, "value is required");
@@ -194,7 +196,7 @@ public class WorldApiV2Handler implements HttpHandler {
             List<String> tags = tagsStr != null ? Arrays.asList(tagsStr.split(",")) : List.of();
             List<String> links = linksStr != null ? Arrays.asList(linksStr.split(",")) : List.of();
 
-            var data = wm.writeElement(worldId, nodeId, cpId, key, value, type, tags, links);
+            var data = wm.writeElement(worldId, nodeId, cpId, key, value, type, tags, links, autoDoc);
             OperationLog.get().record(worldId, "element.write", "POST",
                     "/api/world/" + worldId + "/nodes/" + nodeId + "/" + cpId + "/" + key,
                     "wrote " + data.get("ref") + " (" + data.get("action") + ")",

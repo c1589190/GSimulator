@@ -43,23 +43,43 @@ public class WorldManager {
         this.worldsDir = worldsDir;
     }
 
-    /** route_to_doc 元素：检测 value 是否为 @doc:xxx，是则注入 renderedContent。 */
+    /** @ 引用解析：route_to_doc → 注入 renderedContent；其他 @doc:/@cache: → 注入 renderedSummary。 */
     private void injectRenderedContent(Map<String, Object> elementMap, Element el) {
-        if (!"route_to_doc".equals(el.type())) return;
         String val = el.value();
-        if (val == null || !val.startsWith("@doc:")) return;
-        String docId = val.substring(5).trim();
-        if (docId.isEmpty()) return;
-        // 懒初始化 DocStore
-        if (docStore == null) {
-            Path docsDir = worldsDir.resolveSibling("docs");
-            docStore = new DocStore(docsDir);
-            try { docStore.init(); } catch (java.io.IOException ignored) {}
+        if (val == null) return;
+
+        if ("route_to_doc".equals(el.type()) && val.startsWith("@doc:")) {
+            String docId = val.substring(5).trim();
+            if (!docId.isEmpty()) {
+                Document doc = getDocStore().get(docId);
+                if (doc != null) {
+                    elementMap.put("renderedContent", doc.content());
+                    elementMap.put("renderedTitle", doc.title());
+                }
+            }
+            return;
         }
-        Document doc = docStore.get(docId);
-        if (doc != null) {
-            elementMap.put("renderedContent", doc.content());
-            elementMap.put("renderedTitle", doc.title());
+
+        // 非 route_to_doc 但 value 以 @doc: 或 @cache: 开头 → 注入摘要
+        if (val.startsWith("@doc:")) {
+            String docId = val.substring(5).trim().split("[\\s,;。\\n]", 2)[0];
+            if (!docId.isEmpty()) {
+                Document doc = getDocStore().get(docId);
+                if (doc != null) {
+                    elementMap.put("renderedTitle", doc.title());
+                    elementMap.put("renderedSummary", doc.summary());
+                }
+            }
+        } else if (val.startsWith("@cache:")) {
+            String cacheId = val.substring(7).trim().split("[\\s,;。\\n]", 2)[0];
+            if (!cacheId.isEmpty()) {
+                var cm = getCacheManager();
+                String cached = cm.get(cacheId);
+                if (cached != null && !cached.isBlank()) {
+                    String s = cached.length() > 100 ? cached.substring(0, 97) + "..." : cached;
+                    elementMap.put("renderedSummary", s);
+                }
+            }
         }
     }
 
@@ -304,11 +324,12 @@ public class WorldManager {
         return result;
     }
 
-    /** 写入/更新元素。 */
+    /** 写入/更新元素。autoDoc 为 true 时：value 非 @doc: 开头则自动创建 Doc 并改写为 route_to_doc。 */
     public Map<String, Object> writeElement(String worldId, String nodeId,
                                              String checkpointId, String key,
                                              String value, String type,
-                                             List<String> tags, List<String> links) {
+                                             List<String> tags, List<String> links,
+                                             boolean autoDoc) {
         requireWorld(worldId);
         if (key == null || key.isBlank()) throw new IllegalArgumentException("key is required");
         if (value == null || value.isBlank()) throw new IllegalArgumentException("value is required");
@@ -324,6 +345,24 @@ public class WorldManager {
                     "Checkpoint not found: " + checkpointId
                     + ". Use POST /api/world/" + worldId + "/nodes/" + nodeId + "/" + checkpointId + " to create it first.");
 
+        // autoDoc：value 非 @doc: 开头 → 自动创建 Doc 并改写
+        String docRef = null;
+        if (autoDoc && !value.startsWith("@doc:") && !value.startsWith("@cache:")) {
+            var ds = getDocStore();
+            String docId = sanitizeDocId(key);
+            try {
+                if (ds.get(docId) == null) {
+                    ds.create(docId, com.gsim.doc.DocType.OTHER, key, value, java.util.List.of("auto"));
+                } else {
+                    ds.updateContent(docId, value);
+                }
+                docRef = "@doc:" + docId;
+                value = docRef;
+                type = "route_to_doc";
+            } catch (java.io.IOException ignored) {
+            }
+        }
+
         // Build WorldInformation so upsertElement/appendElement work
         ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
         WorldInformation wi = active != null
@@ -334,7 +373,6 @@ public class WorldManager {
         String now = Instant.now().toString();
         String createdAt = now;
 
-        // Find existing element to preserve createdAt
         for (Element el : cp.elements()) {
             if (el.key().equals(key) && el.createdAt() != null) {
                 createdAt = el.createdAt();
@@ -353,7 +391,7 @@ public class WorldManager {
         NodeLoader.save(nodeFile, wi.nodeById(nodeId));
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("ref", nodeId + ":" + checkpointId + ":" + key);
+        result.put("ref", "@world:" + nodeId + ":" + checkpointId + ":" + key);
         result.put("key", key);
         result.put("nodeId", nodeId);
         result.put("checkpointId", checkpointId);
@@ -361,7 +399,43 @@ public class WorldManager {
         result.put("type", element.type());
         result.put("createdAt", createdAt);
         result.put("updatedAt", now);
+
+        // autoDoc 时返回 docRef
+        if (docRef != null) result.put("docRef", docRef);
+
+        // 长文本自动缓存
+        if (value != null && value.length() > 200) {
+            var cm = getCacheManager();
+            try {
+                String cacheId = cm.put("write", value);
+                result.put("cacheRef", "@cache:" + cacheId);
+            } catch (java.io.IOException ignored) {
+            }
+        }
+
         return result;
+    }
+
+    // ── 懒初始化辅助 ──
+
+    private DocStore getDocStore() {
+        if (docStore == null) {
+            Path docsDir = worldsDir.resolveSibling("docs");
+            docStore = new DocStore(docsDir);
+            try { docStore.init(); } catch (java.io.IOException ignored) {}
+        }
+        return docStore;
+    }
+
+    private com.gsim.doc.DocCacheManager getCacheManager() {
+        Path cacheDir = worldsDir.resolveSibling("docs").resolve(".cache");
+        var cm = new com.gsim.doc.DocCacheManager(cacheDir);
+        try { cm.init(); } catch (java.io.IOException ignored) {}
+        return cm;
+    }
+
+    private static String sanitizeDocId(String key) {
+        return key.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 
     // ────────── helpers ──────────

@@ -34,9 +34,11 @@ public class DocsHandler implements HttpHandler {
 
     private final Supplier<DocStore> docStoreSupplier;
     private final DocCacheManager cacheManager;
+    private final Path worldsDir;
 
     public DocsHandler(Supplier<DocStore> docStoreSupplier, Path worldsDir) {
         this.docStoreSupplier = docStoreSupplier;
+        this.worldsDir = worldsDir;
         this.cacheManager = new DocCacheManager(
                 worldsDir.resolveSibling("docs").resolve(".cache"));
         try { this.cacheManager.init(); } catch (IOException ignored) {}
@@ -204,6 +206,7 @@ public class DocsHandler implements HttpHandler {
         String title = str(req, "title");
         String content = str(req, "content");
         String tagsStr = str(req, "tags");
+        String sourceElement = str(req, "sourceElement");  // @world:ref → 从 World 元素取内容
 
         if (docId.isEmpty()) {
             BaseApiHandler.sendError(exchange, 400, "docId is required");
@@ -214,6 +217,12 @@ public class DocsHandler implements HttpHandler {
             return;
         }
         if (title.isEmpty()) title = docId;
+
+        // sourceElement：从 World 元素自动提取内容
+        if (!sourceElement.isEmpty() && content.isEmpty()) {
+            String resolved = resolveWorldElement(sourceElement);
+            if (resolved != null) content = resolved;
+        }
 
         // 解析 @cache: 引用
         if (!content.isEmpty()) content = cacheManager.resolve(content);
@@ -309,9 +318,30 @@ public class DocsHandler implements HttpHandler {
 
     // ── Helpers ──
 
+    /** 解析 @world:nodeId:cpId:key → 读取 element 的 value。 */
+    private String resolveWorldElement(String ref) {
+        if (!ref.startsWith("@world:")) return null;
+        String path = ref.substring(7);
+        String[] parts = path.split(":", 3);
+        if (parts.length != 3) return null;
+        try {
+            var nodeFile = com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, "default", parts[0]);
+            if (!java.nio.file.Files.exists(nodeFile)) return null;
+            var node = com.gsim.worldinfo.loader.NodeLoader.load(nodeFile);
+            var cp = node.checkpoint(parts[1]);
+            if (cp == null) return null;
+            for (var el : cp.elements()) {
+                if (el.key().equals(parts[2])) return el.value();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private Map<String, Object> docToMap(Document doc) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("docId", doc.id());
+        m.put("ref", "@doc:" + doc.id());
         m.put("type", doc.type().key());
         m.put("title", doc.title());
         m.put("tags", doc.tags());
