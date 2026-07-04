@@ -31,6 +31,7 @@ public class ApiRouter {
     private final LlmProviderRegistry llmRegistry;
     private final WorldManager worldManager;
     private final ApiMonitorFilter monitorFilter;
+    private final boolean monitorMode;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
@@ -50,6 +51,7 @@ public class ApiRouter {
         this.llmConfigManager = llmConfigManager;
         this.llmRegistry = llmRegistry;
         this.worldManager = new WorldManager(worldsDir);
+        this.monitorMode = monitorMode;
         this.monitorFilter = monitorMode ? new ApiMonitorFilter() : null;
     }
 
@@ -58,13 +60,17 @@ public class ApiRouter {
         register("/api/status", new StatusApiHandler(ctx));
         register("/api/tools", new ToolsApiHandler(ctx, sessionManager));
 
-        // ── 命令（旧接口，保留兼容）──
-        register("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
-        register("/api/command/stream",
-                new StreamCommandHandler(ctx, eventBus, sessionManager, taskManager));
-
-        // ── 任务 API ──
-        register("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
+        // ── 命令 + 任务（monitor 模式下禁用 Agent 对话）──
+        if (monitorMode) {
+            registerBlocked("/api/command", "Agent disabled in monitor mode");
+            registerBlocked("/api/command/stream", "Agent disabled in monitor mode");
+            registerBlocked("/api/tasks", "Agent disabled in monitor mode");
+        } else {
+            register("/api/command", new CommandApiHandler(ctx, eventBus, sessionManager));
+            register("/api/command/stream",
+                    new StreamCommandHandler(ctx, eventBus, sessionManager, taskManager));
+            register("/api/tasks", new TasksApiHandler(taskManager, sessionManager, eventBus));
+        }
 
         // ── Import ──
         register("/api/import", new ImportApiHandler(ctx, eventBus));
@@ -111,5 +117,12 @@ public class ApiRouter {
         if (monitorFilter != null) {
             context.getFilters().add(monitorFilter);
         }
+    }
+
+    private void registerBlocked(String path, String reason) {
+        register(path, exchange -> {
+            com.gsim.api.handlers.BaseApiHandler.sendError((com.sun.net.httpserver.HttpExchange) exchange,
+                    503, reason);
+        });
     }
 }
