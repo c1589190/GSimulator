@@ -40,7 +40,8 @@ class CorsPreflightTest {
         apiManager = new ApiManager(apiConfig, ctx, ctx.getEventBus(),
                 config.worldsDir(), config.getImportDir(), () -> "default",
                 () -> ctx.getDocStore(config.worldsDir().resolveSibling("docs")),
-                llmCfg, ctx.getLlmProviderRegistry());
+                llmCfg, ctx.getLlmProviderRegistry(),
+                null, null, null, null);
         apiManager.forceEnable();
         apiManager.start();
 

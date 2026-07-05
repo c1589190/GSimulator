@@ -16,7 +16,8 @@ public record CacheInfo(
         String nodeId,
         String createdAt,         // ISO timestamp
         int messageCount,
-        String previousSessionId  // 链式缓存关联（可以为 null）
+        String previousSessionId, // 链式缓存关联（可以为 null）
+        String firstUserMsg       // 首条 user 消息摘要（轻量索引时提取）
 ) {
     /** 从 agentName 推断 agentType。 */
     public static String inferType(String agentName) {
@@ -41,7 +42,8 @@ public record CacheInfo(
                 session.nodeId(),
                 session.createdAt(),
                 session.messageCount(),
-                session.previousSessionId()
+                session.previousSessionId(),
+                null  // firstUserMsg — 需要解析消息列表
         );
     }
 }

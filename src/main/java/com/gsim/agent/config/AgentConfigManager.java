@@ -124,6 +124,78 @@ public class AgentConfigManager {
         }
     }
 
+    /** 创建新的 Agent 配置（从 JSON body 解析并写入文件）。 */
+    public UpdateResult createAgent(String jsonBody) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = JsonUtils.fromJson(jsonBody, Map.class);
+            String agentId = (String) body.get("agentId");
+            if (agentId == null || agentId.isBlank()) {
+                return UpdateResult.fail("agentId is required");
+            }
+            if (!agentId.matches("[a-zA-Z0-9_\\-]+")) {
+                return UpdateResult.fail("Invalid agentId: " + agentId);
+            }
+
+            Path file = agentsDir.resolve(agentId + ".json");
+            if (Files.exists(file)) {
+                return UpdateResult.fail("Agent config already exists: " + agentId);
+            }
+
+            // 构建 agent config JSON
+            Map<String, Object> json = new LinkedHashMap<>();
+            json.put("agentId", agentId);
+            json.put("llmProvider", body.getOrDefault("llmProvider", "base"));
+            json.put("temperature", body.getOrDefault("temperature", 0.3));
+            json.put("maxTokens", body.getOrDefault("maxTokens", 2048));
+            json.put("maxToolRounds", body.getOrDefault("maxToolRounds", 16));
+
+            String toolFilterMode = (String) body.getOrDefault("toolFilterMode", "read_only");
+            if (body.containsKey("toolFilter")) {
+                json.put("toolFilter", body.get("toolFilter"));
+            } else {
+                json.put("toolFilter", Map.of("mode", toolFilterMode));
+            }
+
+            if (body.containsKey("staticSystemPrompt")) {
+                json.put("staticSystemPrompt", body.get("staticSystemPrompt"));
+            } else if (body.containsKey("systemPrompt")) {
+                json.put("systemPrompt", body.get("systemPrompt"));
+            }
+            if (body.containsKey("userTemplate")) {
+                json.put("userTemplate", body.get("userTemplate"));
+            }
+
+            Files.createDirectories(agentsDir);
+            Files.writeString(file, JsonUtils.toJson(json));
+            configStore.reload(agentsDir);
+
+            return UpdateResult.ok("Created agent config: " + agentId);
+        } catch (IOException e) {
+            return UpdateResult.fail("IO error: " + e.getMessage());
+        } catch (Exception e) {
+            return UpdateResult.fail("Failed to create agent: " + e.getMessage());
+        }
+    }
+
+    /** 删除 Agent 配置。不允许删除 orchestrator。 */
+    public UpdateResult deleteAgent(String agentId) {
+        if ("orchestrator".equals(agentId)) {
+            return UpdateResult.fail("Cannot delete orchestrator agent config");
+        }
+        AgentConfig config = configStore.get(agentId);
+        if (config == null) return UpdateResult.fail("Agent not found: " + agentId);
+
+        Path file = agentsDir.resolve(agentId + ".json");
+        try {
+            Files.deleteIfExists(file);
+            configStore.reload(agentsDir);
+            return UpdateResult.ok("Deleted agent config: " + agentId);
+        } catch (IOException e) {
+            return UpdateResult.fail("IO error: " + e.getMessage());
+        }
+    }
+
     /** 强制重新加载所有 agent 配置。 */
     public String reload() {
         configStore.reload(agentsDir);

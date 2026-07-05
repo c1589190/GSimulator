@@ -37,11 +37,19 @@ public class ApiManager {
     private ExecutorService executor;
     private boolean forceEnabled = false;
     private boolean monitorMode = false;
+    private com.gsim.agent.management.AgentsManager agentsManager;
+    private com.gsim.agent.management.AgentSseManager agentSseManager;
+    private com.gsim.agent.management.AgentCacheStore agentCacheStore;
+    private com.gsim.agent.config.AgentConfigManager agentConfigManager;
 
     public ApiManager(ApiConfig apiConfig, ApplicationContext ctx, EventBus eventBus,
                       Path worldsDir, Path importDir, Supplier<String> activeWorldId,
                       Supplier<com.gsim.doc.DocStore> docStore,
-                      LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry) {
+                      LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry,
+                      com.gsim.agent.management.AgentsManager agentsManager,
+                      com.gsim.agent.management.AgentSseManager agentSseManager,
+                      com.gsim.agent.management.AgentCacheStore agentCacheStore,
+                      com.gsim.agent.config.AgentConfigManager agentConfigManager) {
         this.apiConfig = apiConfig;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -53,6 +61,10 @@ public class ApiManager {
         this.docStore = docStore;
         this.llmConfigManager = llmConfigManager;
         this.llmRegistry = llmRegistry;
+        this.agentsManager = agentsManager;
+        this.agentSseManager = agentSseManager;
+        this.agentCacheStore = agentCacheStore;
+        this.agentConfigManager = agentConfigManager;
     }
 
     /**
@@ -70,7 +82,8 @@ public class ApiManager {
         // 注册所有路由
         ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
                 worldsDir, importDir, activeWorldId, docStore,
-                llmConfigManager, llmRegistry, monitorMode);
+                llmConfigManager, llmRegistry, monitorMode,
+                agentsManager, agentSseManager, agentCacheStore, agentConfigManager);
         router.registerAll();
 
         // 使用虚拟线程执行器 (Java 21+)
@@ -120,6 +133,19 @@ public class ApiManager {
      */
     public void setMonitorMode(boolean enabled) {
         this.monitorMode = enabled;
+    }
+
+    /** 延迟注入 Agent 管理器（由 GSimulatorApplication 在 wiring 完成后调用）。
+     *  必须在 start() 之前调用。 */
+    public void injectAgentManagers(
+            com.gsim.agent.management.AgentsManager agentsManager,
+            com.gsim.agent.management.AgentSseManager agentSseManager,
+            com.gsim.agent.management.AgentCacheStore agentCacheStore,
+            com.gsim.agent.config.AgentConfigManager agentConfigManager) {
+        this.agentsManager = agentsManager;
+        this.agentSseManager = agentSseManager;
+        this.agentCacheStore = agentCacheStore;
+        this.agentConfigManager = agentConfigManager;
     }
 
     public int getPort() {

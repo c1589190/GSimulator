@@ -2,6 +2,10 @@ package com.gsim.api;
 
 import com.gsim.api.handlers.*;
 import com.gsim.app.ApplicationContext;
+import com.gsim.agent.config.AgentConfigManager;
+import com.gsim.agent.management.AgentCacheStore;
+import com.gsim.agent.management.AgentSseManager;
+import com.gsim.agent.management.AgentsManager;
 import com.gsim.event.EventBus;
 import com.gsim.llm.LlmConfigManager;
 import com.gsim.llm.LlmProviderRegistry;
@@ -32,13 +36,19 @@ public class ApiRouter {
     private final WorldManager worldManager;
     private final ApiMonitorFilter monitorFilter;
     private final boolean monitorMode;
+    private final AgentsManager agentsManager;
+    private final AgentSseManager agentSseManager;
+    private final AgentCacheStore agentCacheStore;
+    private final AgentConfigManager agentConfigManager;
 
     public ApiRouter(HttpServer server, ApplicationContext ctx, EventBus eventBus,
                      SessionManager sessionManager, TaskManager taskManager,
                      Path worldsDir, Path importDir, Supplier<String> activeWorldId,
                      Supplier<com.gsim.doc.DocStore> docStore,
                      LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry,
-                     boolean monitorMode) {
+                     boolean monitorMode,
+                     AgentsManager agentsManager, AgentSseManager agentSseManager,
+                     AgentCacheStore agentCacheStore, AgentConfigManager agentConfigManager) {
         this.server = server;
         this.ctx = ctx;
         this.eventBus = eventBus;
@@ -53,6 +63,10 @@ public class ApiRouter {
         this.worldManager = new WorldManager(worldsDir);
         this.monitorMode = monitorMode;
         this.monitorFilter = monitorMode ? new ApiMonitorFilter() : null;
+        this.agentsManager = agentsManager;
+        this.agentSseManager = agentSseManager;
+        this.agentCacheStore = agentCacheStore;
+        this.agentConfigManager = agentConfigManager;
     }
 
     public void registerAll() {
@@ -105,6 +119,17 @@ public class ApiRouter {
         // ── Roots + Skills（直调 Manager）──
         register("/api/roots", new RootsApiHandler(worldManager, worldsDir, activeWorldId));
         register("/api/skills", new SkillsApiHandler(docStore));
+
+        // ── Agent 生命周期 + 配置 + 缓存（新）──
+        if (agentsManager != null && agentSseManager != null) {
+            register("/api/agents", new AgentsApiHandler(agentsManager, agentSseManager));
+        }
+        if (agentConfigManager != null) {
+            register("/api/agent-configs", new AgentConfigsApiHandler(agentConfigManager));
+        }
+        if (agentCacheStore != null) {
+            register("/api/agent-caches", new AgentCachesApiHandler(agentCacheStore));
+        }
     }
 
     private void register(String path, HttpHandler handler) {

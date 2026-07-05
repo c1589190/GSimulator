@@ -1,8 +1,10 @@
 package com.gsim.agent.tool;
 
 import com.gsim.agent.AgentProgressSink;
+import com.gsim.agent.EventBusAgentProgressSink;
 import com.gsim.agent.config.AgentConfigStore;
 import com.gsim.agent.core.AgentConfig;
+import com.gsim.agent.management.AgentInstance;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.llm.LlmManager;
@@ -53,6 +55,7 @@ public class DispatchSubAgentTool implements AgentTool {
     private final AgentFactory agentFactory;
     private final AgentConfigStore configStore;
     private final com.gsim.doc.DocCacheManager docCacheManager;
+    private volatile com.gsim.agent.management.AgentsManager agentsManager;
 
     public DispatchSubAgentTool(LlmManager llmManager, ToolRegistry toolRegistry,
                                 String model, AgentProgressSink progressSink,
@@ -70,6 +73,11 @@ public class DispatchSubAgentTool implements AgentTool {
         this.agentFactory = agentFactory;
         this.configStore = configStore;
         this.docCacheManager = docCacheManager;
+    }
+
+    /** 注入 AgentsManager（新路径 — HTTP API 兼容的 Agent 生命周期管理）。 */
+    public void setAgentsManager(com.gsim.agent.management.AgentsManager am) {
+        this.agentsManager = am;
     }
 
     @Override
@@ -145,13 +153,52 @@ public class DispatchSubAgentTool implements AgentTool {
             return ToolResult.fail(NAME, "prompt cannot be empty");
         }
 
-        String parentTaskId = com.gsim.agent.EventBusAgentProgressSink.getCurrentTaskId();
-        String parentSessionId = com.gsim.agent.EventBusAgentProgressSink.getCurrentSessionId();
+        // 优先使用 AgentsManager（新路径 — HTTP API 兼容）
+        if (agentsManager != null) {
+            return executeViaAgentsManager(type, prompt, cacheId);
+        }
+
+        // Fallback: 旧路径 — AgentFactory.dispatch()
+        return executeViaAgentFactory(type, prompt, cacheId);
+    }
+
+    private ToolResult executeViaAgentsManager(String type, String prompt, String cacheId) {
+        AgentInstance subAgent = agentsManager.runAgent(type, cacheId, prompt, null);
+        String agentId = subAgent.instanceId();
+        String cacheNote = cacheId != null ? " (续接 cache: " + cacheId + ")" : "";
+        log.info("[DispatchSubAgent] dispatched via AgentsManager {} (type={}, promptLen={}){}, blocking...",
+                agentId, type, prompt.length(), cacheNote);
+
+        try {
+            AgentResult result = agentsManager.waitForCompletion(agentId, 120_000);
+
+            if (result.success()) {
+                String text = result.finalText();
+                log.info("[DispatchSubAgent] {} completed: {} chars",
+                        agentId, text != null ? text.length() : 0);
+                return ToolResult.ok(NAME, List.of(new ToolResult.Item(
+                        "sub_agent_result: " + agentId,
+                        NAME,
+                        text != null ? text : "(空结果)",
+                        1.0)));
+            } else {
+                log.warn("[DispatchSubAgent] {} failed: {}", agentId, result.error());
+                return ToolResult.fail(NAME, "子代理 " + agentId + " 执行失败: " + result.error());
+            }
+        } catch (Exception e) {
+            log.warn("[DispatchSubAgent] {} error: {}", agentId, e.getMessage());
+            return ToolResult.fail(NAME, "子代理 " + agentId + " 异常: " + e.getMessage());
+        }
+    }
+
+    private ToolResult executeViaAgentFactory(String type, String prompt, String cacheId) {
+        String parentTaskId = EventBusAgentProgressSink.getCurrentTaskId();
+        String parentSessionId = EventBusAgentProgressSink.getCurrentSessionId();
 
         // 派发子代理（异步启动）
         String agentId = agentFactory.dispatch(type, prompt, parentTaskId, parentSessionId, cacheId);
         String cacheNote = cacheId != null ? " (续接 cache: " + cacheId + ")" : "";
-        log.info("[DispatchSubAgent] dispatched {} (type={}, promptLen={}){}, blocking...",
+        log.info("[DispatchSubAgent] dispatched via AgentFactory {} (type={}, promptLen={}){}, blocking...",
                 agentId, type, prompt.length(), cacheNote);
 
         // 阻塞等待子代理完成

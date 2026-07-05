@@ -15,6 +15,8 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
 
     private static final ThreadLocal<String> currentTaskId = new ThreadLocal<>();
     private static final ThreadLocal<String> currentSessionId = new ThreadLocal<>();
+    private static final ThreadLocal<String> currentAgentId = new ThreadLocal<>();
+    private static final ThreadLocal<String> currentParentAgentId = new ThreadLocal<>();
 
     private final EventBus eventBus;
 
@@ -32,6 +34,16 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
     public static void unbindTask() {
         currentSessionId.remove();
         currentTaskId.remove();
+        currentAgentId.remove();
+        currentParentAgentId.remove();
+    }
+
+    /** 绑定当前 Agent 实例信息（供 AgentsManager 使用）。 */
+    public static void bindAgent(String instanceId, String parentInstanceId) {
+        currentAgentId.set(instanceId);
+        if (parentInstanceId != null && !parentInstanceId.isEmpty()) {
+            currentParentAgentId.set(parentInstanceId);
+        }
     }
 
     /** 获取当前线程绑定的 taskId（供 DispatchSubAgentTool 等捕获用）。 */
@@ -103,6 +115,14 @@ public class EventBusAgentProgressSink implements AgentProgressSink {
         // 透传 agentId（SubAgent 事件路由用）
         if (agentId != null) {
             data.put("agentId", agentId);
+        }
+        String boundAgentId = currentAgentId.get();
+        if (boundAgentId != null && !data.containsKey("agentId")) {
+            data.put("agentId", boundAgentId);
+        }
+        String boundParentId = currentParentAgentId.get();
+        if (boundParentId != null) {
+            data.put("parentAgentId", boundParentId);
         }
 
         eventBus.publish(GSimEvent.of(sessionId, taskId, gsimType, data));

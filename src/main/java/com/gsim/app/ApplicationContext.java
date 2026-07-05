@@ -115,7 +115,8 @@ public class ApplicationContext {
                 () -> activeRootId != null ? activeRootId : "default",
                 this::getDocStore,
                 new com.gsim.llm.LlmConfigManager(config.getLlmsPath()),
-                llmProviderRegistry);
+                llmProviderRegistry,
+                null, null, null, null);  // Agent managers injected later
     }
 
     /**

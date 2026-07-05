@@ -141,7 +141,8 @@ public class FileSystemCachesManager implements CachesManager {
                     nodeId != null ? nodeId : "n0000",
                     createdAt != null ? createdAt : "",
                     msgCount,
-                    previousSessionId != null && !previousSessionId.isEmpty() ? previousSessionId : null
+                    previousSessionId != null && !previousSessionId.isEmpty() ? previousSessionId : null,
+                    null  // firstUserMsg — lightweight meta reader doesn't extract this
             );
         } catch (IOException e) {
             return null;

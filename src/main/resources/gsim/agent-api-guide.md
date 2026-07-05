@@ -154,6 +154,158 @@ GET /api/caches/{id}?offset=10&limit=50  → 分页读取
 POST /api/caches/{id}/edit               → 编辑
 ```
 
+### Agent 生命周期（运行与管理）
+
+**Agent = 配置 + 缓存 + 提示词**，三者组合即可运行一个 Agent：
+
+```
+配置（系统提示词、模型参数）
+  └── POST /api/agent-configs          创建 Agent 配置
+缓存（对话历史、自动注入系统提示词）
+  └── POST /api/agent-caches           创建对话缓存
+运行（异步启动，通过 SSE 或轮询获取结果）
+  └── POST /api/agents/run             启动 Agent → 返回 instanceId
+  └── GET /api/agents/{id}/events      SSE 流式事件
+  └── GET /api/agents/{id}/output      获取最终文本
+```
+
+**Agent 配置管理**：
+
+```
+GET    /api/agent-configs                   列出所有配置（摘要）
+GET    /api/agent-configs/{configId}         获取配置详情
+POST   /api/agent-configs                   创建新配置
+PATCH  /api/agent-configs/{configId}        更新配置字段
+DELETE /api/agent-configs/{configId}        删除配置
+```
+
+**POST /api/agent-configs — 创建 Agent 配置**：
+
+```json
+{
+  "agentId": "my_custom_agent",
+  "llmProvider": "base",
+  "temperature": 0.3,
+  "maxTokens": 2048,
+  "maxToolRounds": 8,
+  "toolFilterMode": "read_only",
+  "staticSystemPrompt": "你是一个专业的历史顾问。回答要简洁（不超过100字），引用史实要有依据。"
+}
+```
+
+**PATCH /api/agent-configs/{configId} — 更新字段**：
+
+```json
+{"field": "staticSystemPrompt", "value": "新的系统提示词..."}
+{"field": "temperature", "value": "0.7"}
+{"field": "toolFilterMode", "value": "all"}
+```
+
+可更新字段：`llmProvider`, `temperature`, `maxTokens`, `maxToolRounds`, `toolFilter`, `staticSystemPrompt`
+
+**Agent 对话缓存管理**：
+
+```
+GET    /api/agent-caches                     列出缓存（?worldId=&agentType=）
+GET    /api/agent-caches/{cacheId}           读取缓存（?summary=true 仅摘要）
+GET    /api/agent-caches/{cacheId}?limit=10  分页读消息
+POST   /api/agent-caches                     创建缓存（自动注入系统提示词）
+DELETE /api/agent-caches/{cacheId}           删除缓存
+```
+
+**POST /api/agent-caches — 创建对话缓存**：
+
+```json
+{
+  "configId": "my_custom_agent",
+  "worldId": "default",
+  "nodeId": "n0000"
+}
+```
+
+创建时自动从 Agent 配置读取 `staticSystemPrompt` 作为首条 system 消息。  
+返回 `cacheId` 用于后续 `POST /api/agents/run` 引用。
+
+**Agent 生命周期**：
+
+```
+POST   /api/agents/run                       启动 Agent（异步，立即返回）
+GET    /api/agents                           列出所有实例（?status=&configId=）
+GET    /api/agents/{instanceId}              查询实例状态
+GET    /api/agents/{instanceId}/events       SSE 事件流（等待结果）
+GET    /api/agents/{instanceId}/output       获取最终输出文本
+POST   /api/agents/{instanceId}/cancel       取消运行中的 Agent
+```
+
+**POST /api/agents/run — 启动 Agent**：
+
+```json
+{
+  "configId": "my_custom_agent",
+  "cacheId": "my_custom_agent_2026-07-06T10-30-00.json",
+  "prompt": "请分析明朝永乐年间的对外政策",
+  "parentInstanceId": "orchestrator-5"
+}
+```
+
+- `configId`（必填）：使用哪个 Agent 配置
+- `prompt`（必填）：Agent 要处理的任务指令
+- `cacheId`（可选）：已有对话缓存的 ID。不传则自动创建新缓存（含系统提示词）
+- `parentInstanceId`（可选）：父 Agent 实例 ID（SubAgent 时使用）
+
+**响应**：
+
+```json
+{
+  "instanceId": "my_custom_agent-1",
+  "configId": "my_custom_agent",
+  "sessionId": "agent-my_custom_agent-1",
+  "taskId": "task-my_custom_agent-1",
+  "cacheId": "my_custom_agent_2026-07-06T10-30-00.json",
+  "parentInstanceId": "orchestrator-5",
+  "status": "RUNNING",
+  "eventsUrl": "/api/agents/my_custom_agent-1/events",
+  "outputUrl": "/api/agents/my_custom_agent-1/output"
+}
+```
+
+每个 Agent 获得**独立的 sessionId + taskId**，SSE 事件流隔离。
+
+**SSE 事件类型**：
+
+| 事件 | 说明 | 关键字段 |
+|------|------|---------|
+| `agent_started` | Agent 开始执行 | instanceId, configId, parentInstanceId, cacheId |
+| `llm_delta` | LLM 流式增量 | content, agentId |
+| `llm_reasoning_delta` | LLM 推理增量 | content, agentId |
+| `tool_started` | 工具开始执行 | tool, agentId |
+| `tool_done` | 工具执行成功 | tool, agentId |
+| `tool_error` | 工具执行失败 | tool, error, agentId |
+| `agent_result` | Agent 最终结果 | instanceId, finalText（截断2000字）, cacheId |
+| `agent_done` | Agent 完成 | instanceId, status |
+| `agent_error` | Agent 出错 | instanceId, error |
+| `done` | SSE 流结束 | — |
+
+**获取结果的两种方式**：
+
+```
+# 方式 1：轮询（简单）
+GET /api/agents/{instanceId}          → 检查 status
+GET /api/agents/{instanceId}/output   → status=DONE 后取文本
+
+# 方式 2：SSE 流（实时）
+GET /api/agents/{instanceId}/events   → 流式接收所有事件
+→ 收到 agent_done 后关闭连接
+```
+
+**LLM Provider 管理（已有）**：
+
+```
+GET  /api/llm                 列出所有 Provider
+GET  /api/llm/{id}            查看 Provider 详情
+POST /api/llm/{id}            更新 Provider 字段
+```
+
 ---
 
 ## 典型工作流
@@ -195,6 +347,51 @@ POST /api/caches/{id}/edit               → 编辑
 2. GET /api/world/{id}/nodes/{nid}/characters/赵云
    → renderedContent 自动注入 Doc 全文
    → 修改 Doc 则所有路由自动更新
+```
+
+### 工作流 D：Agent 端到端（配置 → 缓存 → 运行 → 获取结果）
+
+```
+1. 创建 Agent 配置
+   POST /api/agent-configs
+   {"agentId": "historian", "staticSystemPrompt": "你是一位历史学者...",
+    "temperature": 0.3, "maxTokens": 2048, "maxToolRounds": 8,
+    "toolFilterMode": "read_only", "llmProvider": "base"}
+
+2. 创建对话缓存（自动注入系统提示词）
+   POST /api/agent-caches
+   {"configId": "historian", "worldId": "default", "nodeId": "n0000"}
+   → {"cacheId": "historian_2026-07-06T10-30-00.json"}
+
+3. 启动 Agent（异步）
+   POST /api/agents/run
+   {"configId": "historian", "prompt": "分析宋朝海上贸易的三个主要特点",
+    "cacheId": "historian_2026-07-06T10-30-00.json"}
+   → {"instanceId": "historian-1", "status": "RUNNING",
+      "eventsUrl": "/api/agents/historian-1/events"}
+
+4. 等待完成并获取结果
+   GET /api/agents/historian-1                      → status: DONE
+   GET /api/agents/historian-1/output               → finalText: "宋朝海上贸易..."
+   
+   或通过 SSE 流式接收：
+   curl -N http://127.0.0.1:8710/api/agents/historian-1/events
+   → event: agent_started
+   → event: llm_delta (重复)
+   → event: agent_result
+   → event: agent_done
+   → event: done
+
+5. 查看完整对话历史（可选）
+   GET /api/agent-caches/historian_2026-07-06T10-30-00.json?limit=20
+   → messages: [system, user, assistant] 完整对话链
+
+6. 续接对话（再问一个问题）
+   POST /api/agents/run
+   {"configId": "historian",
+    "prompt": "其中哪些特点影响到了明朝的海禁政策？",
+    "cacheId": "historian_2026-07-06T10-30-00.json"}
+   → 自动加载前轮对话上下文，LLM 有记忆
 ```
 
 ---

@@ -246,6 +246,25 @@ public class GSimulatorApplication {
                 agentConfigStore, ctx.getLlmProviderRegistry(), toolRegistry,
                 compositeSink, config.getLlmModel(),
                 worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default");
+
+        // ── Agent 管理层（仿 World/Docs 体系：Store → Manager → HTTP API）──
+        Path cachesBaseDir = worldsDir.resolveSibling("caches");
+        var agentCacheStore = new com.gsim.agent.management.AgentCacheStore(
+                cachesBaseDir, agentConfigStore);
+        agentCacheStore.init();
+        var agentSseManager = new com.gsim.agent.management.AgentSseManager(ctx.getEventBus());
+        var agentsManager = new com.gsim.agent.management.AgentsManager(
+                agentConfigStore, agentCacheStore,
+                ctx.getLlmProviderRegistry(), toolRegistry,
+                compositeSink, ctx.getEventBus(), config.getLlmModel(),
+                worldsDir, () -> worldInfo != null ? worldInfo.worldId() : "default");
+        var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(
+                agentConfigStore, config.agentsDir());
+
+        // 注入到 ApiManager（必须在 start() 之前）
+        ctx.getApiManager().injectAgentManagers(
+                agentsManager, agentSseManager, agentCacheStore, agentConfigManager);
+        log.info("Agent management layer initialized (Store + Manager + SSE + Config)");
         // DocCacheManager 需在 doc 工具注册前创建
         Path docsDir = worldsDir.resolveSibling("docs");
         this.docCacheManager = new com.gsim.doc.DocCacheManager(
@@ -257,6 +276,12 @@ public class GSimulatorApplication {
         }
         this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory,
                 this.docCacheManager);
+
+        // 将 AgentsManager 注入到 DispatchSubAgentTool（新路径优先）
+        var dispatchTool = toolRegistry.get("dispatch_sub_agent");
+        if (dispatchTool instanceof com.gsim.agent.tool.DispatchSubAgentTool d) {
+            d.setAgentsManager(agentsManager);
+        }
 
         // SubAgent cache 管理工具
         var worldIdSupplier = new java.util.function.Supplier<String>() {
