@@ -57,6 +57,11 @@ public class RefApiHandler implements HttpHandler {
             data.put("id", resolved.id());
             data.put("title", resolved.title());
             data.put("content", resolved.content());
+            if (BaseApiHandler.isTextFormat(exchange)) {
+                BaseApiHandler.sendTextOk(exchange,
+                        "# " + resolved.title() + "\n\n" + resolved.content());
+                return;
+            }
             BaseApiHandler.sendOk(exchange, "Resolved: " + ref, data);
         } catch (IllegalArgumentException e) {
             BaseApiHandler.sendError(exchange, 404, e.getMessage());

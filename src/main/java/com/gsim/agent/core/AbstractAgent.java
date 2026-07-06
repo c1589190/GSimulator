@@ -481,12 +481,14 @@ public class AbstractAgent {
         sb.append("[TOOL_RESULT]\ntool: ").append(toolName)
                 .append("\nsuccess: ").append(result.success()).append("\ncontent:\n");
         if (!result.success()) {
-            sb.append("error: ").append(result.error()).append("\n");
+            sb.append("error: ").append(result.error() != null ? result.error() : "(无错误信息)").append("\n");
         } else {
             for (int i = 0; i < result.items().size(); i++) {
                 var item = result.items().get(i);
-                sb.append("[").append(i + 1).append("] ").append(item.title()).append("\n");
-                sb.append("    path: ").append(item.path()).append("\n");
+                String title = item.title() != null ? item.title() : "(无标题)";
+                sb.append("[").append(i + 1).append("] ").append(title).append("\n");
+                String path = item.path() != null ? item.path() : "";
+                if (!path.isEmpty()) sb.append("    path: ").append(path).append("\n");
                 String snippet = item.snippet();
                 if (snippet != null) {
                     if (snippet.length() > 500) snippet = snippet.substring(0, 500) + "...";

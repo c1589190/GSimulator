@@ -208,6 +208,13 @@ public class WorldApiV2Handler implements HttpHandler {
         // GET /api/world/{id}/nodes/{nid}/{cpId}/{key} — full element
         if (n == 5 && "GET".equals(method)) {
             var data = wm.getElement(worldId, nodeId, cpId, key);
+            if (BaseApiHandler.isTextFormat(exchange)) {
+                // ?format=text → 返回 raw value（优先 renderedContent）
+                String raw = (String) data.getOrDefault("renderedContent",
+                        data.getOrDefault("value", ""));
+                BaseApiHandler.sendTextOk(exchange, raw);
+                return;
+            }
             BaseApiHandler.sendOk(exchange, "Element: " + key, data);
             return;
         }

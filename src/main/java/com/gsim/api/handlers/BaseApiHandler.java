@@ -146,4 +146,48 @@ public final class BaseApiHandler {
         String sid = extractSessionId(exchange);
         return sid != null ? sid : "default";
     }
+
+    // ── Query parameter ──
+
+    /** 共享 query parameter 解析。所有 handler 统一使用此方法。 */
+    public static String parseQueryParam(HttpExchange exchange, String key) {
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null) return null;
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                String k = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+                if (key.equals(k)) {
+                    return URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+                }
+            }
+        }
+        return null;
+    }
+
+    // ── Text output mode (?format=text) ──
+
+    /**
+     * 当请求携带 ?format=text 时，返回纯文本/Markdown 而非 JSON。
+     * 适用于读操作（GET）。
+     */
+    public static boolean isTextFormat(HttpExchange exchange) {
+        return "text".equalsIgnoreCase(parseQueryParam(exchange, "format"))
+                || "compact".equalsIgnoreCase(parseQueryParam(exchange, "format"));
+    }
+
+    /** 发送纯文本响应。 */
+    public static void sendText(HttpExchange exchange, int statusCode, String text) throws IOException {
+        byte[] body = text.getBytes(StandardCharsets.UTF_8);
+        addCorsHeaders(exchange);
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        exchange.sendResponseHeaders(statusCode, body.length);
+        exchange.getResponseBody().write(body);
+        exchange.getResponseBody().close();
+    }
+
+    /** 发送文本 OK 响应。 */
+    public static void sendTextOk(HttpExchange exchange, String text) throws IOException {
+        sendText(exchange, 200, text);
+    }
 }

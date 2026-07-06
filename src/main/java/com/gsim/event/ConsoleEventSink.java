@@ -28,36 +28,36 @@ public class ConsoleEventSink implements EventSink {
     public void accept(GSimEvent event) {
         switch (event.type()) {
             case "command_started":
-                out.println("[>] 命令开始: " + event.getString("command"));
+                out.println("[>] 命令开始: " + safe(event, "command"));
                 break;
             case "command_done":
                 out.println("[✓] 命令完成");
                 break;
             case "command_error":
-                out.println("[✗] 命令错误: " + event.getString("error"));
+                out.println("[✗] 命令错误: " + safe(event, "error"));
                 break;
 
             case "run_stage":
-                out.println("[…] " + event.getString("stage") + ": " + event.getString("message"));
+                out.println("[…] " + safe(event, "stage") + ": " + safe(event, "message"));
                 break;
 
             case "tool_started":
-                out.println("[🔧] 调用工具: " + event.getString("tool") + " - " + event.getString("message"));
+                out.println("[🔧] 调用工具: " + safe(event, "tool") + " - " + safe(event, "message"));
                 break;
             case "tool_done":
                 Object count = event.data().get("count");
-                out.println("[🔧] 工具完成: " + event.getString("tool")
+                out.println("[🔧] 工具完成: " + safe(event, "tool")
                         + (count != null ? " (" + count + " 条结果)" : ""));
                 break;
             case "tool_error":
-                out.println("[🔧] 工具错误: " + event.getString("tool") + " - " + event.getString("error"));
+                out.println("[🔧] 工具错误: " + safe(event, "tool") + " - " + safe(event, "error"));
                 break;
 
             case "import_progress":
-                out.println("[📥] 导入: " + event.getString("message"));
+                out.println("[📥] 导入: " + safe(event, "message"));
                 break;
             case "search_progress":
-                out.println("[🔍] 搜索: " + event.getString("message"));
+                out.println("[🔍] 搜索: " + safe(event, "message"));
                 break;
 
             case "llm_started":
@@ -68,7 +68,7 @@ public class ConsoleEventSink implements EventSink {
                     out.println();
                     reasoningOpen = false;
                 }
-                out.print(event.getString("text"));
+                out.print(event.getString("content"));
                 out.flush();
                 break;
             case "llm_reasoning_delta":
@@ -76,7 +76,7 @@ public class ConsoleEventSink implements EventSink {
                     out.println();
                     reasoningOpen = true;
                 }
-                out.print("[reasoning] " + event.getString("text"));
+                out.print("[reasoning] " + event.getString("content"));
                 out.flush();
                 break;
             case "llm_done":
@@ -89,7 +89,7 @@ public class ConsoleEventSink implements EventSink {
                 break;
 
             case "log":
-                out.println("[log] " + event.getString("message"));
+                out.println("[log] " + safe(event, "message"));
                 break;
 
             case "result":
@@ -107,6 +107,12 @@ public class ConsoleEventSink implements EventSink {
                 // 未知事件类型静默忽略
                 break;
         }
+    }
+
+    /** 安全获取事件字段，null 时返回空字符串而非 "null"。 */
+    private static String safe(GSimEvent event, String key) {
+        Object v = event.data().get(key);
+        return v != null ? v.toString() : "";
     }
 
     @Override

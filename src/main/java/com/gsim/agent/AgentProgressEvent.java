@@ -131,14 +131,16 @@ public record AgentProgressEvent(
 
     /** 推演内容（推文）事件 — 前端渲染为推文卡片，CLI 回显黄字。 */
     public static AgentProgressEvent simulationContent(String title, String body) {
-        String display = "# " + title + "\n\n" + body;
+        String t = title != null ? title : "";
+        String b = body != null ? body : "";
+        String display = "# " + t + "\n\n" + b;
         return new AgentProgressEvent(AGENT_PUBLIC_MESSAGE, 0, 0,
                 "\033[33m" + display + "\033[0m",
                 Map.of("source", "simulation_content",
                         "subType", "simulation_content",
-                        "title", title != null ? title : "",
-                        "body", body != null ? body : "",
-                        "chars", String.valueOf(body != null ? body.length() : 0)));
+                        "title", t,
+                        "body", b,
+                        "chars", String.valueOf(b.length())));
     }
 
     public static AgentProgressEvent aborted(int round, int maxRounds, String reason) {

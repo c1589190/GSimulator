@@ -54,9 +54,9 @@ class ConsoleEventSinkTest {
     @DisplayName("llm_delta 直接流式打印")
     void shouldStreamLlmDelta() {
         sink.accept(GSimEvent.of("default", "llm_delta",
-                Map.of("text", "Hello")));
+                Map.of("content", "Hello")));
         sink.accept(GSimEvent.of("default", "llm_delta",
-                Map.of("text", " world")));
+                Map.of("content", " world")));
         String output = sw.toString();
         assertTrue(output.contains("Hello"));
         assertTrue(output.contains(" world"));
@@ -66,7 +66,7 @@ class ConsoleEventSinkTest {
     @DisplayName("llm_reasoning_delta 以 [reasoning] 前缀打印")
     void shouldPrefixReasoningDelta() {
         sink.accept(GSimEvent.of("default", "llm_reasoning_delta",
-                Map.of("text", "thinking step 1...")));
+                Map.of("content", "thinking step 1...")));
         String output = sw.toString();
         assertTrue(output.contains("[reasoning]"));
         assertTrue(output.contains("thinking step 1..."));
@@ -76,9 +76,9 @@ class ConsoleEventSinkTest {
     @DisplayName("llm_delta 应在 reasoning 后换行")
     void shouldBreakAfterReasoning() {
         sink.accept(GSimEvent.of("default", "llm_reasoning_delta",
-                Map.of("text", "think...")));
+                Map.of("content", "think...")));
         sink.accept(GSimEvent.of("default", "llm_delta",
-                Map.of("text", "output")));
+                Map.of("content", "output")));
         // reasoningOpen 标志应在 llm_delta 时被重置，输出前应有换行
         String output = sw.toString();
         assertTrue(output.contains("[reasoning]"));
