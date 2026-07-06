@@ -396,6 +396,30 @@ POST /api/llm/{id}            更新 Provider 字段
 
 ---
 
+## 紧凑输出模式（?format=text）
+
+读操作支持 `?format=text` 参数，直接返回纯文本/Markdown，无需解析 JSON：
+
+```
+# 标准 JSON（默认）
+GET /api/ref?ref=@world:n0002:characters:曹操
+→ {"success":true, "data":{"content":"曹操，字孟德..."}}
+
+# 紧凑文本（?format=text）
+GET /api/ref?ref=@world:n0002:characters:曹操&format=text
+→ # 曹操 @n0002 (turn 0)
+→ 曹操，字孟德，沛国谯县人...
+
+# 支持 ?format=text 的端点
+GET /api/ref?ref=...&format=text              → 标题 + 内容 Markdown
+GET /api/world/{id}/nodes/{nid}/{cpId}/{key}?format=text  → 元素 raw value
+GET /api/docs/{docId}?format=text             → 文档 raw content
+```
+
+`?format=compact` 与 `?format=text` 等效。
+
+---
+
 ## 省 Token 最佳实践
 
 | 做法 | 效果 |
@@ -406,4 +430,4 @@ POST /api/llm/{id}            更新 Provider 字段
 | 写入填 @cache:id | body 只有几十字节，自动展开 |
 | 大文本先存为 Doc | 用 route_to_doc 一次引用多处复用 |
 | checkpoint ?truncate=200 | 预览阶段不拉全文 |
-| 中文搜索 scope=world | 限定范围减少无关结果 |
+| 读操作加 `?format=text` | 省去 JSON 解析，直接拿文本 |
