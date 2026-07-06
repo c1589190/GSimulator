@@ -13,6 +13,7 @@ import java.util.Set;
  * <ul>
  *   <li>"all" — 全部工具可用（主 Agent）</li>
  *   <li>"read_only" — 仅 READ_ONLY + CONTROL（SubAgent 默认）</li>
+ *   <li>"none" — 仅 finish_action（纯思考/对话 Agent，不访问任何数据）</li>
  *   <li>"custom" — 按 allow/deny 列表过滤</li>
  * </ul>
  */
@@ -23,6 +24,7 @@ public record ToolFilterConfig(
 ) {
     public static final ToolFilterConfig ALL = new ToolFilterConfig("all", List.of(), List.of());
     public static final ToolFilterConfig READ_ONLY = new ToolFilterConfig("read_only", List.of(), List.of());
+    public static final ToolFilterConfig NONE = new ToolFilterConfig("none", List.of(), List.of());
 
     /** 判断工具是否可用。 */
     public boolean allows(String toolName) {
@@ -30,6 +32,7 @@ public record ToolFilterConfig(
             case "all" -> true;
             case "read_only" -> ToolCategoryRegistry.isReadOnly(toolName)
                     || ToolCategoryRegistry.isControl(toolName);
+            case "none" -> "finish_action".equals(toolName);
             case "custom" -> {
                 if (deny.contains(toolName)) yield false;
                 if (allow.isEmpty()) yield true;

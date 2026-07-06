@@ -205,7 +205,7 @@ public class AgentConfigManager {
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseToolFilter(String value) {
         Map<String, Object> tf = new LinkedHashMap<>();
-        if ("all".equals(value) || "read_only".equals(value)) {
+        if ("all".equals(value) || "read_only".equals(value) || "none".equals(value)) {
             tf.put("mode", value);
         } else if (value.startsWith("custom:")) {
             tf.put("mode", "custom");
@@ -219,7 +219,7 @@ public class AgentConfigManager {
             }
         } else {
             throw new IllegalArgumentException("Invalid toolFilter: " + value
-                    + ". Use: all, read_only, or custom:allow1,allow2:deny1,deny2");
+                    + ". Use: all, read_only, none, or custom:allow1,allow2:deny1,deny2");
         }
         return tf;
     }
