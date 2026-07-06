@@ -186,7 +186,7 @@ public class AbstractAgent {
 
             log.debug("[{}] round {}/{} tools={}", agentId, toolRound, maxRounds, toolDefs.size());
 
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages),
+            LlmRequest request = new LlmRequest(null, new ArrayList<>(messages),
                     config.temperature(), config.maxTokens(), toolDefs);
             LlmResult response = callLlm(request);
 

@@ -748,7 +748,7 @@ public class OrchestratorAgent extends AbstractAgent {
             // progress: 等待 LLM
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048,
+            LlmRequest request = new LlmRequest(null, new ArrayList<>(messages), 0.3, 2048,
                     roundToolDefs, roundToolChoice);
             LlmResult response = callLlm(request);
 
@@ -1160,7 +1160,7 @@ public class OrchestratorAgent extends AbstractAgent {
             // progress: 等待 LLM
             progressSink.onProgress(AgentProgressEvent.waitingLlm(toolRound, maxToolRounds));
 
-            LlmRequest request = new LlmRequest(model, new ArrayList<>(messages), 0.3, 2048, toolDefs);
+            LlmRequest request = new LlmRequest(null, new ArrayList<>(messages), 0.3, 2048, toolDefs);
             LlmResult response = callLlm(request);
 
             if (!response.success()) {
