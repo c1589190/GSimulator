@@ -214,6 +214,10 @@ class Provider {
             if (msg.name() != null) {
                 m.put("name", msg.name());
             }
+            // assistant 消息的 reasoning_content（DeepSeek thinking token 回传）
+            if (msg.reasoning() != null && !msg.reasoning().isEmpty()) {
+                m.put("reasoning_content", msg.reasoning());
+            }
 
             msgs.add(m);
         }

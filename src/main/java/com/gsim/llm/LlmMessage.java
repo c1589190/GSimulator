@@ -5,20 +5,21 @@ import java.util.List;
 /**
  * LLM 消息 — 兼容 OpenAI Chat Completions 消息格式。
  *
- * <p>支持标准字段：role, content, tool_calls, tool_call_id, name。
+ * <p>支持标准字段：role, content, tool_calls, tool_call_id, name, reasoning。
  */
 public record LlmMessage(
         String role,                    // system, user, assistant, tool
         String content,
         List<LlmToolCall> toolCalls,    // assistant 消息的 tool_calls（仅 API 原生 tool_call 时非空）
         String toolCallId,              // tool 消息的 tool_call_id
-        String name                     // tool 消息的 name（可选，用于区分工具）
+        String name,                    // tool 消息的 name（可选，用于区分工具）
+        String reasoning                // assistant 消息的 reasoning_content（DeepSeek thinking token）
 ) {
     // ── 向后兼容构造器 ──
 
     /** 最简构造（向后兼容）：role + content，无 tool_calls 信息。 */
     public LlmMessage(String role, String content) {
-        this(role, content, null, null, null);
+        this(role, content, null, null, null, null);
     }
 
     // ── 工厂方法 ──
@@ -33,24 +34,39 @@ public record LlmMessage(
 
     /** 普通 assistant 消息（无 tool_calls）。 */
     public static LlmMessage assistant(String content) {
-        return new LlmMessage("assistant", content);
+        return new LlmMessage("assistant", content, null, null, null, null);
+    }
+
+    /** assistant 消息，带 reasoning_content。 */
+    public static LlmMessage assistant(String content, String reasoning) {
+        return new LlmMessage("assistant", content, null, null, null,
+                reasoning != null && !reasoning.isEmpty() ? reasoning : null);
     }
 
     /** assistant 消息 + API 原生 tool_calls。 */
     public static LlmMessage assistantWithToolCalls(String content, List<LlmToolCall> toolCalls) {
         return new LlmMessage("assistant", content,
                 toolCalls != null ? List.copyOf(toolCalls) : null,
-                null, null);
+                null, null, null);
+    }
+
+    /** assistant 消息 + API 原生 tool_calls + reasoning_content。 */
+    public static LlmMessage assistantWithToolCalls(String content, List<LlmToolCall> toolCalls,
+                                                    String reasoning) {
+        return new LlmMessage("assistant", content,
+                toolCalls != null ? List.copyOf(toolCalls) : null,
+                null, null,
+                reasoning != null && !reasoning.isEmpty() ? reasoning : null);
     }
 
     /** tool 消息（工具结果反馈），不含 tool_call_id。 */
     public static LlmMessage tool(String content) {
-        return new LlmMessage("tool", content, null, null, null);
+        return new LlmMessage("tool", content, null, null, null, null);
     }
 
     /** tool 消息（工具结果反馈），带 tool_call_id 和 name。 */
     public static LlmMessage toolWithId(String toolCallId, String name, String content) {
-        return new LlmMessage("tool", content, null, toolCallId, name);
+        return new LlmMessage("tool", content, null, toolCallId, name, null);
     }
 
     /** 是否有 API 原生 tool_calls。 */
@@ -65,6 +81,7 @@ public record LlmMessage(
         String content = (String) map.get("content");
         String toolCallId = (String) map.get("tool_call_id");
         String name = (String) map.get("name");
+        String reasoning = (String) map.get("reasoning_content");
 
         java.util.List<LlmToolCall> toolCalls = null;
         Object tcObj = map.get("tool_calls");
@@ -88,7 +105,7 @@ public record LlmMessage(
             }
         }
 
-        return new LlmMessage(role, content, toolCalls, toolCallId, name);
+        return new LlmMessage(role, content, toolCalls, toolCallId, name, reasoning);
     }
 
     @SuppressWarnings("unchecked")
@@ -134,6 +151,9 @@ public record LlmMessage(
         }
         if (name != null) {
             m.put("name", name);
+        }
+        if (reasoning != null && !reasoning.isEmpty()) {
+            m.put("reasoning_content", reasoning);
         }
         return m;
     }

@@ -215,11 +215,13 @@ public class AbstractAgent {
             }
 
             // 记录 assistant 消息（含 tool_calls 如有 API 原生调用）
+            String reasoning = response.reasoning();
             if (nativeToolCalls != null && !nativeToolCalls.isEmpty()) {
                 addMessage(messages, LlmMessage.assistantWithToolCalls(
-                        content != null ? content : "", nativeToolCalls));
+                        content != null ? content : "", nativeToolCalls, reasoning));
             } else {
-                addMessage(messages, LlmMessage.assistant(content != null ? content : ""));
+                addMessage(messages, LlmMessage.assistant(
+                        content != null ? content : "", reasoning));
             }
 
             // ═══ 有工具调用 ═══

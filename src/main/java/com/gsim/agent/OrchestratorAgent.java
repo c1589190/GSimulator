@@ -765,7 +765,7 @@ public class OrchestratorAgent extends AbstractAgent {
             int apiToolCallCount = response.hasApiToolCalls() ? response.toolCalls().size() : 0;
             String finishReason = response.finishReason();
 
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
+            messages.add(LlmMessage.assistant(content != null ? content : "", response.reasoning()));
 
             // DEBUG: LLM response preview
             ToolLoopDebug.logLlmResult(log, "runToolLoop", toolRound, content,
@@ -1179,7 +1179,7 @@ public class OrchestratorAgent extends AbstractAgent {
             int apiToolCallCount = response.hasApiToolCalls() ? response.toolCalls().size() : 0;
             String finishReason = response.finishReason();
 
-            messages.add(LlmMessage.assistant(content != null ? content : ""));
+            messages.add(LlmMessage.assistant(content != null ? content : "", response.reasoning()));
 
             ToolLoopDebug.logLlmResult(log, "runSimToolLoop", toolRound, content,
                     apiToolCallCount, finishReason);

@@ -1,0 +1,11 @@
+{
+  "agentId" : "thinker",
+  "llmProvider" : "base",
+  "temperature" : 0.5,
+  "maxTokens" : 1024,
+  "maxToolRounds" : 1,
+  "toolFilter" : {
+    "mode" : "none"
+  },
+  "staticSystemPrompt" : "你是一个纯思考助手。你不能使用任何工具。收到问题后，直接思考并用 finish_action 输出最终答案。回答限制在100字以内。"
+}
