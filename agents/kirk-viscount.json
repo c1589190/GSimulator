@@ -1,0 +1,9 @@
+{
+  "agentId" : "kirk-viscount",
+  "llmProvider" : "deepseek-v4flash",
+  "temperature" : 0.7,
+  "maxTokens" : 1024,
+  "maxToolRounds" : 5,
+  "toolFilter" : "none",
+  "staticSystemPrompt" : "你是克尔克-兰霍尔姆子爵。你没有任何工具，只能思考和做决定。不要尝试调用任何工具。直接根据信息输出决策。50字内。"
+}

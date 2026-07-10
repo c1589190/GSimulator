@@ -73,6 +73,9 @@ public class AppConfig {
     /** CLI 流式预览是否显示 reasoning（默认 true）。 */
     private final boolean cliStreamPreviewShowReasoning;
 
+    /** CLI 是否监控 HTTP API 交互并以颜色输出（默认 false）。 */
+    private final boolean cliMonitorHttpApi;
+
     // WebUI 配置
     private final String webUiHost;
     private final int webUiPort;
@@ -153,6 +156,10 @@ public class AppConfig {
                 parseInt(result.get("cli.stream.preview.max_chars"), 3000), 100, 100000);
         this.cliStreamPreviewShowReasoning = parseBoolean(
                 result.get("cli.stream.preview.show_reasoning"), true);
+
+        // CLI HTTP API 监控（默认关闭）
+        this.cliMonitorHttpApi = parseBoolean(
+                result.get("cli.monitor.http_api"), false);
 
         // WebUI 配置
         this.webUiHost = isBlank(result.get("webui.host")) ? "127.0.0.1" : result.get("webui.host");
@@ -289,6 +296,8 @@ public class AppConfig {
     public int getCliStreamPreviewMaxChars() { return cliStreamPreviewMaxChars; }
     /** CLI 流式预览是否显示 reasoning（默认 true）。 */
     public boolean isCliStreamPreviewShowReasoning() { return cliStreamPreviewShowReasoning; }
+    /** CLI HTTP API 监控（默认 false）。 */
+    public boolean isCliMonitorHttpApi() { return cliMonitorHttpApi; }
 
     public String getWebUiHost() { return webUiHost; }
     public int getWebUiPort() { return webUiPort; }

@@ -35,7 +35,8 @@ public class ApiRouter {
     private final LlmProviderRegistry llmRegistry;
     private final WorldManager worldManager;
     private final ApiMonitorFilter monitorFilter;
-    private final boolean monitorMode;
+    private final boolean monitorMode;          // 纯监控模式（禁用 Agent 对话）
+    private final boolean cliMonitorHttpApi;    // CLI 中彩色监控 HTTP API
     private final AgentsManager agentsManager;
     private final AgentSseManager agentSseManager;
     private final AgentCacheStore agentCacheStore;
@@ -46,7 +47,7 @@ public class ApiRouter {
                      Path worldsDir, Path importDir, Supplier<String> activeWorldId,
                      Supplier<com.gsim.doc.DocStore> docStore,
                      LlmConfigManager llmConfigManager, LlmProviderRegistry llmRegistry,
-                     boolean monitorMode,
+                     boolean monitorMode, boolean cliMonitorHttpApi,
                      AgentsManager agentsManager, AgentSseManager agentSseManager,
                      AgentCacheStore agentCacheStore, AgentConfigManager agentConfigManager) {
         this.server = server;
@@ -62,7 +63,12 @@ public class ApiRouter {
         this.llmRegistry = llmRegistry;
         this.worldManager = new WorldManager(worldsDir);
         this.monitorMode = monitorMode;
-        this.monitorFilter = monitorMode ? new ApiMonitorFilter() : null;
+        this.cliMonitorHttpApi = cliMonitorHttpApi;
+        // 始终创建 filter，但仅在 CLI 监控或纯监控模式下启用
+        this.monitorFilter = new ApiMonitorFilter();
+        if (monitorMode || cliMonitorHttpApi) {
+            this.monitorFilter.setEnabled(true);
+        }
         this.agentsManager = agentsManager;
         this.agentSseManager = agentSseManager;
         this.agentCacheStore = agentCacheStore;
@@ -140,9 +146,7 @@ public class ApiRouter {
                 handler.handle(exchange);
             }
         });
-        if (monitorFilter != null) {
-            context.getFilters().add(monitorFilter);
-        }
+        context.getFilters().add(monitorFilter);
     }
 
     private void registerBlocked(String path, String reason) {

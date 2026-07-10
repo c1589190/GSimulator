@@ -80,9 +80,10 @@ public class ApiManager {
         server = HttpServer.create(address, 0);  // 0 = default backlog
 
         // 注册所有路由
+        boolean cliMonitor = ctx.getConfig().isCliMonitorHttpApi();
         ApiRouter router = new ApiRouter(server, ctx, eventBus, sessionManager, taskManager,
                 worldsDir, importDir, activeWorldId, docStore,
-                llmConfigManager, llmRegistry, monitorMode,
+                llmConfigManager, llmRegistry, monitorMode, cliMonitor,
                 agentsManager, agentSseManager, agentCacheStore, agentConfigManager);
         router.registerAll();
 

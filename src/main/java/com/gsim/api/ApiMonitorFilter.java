@@ -8,54 +8,78 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * HTTP API 请求监控 Filter — 终端实时输出请求/响应摘要。
+ * HTTP API 请求监控 Filter — 终端彩色输出请求/响应摘要。
  *
- * <p>配合 {@code --monitor} 模式使用，禁用 CLI REPL，只显示 HTTP 交互。
+ * <p>当 {@code cli.monitor.http_api=true} 时启用，在 CLI 中实时显示 HTTP API 交互。
+ * 支持同时运行 CLI REPL + HTTP API 监控。
  */
 public class ApiMonitorFilter extends Filter {
 
     private static final DateTimeFormatter TF = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+    // ANSI
+    private static final String CYAN = "\033[36m";
+    private static final String GREEN = "\033[32m";
+    private static final String YELLOW = "\033[33m";
+    private static final String RED = "\033[31m";
+    private static final String DIM = "\033[2m";
+    private static final String RESET = "\033[0m";
+
+    private volatile boolean enabled = false;
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     @Override
     public void doFilter(HttpExchange exchange, Chain chain) throws IOException {
+        if (!enabled) {
+            chain.doFilter(exchange);
+            return;
+        }
+
         long start = System.currentTimeMillis();
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
         String query = exchange.getRequestURI().getQuery();
         String fullPath = query != null ? path + "?" + query : path;
+
+        // Request body size
         int contentLen = 0;
         String contentLenStr = exchange.getRequestHeaders().getFirst("Content-Length");
         if (contentLenStr != null) {
             try { contentLen = Integer.parseInt(contentLenStr); } catch (NumberFormatException ignored) {}
         }
 
-        // Before
+        // Before — cyan method + dim path
         String time = TF.format(LocalTime.now());
-        StringBuilder line = new StringBuilder();
-        line.append("\n── ").append(time).append(" ").append(method).append(" ").append(fullPath);
-        if (contentLen > 0) line.append("  (").append(contentLen).append("B)");
-        System.out.println(line);
+        String methodColor = switch (method) {
+            case "GET" -> GREEN;
+            case "POST", "PATCH", "PUT" -> YELLOW;
+            case "DELETE" -> RED;
+            default -> CYAN;
+        };
+        System.out.println(DIM + time + RESET + " " + methodColor + method + RESET + " " + DIM + fullPath + RESET
+                + (contentLen > 0 ? " " + DIM + "(" + contentLen + "B)" + RESET : ""));
 
         // Execute
         chain.doFilter(exchange);
 
-        // After
+        // After — status code + elapsed
         long elapsed = System.currentTimeMillis() - start;
         int status = exchange.getResponseCode();
-        long respLen = exchange.getResponseHeaders().containsKey("Content-Length")
-                ? Long.parseLong(exchange.getResponseHeaders().getFirst("Content-Length"))
-                : -1;
 
-        StringBuilder result = new StringBuilder();
-        result.append(status).append("  ");
-        if (respLen >= 0) result.append(respLen).append("B  ");
-        result.append(elapsed).append("ms");
-        if (status >= 400) result.append(" ⚠");
-        System.out.println(result);
+        String statusColor = status < 300 ? GREEN : status < 400 ? YELLOW : RED;
+        System.out.println("  " + statusColor + status + RESET + "  " + DIM + elapsed + "ms" + RESET
+                + (status >= 400 ? " " + RED + "✗" + RESET : ""));
     }
 
     @Override
     public String description() {
-        return "API Monitor — logs all HTTP requests/responses to stdout";
+        return "API Monitor — colored HTTP request/response logging";
     }
 }
