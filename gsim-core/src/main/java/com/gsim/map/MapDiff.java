@@ -37,6 +37,7 @@ public record MapDiff(
     }
 
     /** Is this diff empty (no changes)? */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isEmpty() {
         return changed.isEmpty() && removed.isEmpty()
             && provincesChanged.isEmpty() && provincesRemoved.isEmpty()
