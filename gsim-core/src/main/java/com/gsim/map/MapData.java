@@ -43,12 +43,19 @@ public record MapData(
     public record TerrainBlock(
         @JsonProperty("terrain") String terrain,
         @JsonProperty("boundary") List<Pt> boundary,
-        @JsonProperty("seedKey") String seedKey
+        @JsonProperty("seedKey") String seedKey,
+        @JsonProperty("hexKeys") Set<String> hexKeys
     ) {
         public TerrainBlock {
             if (terrain == null) terrain = "plains";
             if (boundary == null) boundary = List.of();
             if (seedKey == null) seedKey = "";
+            if (hexKeys == null) hexKeys = Set.of();
+        }
+
+        /** Constructor without hexKeys (derived from boundary). */
+        public TerrainBlock(String terrain, List<Pt> boundary, String seedKey) {
+            this(terrain, boundary, seedKey, Set.of());
         }
     }
 
