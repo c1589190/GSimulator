@@ -66,15 +66,17 @@ public record MapData(
         @JsonProperty("color") String color,
         @JsonProperty("terrain") String terrain,
         @JsonProperty("symbol") String symbol,
-        @JsonProperty("symbolColor") String symbolColor
+        @JsonProperty("symbolColor") String symbolColor,
+        @JsonProperty("description") String description
     ) {
         public HexCell {
             if (color == null) color = "#808080";
             if (terrain == null) terrain = "unknown";
+            if (description == null) description = "";
         }
 
-        public static HexCell of(String color) { return new HexCell(color, "unknown", null, null); }
-        public static HexCell of(String color, String terrain) { return new HexCell(color, terrain, null, null); }
+        public static HexCell of(String color) { return new HexCell(color, "unknown", null, null, ""); }
+        public static HexCell of(String color, String terrain) { return new HexCell(color, terrain, null, null, ""); }
     }
 
     // ── TerrainType ──────────────────────────────────────
@@ -115,11 +117,15 @@ public record MapData(
     @JsonDeserialize
     public record Province(
         @JsonProperty("hexes") List<String> hexes,
-        @JsonProperty("color") String color
+        @JsonProperty("color") String color,
+        @JsonProperty("tag") String tag,
+        @JsonProperty("description") String description
     ) {
         public Province {
             if (hexes == null) hexes = List.of();
             if (color == null) color = "#FF0000";
+            if (tag == null) tag = "";
+            if (description == null) description = "";
         }
     }
 
@@ -129,8 +135,13 @@ public record MapData(
     public record City(
         @JsonProperty("q") int q,
         @JsonProperty("r") int r,
-        @JsonProperty("name") String name
-    ) {}
+        @JsonProperty("name") String name,
+        @JsonProperty("description") String description
+    ) {
+        public City {
+            if (description == null) description = "";
+        }
+    }
 
     // ── River ────────────────────────────────────────────
 
