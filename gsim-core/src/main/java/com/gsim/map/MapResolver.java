@@ -166,8 +166,8 @@ public final class MapResolver {
 
         return new MapData(
             base.gridSize(), base.hexOrientation(),
-            hexes, provinces, cities, rivers, roads,
-            base.terrainTypes()  // terrain types are inherited from root, not diffed
+            hexes, base.terrainBlocks(), provinces, cities, rivers, roads,
+            base.terrainTypes()
         );
     }
 }
