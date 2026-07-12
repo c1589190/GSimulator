@@ -147,21 +147,33 @@ public record MapData(
 
     @JsonDeserialize
     public record River(
-        @JsonProperty("points") List<Point> points,
+        @JsonProperty("name") String name,
+        @JsonProperty("path") List<String> path,
         @JsonProperty("width") int width,
-        @JsonProperty("color") String color,
-        @JsonProperty("taper") boolean taper
+        @JsonProperty("color") String color
     ) {
-        @JsonDeserialize
-        public record Point(@JsonProperty("x") double x, @JsonProperty("y") double y) {}
+        public River {
+            if (name == null) name = "";
+            if (path == null) path = List.of();
+            if (width < 1) width = 3;
+            if (color == null) color = "#3295D2";
+        }
     }
 
     // ── Road ─────────────────────────────────────────────
 
     @JsonDeserialize
     public record Road(
-        @JsonProperty("points") List<River.Point> points,
+        @JsonProperty("name") String name,
+        @JsonProperty("path") List<String> path,
         @JsonProperty("width") int width,
         @JsonProperty("color") String color
-    ) {}
+    ) {
+        public Road {
+            if (name == null) name = "";
+            if (path == null) path = List.of();
+            if (width < 1) width = 2;
+            if (color == null) color = "#f5deb3";
+        }
+    }
 }
