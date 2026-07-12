@@ -67,16 +67,18 @@ public record MapData(
         @JsonProperty("terrain") String terrain,
         @JsonProperty("symbol") String symbol,
         @JsonProperty("symbolColor") String symbolColor,
-        @JsonProperty("description") String description
+        @JsonProperty("description") String description,
+        @JsonProperty("riverMask") int riverMask
     ) {
         public HexCell {
             if (color == null) color = "#808080";
             if (terrain == null) terrain = "unknown";
             if (description == null) description = "";
+            if (riverMask < 0 || riverMask > 63) riverMask = 0;
         }
 
-        public static HexCell of(String color) { return new HexCell(color, "unknown", null, null, ""); }
-        public static HexCell of(String color, String terrain) { return new HexCell(color, terrain, null, null, ""); }
+        public static HexCell of(String color) { return new HexCell(color, "unknown", null, null, "", 0); }
+        public static HexCell of(String color, String terrain) { return new HexCell(color, terrain, null, null, "", 0); }
     }
 
     // ── TerrainType ──────────────────────────────────────
