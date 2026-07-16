@@ -167,7 +167,7 @@ public final class MapResolver {
         return new MapData(
             base.gridSize(), base.hexOrientation(),
             hexes, base.terrainBlocks(), provinces, cities, rivers, roads,
-            base.terrainTypes()
+            base.terrainTypes(), base.compressedRegions()
         );
     }
 }

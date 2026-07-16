@@ -14,7 +14,8 @@ public record MapData(
     @JsonProperty("cities") Map<String, City> cities,
     @JsonProperty("rivers") List<River> rivers,
     @JsonProperty("roads") List<Road> roads,
-    @JsonProperty("terrainTypes") Map<String, TerrainType> terrainTypes
+    @JsonProperty("terrainTypes") Map<String, TerrainType> terrainTypes,
+    @JsonProperty("compressedRegions") List<CompressedRegion> compressedRegions
 ) {
     public MapData {
         if (gridSize < 1 || gridSize > 1000) throw new IllegalArgumentException("gridSize must be 1-1000, got: " + gridSize);
@@ -25,10 +26,11 @@ public record MapData(
         if (rivers == null) rivers = List.of();
         if (roads == null) roads = List.of();
         if (terrainTypes == null || terrainTypes.isEmpty()) terrainTypes = TerrainType.defaults();
+        if (compressedRegions == null) compressedRegions = List.of();
     }
 
     public static MapData empty() {
-        return new MapData(30, false, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), TerrainType.defaults());
+        return new MapData(30, false, Map.of(), List.of(), Map.of(), Map.of(), List.of(), List.of(), TerrainType.defaults(), List.of());
     }
 
     public static String hexKey(int q, int r) { return q + "_" + r; }
@@ -171,5 +173,32 @@ public record MapData(
             if (width < 1) width = 2;
             if (color == null) color = "#f5deb3";
         }
+    }
+
+    // ── CompressedRegion ────────────────────────────────────
+
+    /**
+     * A compressed representation of a large contiguous same-terrain region.
+     * Pure rendering optimization — does not replace hexes in {@link #hexes()}.
+     * Can be regenerated at any time by re-running {@code compress()}.
+     */
+    @JsonDeserialize
+    public record CompressedRegion(
+        @JsonProperty("id") String id,
+        @JsonProperty("terrain") String terrain,
+        @JsonProperty("color") String color,
+        @JsonProperty("boundary") List<Pt> boundary,
+        @JsonProperty("isWater") boolean isWater,
+        @JsonProperty("hexKeys") Set<String> hexKeys
+    ) {
+        public CompressedRegion {
+            if (id == null) id = "";
+            if (terrain == null) terrain = "unknown";
+            if (color == null) color = "#808080";
+            if (boundary == null) boundary = List.of();
+            if (hexKeys == null) hexKeys = Set.of();
+        }
+        /** Derived from hexKeys size; not serialized. */
+        public int size() { return hexKeys.size(); }
     }
 }
