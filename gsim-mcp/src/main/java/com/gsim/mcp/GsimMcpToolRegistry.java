@@ -34,7 +34,7 @@ public class GsimMcpToolRegistry {
 
     public GsimMcpToolRegistry(Path worldsDir, Path importDir) {
         this.worldsDir = worldsDir;
-        this.importDir = importDir != null ? importDir : worldsDir.resolveSibling("import");
+        this.importDir = importDir != null ? importDir : Path.of("import");
         registerAll();
     }
 
