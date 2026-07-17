@@ -15,6 +15,7 @@
     <modules>
         <module>gsim-core</module>
         <module>gsim-app</module>
+        <module>gsim-mcp</module>
     </modules>
 
     <properties>
