@@ -164,10 +164,15 @@ public final class MapResolver {
         List<MapData.River> rivers = diff.riversAdded().isEmpty() ? base.rivers() : diff.riversAdded();
         List<MapData.Road> roads = diff.roadsAdded().isEmpty() ? base.roads() : diff.roadsAdded();
 
+        // Compressed regions — child's CRs (computed from resolved state) win over parent's
+        List<MapData.CompressedRegion> crs = diff.compressedRegions().isEmpty()
+            ? base.compressedRegions()
+            : diff.compressedRegions();
+
         return new MapData(
             base.gridSize(), base.hexOrientation(),
             hexes, base.terrainBlocks(), provinces, cities, rivers, roads,
-            base.terrainTypes(), base.compressedRegions()
+            base.terrainTypes(), crs
         );
     }
 }

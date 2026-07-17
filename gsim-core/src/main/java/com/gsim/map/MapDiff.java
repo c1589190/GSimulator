@@ -21,7 +21,8 @@ public record MapDiff(
     @JsonProperty("cities_added") Map<String, MapData.City> citiesAdded,
     @JsonProperty("cities_removed") List<String> citiesRemoved,
     @JsonProperty("rivers_added") List<MapData.River> riversAdded,
-    @JsonProperty("roads_added") List<MapData.Road> roadsAdded
+    @JsonProperty("roads_added") List<MapData.Road> roadsAdded,
+    @JsonProperty("compressedRegions") List<MapData.CompressedRegion> compressedRegions
 ) {
     public MapDiff {
         if (parentNodeId == null || parentNodeId.isBlank())
@@ -34,6 +35,7 @@ public record MapDiff(
         if (citiesRemoved == null) citiesRemoved = List.of();
         if (riversAdded == null) riversAdded = List.of();
         if (roadsAdded == null) roadsAdded = List.of();
+        if (compressedRegions == null) compressedRegions = List.of();
     }
 
     /** Is this diff empty (no changes)? */
@@ -42,7 +44,8 @@ public record MapDiff(
         return changed.isEmpty() && removed.isEmpty()
             && provincesChanged.isEmpty() && provincesRemoved.isEmpty()
             && citiesAdded.isEmpty() && citiesRemoved.isEmpty()
-            && riversAdded.isEmpty() && roadsAdded.isEmpty();
+            && riversAdded.isEmpty() && roadsAdded.isEmpty()
+            && compressedRegions.isEmpty();
     }
 
     /**
@@ -96,6 +99,7 @@ public record MapDiff(
         return new MapDiff(parentNodeId, changed, removed,
             provChanged, provRemoved,
             citiesAdded, citiesRemoved,
-            child.rivers(), child.roads());
+            child.rivers(), child.roads(),
+            child.compressedRegions());
     }
 }
