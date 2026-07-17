@@ -2,7 +2,7 @@ package com.gsim.agent.core;
 
 import com.gsim.agent.AgentProgressEvent;
 import com.gsim.agent.AgentProgressSink;
-import com.gsim.agent.config.AgentConfigStore;
+import com.gsim.agent.AgentConfigStore;
 import com.gsim.cache.CacheStore;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;

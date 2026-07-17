@@ -1,4 +1,4 @@
-package com.gsim.agent.management;
+package com.gsim.agent;
 
 /**
  * Agent 运行时状态。

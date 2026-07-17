@@ -1,6 +1,5 @@
-package com.gsim.agent.config;
+package com.gsim.agent;
 
-import com.gsim.agent.core.AgentConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,5 +174,41 @@ public class AgentConfigStore {
 
     public Set<String> agentIds() {
         return configs.keySet();
+    }
+
+    /**
+     * Create or update an agent config (for MCP write operations).
+     * Writes the config as a JSON file to the agents directory.
+     */
+    public boolean saveConfig(AgentConfig config) throws IOException {
+        if (agentsDir == null) return false;
+        Files.createDirectories(agentsDir);
+        Path target = agentsDir.resolve(config.agentId() + ".json");
+        String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .writerWithDefaultPrettyPrinter()
+                .writeValueAsString(Map.of(
+                        "agentId", config.agentId(),
+                        "llmProvider", config.llmProvider() != null ? config.llmProvider() : "base",
+                        "staticSystemPrompt", config.staticSystemPrompt() != null ? config.staticSystemPrompt() : "",
+                        "systemPrompt", config.systemPrompt() != null ? config.systemPrompt() : "",
+                        "userTemplate", config.userTemplate() != null ? config.userTemplate() : "",
+                        "maxToolRounds", config.maxToolRounds(),
+                        "temperature", config.temperature(),
+                        "maxTokens", config.maxTokens()
+                ));
+        Files.writeString(target, json);
+        configs.put(config.agentId(), config);
+        return true;
+    }
+
+    /**
+     * Delete an agent config file.
+     */
+    public boolean deleteConfig(String agentId) throws IOException {
+        if (agentsDir == null) return false;
+        Path target = agentsDir.resolve(agentId + ".json");
+        boolean deleted = Files.deleteIfExists(target);
+        if (deleted) configs.remove(agentId);
+        return deleted;
     }
 }

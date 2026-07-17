@@ -240,7 +240,7 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
 
         // Sub-agent tools — 从 agents/ 目录加载配置
-        var agentConfigStore = new com.gsim.agent.config.AgentConfigStore();
+        var agentConfigStore = new com.gsim.agent.AgentConfigStore();
         agentConfigStore.reload(config.agentsDir());
         this.agentFactory = new com.gsim.agent.core.AgentFactory(
                 agentConfigStore, ctx.getLlmProviderRegistry(), toolRegistry,

@@ -1,10 +1,6 @@
-package com.gsim.agent.core;
-
-import com.gsim.agent.ToolCategory;
-import com.gsim.agent.ToolCategoryRegistry;
+package com.gsim.agent;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * 工具过滤规则 — 控制 Agent 可用工具集。
@@ -16,6 +12,9 @@ import java.util.Set;
  *   <li>"none" — 仅 finish_action（纯思考/对话 Agent，不访问任何数据）</li>
  *   <li>"custom" — 按 allow/deny 列表过滤</li>
  * </ul>
+ *
+ * <p>运行时过滤逻辑 ({@code allows()}) 在 gsim-app 的 {@code ToolFilterEvaluator} 中。
+ * 本 record 仅承载配置数据。
  */
 public record ToolFilterConfig(
         String mode,
@@ -25,20 +24,4 @@ public record ToolFilterConfig(
     public static final ToolFilterConfig ALL = new ToolFilterConfig("all", List.of(), List.of());
     public static final ToolFilterConfig READ_ONLY = new ToolFilterConfig("read_only", List.of(), List.of());
     public static final ToolFilterConfig NONE = new ToolFilterConfig("none", List.of(), List.of());
-
-    /** 判断工具是否可用。 */
-    public boolean allows(String toolName) {
-        return switch (mode) {
-            case "all" -> true;
-            case "read_only" -> ToolCategoryRegistry.isReadOnly(toolName)
-                    || ToolCategoryRegistry.isControl(toolName);
-            case "none" -> "finish_action".equals(toolName);
-            case "custom" -> {
-                if (deny.contains(toolName)) yield false;
-                if (allow.isEmpty()) yield true;
-                yield allow.contains(toolName);
-            }
-            default -> false;
-        };
-    }
 }

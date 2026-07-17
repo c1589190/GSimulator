@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gsim.agent.AgentConfig;
+import com.gsim.agent.AgentConfigStore;
+import com.gsim.agent.ToolFilterConfig;
+import com.gsim.llm.LlmConfig;
+import com.gsim.llm.LlmConfigManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,11 +70,11 @@ public class GsimMcpToolRegistry {
             case "gsim_resolve_ref"               -> handleResolveRef(args);
             case "gsim_list_docs"                 -> handleListDocs(args);
             case "gsim_get_doc"                   -> handleGetDoc(args);
-            case "gsim_llm_list"                  -> httpGet("/api/llm", args);
-            case "gsim_llm_get"                   -> httpGet("/api/llm/" + args.get("id").asText(), args);
-            case "gsim_llm_add"                   -> httpPost("/api/llm", args);
-            case "gsim_llm_update"               -> httpPatch("/api/llm/" + args.get("id").asText(), args);
-            case "gsim_llm_delete"               -> httpDelete("/api/llm/" + args.get("id").asText(), args);
+            case "gsim_llm_list"                  -> handleLlmList(args);
+            case "gsim_llm_get"                   -> handleLlmGet(args);
+            case "gsim_llm_add"                   -> handleLlmAdd(args);
+            case "gsim_llm_update"                -> handleLlmUpdate(args);
+            case "gsim_llm_delete"                -> handleLlmDelete(args);
             case "gsim_llm_test" -> {
                 var result = httpPostBody("/api/llm/" + args.get("id").asText() + "/test", MAPPER.createObjectNode());
                 try {
@@ -88,11 +93,11 @@ public class GsimMcpToolRegistry {
             case "gsim_agent_run"                -> httpPost("/api/agents/run", args);
             case "gsim_agent_cancel"             -> httpPost("/api/agents/" + args.get("instanceId").asText() + "/cancel", args);
             case "gsim_agent_output"             -> httpGet("/api/agents/" + args.get("instanceId").asText() + "/output", args);
-            case "gsim_agent_config_list"        -> httpGet("/api/agent-configs", args);
-            case "gsim_agent_config_get"         -> httpGet("/api/agent-configs/" + args.get("configId").asText(), args);
-            case "gsim_agent_config_create"      -> httpPost("/api/agent-configs", args);
-            case "gsim_agent_config_update"      -> httpPatch("/api/agent-configs/" + args.get("configId").asText(), args);
-            case "gsim_agent_config_delete"      -> httpDelete("/api/agent-configs/" + args.get("configId").asText(), args);
+            case "gsim_agent_config_list"        -> handleAgentConfigList(args);
+            case "gsim_agent_config_get"         -> handleAgentConfigGet(args);
+            case "gsim_agent_config_create"      -> handleAgentConfigCreate(args);
+            case "gsim_agent_config_update"      -> handleAgentConfigUpdate(args);
+            case "gsim_agent_config_delete"      -> handleAgentConfigDelete(args);
             default -> throw new IllegalArgumentException("Unknown tool: " + name);
         };
     }
@@ -994,6 +999,122 @@ public class GsimMcpToolRegistry {
         if (!cp.has("elements") || cp.get("elements").isNull())
             cp.set("elements", MAPPER.createArrayNode());
         return (ArrayNode) cp.get("elements");
+    }
+
+    // ── LLM Provider handlers (direct file access) ──────────
+
+    private LlmConfigManager getLlmConfigManager() {
+        Path llmsPath = resolveDataDir().resolve("llms.json");
+        return new LlmConfigManager(llmsPath);
+    }
+
+    private Path resolveDataDir() {
+        // Default data dir is {worldsDir}/../data
+        return worldsDir.getParent() != null ? worldsDir.getParent().resolve("data") : Path.of("data");
+    }
+
+    private String handleLlmList(JsonNode args) throws Exception {
+        return toJson(Map.of("providers", getLlmConfigManager().listProviders()));
+    }
+
+    private String handleLlmGet(JsonNode args) throws Exception {
+        String id = args.get("id").asText();
+        return toJson(getLlmConfigManager().getProvider(id));
+    }
+
+    private String handleLlmAdd(JsonNode args) throws Exception {
+        String id = args.get("id").asText();
+        String name = args.has("name") ? args.get("name").asText() : null;
+        String baseUrl = args.get("baseUrl").asText();
+        String model = args.get("model").asText();
+        String apiKey = args.has("apiKey") ? args.get("apiKey").asText() : null;
+        return toJson(getLlmConfigManager().addProvider(id, name, baseUrl, model, apiKey));
+    }
+
+    private String handleLlmUpdate(JsonNode args) throws Exception {
+        String id = args.get("id").asText();
+        String field = args.get("field").asText();
+        String value = args.get("value").asText();
+        return toJson(getLlmConfigManager().updateProvider(id, field, value));
+    }
+
+    private String handleLlmDelete(JsonNode args) throws Exception {
+        String id = args.get("id").asText();
+        return toJson(getLlmConfigManager().deleteProvider(id));
+    }
+
+    // ── Agent Config handlers (direct file access) ──────────
+
+    private AgentConfigStore getAgentConfigStore() {
+        AgentConfigStore store = new AgentConfigStore();
+        store.reload(resolveDataDir().resolve("agent-configs"));
+        return store;
+    }
+
+    private String handleAgentConfigList(JsonNode args) throws Exception {
+        return toJson(Map.of("configs", getAgentConfigStore().all().values().stream()
+            .map(this::cfgToMap).toList()));
+    }
+
+    private String handleAgentConfigGet(JsonNode args) throws Exception {
+        String configId = args.get("configId").asText();
+        AgentConfig cfg = getAgentConfigStore().get(configId);
+        if (cfg == null) return toJson(Map.of("error", "Config not found: " + configId));
+        return toJson(cfgToMap(cfg));
+    }
+
+    private String handleAgentConfigCreate(JsonNode args) throws Exception {
+        String agentId = args.get("agentId").asText();
+        String llmProvider = args.has("llmProvider") ? args.get("llmProvider").asText() : "base";
+        String systemPrompt = args.get("staticSystemPrompt").asText();
+        String userTemplate = args.has("userTemplate") ? args.get("userTemplate").asText() : "";
+        int maxToolRounds = args.has("maxToolRounds") ? args.get("maxToolRounds").asInt() : 32;
+        double temperature = args.has("temperature") ? args.get("temperature").asDouble() : 0.3;
+        int maxTokens = args.has("maxTokens") ? args.get("maxTokens").asInt() : 2048;
+
+        ToolFilterConfig toolFilter = new ToolFilterConfig("all", List.of(), List.of());
+        AgentConfig cfg = new AgentConfig(agentId, llmProvider, systemPrompt, systemPrompt,
+            userTemplate, toolFilter, maxToolRounds, temperature, maxTokens);
+        getAgentConfigStore().saveConfig(cfg);
+        return toJson(Map.of("ok", true, "configId", agentId));
+    }
+
+    private String handleAgentConfigUpdate(JsonNode args) throws Exception {
+        String configId = args.get("configId").asText();
+        AgentConfigStore store = getAgentConfigStore();
+        AgentConfig existing = store.get(configId);
+        if (existing == null) return toJson(Map.of("ok", false, "error", "Config not found: " + configId));
+
+        String llmProvider = args.has("llmProvider") ? args.get("llmProvider").asText() : existing.llmProvider();
+        String systemPrompt = args.has("staticSystemPrompt") ? args.get("staticSystemPrompt").asText() : existing.staticSystemPrompt();
+        String userTemplate = args.has("userTemplate") ? args.get("userTemplate").asText() : existing.userTemplate();
+        int maxToolRounds = args.has("maxToolRounds") ? args.get("maxToolRounds").asInt() : existing.maxToolRounds();
+        double temperature = args.has("temperature") ? args.get("temperature").asDouble() : existing.temperature();
+        int maxTokens = args.has("maxTokens") ? args.get("maxTokens").asInt() : existing.maxTokens();
+
+        AgentConfig updated = new AgentConfig(configId, llmProvider, systemPrompt, existing.systemPrompt(),
+            userTemplate, existing.toolFilter(), maxToolRounds, temperature, maxTokens);
+        store.saveConfig(updated);
+        return toJson(Map.of("ok", true, "configId", configId));
+    }
+
+    private String handleAgentConfigDelete(JsonNode args) throws Exception {
+        String configId = args.get("configId").asText();
+        getAgentConfigStore().deleteConfig(configId);
+        return toJson(Map.of("ok", true, "configId", configId));
+    }
+
+    private Map<String, Object> cfgToMap(AgentConfig cfg) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("configId", cfg.agentId());
+        m.put("llmProvider", cfg.llmProvider());
+        m.put("staticSystemPrompt", cfg.staticSystemPrompt());
+        m.put("userTemplate", cfg.userTemplate());
+        m.put("maxToolRounds", cfg.maxToolRounds());
+        m.put("temperature", cfg.temperature());
+        m.put("maxTokens", cfg.maxTokens());
+        m.put("toolFilterMode", cfg.toolFilter() != null ? cfg.toolFilter().mode() : "all");
+        return m;
     }
 
     // ── HTTP helpers (LLM/Agent/Config tools) ───────────────

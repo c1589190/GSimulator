@@ -1,6 +1,5 @@
-package com.gsim.agent.core;
+package com.gsim.agent;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;

@@ -1,11 +1,13 @@
 package com.gsim.agent.core;
 
+import com.gsim.agent.AgentConfig;
 import com.gsim.agent.AgentProgressEvent;
 import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
 import com.gsim.agent.ParsedToolCall;
 import com.gsim.agent.ToolCallExtractor;
 import com.gsim.agent.ToolCategoryRegistry;
+import com.gsim.agent.ToolFilterEvaluator;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
@@ -464,7 +466,7 @@ public class AbstractAgent {
     protected List<ToolDef> buildFilteredToolDefs() {
         List<ToolDef> defs = new ArrayList<>();
         for (var tool : allTools.all().values()) {
-            if (config.toolFilter().allows(tool.name())) {
+            if (ToolFilterEvaluator.allows(config.toolFilter(), tool.name())) {
                 var params = tool.getParameters();
                 defs.add(params != null
                         ? new ToolDef(tool.name(), tool.description(), params)

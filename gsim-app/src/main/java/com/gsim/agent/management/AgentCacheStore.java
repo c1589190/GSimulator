@@ -1,6 +1,6 @@
 package com.gsim.agent.management;
 
-import com.gsim.agent.config.AgentConfigStore;
+import com.gsim.agent.AgentConfigStore;
 import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CacheSession;
 import com.gsim.util.JsonUtils;

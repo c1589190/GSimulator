@@ -2,9 +2,9 @@ package com.gsim.agent.tool;
 
 import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.EventBusAgentProgressSink;
-import com.gsim.agent.config.AgentConfigStore;
-import com.gsim.agent.core.AgentConfig;
-import com.gsim.agent.management.AgentInstance;
+import com.gsim.agent.AgentConfigStore;
+import com.gsim.agent.AgentConfig;
+import com.gsim.agent.AgentInstance;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.llm.LlmManager;

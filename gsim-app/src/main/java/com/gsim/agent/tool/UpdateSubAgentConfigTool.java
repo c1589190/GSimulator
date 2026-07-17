@@ -1,8 +1,8 @@
 package com.gsim.agent.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.agent.config.AgentConfigStore;
-import com.gsim.agent.core.AgentConfig;
+import com.gsim.agent.AgentConfigStore;
+import com.gsim.agent.AgentConfig;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;

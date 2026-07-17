@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.gsim.agent.core.AbstractAgent;
-import com.gsim.agent.core.AgentConfig;
+import com.gsim.agent.AgentConfig;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.tool.DispatchSubAgentTool;

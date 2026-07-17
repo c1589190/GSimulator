@@ -1,8 +1,8 @@
 package com.gsim.api.handlers;
 
-import com.gsim.agent.management.AgentInstance;
+import com.gsim.agent.AgentInstance;
 import com.gsim.agent.management.AgentSseManager;
-import com.gsim.agent.management.AgentStatus;
+import com.gsim.agent.AgentStatus;
 import com.gsim.agent.management.AgentsManager;
 import com.gsim.api.ApiResponse;
 import com.gsim.util.JsonUtils;
