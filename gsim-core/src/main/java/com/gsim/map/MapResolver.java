@@ -47,12 +47,15 @@ public final class MapResolver {
             log.debug("No root map for {}/{}, using empty default", worldId, chain.get(0));
             resolved = MapData.empty();
         }
+        List<MapData.CompressedRegion> baseCrs = resolved.compressedRegions();
+        Map<String, MapDiff> chainDiffs = new LinkedHashMap<>();
 
         // Apply each child's diff
         for (int i = 1; i < chain.size(); i++) {
             MapDiff diff = MapStore.loadDiff(worldsDir, worldId, chain.get(i));
             if (diff != null && !diff.isEmpty()) {
-                resolved = applyDiff(resolved, diff);
+                chainDiffs.put(chain.get(i), diff);
+                resolved = applyDiff(resolved, diff, chain, baseCrs, chainDiffs);
             }
         }
 
@@ -68,6 +71,8 @@ public final class MapResolver {
 
         MapData resolved = MapStore.loadFull(worldsDir, worldId, chain.get(0));
         if (resolved == null) resolved = MapData.empty();
+        List<MapData.CompressedRegion> hBaseCrs = resolved.compressedRegions();
+        Map<String, MapDiff> hChainDiffs = new LinkedHashMap<>();
 
         entries.add(new HistoryEntry(chain.get(0), resolved, null, MapStore.exists(worldsDir, worldId, chain.get(0))));
 
@@ -75,7 +80,8 @@ public final class MapResolver {
             String nid = chain.get(i);
             MapDiff diff = MapStore.loadDiff(worldsDir, worldId, nid);
             if (diff != null && !diff.isEmpty()) {
-                resolved = applyDiff(resolved, diff);
+                hChainDiffs.put(nid, diff);
+                resolved = applyDiff(resolved, diff, chain, hBaseCrs, hChainDiffs);
             }
             entries.add(new HistoryEntry(nid, resolved, diff, diff != null));
         }
@@ -132,7 +138,9 @@ public final class MapResolver {
 
     // ── Diff application ─────────────────────────────────
 
-    static MapData applyDiff(MapData base, MapDiff diff) {
+    static MapData applyDiff(MapData base, MapDiff diff,
+                              List<String> chain, List<MapData.CompressedRegion> baseCrs,
+                              Map<String, MapDiff> chainDiffs) {
         // Hexes
         Map<String, MapData.HexCell> hexes = new LinkedHashMap<>(base.hexes());
         for (String key : diff.removed()) {
@@ -164,10 +172,21 @@ public final class MapResolver {
         List<MapData.River> rivers = diff.riversAdded().isEmpty() ? base.rivers() : diff.riversAdded();
         List<MapData.Road> roads = diff.roadsAdded().isEmpty() ? base.roads() : diff.roadsAdded();
 
-        // Compressed regions — child's CRs (computed from resolved state) win over parent's
-        List<MapData.CompressedRegion> crs = diff.compressedRegions().isEmpty()
-            ? base.compressedRegions()
-            : diff.compressedRegions();
+        // Compressed regions: concatenate from all nodes in chain order.
+        // Root CRs first (background), then each child's CRs appended (overlay).
+        // Higher-index CRs render on top, naturally achieving diff override.
+        List<MapData.CompressedRegion> crs = new ArrayList<>();
+        for (String nid : chain) {
+            if (nid.equals(chain.get(0))) {
+                // Root: CRs from the full map
+                crs.addAll(baseCrs != null ? baseCrs : List.of());
+            } else {
+                MapDiff d = chainDiffs.get(nid);
+                if (d != null && !d.compressedRegions().isEmpty()) {
+                    crs.addAll(d.compressedRegions());
+                }
+            }
+        }
 
         return new MapData(
             base.gridSize(), base.hexOrientation(),
