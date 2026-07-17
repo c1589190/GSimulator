@@ -25,10 +25,16 @@ public class GsimMcpToolRegistry {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Path worldsDir;
+    private final Path importDir;
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
 
     public GsimMcpToolRegistry(Path worldsDir) {
+        this(worldsDir, null);
+    }
+
+    public GsimMcpToolRegistry(Path worldsDir, Path importDir) {
         this.worldsDir = worldsDir;
+        this.importDir = importDir != null ? importDir : worldsDir.resolveSibling("import");
         registerAll();
     }
 
@@ -586,7 +592,7 @@ public class GsimMcpToolRegistry {
 
         // Search import documents
         if ("docs".equals(scope) || "all".equals(scope)) {
-            Path importDir = worldsDir.resolveSibling("import");
+            Path importDir = this.importDir;
             if (Files.isDirectory(importDir)) {
                 try (var files = Files.walk(importDir)) {
                     files.filter(Files::isRegularFile)
@@ -703,7 +709,7 @@ public class GsimMcpToolRegistry {
     }
 
     private String resolveDocRef(String docId) {
-        Path importDir = worldsDir.resolveSibling("import");
+        Path importDir = this.importDir;
         Path docPath = importDir.resolve(docId);
         if (!Files.exists(docPath)) {
             // Try resolving just the filename
@@ -738,7 +744,7 @@ public class GsimMcpToolRegistry {
     // ── Tool: gsim_list_docs ────────────────────────────────
 
     private String handleListDocs(JsonNode args) {
-        Path importDir = worldsDir.resolveSibling("import");
+        Path importDir = this.importDir;
         String filterQuery = args.has("query") ? args.get("query").asText().toLowerCase() : null;
 
         List<Map<String, Object>> docs = new ArrayList<>();
@@ -768,7 +774,7 @@ public class GsimMcpToolRegistry {
         int offset = args.has("offset") ? args.get("offset").asInt() : 0;
         int limit = args.has("limit") ? args.get("limit").asInt() : 200;
 
-        Path importDir = worldsDir.resolveSibling("import");
+        Path importDir = this.importDir;
         Path docPath = importDir.resolve(docId);
         if (!Files.exists(docPath)) {
             // Try by filename
