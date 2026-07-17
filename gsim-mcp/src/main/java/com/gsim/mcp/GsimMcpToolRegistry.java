@@ -61,6 +61,7 @@ public class GsimMcpToolRegistry {
             case "gsim_list_worlds"               -> handleListWorlds(args);
             case "gsim_get_world_info"            -> handleGetWorldInfo(args);
             case "gsim_get_node_info"             -> handleGetNodeInfo(args);
+            case "gsim_create_node"              -> handleCreateNode(args);
             case "gsim_list_checkpoints"          -> handleListCheckpoints(args);
             case "gsim_get_checkpoint"            -> handleGetCheckpoint(args);
             case "gsim_add_checkpoint_element"    -> handleAddCheckpointElement(args);
@@ -98,6 +99,33 @@ public class GsimMcpToolRegistry {
             case "gsim_agent_config_create"      -> handleAgentConfigCreate(args);
             case "gsim_agent_config_update"      -> handleAgentConfigUpdate(args);
             case "gsim_agent_config_delete"      -> handleAgentConfigDelete(args);
+            case "gsim_create_world"             -> handleCreateWorld(args);
+            case "gsim_delete_world"             -> handleDeleteWorld(args);
+            case "gsim_create_doc"               -> handleCreateDoc(args);
+            case "gsim_update_doc"               -> handleUpdateDoc(args);
+            case "gsim_delete_doc"               -> handleDeleteDoc(args);
+            case "gsim_doc_store_list"           -> handleDocStoreList(args);
+            case "gsim_doc_store_get"            -> handleDocStoreGet(args);
+            case "gsim_doc_store_create"         -> handleDocStoreCreate(args);
+            case "gsim_agent_cache_list"         -> handleAgentCacheList(args);
+            case "gsim_agent_cache_get"          -> handleAgentCacheGet(args);
+            case "gsim_agent_cache_create"       -> handleAgentCacheCreate(args);
+            case "gsim_agent_cache_delete"       -> handleAgentCacheDelete(args);
+            case "gsim_skill_list"               -> handleSkillList(args);
+            case "gsim_skill_get"                -> handleSkillGet(args);
+            case "gsim_skill_search"             -> handleSkillSearch(args);
+            case "gsim_cache_list"               -> handleCacheList(args);
+            case "gsim_cache_get"                -> handleCacheGet(args);
+            case "gsim_cache_edit"               -> handleCacheEdit(args);
+            case "gsim_get_status"               -> handleGetStatus(args);
+            case "gsim_list_tools" -> {
+                try {
+                    yield httpGet("/api/tools", MAPPER.createObjectNode());
+                } catch (Exception e) {
+                    yield toJson(Map.of("tools", tools.keySet().stream().toList(), "count", tools.size(),
+                        "note", "Using static tool list (gsim-app HTTP API unavailable)"));
+                }
+            }
             default -> throw new IllegalArgumentException("Unknown tool: " + name);
         };
     }
@@ -121,65 +149,75 @@ public class GsimMcpToolRegistry {
             "Get metadata for a GSim node: turn number, worldTime, parentId, checkpoints list.",
             """
             {"type":"object","properties":{
-              "worldId":{"type":"string"},
-              "nodeId":{"type":"string","description":"Node ID (e.g. n0000). Defaults to active node."}
-            },"required":["worldId"]}""");
+              "worldId":{"type":"string","description":"GSim world ID"},
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"}
+            },"required":["worldId","nodeId"]}""");
+
+        register("gsim_create_node",
+            "Create a new child node in a GSim world (advance turn). Creates a new branch node with auto-incremented turn number. Uses direct file I/O — no HTTP dependency.",
+            """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"GSim world ID"},
+              "parentId":{"type":"string","description":"Parent node ID to branch from"},
+              "worldTime":{"type":"string","description":"In-game time label (e.g. '星历502年春')"},
+              "title":{"type":"string","description":"Optional node title"}
+            },"required":["worldId","parentId","worldTime"]}""");
 
         register("gsim_list_checkpoints",
             "List all checkpoints in a GSim node with element counts.",
             """
             {"type":"object","properties":{
               "worldId":{"type":"string"},
-              "nodeId":{"type":"string","description":"Node ID (optional, defaults to active node)"}
-            },"required":["worldId"]}""");
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"}
+            },"required":["worldId","nodeId"]}""");
 
         register("gsim_get_checkpoint",
             "Get elements from a GSim checkpoint. Filter by key or tags (all must match).",
             """
             {"type":"object","properties":{
               "worldId":{"type":"string"},
-              "nodeId":{"type":"string"},
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"},
               "checkpoint":{"type":"string","description":"Checkpoint name: narrative, factions, worldview, characters, map"},
               "key":{"type":"string","description":"Filter by specific element key (optional)"},
               "tags":{"type":"array","items":{"type":"string"},"description":"Filter by tags — element must have ALL specified tags (optional)"},
               "limit":{"type":"integer","description":"Max elements to return (default 50)"}
-            },"required":["worldId","checkpoint"]}""");
+            },"required":["worldId","nodeId","checkpoint"]}""");
 
         register("gsim_add_checkpoint_element",
             "Add a new element to a GSim checkpoint.",
             """
             {"type":"object","properties":{
               "worldId":{"type":"string"},
-              "nodeId":{"type":"string"},
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"},
               "checkpoint":{"type":"string","description":"Checkpoint name"},
               "key":{"type":"string","description":"Unique element key"},
               "value":{"type":"string","description":"Full text content"},
               "type":{"type":"string","description":"Element type: text, character_state, map-region, map-city (default: text)"},
               "tags":{"type":"array","items":{"type":"string"},"description":"Tags for categorization"}
-            },"required":["worldId","checkpoint","key","value"]}""");
+            },"required":["worldId","nodeId","checkpoint","key","value"]}""");
 
         register("gsim_update_checkpoint_element",
             "Update an existing element in a GSim checkpoint. Only provided fields are changed.",
             """
             {"type":"object","properties":{
               "worldId":{"type":"string"},
-              "nodeId":{"type":"string"},
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"},
               "checkpoint":{"type":"string","description":"Checkpoint name"},
               "key":{"type":"string","description":"Element key to update"},
               "value":{"type":"string","description":"New text content (optional)"},
               "type":{"type":"string","description":"New element type (optional)"},
               "tags":{"type":"array","items":{"type":"string"},"description":"New tags list (optional, replaces all existing tags)"}
-            },"required":["worldId","checkpoint","key"]}""");
+            },"required":["worldId","nodeId","checkpoint","key"]}""");
 
         register("gsim_delete_checkpoint_element",
             "Delete an element from a GSim checkpoint by key.",
             """
             {"type":"object","properties":{
               "worldId":{"type":"string"},
-              "nodeId":{"type":"string"},
+              "nodeId":{"type":"string","description":"Node ID (e.g. n0000)"},
               "checkpoint":{"type":"string","description":"Checkpoint name"},
               "key":{"type":"string","description":"Element key to delete"}
-            },"required":["worldId","checkpoint","key"]}""");
+            },"required":["worldId","nodeId","checkpoint","key"]}""");
 
         register("gsim_search",
             "Keyword search across GSim world data: checkpoints (all worlds) plus imported documents. Returns matching elements with surrounding context.",
@@ -192,11 +230,12 @@ public class GsimMcpToolRegistry {
             },"required":["query"]}""");
 
         register("gsim_resolve_ref",
-            "Resolve a GSim @ reference (e.g. '@world:n0002:characters:曹操') to full element content. Supports 3-segment (world:node:checkpoint:key), 2-segment (world:checkpoint:key using active node), and @doc:id references.",
+            "Resolve a GSim @ reference to full element content. Supports explicit @world:worldId:nodeId:checkpoint:key (5-segment) and @world:worldId:checkpoint:key (4-segment, requires nodeId param). Also supports @doc:docId.",
             """
             {"type":"object","properties":{
-              "ref":{"type":"string","description":"Reference string: @world:nodeId:checkpoint:key, @world:checkpoint:key, or @doc:docId"},
-              "worldId":{"type":"string","description":"World ID (required for @world refs without explicit world prefix)"}
+              "ref":{"type":"string","description":"Reference: @world:worldId:nodeId:checkpoint:key, @world:worldId:checkpoint:key (needs nodeId param), or @doc:docId"},
+              "worldId":{"type":"string","description":"World ID (required for @world refs)"},
+              "nodeId":{"type":"string","description":"Node ID (required for 4-segment @world refs without nodeId in the ref)"}
             },"required":["ref"]}""");
 
         register("gsim_list_docs",
@@ -349,6 +388,168 @@ public class GsimMcpToolRegistry {
             {"type":"object","properties":{
               "configId":{"type":"string","description":"Config ID to delete"}
             },"required":["configId"]}""");
+
+        // ── World CRUD ─────────────────────────────────────────
+        register("gsim_create_world",
+            "Create a new GSim world. Creates world.json, root node n0000 (with worldview + narrative checkpoints), active.json, and updates _index.json.",
+            """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"Unique world ID (alphanumeric, dash, underscore)"},
+              "name":{"type":"string","description":"Display name (defaults to worldId)"}
+            },"required":["worldId"]}""");
+
+        register("gsim_delete_world",
+            "Delete a GSim world. Recursively removes the world directory and updates _index.json.",
+            """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"World ID to delete"}
+            },"required":["worldId"]}""");
+
+        // ── Import doc CRUD ───────────────────────────────────
+        register("gsim_create_doc",
+            "Create a new document in the import directory (.txt or .md).",
+            """
+            {"type":"object","properties":{
+              "name":{"type":"string","description":"Filename (e.g. 'research.txt'). Auto-appends .txt if no extension."},
+              "content":{"type":"string","description":"Full document text content"}
+            },"required":["name","content"]}""");
+
+        register("gsim_update_doc",
+            "Update an existing import document by docId.",
+            """
+            {"type":"object","properties":{
+              "docId":{"type":"string","description":"Document ID (relative path in import dir)"},
+              "content":{"type":"string","description":"New full text content"}
+            },"required":["docId","content"]}""");
+
+        register("gsim_delete_doc",
+            "Delete an import document by docId.",
+            """
+            {"type":"object","properties":{
+              "docId":{"type":"string","description":"Document ID to delete"}
+            },"required":["docId"]}""");
+
+        // ── DocStore CRUD ─────────────────────────────────────
+        register("gsim_doc_store_list",
+            "List documents in the DocStore (data/docs/). Filter by type (skill, character, world_state, template, context, rule, board, other) or tag.",
+            """
+            {"type":"object","properties":{
+              "type":{"type":"string","description":"Document type filter (optional): skill, character, world_state, ..."},
+              "tag":{"type":"string","description":"Tag filter (optional, case-sensitive substring match)"}
+            },"required":[]}""");
+
+        register("gsim_doc_store_get",
+            "Read a DocStore document by docId. Auto-discovers the type subdirectory. Supports line-level offset/limit pagination.",
+            """
+            {"type":"object","properties":{
+              "docId":{"type":"string","description":"Document ID (e.g. 'my-skill')"},
+              "offset":{"type":"integer","description":"Line offset for pagination (default 0)"},
+              "limit":{"type":"integer","description":"Max lines to return (default 200)"}
+            },"required":["docId"]}""");
+
+        register("gsim_doc_store_create",
+            "Create a new DocStore document (YAML frontmatter + Markdown). Stored at data/docs/{type}/{docId}.md.",
+            """
+            {"type":"object","properties":{
+              "docId":{"type":"string","description":"Unique document ID"},
+              "type":{"type":"string","description":"Document type: skill, character, world_state, template, context, rule, board, other"},
+              "title":{"type":"string","description":"Document title"},
+              "content":{"type":"string","description":"Markdown body content"},
+              "tags":{"type":"string","description":"Comma-separated tags (optional)"}
+            },"required":["docId","type","title","content"]}""");
+
+        // ── Agent Caches ───────────────────────────────────────
+        register("gsim_agent_cache_list",
+            "List agent conversation caches. Filter by worldId or agentType (orchestrator/sim/search).",
+            """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"Filter by world ID (optional)"},
+              "agentType":{"type":"string","description":"Filter by agent type (optional): orchestrator, sim, search"}
+            },"required":[]}""");
+
+        register("gsim_agent_cache_get",
+            "Read an agent cache by sessionId. Supports message pagination via offset/limit. Use summary=true for metadata only.",
+            """
+            {"type":"object","properties":{
+              "cacheId":{"type":"string","description":"Cache session ID (filename, e.g. 'orchestrator_2026-07-06T12-04-23.json')"},
+              "summary":{"type":"boolean","description":"Return metadata only, omit messages (default false)"},
+              "offset":{"type":"integer","description":"Message offset for pagination (default 0)"},
+              "limit":{"type":"integer","description":"Max messages to return (default 50)"}
+            },"required":["cacheId"]}""");
+
+        register("gsim_agent_cache_create",
+            "Create a new agent conversation cache. Auto-injects system prompt from agent config if available.",
+            """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"World ID for the cache"},
+              "agentName":{"type":"string","description":"Agent name (e.g. 'orchestrator', 'sim-1'). Default: 'orchestrator'."},
+              "nodeId":{"type":"string","description":"Node ID (default: 'n0000')"}
+            },"required":["worldId"]}""");
+
+        register("gsim_agent_cache_delete",
+            "Delete an agent cache by session ID.",
+            """
+            {"type":"object","properties":{
+              "cacheId":{"type":"string","description":"Cache session ID to delete"}
+            },"required":["cacheId"]}""");
+
+        // ── Skills ─────────────────────────────────────────────
+        register("gsim_skill_list",
+            "List all skill documents (from data/docs/skill/). Returns id, title, type, tags, summary for each.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_skill_get",
+            "Read a skill document by ID. Supports line-level offset/limit pagination.",
+            """
+            {"type":"object","properties":{
+              "skillId":{"type":"string","description":"Skill ID (filename without .md extension)"},
+              "offset":{"type":"integer","description":"Line offset (default 0)"},
+              "limit":{"type":"integer","description":"Max lines (default 200)"}
+            },"required":["skillId"]}""");
+
+        register("gsim_skill_search",
+            "Search skill documents by keyword. Matches against title and content. Returns up to 20 results with excerpts.",
+            """
+            {"type":"object","properties":{
+              "query":{"type":"string","description":"Search keyword(s)"}
+            },"required":["query"]}""");
+
+        // ── Text Caches ────────────────────────────────────────
+        register("gsim_cache_list",
+            "List all text caches (from data/docs/.cache/). Returns id and file size for each.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_cache_get",
+            "Read a text cache by ID. Supports line-level offset/limit pagination.",
+            """
+            {"type":"object","properties":{
+              "cacheId":{"type":"string","description":"Cache ID (filename, e.g. 'crop_20260701_120000_a1b2c3d4.txt')"},
+              "offset":{"type":"integer","description":"Line offset (default 0)"},
+              "limit":{"type":"integer","description":"Max lines (default 200)"}
+            },"required":["cacheId"]}""");
+
+        register("gsim_cache_edit",
+            "Edit a text cache. Supports keyword replacement (replace_from → replace_to) and text appending (insert_text). Result saved as a new cache file.",
+            """
+            {"type":"object","properties":{
+              "cacheId":{"type":"string","description":"Source cache ID to edit"},
+              "replace_from":{"type":"string","description":"Text to find and replace (optional)"},
+              "replace_to":{"type":"string","description":"Replacement text (optional, used with replace_from)"},
+              "insert_text":{"type":"string","description":"Text to append at end (optional)"}
+            },"required":["cacheId"]}""");
+
+        // ── Status ─────────────────────────────────────────────
+        register("gsim_get_status",
+            "Get MCP server status: version, directories, world count, tool count.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_list_tools",
+            "List GSimulator agent tools. Delegates to gsim-app HTTP API if running, otherwise returns a static tool summary.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
     }
 
     private void register(String name, String description, String schema) {
@@ -374,18 +575,6 @@ public class GsimMcpToolRegistry {
         Path path = worldsDir.resolve(worldId).resolve("nodes").resolve(nodeId + ".json");
         Files.createDirectories(path.getParent());
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), node);
-    }
-
-    private String resolveNodeId(String worldId, String providedNodeId) {
-        if (providedNodeId != null && !providedNodeId.isBlank()) return providedNodeId;
-        Path activeFile = worldsDir.resolve(worldId).resolve("active.json");
-        if (Files.exists(activeFile)) {
-            try {
-                JsonNode n = MAPPER.readTree(activeFile.toFile());
-                if (n.has("nodeId") && !n.get("nodeId").isNull()) return n.get("nodeId").asText();
-            } catch (Exception ignored) {}
-        }
-        return "n0000";
     }
 
     private String now() {
@@ -440,14 +629,17 @@ public class GsimMcpToolRegistry {
             result.put("createdAt", meta.has("createdAt") ? meta.get("createdAt").asText() : "");
         }
 
-        // Active node
+        // Active node — informational only (read from active.json for display)
         Path activeFile = w.resolve("active.json");
-        String activeNode = "n0000";
+        String activeNode = null;
         if (Files.exists(activeFile)) {
-            JsonNode an = MAPPER.readTree(activeFile.toFile());
-            if (an.has("nodeId")) activeNode = an.get("nodeId").asText();
+            try {
+                JsonNode an = MAPPER.readTree(activeFile.toFile());
+                if (an.has("nodeId") && !an.get("nodeId").isNull())
+                    activeNode = an.get("nodeId").asText();
+            } catch (Exception ignored) {}
         }
-        result.put("activeNode", activeNode);
+        if (activeNode != null) result.put("activeNode", activeNode);
 
         // Node chain
         Path nodesDir = w.resolve("nodes");
@@ -480,7 +672,7 @@ public class GsimMcpToolRegistry {
 
     private String handleGetNodeInfo(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         ObjectNode node = readNodeFile(worldId, nodeId);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -516,7 +708,7 @@ public class GsimMcpToolRegistry {
 
     private String handleListCheckpoints(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         ObjectNode node = readNodeFile(worldId, nodeId);
 
         List<Map<String, Object>> cps = new ArrayList<>();
@@ -540,7 +732,7 @@ public class GsimMcpToolRegistry {
 
     private String handleGetCheckpoint(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         String checkpointName = args.get("checkpoint").asText();
         String filterKey = args.has("key") ? args.get("key").asText() : null;
         int limit = args.has("limit") ? args.get("limit").asInt() : 50;
@@ -590,7 +782,7 @@ public class GsimMcpToolRegistry {
 
     private String handleAddCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 
@@ -633,7 +825,7 @@ public class GsimMcpToolRegistry {
 
     private String handleUpdateCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 
@@ -671,7 +863,7 @@ public class GsimMcpToolRegistry {
 
     private String handleDeleteCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = resolveNodeId(worldId, args.has("nodeId") ? args.get("nodeId").asText() : null);
+        String nodeId = args.get("nodeId").asText();
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 
@@ -802,10 +994,9 @@ public class GsimMcpToolRegistry {
 
     private String handleResolveRef(JsonNode args) throws Exception {
         String ref = args.get("ref").asText().strip();
-        String defaultWorld = args.has("worldId") ? args.get("worldId").asText() : null;
+        String explicitNodeId = args.has("nodeId") ? args.get("nodeId").asText() : null;
 
-        // Parse: @world:n0002:characters:曹操 → ["world", "n0002", "characters", "曹操"]
-        // Parse: @world:characters:曹操 → ["world", "characters", "曹操"] (2-segment, uses active node)
+        // Parse: @world:worldId:nodeId:checkpoint:key → ["world", ...]
         // Parse: @doc:some_doc → ["doc", "some_doc"]
         if (!ref.startsWith("@")) return toJson(Map.of("error", "Invalid ref: must start with @", "ref", ref));
 
@@ -813,36 +1004,31 @@ public class GsimMcpToolRegistry {
         if (parts.length < 2) return toJson(Map.of("error", "Invalid ref: at least @type:id required", "ref", ref));
 
         return switch (parts[0]) {
-            case "world" -> resolveWorldRef(parts, defaultWorld);
+            case "world" -> resolveWorldRef(parts, explicitNodeId);
             case "doc" -> resolveDocRef(parts[1]);
             default -> toJson(Map.of("error", "Unknown ref type: " + parts[0], "ref", ref));
         };
     }
 
-    private String resolveWorldRef(String[] parts, String defaultWorld) throws Exception {
+    private String resolveWorldRef(String[] parts, String explicitNodeId) throws Exception {
         String worldId, nodeId, checkpointName, key;
 
         if (parts.length >= 5) {
-            // @world:worldId:nodeId:checkpoint:key (5 segments)
+            // @world:worldId:nodeId:checkpoint:key — fully explicit
             worldId = parts[1];
             nodeId = parts[2];
             checkpointName = parts[3];
             key = parts[4];
         } else if (parts.length == 4) {
-            // @world:worldId:checkpoint:key (4 segments, node defaults to active)
+            // @world:worldId:checkpoint:key — requires explicit nodeId parameter
+            if (explicitNodeId == null || explicitNodeId.isBlank())
+                return toJson(Map.of("error", "4-segment @world ref requires explicit nodeId parameter", "ref", "@" + String.join(":", parts)));
             worldId = parts[1];
-            nodeId = resolveNodeId(worldId, null);
+            nodeId = explicitNodeId;
             checkpointName = parts[2];
             key = parts[3];
-        } else if (parts.length == 3) {
-            // @world:checkpoint:key (3 segments, use default world + active node)
-            worldId = defaultWorld != null ? defaultWorld : findFirstWorld();
-            if (worldId == null) return toJson(Map.of("error", "No world available", "ref", "@" + String.join(":", parts)));
-            nodeId = resolveNodeId(worldId, null);
-            checkpointName = parts[1];
-            key = parts[2];
         } else {
-            return toJson(Map.of("error", "Invalid @world ref: need 3-5 segments (world[:nodeId]:checkpoint:key)", "ref", "@" + String.join(":", parts)));
+            return toJson(Map.of("error", "Invalid @world ref: need 4-5 segments (worldId:nodeId:checkpoint:key or worldId:checkpoint:key with nodeId param)", "ref", "@" + String.join(":", parts)));
         }
 
         // Verify world exists
@@ -905,15 +1091,6 @@ public class GsimMcpToolRegistry {
         } catch (IOException e) {
             return toJson(Map.of("error", "Failed to read document: " + e.getMessage()));
         }
-    }
-
-    private String findFirstWorld() {
-        java.io.File[] dirs = worldsDir.toFile().listFiles(java.io.File::isDirectory);
-        if (dirs == null || dirs.length == 0) return null;
-        for (java.io.File d : dirs) {
-            if (Files.exists(d.toPath().resolve("world.json"))) return d.getName();
-        }
-        return dirs[0].getName();
     }
 
     // ── Tool: gsim_list_docs ────────────────────────────────
@@ -1001,10 +1178,108 @@ public class GsimMcpToolRegistry {
         return (ArrayNode) cp.get("elements");
     }
 
+    // ── Directory resolution helpers ────────────────────────
+
+    private Path resolveCachesPath() {
+        return worldsDir.resolveSibling("caches");
+    }
+
+    private Path resolveDocsPath() {
+        return worldsDir.resolveSibling("docs");
+    }
+
+    private Path resolveDocFilePath(String type, String docId) {
+        return resolveDocsPath().resolve(type).resolve(docId + ".md");
+    }
+
+    private Path resolveTextCacheDir() {
+        return resolveDocsPath().resolve(".cache");
+    }
+
+    // ── YAML frontmatter parser ──────────────────────────────
+
+    /** Parse YAML frontmatter from a Markdown document.
+     *  Returns a map of key-value pairs (type, title, tags, version, ...). */
+    private Map<String, String> parseYamlFrontmatter(String content) {
+        Map<String, String> fm = new LinkedHashMap<>();
+        if (content == null || !content.startsWith("---")) return fm;
+        int end = content.indexOf("\n---\n", 3);
+        if (end < 0) end = content.indexOf("\n---\r\n", 3);
+        if (end < 0) return fm;
+        String yaml = content.substring(content.indexOf('\n', 3) + 1, end);
+        for (String line : yaml.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
+            int colon = trimmed.indexOf(':');
+            if (colon <= 0) continue;
+            String k = trimmed.substring(0, colon).trim();
+            String v = trimmed.substring(colon + 1).trim();
+            // Remove surrounding brackets and quotes
+            if (v.startsWith("[") && v.endsWith("]")) v = v.substring(1, v.length() - 1).trim();
+            if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'") && v.endsWith("'")))
+                v = v.substring(1, v.length() - 1);
+            fm.put(k, v);
+        }
+        return fm;
+    }
+
+    /** Extract body content after YAML frontmatter. */
+    private String extractMarkdownBody(String content) {
+        if (content == null || !content.startsWith("---")) return content;
+        int end = content.indexOf("\n---\n", 3);
+        if (end < 0) end = content.indexOf("\n---\r\n", 3);
+        if (end < 0) return content;
+        return content.substring(end + 5).trim();
+    }
+
+    /** Build a YAML frontmatter + body Markdown document string. */
+    private String buildDocContent(String type, String title, String tagsStr, String body) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("---\n");
+        sb.append("type: ").append(type != null ? type : "other").append("\n");
+        sb.append("title: ").append(title != null ? title : "").append("\n");
+        if (tagsStr != null && !tagsStr.isBlank()) {
+            sb.append("tags: [").append(tagsStr).append("]\n");
+        }
+        sb.append("version: 1\n");
+        sb.append("updated: ").append(System.currentTimeMillis()).append("\n");
+        sb.append("---\n");
+        if (body != null) sb.append(body);
+        return sb.toString();
+    }
+
+    // ── World index helpers ───────────────────────────────────
+
+    private List<Map<String, Object>> loadWorldIndex() {
+        Path idx = worldsDir.resolve("_index.json");
+        if (!Files.exists(idx)) return new ArrayList<>();
+        try {
+            JsonNode arr = MAPPER.readTree(idx.toFile());
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (arr.isArray()) for (JsonNode n : arr) result.add(MAPPER.treeToValue(n, Map.class));
+            return result;
+        } catch (Exception e) { return new ArrayList<>(); }
+    }
+
+    private void saveWorldIndex(List<Map<String, Object>> entries) throws IOException {
+        Path idx = worldsDir.resolve("_index.json");
+        Files.createDirectories(worldsDir);
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(idx.toFile(), entries);
+    }
+
+    private void deleteRecursive(Path dir) throws IOException {
+        if (Files.isDirectory(dir)) {
+            try (var stream = Files.list(dir)) {
+                for (Path child : stream.toList()) deleteRecursive(child);
+            }
+        }
+        Files.delete(dir);
+    }
+
     // ── LLM Provider handlers (direct file access) ──────────
 
     private LlmConfigManager getLlmConfigManager() {
-        Path llmsPath = resolveDataDir().resolve("llms.json");
+        Path llmsPath = worldsDir.resolveSibling("llms.json");
         return new LlmConfigManager(llmsPath);
     }
 
@@ -1047,7 +1322,13 @@ public class GsimMcpToolRegistry {
 
     private AgentConfigStore getAgentConfigStore() {
         AgentConfigStore store = new AgentConfigStore();
-        store.reload(resolveDataDir().resolve("agent-configs"));
+        // Agent configs live at project root as sibling of worlds/ — same as gsim-app
+        Path agentsDir = worldsDir.resolveSibling("agents");
+        try {
+            store.reload(agentsDir);
+        } catch (Exception e) {
+            log.warn("Failed to load agent configs from {}: {}", agentsDir, e.getMessage());
+        }
         return store;
     }
 
@@ -1115,6 +1396,624 @@ public class GsimMcpToolRegistry {
         m.put("maxTokens", cfg.maxTokens());
         m.put("toolFilterMode", cfg.toolFilter() != null ? cfg.toolFilter().mode() : "all");
         return m;
+    }
+
+    // ── World CRUD handlers ──────────────────────────────────
+
+    private String handleCreateWorld(JsonNode args) throws Exception {
+        String worldId = args.get("worldId").asText();
+        if (!worldId.matches("[a-zA-Z0-9_\\-]+"))
+            return toJson(Map.of("ok", false, "error", "Invalid worldId: use alphanumeric, dash, underscore"));
+        Path worldDir = worldsDir.resolve(worldId);
+        if (Files.exists(worldDir))
+            return toJson(Map.of("ok", false, "error", "World already exists: " + worldId));
+
+        String name = args.has("name") ? args.get("name").asText() : worldId;
+        String now = Instant.now().toString();
+
+        ObjectNode worldMeta = MAPPER.createObjectNode();
+        worldMeta.put("id", worldId);
+        worldMeta.put("name", name);
+        worldMeta.put("createdAt", now);
+        worldMeta.put("currentNodeId", "n0000");
+        Files.createDirectories(worldDir);
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(worldDir.resolve("world.json").toFile(), worldMeta);
+
+        ObjectNode rootNode = MAPPER.createObjectNode();
+        rootNode.put("nodeId", "n0000");
+        rootNode.putNull("parentId");
+        rootNode.put("turn", 0);
+        rootNode.put("worldTime", "时间原点");
+        rootNode.put("status", "initial");
+        rootNode.put("createdAt", now);
+        ObjectNode rootCps = MAPPER.createObjectNode();
+        ObjectNode worldviewCp = MAPPER.createObjectNode();
+        worldviewCp.put("label", "世界观");
+        worldviewCp.put("type", "worldview");
+        worldviewCp.set("elements", MAPPER.createArrayNode());
+        rootCps.set("worldview", worldviewCp);
+        ObjectNode narrativeCp = MAPPER.createObjectNode();
+        narrativeCp.put("label", "推文");
+        narrativeCp.put("type", "narrative");
+        narrativeCp.set("elements", MAPPER.createArrayNode());
+        rootCps.set("narrative", narrativeCp);
+        rootNode.set("checkpoints", rootCps);
+        Path nodesDir = worldDir.resolve("nodes");
+        Files.createDirectories(nodesDir);
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(nodesDir.resolve("n0000.json").toFile(), rootNode);
+
+        ObjectNode activeState = MAPPER.createObjectNode();
+        activeState.put("nodeId", "n0000");
+        activeState.set("sessions", MAPPER.createObjectNode());
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(worldDir.resolve("active.json").toFile(), activeState);
+
+        List<Map<String, Object>> index = loadWorldIndex();
+        index.add(Map.of("id", worldId, "name", name, "createdAt", now));
+        saveWorldIndex(index);
+
+        return toJson(Map.of("ok", true, "worldId", worldId, "name", name, "createdAt", now, "currentNodeId", "n0000"));
+    }
+
+    private String handleDeleteWorld(JsonNode args) throws Exception {
+        String worldId = args.get("worldId").asText();
+        Path worldDir = worldsDir.resolve(worldId);
+        if (!Files.isDirectory(worldDir) || !Files.exists(worldDir.resolve("world.json")))
+            return toJson(Map.of("ok", false, "error", "World not found: " + worldId));
+
+        deleteRecursive(worldDir);
+        List<Map<String, Object>> index = loadWorldIndex();
+        index.removeIf(e -> worldId.equals(e.get("id")));
+        saveWorldIndex(index);
+
+        return toJson(Map.of("ok", true, "worldId", worldId, "deleted", true));
+    }
+
+    // ── Node create handler (direct file I/O) ──────────────────
+
+    private String handleCreateNode(JsonNode args) throws Exception {
+        String worldId = args.get("worldId").asText();
+        String parentId = args.get("parentId").asText();
+        String worldTime = args.get("worldTime").asText();
+
+        Path worldDir = worldsDir.resolve(worldId);
+        if (!Files.isDirectory(worldDir) || !Files.exists(worldDir.resolve("world.json")))
+            return toJson(Map.of("ok", false, "error", "World not found: " + worldId));
+
+        Path parentFile = worldsDir.resolve(worldId).resolve("nodes").resolve(parentId + ".json");
+        if (!Files.exists(parentFile))
+            return toJson(Map.of("ok", false, "error", "Parent node not found: " + parentId));
+
+        // Read parent turn
+        ObjectNode parentNode = (ObjectNode) MAPPER.readTree(parentFile.toFile());
+        int parentTurn = parentNode.has("turn") ? parentNode.get("turn").asInt() : 0;
+        int nextTurn = parentTurn + 1;
+
+        // Scan disk for max nXXXX → next node ID
+        Path nodesDir = worldsDir.resolve(worldId).resolve("nodes");
+        int maxNum = -1;
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("n(\\d{4})\\.json$");
+        if (Files.isDirectory(nodesDir)) {
+            try (var files = Files.list(nodesDir)) {
+                for (Path f : (Iterable<Path>) files::iterator) {
+                    var m = p.matcher(f.getFileName().toString());
+                    if (m.find()) {
+                        int num = Integer.parseInt(m.group(1));
+                        if (num > maxNum) maxNum = num;
+                    }
+                }
+            }
+        }
+        String newNodeId = String.format("n%04d", maxNum + 1);
+
+        // Build child node JSON
+        ObjectNode childNode = MAPPER.createObjectNode();
+        childNode.put("nodeId", newNodeId);
+        childNode.put("parentId", parentId);
+        childNode.put("turn", nextTurn);
+        childNode.put("worldTime", worldTime);
+        childNode.put("status", "active");
+        childNode.put("createdAt", now());
+        childNode.set("checkpoints", MAPPER.createObjectNode());
+
+        writeNodeFile(worldId, newNodeId, childNode);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ok", true);
+        result.put("nodeId", newNodeId);
+        result.put("parentId", parentId);
+        result.put("turn", nextTurn);
+        result.put("worldTime", worldTime);
+        if (args.has("title") && !args.get("title").asText().isBlank())
+            result.put("title", args.get("title").asText());
+        result.put("action", "created");
+        return toJson(result);
+    }
+
+    // ── Import doc CRUD handlers ──────────────────────────────
+
+    private String handleCreateDoc(JsonNode args) throws Exception {
+        String name = args.get("name").asText();
+        String content = args.has("content") ? args.get("content").asText() : "";
+
+        // Sanitize filename
+        String safeName = name.replaceAll("[^a-zA-Z0-9_\\-.一-鿿]", "_");
+        if (!safeName.endsWith(".txt") && !safeName.endsWith(".md") && !safeName.endsWith(".markdown"))
+            safeName += ".txt";
+
+        Path target = importDir.resolve(safeName);
+        Files.createDirectories(target.getParent());
+        if (Files.exists(target))
+            return toJson(Map.of("ok", false, "error", "Document already exists: " + safeName));
+
+        Files.writeString(target, content);
+        return toJson(Map.of("ok", true, "docId", importDir.relativize(target).toString()));
+    }
+
+    private String handleUpdateDoc(JsonNode args) throws Exception {
+        String docId = args.get("docId").asText();
+        String content = args.has("content") ? args.get("content").asText() : "";
+        Path docPath = importDir.resolve(docId);
+        if (!Files.exists(docPath)) {
+            try (var files = Files.walk(importDir)) {
+                var found = files.filter(Files::isRegularFile)
+                    .filter(f -> f.getFileName().toString().equals(docId))
+                    .findFirst();
+                if (found.isPresent()) docPath = found.get();
+            } catch (Exception ignored) {}
+        }
+        if (!Files.exists(docPath))
+            return toJson(Map.of("ok", false, "error", "Document not found: " + docId));
+
+        Files.writeString(docPath, content);
+        return toJson(Map.of("ok", true, "docId", docId));
+    }
+
+    private String handleDeleteDoc(JsonNode args) throws Exception {
+        String docId = args.get("docId").asText();
+        Path docPath = importDir.resolve(docId);
+        if (!Files.exists(docPath)) {
+            try (var files = Files.walk(importDir)) {
+                var found = files.filter(Files::isRegularFile)
+                    .filter(f -> f.getFileName().toString().equals(docId))
+                    .findFirst();
+                if (found.isPresent()) docPath = found.get();
+            } catch (Exception ignored) {}
+        }
+        if (!Files.exists(docPath))
+            return toJson(Map.of("ok", false, "error", "Document not found: " + docId));
+
+        Files.delete(docPath);
+        return toJson(Map.of("ok", true, "docId", docId, "deleted", true));
+    }
+
+    // ── DocStore handlers ─────────────────────────────────────
+
+    private String handleDocStoreList(JsonNode args) throws Exception {
+        Path docsDir = resolveDocsPath();
+        String filterType = args.has("type") ? args.get("type").asText() : null;
+        String filterTag = args.has("tag") ? args.get("tag").asText() : null;
+
+        List<Map<String, Object>> docs = new ArrayList<>();
+        if (Files.isDirectory(docsDir)) {
+            try (var files = Files.walk(docsDir)) {
+                files.filter(Files::isRegularFile)
+                    .filter(f -> f.toString().endsWith(".md"))
+                    .forEach(f -> {
+                        try {
+                            String content = Files.readString(f);
+                            Map<String, String> fm = parseYamlFrontmatter(content);
+                            String docType = fm.getOrDefault("type", "other");
+                            if (filterType != null && !filterType.equals(docType)) return;
+
+                            Map<String, Object> d = new LinkedHashMap<>();
+                            Path rel = docsDir.relativize(f);
+                            String docId = rel.toString().replace(".md", "");
+                            d.put("docId", docId);
+                            d.put("type", docType);
+                            d.put("title", fm.getOrDefault("title", ""));
+                            d.put("tags", fm.getOrDefault("tags", ""));
+                            d.put("version", fm.getOrDefault("version", "1"));
+                            d.put("size", Files.size(f));
+
+                            // Tag filter
+                            if (filterTag != null && !filterTag.isBlank()) {
+                                String tags = fm.getOrDefault("tags", "");
+                                if (!tags.contains(filterTag)) return;
+                            }
+                            docs.add(d);
+                        } catch (Exception ignored) {}
+                    });
+            } catch (Exception ignored) {}
+        }
+        return toJson(Map.of("docs", docs, "count", docs.size()));
+    }
+
+    private String handleDocStoreGet(JsonNode args) throws Exception {
+        String docId = args.get("docId").asText();
+        int offset = args.has("offset") ? args.get("offset").asInt() : 0;
+        int limit = args.has("limit") ? args.get("limit").asInt() : 200;
+
+        // Try to find doc by ID in all type subdirectories
+        Path docsDir = resolveDocsPath();
+        Path docPath = null;
+        if (Files.isDirectory(docsDir)) {
+            try (var subdirs = Files.list(docsDir)) {
+                for (Path sd : (Iterable<Path>) subdirs::iterator) {
+                    Path candidate = sd.resolve(docId + ".md");
+                    if (Files.exists(candidate)) { docPath = candidate; break; }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (docPath == null)
+            return toJson(Map.of("error", "Document not found: " + docId));
+
+        String content = Files.readString(docPath);
+        Map<String, String> fm = parseYamlFrontmatter(content);
+        String body = extractMarkdownBody(content);
+
+        String[] lines = body.split("\n");
+        int totalLines = lines.length;
+        int from = Math.min(offset, totalLines);
+        int to = Math.min(from + limit, totalLines);
+        String excerpt = String.join("\n", Arrays.copyOfRange(lines, from, to));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("docId", docId);
+        result.put("type", fm.getOrDefault("type", "other"));
+        result.put("title", fm.getOrDefault("title", ""));
+        result.put("tags", fm.getOrDefault("tags", ""));
+        result.put("totalLines", totalLines);
+        result.put("offset", from);
+        result.put("limit", limit);
+        result.put("content", excerpt);
+        return toJson(result);
+    }
+
+    private String handleDocStoreCreate(JsonNode args) throws Exception {
+        String docId = args.get("docId").asText();
+        String type = args.has("type") ? args.get("type").asText() : "other";
+        String title = args.has("title") ? args.get("title").asText() : docId;
+        String content = args.has("content") ? args.get("content").asText() : "";
+        String tags = args.has("tags") ? args.get("tags").asText() : "";
+
+        Path docPath = resolveDocFilePath(type, docId);
+        if (Files.exists(docPath))
+            return toJson(Map.of("ok", false, "error", "Document already exists: " + docId));
+
+        Files.createDirectories(docPath.getParent());
+        Files.writeString(docPath, buildDocContent(type, title, tags, content));
+        return toJson(Map.of("ok", true, "docId", docId, "type", type, "title", title));
+    }
+
+    // ── Agent Cache handlers ──────────────────────────────────
+
+    private String handleAgentCacheList(JsonNode args) throws Exception {
+        Path cachesDir = resolveCachesPath();
+        String filterWorldId = args.has("worldId") ? args.get("worldId").asText() : null;
+        String filterAgentType = args.has("agentType") ? args.get("agentType").asText() : null;
+
+        List<Map<String, Object>> caches = new ArrayList<>();
+        if (Files.isDirectory(cachesDir)) {
+            try (var files = Files.list(cachesDir)) {
+                for (Path f : (Iterable<Path>) files.sorted()::iterator) {
+                    if (!f.getFileName().toString().endsWith(".json")) continue;
+                    try {
+                        JsonNode cache = MAPPER.readTree(f.toFile());
+                        String worldId = cache.has("worldId") ? cache.get("worldId").asText() : "";
+                        String agentName = cache.has("agentName") ? cache.get("agentName").asText() : "";
+                        if (filterWorldId != null && !filterWorldId.equals(worldId)) continue;
+                        if (filterAgentType != null) {
+                            String agentType = inferAgentType(agentName);
+                            if (!filterAgentType.equals(agentType)) continue;
+                        }
+                        Map<String, Object> info = new LinkedHashMap<>();
+                        info.put("sessionId", cache.has("sessionId") ? cache.get("sessionId").asText() : f.getFileName().toString());
+                        info.put("agentName", agentName);
+                        info.put("agentType", inferAgentType(agentName));
+                        info.put("worldId", worldId);
+                        info.put("nodeId", cache.has("nodeId") ? cache.get("nodeId").asText() : "");
+                        info.put("createdAt", cache.has("createdAt") ? cache.get("createdAt").asText() : "");
+                        info.put("messageCount", cache.has("messages") ? cache.get("messages").size() : 0);
+                        info.put("previousSessionId", cache.has("previousSessionId") && !cache.get("previousSessionId").isNull()
+                            ? cache.get("previousSessionId").asText() : null);
+                        caches.add(info);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        return toJson(Map.of("caches", caches, "count", caches.size()));
+    }
+
+    private String handleAgentCacheGet(JsonNode args) throws Exception {
+        String cacheId = args.get("cacheId").asText();
+        boolean summaryOnly = args.has("summary") && args.get("summary").asBoolean();
+        int offset = args.has("offset") ? args.get("offset").asInt() : 0;
+        int limit = args.has("limit") ? args.get("limit").asInt() : 50;
+
+        Path cacheFile = resolveCachesPath().resolve(cacheId);
+        if (!Files.exists(cacheFile))
+            return toJson(Map.of("error", "Cache not found: " + cacheId));
+
+        JsonNode cache = MAPPER.readTree(cacheFile.toFile());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", cache.has("sessionId") ? cache.get("sessionId").asText() : cacheId);
+        result.put("agentName", cache.has("agentName") ? cache.get("agentName").asText() : "");
+        result.put("worldId", cache.has("worldId") ? cache.get("worldId").asText() : "");
+        result.put("nodeId", cache.has("nodeId") ? cache.get("nodeId").asText() : "");
+        result.put("createdAt", cache.has("createdAt") ? cache.get("createdAt").asText() : "");
+        result.put("previousSessionId", cache.has("previousSessionId") && !cache.get("previousSessionId").isNull()
+            ? cache.get("previousSessionId").asText() : null);
+
+        if (summaryOnly) {
+            result.put("messageCount", cache.has("messages") ? cache.get("messages").size() : 0);
+        } else {
+            JsonNode messages = cache.get("messages");
+            if (messages != null && messages.isArray()) {
+                int totalMsgs = messages.size();
+                int from = Math.min(offset, totalMsgs);
+                int to = Math.min(from + limit, totalMsgs);
+                List<Object> page = new ArrayList<>();
+                for (int i = from; i < to; i++) page.add(MAPPER.treeToValue(messages.get(i), Map.class));
+                result.put("messages", page);
+                result.put("offset", from);
+                result.put("limit", limit);
+                result.put("totalMessages", totalMsgs);
+            }
+        }
+        return toJson(result);
+    }
+
+    private String handleAgentCacheCreate(JsonNode args) throws Exception {
+        String worldId = args.get("worldId").asText();
+        String agentName = args.has("agentName") ? args.get("agentName").asText() : "orchestrator";
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
+        String now = Instant.now().toString();
+        String safeTime = now.replace(":", "-");
+        if (safeTime.length() > 19) safeTime = safeTime.substring(0, 19);
+        String sessionId = agentName + "_" + safeTime + ".json";
+
+        // Build cache session JSON
+        ObjectNode session = MAPPER.createObjectNode();
+        session.put("agentName", agentName);
+        session.put("worldId", worldId);
+        session.put("nodeId", nodeId);
+        session.put("sessionId", sessionId);
+        session.put("createdAt", now);
+        session.putNull("previousSessionId");
+        session.putNull("compressionNote");
+
+        // Inject system prompt from agent config if available
+        ArrayNode messages = MAPPER.createArrayNode();
+        try {
+            AgentConfigStore store = getAgentConfigStore();
+            AgentConfig cfg = store.get(agentName);
+            if (cfg != null && cfg.staticSystemPrompt() != null && !cfg.staticSystemPrompt().isBlank()) {
+                ObjectNode sysMsg = MAPPER.createObjectNode();
+                sysMsg.put("role", "system");
+                sysMsg.put("content", cfg.staticSystemPrompt());
+                messages.add(sysMsg);
+            }
+        } catch (Exception ignored) {}
+        session.set("messages", messages);
+
+        Path cacheFile = resolveCachesPath().resolve(sessionId);
+        Files.createDirectories(resolveCachesPath());
+        if (Files.exists(cacheFile))
+            return toJson(Map.of("ok", false, "error", "Cache already exists: " + sessionId));
+
+        MAPPER.writerWithDefaultPrettyPrinter().writeValue(cacheFile.toFile(), session);
+        return toJson(Map.of("ok", true, "sessionId", sessionId, "agentName", agentName,
+            "worldId", worldId, "nodeId", nodeId, "messageCount", messages.size()));
+    }
+
+    private String handleAgentCacheDelete(JsonNode args) throws Exception {
+        String cacheId = args.get("cacheId").asText();
+        Path cacheFile = resolveCachesPath().resolve(cacheId);
+        if (!Files.exists(cacheFile))
+            return toJson(Map.of("ok", false, "error", "Cache not found: " + cacheId));
+
+        Files.delete(cacheFile);
+        return toJson(Map.of("ok", true, "cacheId", cacheId, "deleted", true));
+    }
+
+    private static String inferAgentType(String agentName) {
+        if (agentName == null) return "unknown";
+        String lower = agentName.toLowerCase();
+        if (lower.startsWith("orchestrator")) return "orchestrator";
+        if (lower.startsWith("sim")) return "sim";
+        if (lower.startsWith("search")) return "search";
+        int dash = agentName.indexOf('-');
+        return dash > 0 ? agentName.substring(0, dash) : agentName;
+    }
+
+    // ── Skill handlers ────────────────────────────────────────
+
+    private String handleSkillList(JsonNode args) throws Exception {
+        Path skillDir = resolveDocsPath().resolve("skill");
+        List<Map<String, Object>> skills = new ArrayList<>();
+        if (Files.isDirectory(skillDir)) {
+            try (var files = Files.list(skillDir)) {
+                for (Path f : (Iterable<Path>) files.sorted()::iterator) {
+                    if (!f.getFileName().toString().endsWith(".md")) continue;
+                    try {
+                        String content = Files.readString(f);
+                        Map<String, String> fm = parseYamlFrontmatter(content);
+                        Map<String, Object> s = new LinkedHashMap<>();
+                        s.put("id", f.getFileName().toString().replace(".md", ""));
+                        s.put("title", fm.getOrDefault("title", ""));
+                        s.put("type", fm.getOrDefault("type", "skill"));
+                        s.put("tags", fm.getOrDefault("tags", ""));
+                        s.put("version", fm.getOrDefault("version", "1"));
+                        String body = extractMarkdownBody(content);
+                        s.put("summary", body.length() <= 200 ? body : body.substring(0, 197) + "...");
+                        skills.add(s);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        return toJson(Map.of("skills", skills, "count", skills.size()));
+    }
+
+    private String handleSkillGet(JsonNode args) throws Exception {
+        String skillId = args.get("skillId").asText();
+        int offset = args.has("offset") ? args.get("offset").asInt() : 0;
+        int limit = args.has("limit") ? args.get("limit").asInt() : 200;
+
+        Path skillFile = resolveDocsPath().resolve("skill").resolve(skillId + ".md");
+        if (!Files.exists(skillFile))
+            return toJson(Map.of("error", "Skill not found: " + skillId));
+
+        String content = Files.readString(skillFile);
+        Map<String, String> fm = parseYamlFrontmatter(content);
+        String body = extractMarkdownBody(content);
+
+        String[] lines = body.split("\n");
+        int totalLines = lines.length;
+        int from = Math.min(offset, totalLines);
+        int to = Math.min(from + limit, totalLines);
+        String excerpt = String.join("\n", Arrays.copyOfRange(lines, from, to));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", skillId);
+        result.put("title", fm.getOrDefault("title", ""));
+        result.put("type", fm.getOrDefault("type", "skill"));
+        result.put("tags", fm.getOrDefault("tags", ""));
+        result.put("totalLines", totalLines);
+        result.put("offset", from);
+        result.put("limit", limit);
+        result.put("content", excerpt);
+        return toJson(result);
+    }
+
+    private String handleSkillSearch(JsonNode args) throws Exception {
+        String query = args.get("query").asText().toLowerCase();
+        Path skillDir = resolveDocsPath().resolve("skill");
+        List<Map<String, Object>> results = new ArrayList<>();
+        if (Files.isDirectory(skillDir)) {
+            try (var files = Files.list(skillDir)) {
+                for (Path f : (Iterable<Path>) files.sorted()::iterator) {
+                    if (!f.getFileName().toString().endsWith(".md") || results.size() >= 20) continue;
+                    try {
+                        String content = Files.readString(f);
+                        Map<String, String> fm = parseYamlFrontmatter(content);
+                        String body = extractMarkdownBody(content);
+                        String title = fm.getOrDefault("title", "");
+                        if (!title.toLowerCase().contains(query) && !body.toLowerCase().contains(query)) continue;
+
+                        Map<String, Object> hit = new LinkedHashMap<>();
+                        hit.put("id", f.getFileName().toString().replace(".md", ""));
+                        hit.put("title", title);
+                        hit.put("tags", fm.getOrDefault("tags", ""));
+                        int pos = Math.max(0, body.toLowerCase().indexOf(query) - 40);
+                        String excerpt = (pos > 0 ? "…" : "")
+                            + body.substring(pos, Math.min(pos + 300, body.length()))
+                            + (pos + 300 < body.length() ? "…" : "");
+                        hit.put("excerpt", excerpt);
+                        results.add(hit);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+        return toJson(Map.of("query", query, "results", results, "count", results.size()));
+    }
+
+    // ── Text Cache handlers ───────────────────────────────────
+
+    private String handleCacheList(JsonNode args) throws Exception {
+        Path cacheDir = resolveTextCacheDir();
+        List<Map<String, Object>> caches = new ArrayList<>();
+        if (Files.isDirectory(cacheDir)) {
+            try (var files = Files.list(cacheDir)) {
+                for (Path f : (Iterable<Path>) files.sorted()::iterator) {
+                    if (!f.getFileName().toString().endsWith(".txt")) continue;
+                    Map<String, Object> c = new LinkedHashMap<>();
+                    c.put("id", f.getFileName().toString());
+                    try { c.put("size", Files.size(f)); } catch (Exception ignored) {}
+                    caches.add(c);
+                }
+            } catch (Exception ignored) {}
+        }
+        return toJson(Map.of("caches", caches, "count", caches.size()));
+    }
+
+    private String handleCacheGet(JsonNode args) throws Exception {
+        String cacheId = args.get("cacheId").asText();
+        int offset = args.has("offset") ? args.get("offset").asInt() : 0;
+        int limit = args.has("limit") ? args.get("limit").asInt() : 200;
+
+        Path cacheFile = resolveTextCacheDir().resolve(cacheId);
+        if (!Files.exists(cacheFile))
+            return toJson(Map.of("error", "Text cache not found: " + cacheId));
+
+        String content = Files.readString(cacheFile);
+        String[] lines = content.split("\n");
+        int totalLines = lines.length;
+        int from = Math.min(offset, totalLines);
+        int to = Math.min(from + limit, totalLines);
+        String excerpt = String.join("\n", Arrays.copyOfRange(lines, from, to));
+
+        return toJson(Map.of("cacheId", cacheId, "totalLines", totalLines,
+            "offset", from, "limit", limit, "content", excerpt,
+            "ref", "@cache:" + cacheId));
+    }
+
+    private String handleCacheEdit(JsonNode args) throws Exception {
+        String cacheId = args.get("cacheId").asText();
+        Path cacheFile = resolveTextCacheDir().resolve(cacheId);
+        if (!Files.exists(cacheFile))
+            return toJson(Map.of("error", "Text cache not found: " + cacheId));
+
+        String content = Files.readString(cacheFile);
+        boolean modified = false;
+
+        // Keyword replace
+        if (args.has("replace_from") && args.has("replace_to")) {
+            String from = args.get("replace_from").asText();
+            String to = args.get("replace_to").asText();
+            content = content.replace(from, to);
+            modified = true;
+        }
+
+        // Append text
+        if (args.has("insert_text")) {
+            content += "\n" + args.get("insert_text").asText();
+            modified = true;
+        }
+
+        if (!modified)
+            return toJson(Map.of("ok", true, "cacheId", cacheId, "message", "No changes"));
+
+        // Save as new cache
+        String newId = "edited_" + System.currentTimeMillis() + "_" + cacheId;
+        // Ensure ends with .txt
+        if (!newId.endsWith(".txt")) newId += ".txt";
+        Path newFile = resolveTextCacheDir().resolve(newId);
+        Files.createDirectories(resolveTextCacheDir());
+        Files.writeString(newFile, content);
+
+        return toJson(Map.of("ok", true, "sourceCacheId", cacheId,
+            "newCacheId", newId, "ref", "@cache:" + newId));
+    }
+
+    // ── Status handler ────────────────────────────────────────
+
+    private String handleGetStatus(JsonNode args) {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("server", "GSimulator-MCP");
+        status.put("version", "0.1.0");
+        status.put("worldsDir", worldsDir.toString());
+        status.put("importDir", importDir.toString());
+        status.put("dataDir", resolveDataDir().toString());
+        status.put("httpBaseUrl", httpBaseUrl);
+        int worldCount = 0;
+        try {
+            java.io.File[] dirs = worldsDir.toFile().listFiles(java.io.File::isDirectory);
+            worldCount = dirs != null ? dirs.length : 0;
+        } catch (Exception ignored) {}
+        status.put("worldCount", worldCount);
+        status.put("toolCount", tools.size());
+        return toJson(status);
     }
 
     // ── HTTP helpers (LLM/Agent/Config tools) ───────────────

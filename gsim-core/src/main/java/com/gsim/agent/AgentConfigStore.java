@@ -71,8 +71,17 @@ public class AgentConfigStore {
             if (!found) {
                 log.info("No agent configs found in {}, copying built-in templates...", agentsDir);
                 copyBuiltinsFromClasspath(agentsDir);
-                // 重新加载
-                reload(agentsDir);
+                // 检查复制是否成功 — 若 classpath 无资源则走 classpath 直接加载
+                boolean copied = false;
+                try (Stream<Path> after = Files.list(agentsDir)) {
+                    copied = after.anyMatch(f -> f.getFileName().toString().endsWith(".json"));
+                }
+                if (copied) {
+                    reload(agentsDir);
+                } else {
+                    log.warn("No built-in agents available on classpath, loading from classpath directly");
+                    loadFromClasspath();
+                }
             }
         } catch (IOException e) {
             log.error("Failed to scan agents dir: {}", e.getMessage(), e);
