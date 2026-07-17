@@ -70,7 +70,19 @@ public class GsimMcpToolRegistry {
             case "gsim_llm_add"                   -> httpPost("/api/llm", args);
             case "gsim_llm_update"               -> httpPatch("/api/llm/" + args.get("id").asText(), args);
             case "gsim_llm_delete"               -> httpDelete("/api/llm/" + args.get("id").asText(), args);
-            case "gsim_llm_test"                 -> httpPost("/api/llm/" + args.get("id").asText() + "/test", args);
+            case "gsim_llm_test" -> {
+                var result = httpPostBody("/api/llm/" + args.get("id").asText() + "/test", MAPPER.createObjectNode());
+                try {
+                    var json = MAPPER.readTree(result);
+                    yield toJson(Map.of("connected",
+                        json.has("data") && json.get("data").has("connected")
+                            && json.get("data").get("connected").asBoolean(),
+                        "detail", json.has("data") && json.get("data").has("detail")
+                            ? json.get("data").get("detail").asText() : ""));
+                } catch (Exception e) {
+                    yield toJson(Map.of("connected", false, "detail", result));
+                }
+            }
             case "gsim_agent_list"               -> httpGet("/api/agents", args);
             case "gsim_agent_get"                -> httpGet("/api/agents/" + args.get("instanceId").asText(), args);
             case "gsim_agent_run"                -> httpPost("/api/agents/run", args);
@@ -259,14 +271,15 @@ public class GsimMcpToolRegistry {
             },"required":["instanceId"]}""");
 
         register("gsim_agent_run",
-            "Launch a new agent with given input. Returns instanceId for tracking.",
+            "Launch a new agent with given prompt. Returns instanceId for tracking.",
             """
             {"type":"object","properties":{
               "sessionId":{"type":"string","description":"Session ID (default: 'default')"},
-              "input":{"type":"string","description":"Agent prompt/input text"},
-              "agentConfig":{"type":"string","description":"Agent config ID to use (optional)"},
-              "model":{"type":"string","description":"Override model (optional)"}
-            },"required":["sessionId","input"]}""");
+              "prompt":{"type":"string","description":"Agent prompt/input text"},
+              "configId":{"type":"string","description":"Agent config ID to use (optional)"},
+              "cacheId":{"type":"string","description":"Cache ID for resumed context (optional)"},
+              "parentInstanceId":{"type":"string","description":"Parent instance ID for chaining (optional)"}
+            },"required":["sessionId","prompt"]}""");
 
         register("gsim_agent_cancel",
             "Cancel a running agent by instance ID.",
@@ -296,29 +309,33 @@ public class GsimMcpToolRegistry {
             },"required":["configId"]}""");
 
         register("gsim_agent_config_create",
-            "Create a new agent configuration.",
+            "Create a new agent configuration. Fields match AgentConfig record.",
             """
             {"type":"object","properties":{
-              "configId":{"type":"string","description":"Unique config ID"},
-              "name":{"type":"string","description":"Display name (optional)"},
-              "persona":{"type":"string","description":"Agent persona/system prompt"},
-              "model":{"type":"string","description":"Preferred model (optional)"},
-              "temperature":{"type":"number","description":"LLM temperature (default: 0.7)"},
-              "maxTokens":{"type":"integer","description":"Max tokens per response"},
-              "toolGroups":{"type":"array","items":{"type":"string"},"description":"Active tool group keys"}
-            },"required":["configId","persona"]}""");
+              "agentId":{"type":"string","description":"Unique agent config ID"},
+              "llmProvider":{"type":"string","description":"LLM provider ID to use (default: 'base')"},
+              "staticSystemPrompt":{"type":"string","description":"System prompt (static)"},
+              "systemPrompt":{"type":"string","description":"Legacy system prompt field"},
+              "userTemplate":{"type":"string","description":"User message template (optional)"},
+              "toolGroups":{"type":"array","items":{"type":"string"},"description":"Tool group keys to enable (optional)"},
+              "maxToolRounds":{"type":"integer","description":"Max tool call rounds (default: 32)"},
+              "temperature":{"type":"number","description":"LLM temperature (default: 0.3)"},
+              "maxTokens":{"type":"integer","description":"Max tokens per response (default: 2048)"}
+            },"required":["agentId","staticSystemPrompt"]}""");
 
         register("gsim_agent_config_update",
             "Update fields of an existing agent configuration.",
             """
             {"type":"object","properties":{
               "configId":{"type":"string","description":"Config ID to update"},
-              "name":{"type":"string","description":"New name (optional)"},
-              "persona":{"type":"string","description":"New persona (optional)"},
-              "model":{"type":"string","description":"New model (optional)"},
+              "llmProvider":{"type":"string","description":"New provider (optional)"},
+              "staticSystemPrompt":{"type":"string","description":"New system prompt (optional)"},
+              "systemPrompt":{"type":"string","description":"New legacy prompt (optional)"},
+              "userTemplate":{"type":"string","description":"New user template (optional)"},
+              "toolGroups":{"type":"array","items":{"type":"string"},"description":"New tool groups (optional)"},
+              "maxToolRounds":{"type":"integer","description":"New max rounds (optional)"},
               "temperature":{"type":"number","description":"New temperature (optional)"},
-              "maxTokens":{"type":"integer","description":"New max tokens (optional)"},
-              "toolGroups":{"type":"array","items":{"type":"string"},"description":"New tool groups (optional)"}
+              "maxTokens":{"type":"integer","description":"New max tokens (optional)"}
             },"required":["configId"]}""");
 
         register("gsim_agent_config_delete",
@@ -1036,6 +1053,19 @@ public class GsimMcpToolRegistry {
             return toJson(Map.of("status", resp.statusCode(), "data", resp.body()));
         } catch (Exception e) {
             return toJson(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String httpPostBody(String path, JsonNode body) {
+        try {
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(httpBaseUrl + path))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
+                .build();
+            return HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         }
     }
 }
