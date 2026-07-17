@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,6 +42,7 @@ class Provider {
     Provider(ProviderConfig config) {
         this.config = config;
         this.httpClient = new OkHttpClient.Builder()
+                .proxy(Proxy.NO_PROXY)
                 .connectTimeout(config.timeoutSeconds(), TimeUnit.SECONDS)
                 .readTimeout(config.timeoutSeconds(), TimeUnit.SECONDS)
                 .writeTimeout(config.timeoutSeconds(), TimeUnit.SECONDS)

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Proxy;
 import java.time.Duration;
 
 /**
@@ -22,6 +23,7 @@ public class WebFetchService {
     public WebFetchService(int timeoutSeconds, String userAgent) {
         this.userAgent = userAgent;
         this.client = new OkHttpClient.Builder()
+                .proxy(Proxy.NO_PROXY)
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .readTimeout(Duration.ofSeconds(timeoutSeconds))
                 .followRedirects(true)

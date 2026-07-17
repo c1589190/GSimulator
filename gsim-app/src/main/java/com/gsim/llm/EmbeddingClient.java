@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +41,7 @@ public class EmbeddingClient {
         this.apiKey = apiKey;
         this.model = model;
         this.http = new OkHttpClient.Builder()
+                .proxy(Proxy.NO_PROXY)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)

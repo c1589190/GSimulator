@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Proxy;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -31,6 +32,7 @@ public class MediaWikiApiClient {
         this.apiUrl = apiUrl;
         this.userAgent = userAgent;
         this.client = new OkHttpClient.Builder()
+                .proxy(Proxy.NO_PROXY)
                 .connectTimeout(Duration.ofSeconds(timeoutSeconds))
                 .readTimeout(Duration.ofSeconds(timeoutSeconds))
                 .followRedirects(true)
