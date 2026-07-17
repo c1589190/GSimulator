@@ -172,14 +172,13 @@ public final class MapResolver {
         List<MapData.River> rivers = diff.riversAdded().isEmpty() ? base.rivers() : diff.riversAdded();
         List<MapData.Road> roads = diff.roadsAdded().isEmpty() ? base.roads() : diff.roadsAdded();
 
-        // CR merge: concatenate all nodes' CRs in chain order (root first, children appended).
-        // Within each node CRs are sorted descending (large→small, done by CompressionService).
-        // Rendering draws in order: root CRs (bg) → child CRs (overlay), painter's algorithm.
+        // CR merge: child CRs (from its own compress) supersede parent CRs entirely.
+        // Start from parent CRs, then let each child's CRs replace them if the child was compressed.
         List<MapData.CompressedRegion> crs = new ArrayList<>(baseCrs != null ? baseCrs : List.of());
         for (int i = 1; i < chain.size(); i++) {
             MapDiff d = chainDiffs.get(chain.get(i));
             if (d != null && !d.compressedRegions().isEmpty()) {
-                crs.addAll(d.compressedRegions());
+                crs = new ArrayList<>(d.compressedRegions());  // child CRs replace, not merge
             }
         }
 
