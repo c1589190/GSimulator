@@ -35,7 +35,11 @@ public class GsimMcpServer implements Runnable {
     }
 
     public GsimMcpServer(Path worldsDir, Path importDir) {
-        this.registry = new GsimMcpToolRegistry(worldsDir, importDir);
+        this(worldsDir, importDir, null);
+    }
+
+    public GsimMcpServer(Path worldsDir, Path importDir, String httpBaseUrl) {
+        this.registry = new GsimMcpToolRegistry(worldsDir, importDir, httpBaseUrl);
     }
 
     /** Returns the tool registry (for merging with other registries). */
@@ -79,15 +83,16 @@ public class GsimMcpServer implements Runnable {
         log.info("GSim MCP server stopped");
     }
 
-    /** Standalone entry point: java ... com.gsim.mcp.GsimMcpServer <worldsDir> [importDir] */
+    /** Standalone entry point: java ... com.gsim.mcp.GsimMcpServer <worldsDir> [importDir] [httpBaseUrl] */
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Usage: gsim-mcp <worldsDir> [importDir]");
+            System.err.println("Usage: gsim-mcp <worldsDir> [importDir] [httpBaseUrl]");
             System.exit(1);
         }
         Path worldsDir = Path.of(args[0]);
         Path importDir = args.length >= 2 ? Path.of(args[1]) : null;
-        GsimMcpServer server = new GsimMcpServer(worldsDir, importDir);
+        String httpBaseUrl = args.length >= 3 ? args[2] : null;
+        GsimMcpServer server = new GsimMcpServer(worldsDir, importDir, httpBaseUrl);
         server.start();
     }
 

@@ -23,18 +23,25 @@ public class GsimMcpToolRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(GsimMcpToolRegistry.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newHttpClient();
 
     private final Path worldsDir;
     private final Path importDir;
+    private final String httpBaseUrl;
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
 
     public GsimMcpToolRegistry(Path worldsDir) {
-        this(worldsDir, null);
+        this(worldsDir, null, null);
     }
 
     public GsimMcpToolRegistry(Path worldsDir, Path importDir) {
+        this(worldsDir, importDir, null);
+    }
+
+    public GsimMcpToolRegistry(Path worldsDir, Path importDir, String httpBaseUrl) {
         this.worldsDir = worldsDir;
         this.importDir = importDir != null ? importDir : Path.of("import");
+        this.httpBaseUrl = httpBaseUrl != null ? httpBaseUrl : "http://127.0.0.1:8710";
         registerAll();
     }
 
@@ -58,6 +65,22 @@ public class GsimMcpToolRegistry {
             case "gsim_resolve_ref"               -> handleResolveRef(args);
             case "gsim_list_docs"                 -> handleListDocs(args);
             case "gsim_get_doc"                   -> handleGetDoc(args);
+            case "gsim_llm_list"                  -> httpGet("/api/llm", args);
+            case "gsim_llm_get"                   -> httpGet("/api/llm/" + args.get("id").asText(), args);
+            case "gsim_llm_add"                   -> httpPost("/api/llm", args);
+            case "gsim_llm_update"               -> httpPatch("/api/llm/" + args.get("id").asText(), args);
+            case "gsim_llm_delete"               -> httpDelete("/api/llm/" + args.get("id").asText(), args);
+            case "gsim_llm_test"                 -> httpPost("/api/llm/" + args.get("id").asText() + "/test", args);
+            case "gsim_agent_list"               -> httpGet("/api/agents", args);
+            case "gsim_agent_get"                -> httpGet("/api/agents/" + args.get("instanceId").asText(), args);
+            case "gsim_agent_run"                -> httpPost("/api/agents/run", args);
+            case "gsim_agent_cancel"             -> httpPost("/api/agents/" + args.get("instanceId").asText() + "/cancel", args);
+            case "gsim_agent_output"             -> httpGet("/api/agents/" + args.get("instanceId").asText() + "/output", args);
+            case "gsim_agent_config_list"        -> httpGet("/api/agent-configs", args);
+            case "gsim_agent_config_get"         -> httpGet("/api/agent-configs/" + args.get("configId").asText(), args);
+            case "gsim_agent_config_create"      -> httpPost("/api/agent-configs", args);
+            case "gsim_agent_config_update"      -> httpPatch("/api/agent-configs/" + args.get("configId").asText(), args);
+            case "gsim_agent_config_delete"      -> httpDelete("/api/agent-configs/" + args.get("configId").asText(), args);
             default -> throw new IllegalArgumentException("Unknown tool: " + name);
         };
     }
@@ -173,7 +196,137 @@ public class GsimMcpToolRegistry {
               "docId":{"type":"string","description":"Document ID"},
               "offset":{"type":"integer","description":"Line offset for pagination (default 0)"},
               "limit":{"type":"integer","description":"Max lines to return (default 200)"}
-            },"required":["docId"]}""");
+             },"required":["docId"]}""");
+
+        // ── LLM Provider Management ────────────────────────
+        register("gsim_llm_list",
+            "List all configured LLM providers (base URL, model, API key status).",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_llm_get",
+            "Get details for a specific LLM provider by ID.",
+            """
+            {"type":"object","properties":{
+              "id":{"type":"string","description":"Provider ID"}
+            },"required":["id"]}""");
+
+        register("gsim_llm_add",
+            "Add a new LLM provider configuration.",
+            """
+            {"type":"object","properties":{
+              "id":{"type":"string","description":"Provider ID (unique)"},
+              "name":{"type":"string","description":"Display name (optional)"},
+              "baseUrl":{"type":"string","description":"API base URL"},
+              "model":{"type":"string","description":"Default model name"},
+              "apiKey":{"type":"string","description":"API key (optional, can be set later)"}
+            },"required":["id","baseUrl","model"]}""");
+
+        register("gsim_llm_update",
+            "Update a field of an existing LLM provider.",
+            """
+            {"type":"object","properties":{
+              "id":{"type":"string","description":"Provider ID"},
+              "field":{"type":"string","description":"Field to update: name, baseUrl, model, apiKey"},
+              "value":{"type":"string","description":"New value for the field"}
+            },"required":["id","field","value"]}""");
+
+        register("gsim_llm_delete",
+            "Delete an LLM provider configuration by ID.",
+            """
+            {"type":"object","properties":{
+              "id":{"type":"string","description":"Provider ID to delete"}
+            },"required":["id"]}""");
+
+        register("gsim_llm_test",
+            "Test connectivity to an LLM provider.",
+            """
+            {"type":"object","properties":{
+              "id":{"type":"string","description":"Provider ID to test"}
+            },"required":["id"]}""");
+
+        // ── Agent Lifecycle Management ──────────────────────
+        register("gsim_agent_list",
+            "List all agent instances and their statuses.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_agent_get",
+            "Get status and details for a specific agent instance.",
+            """
+            {"type":"object","properties":{
+              "instanceId":{"type":"string","description":"Agent instance ID"}
+            },"required":["instanceId"]}""");
+
+        register("gsim_agent_run",
+            "Launch a new agent with given input. Returns instanceId for tracking.",
+            """
+            {"type":"object","properties":{
+              "sessionId":{"type":"string","description":"Session ID (default: 'default')"},
+              "input":{"type":"string","description":"Agent prompt/input text"},
+              "agentConfig":{"type":"string","description":"Agent config ID to use (optional)"},
+              "model":{"type":"string","description":"Override model (optional)"}
+            },"required":["sessionId","input"]}""");
+
+        register("gsim_agent_cancel",
+            "Cancel a running agent by instance ID.",
+            """
+            {"type":"object","properties":{
+              "instanceId":{"type":"string","description":"Agent instance ID to cancel"}
+            },"required":["instanceId"]}""");
+
+        register("gsim_agent_output",
+            "Get the output of a completed agent run.",
+            """
+            {"type":"object","properties":{
+              "instanceId":{"type":"string","description":"Agent instance ID"}
+            },"required":["instanceId"]}""");
+
+        // ── Agent Configuration Management ──────────────────
+        register("gsim_agent_config_list",
+            "List all saved agent configurations.",
+            """
+            {"type":"object","properties":{},"required":[]}""");
+
+        register("gsim_agent_config_get",
+            "Get details of a specific agent configuration.",
+            """
+            {"type":"object","properties":{
+              "configId":{"type":"string","description":"Config ID"}
+            },"required":["configId"]}""");
+
+        register("gsim_agent_config_create",
+            "Create a new agent configuration.",
+            """
+            {"type":"object","properties":{
+              "configId":{"type":"string","description":"Unique config ID"},
+              "name":{"type":"string","description":"Display name (optional)"},
+              "persona":{"type":"string","description":"Agent persona/system prompt"},
+              "model":{"type":"string","description":"Preferred model (optional)"},
+              "temperature":{"type":"number","description":"LLM temperature (default: 0.7)"},
+              "maxTokens":{"type":"integer","description":"Max tokens per response"},
+              "toolGroups":{"type":"array","items":{"type":"string"},"description":"Active tool group keys"}
+            },"required":["configId","persona"]}""");
+
+        register("gsim_agent_config_update",
+            "Update fields of an existing agent configuration.",
+            """
+            {"type":"object","properties":{
+              "configId":{"type":"string","description":"Config ID to update"},
+              "name":{"type":"string","description":"New name (optional)"},
+              "persona":{"type":"string","description":"New persona (optional)"},
+              "model":{"type":"string","description":"New model (optional)"},
+              "temperature":{"type":"number","description":"New temperature (optional)"},
+              "maxTokens":{"type":"integer","description":"New max tokens (optional)"},
+              "toolGroups":{"type":"array","items":{"type":"string"},"description":"New tool groups (optional)"}
+            },"required":["configId"]}""");
+
+        register("gsim_agent_config_delete",
+            "Delete an agent configuration by ID.",
+            """
+            {"type":"object","properties":{
+              "configId":{"type":"string","description":"Config ID to delete"}
+            },"required":["configId"]}""");
     }
 
     private void register(String name, String description, String schema) {
@@ -824,5 +977,65 @@ public class GsimMcpToolRegistry {
         if (!cp.has("elements") || cp.get("elements").isNull())
             cp.set("elements", MAPPER.createArrayNode());
         return (ArrayNode) cp.get("elements");
+    }
+
+    // ── HTTP helpers (LLM/Agent/Config tools) ───────────────
+
+    private String httpGet(String path, JsonNode args) {
+        try {
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(httpBaseUrl + path))
+                .GET().build();
+            var resp = HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            return toJson(Map.of("status", resp.statusCode(), "data",
+                resp.statusCode() == 200 ? MAPPER.readTree(resp.body()) : resp.body()));
+        } catch (Exception e) {
+            return toJson(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String httpPost(String path, JsonNode args) {
+        try {
+            // Extract body from "body" field, or use all args minus special fields
+            JsonNode body = args.has("body") ? args.get("body") : args;
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(httpBaseUrl + path))
+                .header("Content-Type", "application/json")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
+                .build();
+            var resp = HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            return toJson(Map.of("status", resp.statusCode(), "data",
+                resp.statusCode() < 400 ? MAPPER.readTree(resp.body()) : resp.body()));
+        } catch (Exception e) {
+            return toJson(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String httpPatch(String path, JsonNode args) {
+        try {
+            JsonNode body = args.has("body") ? args.get("body") : args;
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(httpBaseUrl + path))
+                .header("Content-Type", "application/json")
+                .method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
+                .build();
+            var resp = HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            return toJson(Map.of("status", resp.statusCode(), "data",
+                resp.statusCode() < 400 ? MAPPER.readTree(resp.body()) : resp.body()));
+        } catch (Exception e) {
+            return toJson(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String httpDelete(String path, JsonNode args) {
+        try {
+            var req = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(httpBaseUrl + path))
+                .DELETE().build();
+            var resp = HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            return toJson(Map.of("status", resp.statusCode(), "data", resp.body()));
+        } catch (Exception e) {
+            return toJson(Map.of("error", e.getMessage()));
+        }
     }
 }
