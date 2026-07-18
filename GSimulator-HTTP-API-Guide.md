@@ -1,6 +1,6 @@
 # GSimulator HTTP API — Agent 引导手册
 
-> 你是一个外部 AI Agent，连接到一个回合制叙事推演引擎。  
+> 你是一个外部 AI Agent，连接到一个回合制叙事推演引擎。
 > 核心原则：**用 @ 引用替代复制全文，用 text_edit 编辑管道替代来回搬运大段文本。**
 
 ---
@@ -173,7 +173,7 @@ POST /api/caches/{id}/edit               → 编辑
 
 2. GET /api/ref?ref=@world:n0002:characters:关羽   → 当前状态
 3. GET /api/ref?ref=@doc:char_guanyu              → 角色设定
-  
+
 4. 组合后通过 cache edit → @cache:merged → write_element
 ```
 

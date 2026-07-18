@@ -50,3 +50,11 @@ docs/other/
 llms.json
 docs/
 test0704/
+
+# IDE / tooling temp files
+.omo/
+.serena/
+.project
+.settings/
+.classpath
+.factorypath

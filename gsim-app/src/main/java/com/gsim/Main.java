@@ -6,20 +6,42 @@ import com.gsim.app.GSimulatorApplication;
 import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
-import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigDoctor;
+import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigWizard;
-
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
 
 /**
- * GSimulator 主入口。
- * 负责解析命令行参数、加载配置、启动应用。
+ * GSimulator 主入口类。
+ * <p>负责解析命令行参数、加载应用配置、执行首次运行 LLM 配置向导，
+ * 选择 Orchestrator 历史缓存或新建会话，以及启动 GSimulator 应用。
+ *
+ * <p>支持的启动模式：
+ * <ul>
+ *   <li>CLI 交互模式（默认包含）</li>
+ *   <li>HTTP API 模式（端口 8710）</li>
+ *   <li>Web GUI 模式（端口 8711）</li>
+ *   <li>监控模式（HTTP API + 终端实时显示请求/响应）</li>
+ * </ul>
  */
 public class Main {
 
+    /**
+     * 程序入口点。
+     * <p>依次执行以下步骤：
+     * <ol>
+     *   <li>解析命令行参数（--help、--doctor、--init-config 等）</li>
+     *   <li>加载应用配置（{@code AppConfig}）</li>
+     *   <li>首次运行 LLM 配置向导（交互终端下）</li>
+     *   <li>创建缓存管理器并执行引导（{@code Bootstrap}）</li>
+     *   <li>交互选择 Orchestrator 历史缓存或新建会话</li>
+     *   <li>确定启动模式（CLI/HTTP/WebUI/监控）并启动应用</li>
+     * </ol>
+     *
+     * @param args 命令行参数
+     */
     public static void main(String[] args) {
         try {
             // 0. 解析 CLI 参数
@@ -56,9 +78,7 @@ public class Main {
             }
 
             // 2. 首次运行向导：未配置 LLM + 交互终端 + 未指定 --no-wizard
-            if (!config.isLlmConfigured()
-                    && ConfigLoader.isInteractiveTerminal()
-                    && !cliArgs.noWizard()) {
+            if (!config.isLlmConfigured() && ConfigLoader.isInteractiveTerminal() && !cliArgs.noWizard()) {
                 System.out.println();
                 System.out.println("⚠️  未检测到 LLM 配置。");
                 System.out.println();
@@ -89,11 +109,11 @@ public class Main {
 
             Bootstrap.BootstrapResult bootResult = bootstrap.boot(selectedSessionId, targetWorldId);
             System.out.println("World loaded: " + bootResult.worldId()
-                + ", active node: " + bootResult.activeNodeId()
-                + ", chain length: " + bootResult.worldInfo().branchChain().size());
+                    + ", active node: " + bootResult.activeNodeId()
+                    + ", chain length: " + bootResult.worldInfo().branchChain().size());
             if (bootResult.activeCache() != null) {
-                System.out.println("Active cache: " + bootResult.activeCache().sessionId()
-                    + " (" + bootResult.activeCache().messageCount() + " messages)");
+                System.out.println("Active cache: " + bootResult.activeCache().sessionId() + " ("
+                        + bootResult.activeCache().messageCount() + " messages)");
             }
 
             // 5. 确定启动模式
@@ -104,7 +124,8 @@ public class Main {
             boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http());
 
             // 6. 启动应用
-            GSimulatorApplication app = new GSimulatorApplication(config, cliMode, httpMode, webuiMode, monitorMode, bootResult);
+            GSimulatorApplication app =
+                    new GSimulatorApplication(config, cliMode, httpMode, webuiMode, monitorMode, bootResult);
             app.start();
 
         } catch (Exception e) {
@@ -135,8 +156,12 @@ public class Main {
         for (int i = 0; i < caches.size(); i++) {
             CacheInfo ci = caches.get(i);
             String worldLabel = ci.worldId() != null ? ci.worldId() : "?";
-            System.out.printf("  [%d] %s  world=%s  (%d messages, %s)%n",
-                    i + 1, ci.sessionId(), worldLabel, ci.messageCount(),
+            System.out.printf(
+                    "  [%d] %s  world=%s  (%d messages, %s)%n",
+                    i + 1,
+                    ci.sessionId(),
+                    worldLabel,
+                    ci.messageCount(),
                     ci.createdAt().substring(0, Math.min(16, ci.createdAt().length())));
         }
         System.out.println("  [N] 新建会话");
@@ -154,8 +179,7 @@ public class Main {
             int idx = Integer.parseInt(line) - 1;
             if (idx >= 0 && idx < caches.size()) {
                 CacheInfo chosen = caches.get(idx);
-                System.out.println("  加载缓存: " + chosen.sessionId()
-                        + " (world=" + chosen.worldId() + ")");
+                System.out.println("  加载缓存: " + chosen.sessionId() + " (world=" + chosen.worldId() + ")");
                 return new CacheSelection(chosen.sessionId(), chosen.worldId());
             }
         } catch (Exception e) {
@@ -167,15 +191,17 @@ public class Main {
     }
 
     /** 选择 world（用于新建会话时）。 */
-    private static String selectWorldForNewSession(Scanner scanner,
-            List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
+    private static String selectWorldForNewSession(
+            Scanner scanner, List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
         if (worlds.isEmpty()) return "default";
         if (worlds.size() == 1) return worlds.get(0).id();
 
         System.out.println();
         System.out.println("  可用 World:");
         for (int i = 0; i < worlds.size(); i++) {
-            System.out.printf("    [%d] %s (%s)%n", i + 1, worlds.get(i).id(), worlds.get(i).name());
+            System.out.printf(
+                    "    [%d] %s (%s)%n",
+                    i + 1, worlds.get(i).id(), worlds.get(i).name());
         }
         System.out.print("  选择 World (1-" + worlds.size() + ", 回车=首个): ");
         try {
