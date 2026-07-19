@@ -1,33 +1,42 @@
 package com.gsim.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.io.*;
+import com.gsim.app.ApplicationContext;
 import java.nio.file.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
 
 /**
- * MCP (Model Context Protocol) JSON-RPC 2.0 server over stdio for GSimulator.
+ * GSimulator MCP (Model Context Protocol) JSON-RPC 2.0 server over stdio.
  *
- * <p>Protocol: line-delimited JSON-RPC 2.0 (one JSON object per line).
- * Supports initialize, tools/list, tools/call, and notifications/initialized.
+ * <p>继承 {@link AbstractMcpServer}，复用 JSON-RPC 2.0 协议处理逻辑。
+ * 工具注册表为 {@link GsimMcpToolRegistry}（前缀 {@code gsim_} 的工具集）。
  *
- * <p>Usage:
- * <pre>
+ * <h3>使用方式</h3>
+ * <pre>{@code
+ *   // 方式 1: 仅 GSim 工具
  *   GsimMcpServer server = new GsimMcpServer(worldsDir);
- *   server.start();  // blocking, reads from stdin
- * </pre>
+ *   server.start();  // 阻塞，从 stdin 读取，向 stdout 写入
+ *
+ *   // 方式 2: 注册自定义 MCP 工具（与 GSim 工具共存）
+ *   GsimMcpServer server = new GsimMcpServer(worldsDir);
+ *   server.addRegistry(new MyCustomRegistry());
+ *   server.start();
+ *
+ *   // 方式 3: ApplicationContext 模式（Agent/LLM 工具直调 Java API）
+ *   GsimMcpServer server = new GsimMcpServer(applicationContext);
+ *   server.start();
+ * }</pre>
+ *
+ * <h3>独立命令行启动</h3>
+ * <pre>{@code
+ *   java -cp gsim-lib.jar com.gsim.mcp.GsimMcpServer &lt;worldsDir&gt; [importDir] [httpBaseUrl]
+ * }</pre>
  */
-public class GsimMcpServer implements Runnable {
-
-    private static final Logger log = LoggerFactory.getLogger(GsimMcpServer.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+public class GsimMcpServer extends AbstractMcpServer {
 
     private final GsimMcpToolRegistry registry;
-    private volatile boolean running = true;
+
+    // ── 构造函数 ─────────────────────────────────────────────
 
     /**
      * 使用指定的 worlds 目录创建 MCP 服务器。
@@ -35,7 +44,7 @@ public class GsimMcpServer implements Runnable {
      * @param worldsDir 世界观数据目录路径
      */
     public GsimMcpServer(Path worldsDir) {
-        this(worldsDir, null);
+        this(worldsDir, null, null);
     }
 
     /**
@@ -56,7 +65,7 @@ public class GsimMcpServer implements Runnable {
      * @param httpBaseUrl gsim-app HTTP API 的基础 URL（可为 null，默认 http://127.0.0.1:8710）
      */
     public GsimMcpServer(Path worldsDir, Path importDir, String httpBaseUrl) {
-        this.registry = new GsimMcpToolRegistry(worldsDir, importDir, httpBaseUrl);
+        this(new GsimMcpToolRegistry(worldsDir, importDir, httpBaseUrl));
     }
 
     /**
@@ -65,12 +74,52 @@ public class GsimMcpServer implements Runnable {
      *
      * @param ctx 应用上下文
      */
-    public GsimMcpServer(com.gsim.app.ApplicationContext ctx) {
-        this.registry = new GsimMcpToolRegistry(ctx);
+    public GsimMcpServer(ApplicationContext ctx) {
+        this(new GsimMcpToolRegistry(ctx));
     }
 
     /**
-     * 获取工具注册表。
+     * 使用已配置好的工具注册表创建 MCP 服务器。
+     *
+     * <p>此构造函数允许外部调用者在传入前对注册表做额外配置
+     *（如添加自定义工具），然后再创建 MCP 服务器。
+     *
+     * @param registry 已初始化的 GSim MCP 工具注册表
+     */
+    public GsimMcpServer(GsimMcpToolRegistry registry) {
+        super();
+        this.registry = registry;
+    }
+
+    // ── AbstractMcpServer 模板方法实现 ────────────────────────
+
+    @Override
+    protected String getServerName() {
+        return "GSimulator-MCP";
+    }
+
+    @Override
+    protected String getServerVersion() {
+        return "0.1.0";
+    }
+
+    @Override
+    protected List<com.gsim.mcp.ToolDef> getAllTools() {
+        return registry.all().stream()
+                .map(t -> new com.gsim.mcp.ToolDef(t.name(), t.description(), t.schema()))
+                .toList();
+    }
+
+    @Override
+    protected String executeTool(String name, JsonNode args) throws Exception {
+        return registry.execute(name, args);
+    }
+
+    // ── 公共 API ─────────────────────────────────────────────
+
+    /**
+     * 获取 GSim 工具注册表。
+     *
      * <p>返回的注册表可用于与其他工具注册表合并，以扩展 MCP 工具集。
      *
      * @return GSim MCP 工具注册表实例
@@ -79,51 +128,7 @@ public class GsimMcpServer implements Runnable {
         return registry;
     }
 
-    @Override
-    public void run() {
-        start();
-    }
-
-    /**
-     * 启动 MCP 服务器。
-     * <p>阻塞式运行，从 {@code stdin} 读取 JSON-RPC 2.0 请求，
-     * 向 {@code stdout} 写入响应。支持 initialize、tools/list、tools/call
-     * 和 notifications/initialized 协议方法。
-     */
-    public void start() {
-        log.info("GSim MCP server starting on stdio...");
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-                PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out), true)) {
-
-            String line;
-            while (running && (line = in.readLine()) != null) {
-                if (line.isBlank()) continue;
-                try {
-                    JsonNode req = MAPPER.readTree(line);
-                    String method = req.has("method") ? req.get("method").asText() : "";
-                    String id = req.has("id") && !req.get("id").isNull()
-                            ? req.get("id").toString()
-                            : null;
-
-                    switch (method) {
-                        case "initialize" -> out.println(jsonRpc(id, handleInitialize(req)));
-                        case "notifications/initialized" -> {
-                            /* no-op */
-                        }
-                        case "tools/list" -> out.println(jsonRpc(id, handleToolsList()));
-                        case "tools/call" -> out.println(jsonRpc(id, handleToolCall(req)));
-                        default -> out.println(jsonRpcError(id, -32601, "Method not found: " + method));
-                    }
-                } catch (Exception e) {
-                    log.error("MCP error", e);
-                    out.println(jsonRpcError(null, -32700, "Parse error: " + e.getMessage()));
-                }
-            }
-        } catch (IOException e) {
-            log.error("MCP I/O error", e);
-        }
-        log.info("GSim MCP server stopped");
-    }
+    // ── 独立入口点 ───────────────────────────────────────────
 
     /**
      * 独立入口点，用于从命令行启动 MCP 服务器。
@@ -142,95 +147,5 @@ public class GsimMcpServer implements Runnable {
         String httpBaseUrl = args.length >= 3 ? args[2] : null;
         GsimMcpServer server = new GsimMcpServer(worldsDir, importDir, httpBaseUrl);
         server.start();
-    }
-
-    // ── Protocol handlers ───────────────────────────────────
-
-    private JsonNode handleInitialize(JsonNode req) {
-        ObjectNode result = MAPPER.createObjectNode();
-        result.put("protocolVersion", "2024-11-05");
-
-        ObjectNode capabilities = MAPPER.createObjectNode();
-        capabilities.set("tools", MAPPER.createObjectNode());
-        result.set("capabilities", capabilities);
-
-        ObjectNode serverInfo = MAPPER.createObjectNode();
-        serverInfo.put("name", "GSimulator-MCP");
-        serverInfo.put("version", "0.1.0");
-        result.set("serverInfo", serverInfo);
-
-        return result;
-    }
-
-    private JsonNode handleToolsList() {
-        ObjectNode result = MAPPER.createObjectNode();
-        ArrayNode tools = MAPPER.createArrayNode();
-
-        for (var tool : registry.all()) {
-            try {
-                ObjectNode t = MAPPER.createObjectNode();
-                t.put("name", tool.name());
-                t.put("description", tool.description());
-                t.set("inputSchema", MAPPER.readTree(tool.schema()));
-                tools.add(t);
-            } catch (Exception e) {
-                log.warn("Failed to serialize tool schema for {}", tool.name(), e);
-            }
-        }
-
-        result.set("tools", tools);
-        return result;
-    }
-
-    private JsonNode handleToolCall(JsonNode req) throws Exception {
-        JsonNode params = req.get("params");
-        if (params == null) throw new IllegalArgumentException("Missing params in tools/call");
-
-        String toolName = params.get("name").asText();
-        JsonNode args = params.has("arguments") ? params.get("arguments") : MAPPER.createObjectNode();
-
-        String rawResult = registry.execute(toolName, args);
-
-        ObjectNode result = MAPPER.createObjectNode();
-        ArrayNode content = MAPPER.createArrayNode();
-        ObjectNode textPart = MAPPER.createObjectNode();
-        textPart.put("type", "text");
-        textPart.put("text", rawResult);
-        content.add(textPart);
-        result.set("content", content);
-        return result;
-    }
-
-    // ── JSON-RPC protocol helpers ───────────────────────────
-
-    private String jsonRpc(String id, JsonNode result) {
-        try {
-            ObjectNode response = MAPPER.createObjectNode();
-            response.put("jsonrpc", "2.0");
-            if (id != null)
-                response.set("id", MAPPER.getNodeFactory().numberNode(Long.parseLong(id.replace("\"", ""))));
-            else response.putNull("id");
-            response.set("result", result);
-            return MAPPER.writeValueAsString(response);
-        } catch (Exception e) {
-            return jsonRpcError(null, -32603, "Internal error");
-        }
-    }
-
-    private String jsonRpcError(String id, int code, String message) {
-        try {
-            ObjectNode response = MAPPER.createObjectNode();
-            response.put("jsonrpc", "2.0");
-            if (id != null)
-                response.set("id", MAPPER.getNodeFactory().numberNode(Long.parseLong(id.replace("\"", ""))));
-            else response.putNull("id");
-            ObjectNode err = MAPPER.createObjectNode();
-            err.put("code", code);
-            err.put("message", message);
-            response.set("error", err);
-            return MAPPER.writeValueAsString(response);
-        } catch (Exception e) {
-            return "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32603,\"message\":\"Internal error\"}}";
-        }
     }
 }

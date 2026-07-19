@@ -86,6 +86,13 @@ public class GsimMcpToolRegistry {
         registerAll();
     }
 
+    /**
+     * MCP 工具定义记录。
+     *
+     * @deprecated 使用顶层 {@link com.gsim.mcp.ToolDef} 代替。
+     *             保留此内部类仅为向后兼容，将在未来版本中移除。
+     */
+    @Deprecated
     public record ToolDef(String name, String description, String schema) {}
 
     /**
@@ -95,6 +102,30 @@ public class GsimMcpToolRegistry {
      */
     public List<ToolDef> all() {
         return List.copyOf(tools.values());
+    }
+
+    /**
+     * 将此注册表适配为 {@link McpToolRegistry} 接口。
+     *
+     * <p>适配器将内部的 {@link ToolDef}（已废弃）转换为顶层 {@link com.gsim.mcp.ToolDef}。
+     * 可用于 {@link CompositeMcpToolRegistry} 或 {@link AbstractMcpServer} 的多注册表构造器。
+     *
+     * @return 实现 {@link McpToolRegistry} 接口的适配器视图
+     */
+    public McpToolRegistry asMcpRegistry() {
+        return new McpToolRegistry() {
+            @Override
+            public List<com.gsim.mcp.ToolDef> all() {
+                return GsimMcpToolRegistry.this.all().stream()
+                        .map(t -> new com.gsim.mcp.ToolDef(t.name(), t.description(), t.schema()))
+                        .toList();
+            }
+
+            @Override
+            public String execute(String name, JsonNode args) throws Exception {
+                return GsimMcpToolRegistry.this.execute(name, args);
+            }
+        };
     }
 
     /**
@@ -166,10 +197,13 @@ public class GsimMcpToolRegistry {
                             "tools",
                             allTools.values().stream()
                                     .map(t -> Map.of(
-                                            "name", t.name(),
-                                            "description", t.description() != null ? t.description() : ""))
+                                            "name",
+                                            t.name(),
+                                            "description",
+                                            t.description() != null ? t.description() : ""))
                                     .toList(),
-                            "count", allTools.size()));
+                            "count",
+                            allTools.size()));
                 }
                 try {
                     yield httpGet("/api/tools", MAPPER.createObjectNode());
@@ -2370,9 +2404,13 @@ public class GsimMcpToolRegistry {
             var json = MAPPER.readTree(result);
             return toJson(Map.of(
                     "connected",
-                    json.has("data") && json.get("data").has("connected") && json.get("data").get("connected").asBoolean(),
+                    json.has("data")
+                            && json.get("data").has("connected")
+                            && json.get("data").get("connected").asBoolean(),
                     "detail",
-                    json.has("data") && json.get("data").has("detail") ? json.get("data").get("detail").asText() : ""));
+                    json.has("data") && json.get("data").has("detail")
+                            ? json.get("data").get("detail").asText()
+                            : ""));
         } catch (Exception e) {
             return toJson(Map.of("connected", false, "detail", result));
         }
@@ -2383,11 +2421,12 @@ public class GsimMcpToolRegistry {
             var mgr = ctx.getApiManager().getAgentsManager();
             String configId = args.has("configId") ? args.get("configId").asText() : null;
             String statusStr = args.has("status") ? args.get("status").asText() : null;
-            String parentId = args.has("parentInstanceId") ? args.get("parentInstanceId").asText() : null;
-            com.gsim.agent.AgentStatus status = statusStr != null
-                    ? com.gsim.agent.AgentStatus.valueOf(statusStr.toUpperCase(Locale.ROOT))
-                    : null;
-            var list = mgr.listAgents(!configId.isBlank() ? configId : null, status, !parentId.isBlank() ? parentId : null);
+            String parentId =
+                    args.has("parentInstanceId") ? args.get("parentInstanceId").asText() : null;
+            com.gsim.agent.AgentStatus status =
+                    statusStr != null ? com.gsim.agent.AgentStatus.valueOf(statusStr.toUpperCase(Locale.ROOT)) : null;
+            var list = mgr.listAgents(
+                    !configId.isBlank() ? configId : null, status, !parentId.isBlank() ? parentId : null);
             return toJson(Map.of("agents", list, "count", list.size()));
         }
         return httpGet("/api/agents", args);
@@ -2411,8 +2450,10 @@ public class GsimMcpToolRegistry {
             String configId = args.get("configId").asText();
             String cacheId = args.has("cacheId") ? args.get("cacheId").asText() : null;
             String prompt = args.has("prompt") ? args.get("prompt").asText() : "";
-            String parentId = args.has("parentInstanceId") ? args.get("parentInstanceId").asText() : null;
-            var instance = mgr.runAgent(configId, !cacheId.isBlank() ? cacheId : null, prompt, !parentId.isBlank() ? parentId : null);
+            String parentId =
+                    args.has("parentInstanceId") ? args.get("parentInstanceId").asText() : null;
+            var instance = mgr.runAgent(
+                    configId, !cacheId.isBlank() ? cacheId : null, prompt, !parentId.isBlank() ? parentId : null);
             return toJson(instance);
         }
         if (!args.has("configId") || args.get("configId").asText().isBlank()) {
