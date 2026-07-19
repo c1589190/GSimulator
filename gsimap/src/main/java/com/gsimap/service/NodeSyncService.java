@@ -1,9 +1,9 @@
 package com.gsimap.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 public class NodeSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(NodeSyncService.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private final Path worldsDir;
 

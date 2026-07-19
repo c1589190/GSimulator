@@ -4,7 +4,6 @@ import com.gsimap.config.GsimapConfig;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.mcp.GsimapMcpServer;
 import com.gsimap.service.MapService;
-import com.gsim.app.AppConfig;
 import com.gsim.app.GSimulatorApplication;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
@@ -49,35 +48,9 @@ public final class GsimapApp {
 
         // ── Embedded GSimulator HTTP API server (for LLM/Agent MCP tools) ──
         GSimulatorApplication gsimApp = null;
-        int gsimPort = Integer.parseInt(System.getProperty(
-                "gsimap.gsimPort", System.getenv().getOrDefault("GSIMAP_GSIM_PORT", "8710")));
         if (!Boolean.parseBoolean(System.getProperty("gsimap.noGsim", "false"))) {
-            System.setProperty("api.port", String.valueOf(gsimPort));
-            System.setProperty("api.enabled", "true");
-            System.setProperty("worlds.dir", config.worldsDir().toAbsolutePath().toString());
-            if (config.importDir() != null) {
-                System.setProperty(
-                        "import.dir", config.importDir().toAbsolutePath().toString());
-            }
-            try {
-                final AppConfig gsimConfig = new AppConfig(new com.gsim.config.ConfigLoader(new String[0]).load());
-                final GSimulatorApplication app = new GSimulatorApplication(gsimConfig, false, true);
-                gsimApp = app;
-                new Thread(
-                                () -> {
-                                    try {
-                                        app.start();
-                                    } catch (Exception e) {
-                                        log.error("GSim embed failed", e);
-                                    }
-                                },
-                                "gsim-embed")
-                        .start();
-                Thread.sleep(2000);
-                log.info("GSimulator HTTP API embedded on port {}", gsimPort);
-            } catch (Exception e) {
-                log.warn("Failed to start embedded GSimulator: {}", e.getMessage());
-            }
+            int gsimPort = config.gsimPort();
+            gsimApp = GsimEmbeddedLauncher.launch(config.worldsDir(), config.importDir(), gsimPort);
         }
 
         // Start HTTP server

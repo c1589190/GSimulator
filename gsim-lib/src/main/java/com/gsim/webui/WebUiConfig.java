@@ -7,10 +7,10 @@ public record WebUiConfig(String host, int port, boolean enabled) {
     /**
      * 返回默认的 WebUI 配置。
      *
-     * @return 默认配置实例（127.0.0.1:8711，禁用状态）
+     * @return 默认配置实例（127.0.0.1:8710，禁用状态）
      */
     public static WebUiConfig defaults() {
-        return new WebUiConfig("127.0.0.1", 8711, false);
+        return new WebUiConfig("127.0.0.1", 8710, false);
     }
 
     /**

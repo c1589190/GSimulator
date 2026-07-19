@@ -1,23 +1,21 @@
 package com.gsimap.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
 import com.gsimap.map.MapResolver;
 import com.gsimap.map.MapStore;
 import com.gsimap.service.MapService;
 import com.gsim.mcp.ToolDef;
+import com.gsim.mcp.UnknownToolException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,12 +27,10 @@ import org.slf4j.LoggerFactory;
 public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(GsimapMcpToolRegistry.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private final MapService mapService;
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
-
-    private static final Random RANDOM = new Random();
 
     /**
      * Creates a tool registry and registers all gsimap_* MCP tools.
@@ -69,7 +65,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
     @Override
     public String execute(String name, JsonNode args) throws Exception {
         ToolDef tool = tools.get(name);
-        if (tool == null) throw new IllegalArgumentException("Unknown tool: " + name);
+        if (tool == null) throw new UnknownToolException(name);
         return switch (name) {
             case "gsimap_get_hex" -> handleGetHex(args);
             case "gsimap_get_province" -> handleGetProvince(args);
@@ -92,9 +88,10 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
             case "gsimap_update_checkpoint_element" -> handleUpdateCheckpointElement(args);
             case "gsimap_delete_checkpoint_element" -> handleDeleteCheckpointElement(args);
             case "gsimap_rename_region" -> handleRenameRegion(args);
+            case "gsimap_generate" -> handleGenerate(args);
             case "gsimap_init_nation" -> handleInitNation(args);
             case "gsimap_update_terrain_type" -> handleUpdateTerrainType(args);
-            default -> throw new IllegalArgumentException("Unknown tool: " + name);
+            default -> throw new UnknownToolException(name);
         };
     }
 
@@ -376,6 +373,23 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private void registerInitTools() {
         register(
+                "gsimap_generate",
+                "Generate a full terrain hex map for a world using procedural generation. "
+                        + "Creates continents with mountain ridges, lowlands, and water. "
+                        + "Required before using gsimap_init_nation.",
+                """
+            {"type":"object","properties":{
+              "worldId":{"type":"string","description":"GSim world ID"},
+              "nodeId":{"type":"string","description":"Node ID (default: n0000)"},
+              "seed":{"type":"integer","description":"Random seed (default: current time)"},
+              "radius":{"type":"integer","description":"Map radius in hex steps (default: 80)"},
+              "ridges":{"type":"integer","description":"Number of main mountain ridges (default: 2)"},
+              "fragments":{"type":"integer","description":"Number of fragment ridges (default: 5)"},
+              "landRatio":{"type":"number","description":"Target land ratio 0..1 (default: 0.55)"},
+              "coastRoughness":{"type":"number","description":"Coast roughness 0..1 (default: 0.6)"}
+            },"required":["worldId"]}""");
+
+        register(
                 "gsimap_init_nation",
                 "One-shot nation initialization: flood-fill unowned hexes from a seed, "
                         + "create the MapData province, sync to GSim map checkpoint, and optionally "
@@ -487,9 +501,9 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
             regionHexSets.put(e.getKey(), new HashSet<>(e.getValue().hexes()));
         }
         Set<String> ownSet = regionHexSets.get(name);
-        List<Map<String, Object>> adj = ownSet != null ? computeAdjacency(name, ownSet, regionHexSets) : List.of();
-        int[] center = computeCenter(prov.hexes(), map);
-        Map<String, Integer> terrainComp = computeTerrainComposition(prov, map);
+        List<Map<String, Object>> adj = ownSet != null ? MapService.computeAdjacency(ownSet, regionHexSets) : List.of();
+        int[] center = MapService.computeCenter(prov.hexes());
+        Map<String, Integer> terrainComp = MapService.computeTerrainComposition(prov, map);
 
         return toJson(Map.of(
                 "found",
@@ -665,14 +679,14 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
             r.put("hexCount", prov.hexes().size());
 
             // Center
-            int[] center = computeCenter(prov.hexes(), map);
+            int[] center = MapService.computeCenter(prov.hexes());
             r.put("center", Map.of("q", center[0], "r", center[1]));
 
             // Terrain composition
-            r.put("terrainComposition", computeTerrainComposition(prov, map));
+            r.put("terrainComposition", MapService.computeTerrainComposition(prov, map));
 
             // Adjacent regions
-            List<Map<String, Object>> adj = computeAdjacency(name, hexSet, regionHexSets);
+            List<Map<String, Object>> adj = MapService.computeAdjacency(hexSet, regionHexSets);
             r.put("adjacentRegions", adj);
             r.put("adjacentCount", adj.size());
 
@@ -698,8 +712,8 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
             MapData.Province fromP = map.provinces().get(args.get("fromRegion").asText());
             MapData.Province toP = map.provinces().get(args.get("toRegion").asText());
             if (fromP == null || toP == null) return toJson(Map.of("error", "Region not found"));
-            int[] fc = computeCenter(fromP.hexes(), map);
-            int[] tc = computeCenter(toP.hexes(), map);
+            int[] fc = MapService.computeCenter(fromP.hexes());
+            int[] tc = MapService.computeCenter(toP.hexes());
             fromQ = fc[0];
             fromR = fc[1];
             toQ = tc[0];
@@ -717,7 +731,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
             return toJson(Map.of("error", "Provide (fromQ,fromR,toQ,toR) or (fromRegion,toRegion)"));
         }
 
-        int hexDist = hexDistance(fromQ, fromR, toQ, toR);
+        int hexDist = MapService.hexDistance(fromQ, fromR, toQ, toR);
         return toJson(Map.of(
                 "from",
                 fromLabel,
@@ -731,103 +745,21 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
                 hexDist));
     }
 
-    // ── Geometry helpers ───────────────────────────────────
-
-    private static int hexDistance(int q1, int r1, int q2, int r2) {
-        return (Math.abs(q1 - q2) + Math.abs(r1 - r2) + Math.abs((-q1 - r1) - (-q2 - r2))) / 2;
-    }
-
-    private static int[] computeCenter(List<String> hexes, MapData map) {
-        if (hexes == null || hexes.isEmpty()) return new int[] {0, 0};
-        int sq = 0;
-        int sr = 0;
-        for (String hk : hexes) {
-            int[] qr = MapData.parseHexKey(hk);
-            sq += qr[0];
-            sr += qr[1];
-        }
-        return new int[] {Math.round((float) sq / hexes.size()), Math.round((float) sr / hexes.size())};
-    }
-
-    private static Map<String, Integer> computeTerrainComposition(MapData.Province prov, MapData map) {
-        Map<String, Integer> comp = new LinkedHashMap<>();
-        if (prov.hexes() == null || map.hexes() == null) return comp;
-        for (String hk : prov.hexes()) {
-            MapData.HexCell cell = map.hexes().get(hk);
-            if (cell != null) comp.merge(cell.terrain(), 1, Integer::sum);
-        }
-        return comp;
-    }
-
-    private static final int[][] DIRS = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
-
-    private static List<Map<String, Object>> computeAdjacency(
-            String ownName, Set<String> ownHexes, Map<String, Set<String>> allRegionHexes) {
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (var entry : allRegionHexes.entrySet()) {
-            String otherName = entry.getKey();
-            if (otherName.equals(ownName)) continue;
-            Set<String> otherHexes = entry.getValue();
-
-            int sharedEdges = 0;
-            for (String hk : ownHexes) {
-                int[] qr = MapData.parseHexKey(hk);
-                for (int[] d : DIRS) {
-                    String nk = MapData.hexKey(qr[0] + d[0], qr[1] + d[1]);
-                    if (otherHexes.contains(nk)) sharedEdges++;
-                }
-            }
-            if (sharedEdges > 0) {
-                result.add(Map.of("name", otherName, "sharedEdges", sharedEdges));
-            }
-        }
-        return result;
-    }
-
-    // ── Write tools ───────────────────────────────────────
+    // ── Write tools (all delegate to MapService) ────────────
 
     private String handleUpdateRegion(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
         String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String name = args.get("name").asText();
-        MapData map = mapService.resolve(worldId, nodeId);
-        MapData.Province prov = map.provinces().get(name);
-        if (prov == null) return toJson(Map.of("ok", false, "error", "Region not found: " + name));
-
-        // Read optional fields
-        String newTag = args.has("tag") ? args.get("tag").asText() : prov.tag();
-        String newDesc = args.has("description") ? args.get("description").asText() : prov.description();
-        String newColor = args.has("color") ? args.get("color").asText() : prov.color();
-        List<String> newHexes = prov.hexes();
+        String tag = args.has("tag") ? args.get("tag").asText() : null;
+        String desc = args.has("description") ? args.get("description").asText() : null;
+        String color = args.has("color") ? args.get("color").asText() : null;
+        List<String> hexes = null;
         if (args.has("hexes")) {
-            newHexes = new ArrayList<>();
-            for (JsonNode n : args.get("hexes")) {
-                newHexes.add(n.asText());
-            }
+            hexes = new ArrayList<>();
+            for (JsonNode n : args.get("hexes")) hexes.add(n.asText());
         }
-
-        // Build updated province
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.put(name, new MapData.Province(newHexes, newColor, newTag, newDesc));
-
-        // Rebuild MapData with updated provinces
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(
-                Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "tag", newTag, "description", newDesc));
+        return toJson(mapService.updateRegion(worldId, nodeId, name, tag, desc, color, hexes));
     }
 
     private String handleAddHexToRegion(JsonNode args) throws IOException {
@@ -836,37 +768,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
         String name = args.get("name").asText();
         int q = args.get("q").asInt();
         int r = args.get("r").asInt();
-        MapData map = mapService.resolve(worldId, nodeId);
-        MapData.Province prov = map.provinces().get(name);
-        if (prov == null) return toJson(Map.of("ok", false, "error", "Region not found: " + name));
-
-        String hexKey = MapData.hexKey(q, r);
-        if (!map.hexes().containsKey(hexKey)) return toJson(Map.of("ok", false, "error", "Hex not on map: " + hexKey));
-
-        List<String> newHexes = new ArrayList<>(prov.hexes());
-        if (newHexes.contains(hexKey))
-            return toJson(
-                    Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex already in region"));
-
-        newHexes.add(hexKey);
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "added", hexKey));
+        return toJson(mapService.addHexToRegion(worldId, nodeId, name, q, r));
     }
 
     private String handleRemoveHexFromRegion(JsonNode args) throws IOException {
@@ -875,116 +777,43 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
         String name = args.get("name").asText();
         int q = args.get("q").asInt();
         int r = args.get("r").asInt();
-        MapData map = mapService.resolve(worldId, nodeId);
-        MapData.Province prov = map.provinces().get(name);
-        if (prov == null) return toJson(Map.of("ok", false, "error", "Region not found: " + name));
-
-        String hexKey = MapData.hexKey(q, r);
-        List<String> newHexes = new ArrayList<>(prov.hexes());
-        if (!newHexes.remove(hexKey))
-            return toJson(
-                    Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex was not in region"));
-
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "removed", hexKey));
+        return toJson(mapService.removeHexFromRegion(worldId, nodeId, name, q, r));
     }
 
     private String handleCreateRegion(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
         String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String name = args.get("name").asText();
-        MapData map = mapService.resolve(worldId, nodeId);
-        if (map.provinces().containsKey(name))
-            return toJson(Map.of("ok", false, "error", "Region already exists: " + name));
-
-        String tag = args.has("tag") ? args.get("tag").asText() : "";
-        String desc = args.has("description") ? args.get("description").asText() : "";
-        String color = args.has("color")
-                ? args.get("color").asText()
-                : String.format("#%06x", RANDOM.nextInt(0xFFFFFF) | 0x404040);
-        List<String> hexes = new ArrayList<>();
+        String tag = args.has("tag") ? args.get("tag").asText() : null;
+        String desc = args.has("description") ? args.get("description").asText() : null;
+        String color = args.has("color") ? args.get("color").asText() : null;
+        List<String> hexes = null;
         if (args.has("hexes")) {
-            for (JsonNode n : args.get("hexes")) {
-                hexes.add(n.asText());
-            }
+            hexes = new ArrayList<>();
+            for (JsonNode n : args.get("hexes")) hexes.add(n.asText());
         }
-
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.put(name, new MapData.Province(hexes, color, tag, desc));
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(Map.of("ok", true, "name", name, "hexCount", hexes.size(), "tag", tag, "color", color));
+        return toJson(mapService.createRegion(worldId, nodeId, name, tag, color, desc, hexes));
     }
 
     private String handleDeleteRegion(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
         String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String name = args.get("name").asText();
-        MapData map = mapService.resolve(worldId, nodeId);
-        if (!map.provinces().containsKey(name))
-            return toJson(Map.of("ok", false, "error", "Region not found: " + name));
-
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.remove(name);
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(Map.of("ok", true, "name", name, "action", "deleted"));
+        return toJson(mapService.deleteRegion(worldId, nodeId, name));
     }
 
     // ── Checkpoint tools ──────────────────────────────────
 
     private String handleListCheckpoints(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         return toJson(mapService.getCheckpointService().listCheckpoints(worldId, nodeId));
     }
 
     private String handleGetCheckpoint(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String cp = args.get("checkpoint").asText();
         String key = args.has("key") ? args.get("key").asText() : null;
@@ -1000,7 +829,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private String handleAddCheckpointElement(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String cp = args.get("checkpoint").asText();
         String key = args.get("key").asText();
@@ -1018,7 +847,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private String handleUpdateCheckpointElement(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String cp = args.get("checkpoint").asText();
         String key = args.get("key").asText();
@@ -1036,7 +865,7 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private String handleDeleteCheckpointElement(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String cp = args.get("checkpoint").asText();
         String key = args.get("key").asText();
@@ -1045,235 +874,59 @@ public class GsimapMcpToolRegistry implements com.gsim.mcp.McpToolRegistry {
 
     private String handleRenameRegion(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String oldName = args.get("oldName").asText();
         String newName = args.get("newName").asText();
         return toJson(mapService.renameRegion(worldId, nodeId, oldName, newName));
     }
 
+    private String handleGenerate(JsonNode args) throws IOException {
+        String worldId = args.get("worldId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
+        long seed = args.has("seed") ? args.get("seed").asLong() : System.currentTimeMillis();
+        int radius = args.has("radius") ? args.get("radius").asInt() : 80;
+        int ridges = args.has("ridges") ? args.get("ridges").asInt() : 2;
+        int fragments = args.has("fragments") ? args.get("fragments").asInt() : 5;
+        double landRatio = args.has("landRatio") ? args.get("landRatio").asDouble() : 0.55;
+        double coastRoughness = args.has("coastRoughness") ? args.get("coastRoughness").asDouble() : 0.6;
+        return toJson(mapService.generate(worldId, nodeId, seed, radius, ridges, fragments,
+                landRatio, coastRoughness));
+    }
+
     private String handleInitNation(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : readActiveNodeId(worldId);
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : mapService.readActiveNodeId(worldId);
         if (nodeId == null) return toJson(Map.of("error", "No active node for world: " + worldId));
         String name = args.get("name").asText();
         int seedQ = args.get("seedQ").asInt();
         int seedR = args.get("seedR").asInt();
         int maxHexes = args.has("maxHexes") ? args.get("maxHexes").asInt() : 1000;
-
-        MapData map = mapService.resolve(worldId, nodeId);
-        if (map.provinces().containsKey(name))
-            return toJson(Map.of("ok", false, "error", "Region already exists: " + name));
-
-        String seedKey = MapData.hexKey(seedQ, seedR);
-        if (!map.hexes().containsKey(seedKey))
-            return toJson(Map.of("ok", false, "error", "Seed hex not on map: " + seedKey));
-
-        // Build owned hex set
-        Set<String> owned = new HashSet<>();
-        for (var p : map.provinces().values()) {
-            owned.addAll(p.hexes());
-        }
-        if (owned.contains(seedKey)) return toJson(Map.of("ok", false, "error", "Seed hex already owned"));
-
-        // ── 1. Flood-fill unowned hexes ──
-        Set<String> collected = new LinkedHashSet<>();
-        var queue = new ArrayDeque<String>();
-        queue.add(seedKey);
-        collected.add(seedKey);
-        while (!queue.isEmpty() && collected.size() < maxHexes) {
-            String cur = queue.poll();
-            int[] qr = MapData.parseHexKey(cur);
-            for (int[] d : DIRS) {
-                String nk = MapData.hexKey(qr[0] + d[0], qr[1] + d[1]);
-                if (map.hexes().containsKey(nk) && !owned.contains(nk) && collected.add(nk)) {
-                    queue.add(nk);
-                }
-            }
-        }
-        if (collected.isEmpty()) return toJson(Map.of("ok", false, "error", "No unowned hexes reachable from seed"));
-
-        // ── 2. Create province ──
-        String tag = args.has("tag") ? args.get("tag").asText() : "Nation";
-        String color = args.has("color")
-                ? args.get("color").asText()
-                : String.format("#%06x", RANDOM.nextInt(0xFFFFFF) | 0x404040);
-        List<String> hexList = new ArrayList<>(collected);
-
-        Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
-        updatedProvinces.put(name, new MapData.Province(hexList, color, tag, ""));
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                updatedProvinces,
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                map.terrainTypes(),
-                map.compressedRegions(),
-                map.pathwayGroups());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        // ── 3. Build tags for checkpoint elements ──
-        List<String> tags = new ArrayList<>(List.of("Nation", name));
-        if (args.has("ruler") && !args.get("ruler").asText().isBlank())
-            tags.add(args.get("ruler").asText());
-        if (args.has("religion") && !args.get("religion").asText().isBlank())
-            tags.add(args.get("religion").asText());
-
-        var cp = mapService.getCheckpointService();
-        List<String> created = new ArrayList<>();
-
-        // ── 4. Faction checkpoint ──
-        if (args.has("faction") && !args.get("faction").asText().isBlank()) {
-            cp.addElement(
-                    worldId,
-                    nodeId,
-                    "factions",
-                    name,
-                    "text",
-                    args.get("faction").asText(),
-                    tags);
-            created.add("factions:" + name);
-        }
-
-        // ── 5. Narrative checkpoint ──
-        if (args.has("narrative") && !args.get("narrative").asText().isBlank()) {
-            cp.addElement(
-                    worldId,
-                    nodeId,
-                    "narrative",
-                    name + "开局",
-                    "text",
-                    args.get("narrative").asText(),
-                    tags);
-            created.add("narrative:" + name + "开局");
-        }
-
-        // ── 6. Worldview checkpoint ──
-        if (args.has("worldview") && !args.get("worldview").asText().isBlank()) {
-            cp.addElement(
-                    worldId,
-                    nodeId,
-                    "worldview",
-                    name + "世界观",
-                    "text",
-                    args.get("worldview").asText(),
-                    tags);
-            created.add("worldview:" + name + "世界观");
-        }
-
-        // ── 7. Capital city ──
-        if (args.has("capital") && !args.get("capital").asText().isBlank()) {
-            String capitalName = args.get("capital").asText();
-            String cityValue = "名称: " + capitalName + "\n类型: 首都\n所属: " + name + "\n描述: "
-                    + (args.has("faction") ? args.get("faction").asText().split("\n")[0] : "");
-            cp.addElement(
-                    worldId,
-                    nodeId,
-                    "map",
-                    "City:" + capitalName,
-                    "map-city",
-                    cityValue,
-                    List.of("首都", name, capitalName));
-            created.add("map:City:" + capitalName);
-        }
-
-        // ── 8. Compute center ──
-        int sq = 0;
-        int sr = 0;
-        for (String hk : hexList) {
-            int[] qr = MapData.parseHexKey(hk);
-            sq += qr[0];
-            sr += qr[1];
-        }
-
-        log.info("init_nation '{}': {} hexes, {} checkpoint entries created", name, hexList.size(), created.size());
-        return toJson(Map.of(
-                "ok",
-                true,
-                "name",
-                name,
-                "hexCount",
-                hexList.size(),
-                "tag",
-                tag,
-                "color",
-                color,
-                "center",
-                Map.of("q", Math.round((float) sq / hexList.size()), "r", Math.round((float) sr / hexList.size())),
-                "checkpointsCreated",
-                created));
+        String tag = args.has("tag") ? args.get("tag").asText() : null;
+        String color = args.has("color") ? args.get("color").asText() : null;
+        String faction = args.has("faction") ? args.get("faction").asText() : null;
+        String narrative = args.has("narrative") ? args.get("narrative").asText() : null;
+        String worldview = args.has("worldview") ? args.get("worldview").asText() : null;
+        String capital = args.has("capital") ? args.get("capital").asText() : null;
+        String ruler = args.has("ruler") ? args.get("ruler").asText() : null;
+        String religion = args.has("religion") ? args.get("religion").asText() : null;
+        boolean autoGen = !args.has("autoGenerate") || args.get("autoGenerate").asBoolean();
+        return toJson(mapService.initNation(worldId, nodeId, name, seedQ, seedR, maxHexes,
+                tag, color, faction, narrative, worldview, capital, ruler, religion, autoGen));
     }
 
     private String handleUpdateTerrainType(JsonNode args) throws IOException {
         String worldId = args.get("worldId").asText();
         String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String key = args.get("key").asText();
-        MapData map = mapService.resolve(worldId, nodeId);
-        if (!map.terrainTypes().containsKey(key))
-            return toJson(Map.of("ok", false, "error", "Terrain type not found: " + key));
-
-        MapData.TerrainType existing = map.terrainTypes().get(key);
-        String newName = args.has("name") ? args.get("name").asText() : existing.name();
-        String newColor = args.has("color") ? args.get("color").asText() : existing.color();
-        int newFood = args.has("food") ? args.get("food").asInt() : existing.food();
-        int newGold = args.has("gold") ? args.get("gold").asInt() : existing.gold();
-        int newStone = args.has("stone") ? args.get("stone").asInt() : existing.stone();
-        int newMoveCost = args.has("moveCost") ? args.get("moveCost").asInt() : existing.moveCost();
-        String newDesc = args.has("description") ? args.get("description").asText() : existing.description();
-
-        var updatedTypes = new LinkedHashMap<>(map.terrainTypes());
-        updatedTypes.put(
-                key, new MapData.TerrainType(newName, newColor, newFood, newGold, newStone, newMoveCost, newDesc));
-
-        MapData updated = new MapData(
-                map.gridSize(),
-                map.hexOrientation(),
-                map.hexes(),
-                map.terrainBlocks(),
-                map.provinces(),
-                map.cities(),
-                map.rivers(),
-                map.roads(),
-                updatedTypes,
-                map.compressedRegions(),
-                new LinkedHashMap<>());
-        mapService.saveFull(worldId, nodeId, updated);
-        mapService.syncToGSimNode(worldId, nodeId);
-
-        return toJson(Map.of(
-                "ok",
-                true,
-                "key",
-                key,
-                "name",
-                newName,
-                "color",
-                newColor,
-                "food",
-                newFood,
-                "gold",
-                newGold,
-                "stone",
-                newStone,
-                "moveCost",
-                newMoveCost));
-    }
-
-    /** Read the active node ID from active.json. */
-    private String readActiveNodeId(String worldId) {
-        try {
-            var file = mapService.getWorldsDir().resolve(worldId).resolve("active.json");
-            if (!java.nio.file.Files.exists(file)) return null;
-            var node = MAPPER.readTree(file.toFile());
-            return node.has("nodeId") ? node.get("nodeId").asText() : null;
-        } catch (IOException e) {
-            return null;
-        }
+        String name = args.has("name") ? args.get("name").asText() : null;
+        String color = args.has("color") ? args.get("color").asText() : null;
+        Integer food = args.has("food") ? args.get("food").asInt() : null;
+        Integer gold = args.has("gold") ? args.get("gold").asInt() : null;
+        Integer stone = args.has("stone") ? args.get("stone").asInt() : null;
+        Integer moveCost = args.has("moveCost") ? args.get("moveCost").asInt() : null;
+        String desc = args.has("description") ? args.get("description").asText() : null;
+        return toJson(mapService.updateTerrainType(worldId, nodeId, key, name, color, food, gold, stone, moveCost, desc));
     }
 
     private static String toJson(Object obj) throws IOException {

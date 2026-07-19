@@ -1,6 +1,6 @@
 package com.gsimap.http;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
 import com.gsimap.map.MapResolver;
@@ -29,7 +29,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * REST API handler for /api/map/* endpoints.
+ * Web UI map handler for /api/map/* endpoints.
+ *
+ * <p>This HTTP API serves the Gsimap Web UI front-end only. It is NOT intended
+ * for standalone tool access — MCP tools ({@code gsimap_*}) are the canonical
+ * programmatic interface for map operations.
  *
  * <pre>
  *   GET  /api/map/{worldId}?node={nodeId}   → resolve map
@@ -39,10 +43,10 @@ import org.slf4j.LoggerFactory;
  *   GET  /api/map                           → list worlds with maps
  * </pre>
  */
-public class MapApiHandler implements HttpHandler {
+public class MapWebUIHandler implements HttpHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(MapApiHandler.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(MapWebUIHandler.class);
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private final MapService mapService;
 
@@ -52,7 +56,7 @@ public class MapApiHandler implements HttpHandler {
      * @param mapService the shared map service
      */
     @SuppressFBWarnings("EI_EXPOSE_REP2")
-    public MapApiHandler(MapService mapService) {
+    public MapWebUIHandler(MapService mapService) {
         this.mapService = mapService;
     }
 
@@ -139,7 +143,7 @@ public class MapApiHandler implements HttpHandler {
     // ── GET /api/map/{worldId} ────────────────────────────
 
     private void handleGet(HttpExchange exchange, String worldId, Map<String, String> params) throws IOException {
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "World not found or no active node: " + worldId);
             return;
@@ -168,7 +172,7 @@ public class MapApiHandler implements HttpHandler {
 
     private void handleHistory(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
         String worldId = sub.substring(1, sub.indexOf("/history"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "World not found: " + worldId);
             return;
@@ -198,7 +202,7 @@ public class MapApiHandler implements HttpHandler {
 
     private void handleLatestTexts(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
         String worldId = sub.substring(1, sub.indexOf("/latest-texts"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -256,7 +260,7 @@ public class MapApiHandler implements HttpHandler {
 
     private void handleVersion(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
         String worldId = sub.substring(1, sub.indexOf("/version"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -283,7 +287,7 @@ public class MapApiHandler implements HttpHandler {
         String worldId = sub.substring(1, sub.indexOf("/expand"));
         String direction = params.getOrDefault("direction", "E").toUpperCase(Locale.ROOT);
         int radius = Integer.parseInt(params.getOrDefault("radius", "0"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -307,7 +311,7 @@ public class MapApiHandler implements HttpHandler {
         }
         String worldId = sub.substring(1, sub.indexOf("/compress"));
         int minSize = Integer.parseInt(params.getOrDefault("minSize", "100"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -335,7 +339,7 @@ public class MapApiHandler implements HttpHandler {
             sendError(exchange, 400, "Missing 'region' parameter");
             return;
         }
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -360,7 +364,7 @@ public class MapApiHandler implements HttpHandler {
         String worldId = sub.substring(1, sub.indexOf("/decompress-at"));
         int q = Integer.parseInt(params.getOrDefault("q", "0"));
         int r = Integer.parseInt(params.getOrDefault("r", "0"));
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -573,7 +577,7 @@ public class MapApiHandler implements HttpHandler {
             return;
         }
         String worldId = sub.substring(1, sub.indexOf("/rename-region"));
-        String nodeId = readActiveNodeId(worldId);
+        String nodeId = mapService.readActiveNodeId(worldId);
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -631,7 +635,7 @@ public class MapApiHandler implements HttpHandler {
     // ── PUT /api/map/{worldId} (save diff or full) ────────
 
     private void handleSave(HttpExchange exchange, String worldId, Map<String, String> params) throws IOException {
-        String nodeId = params.getOrDefault("node", readActiveNodeId(worldId));
+        String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
@@ -651,7 +655,7 @@ public class MapApiHandler implements HttpHandler {
                         diff.changed().size());
             } else {
                 MapData data = MAPPER.readValue(body, MapData.class);
-                if (isRootNode(worldId, nodeId)) {
+                if (mapService.isRootNode(worldId, nodeId)) {
                     mapService.saveFull(worldId, nodeId, data);
                     log.info(
                             "Saved full map for root node world={} node={} ({} CRs)",
@@ -660,7 +664,7 @@ public class MapApiHandler implements HttpHandler {
                             data.compressedRegions().size());
                 } else {
                     // Child node: auto-compute diff vs parent's resolved map
-                    String parentId = readParentNodeId(worldId, nodeId);
+                    String parentId = mapService.readParentId(worldId, nodeId);
                     MapData parentMap = parentId != null ? mapService.resolve(worldId, parentId) : MapData.empty();
                     MapDiff diff = MapDiff.compute(parentId, parentMap, data);
                     mapService.saveDiff(worldId, nodeId, diff);
@@ -793,34 +797,4 @@ public class MapApiHandler implements HttpHandler {
         return params;
     }
 
-    private String readActiveNodeId(String worldId) {
-        try {
-            var file = mapService.getWorldsDir().resolve(worldId).resolve("active.json");
-            if (!java.nio.file.Files.exists(file)) return null;
-            var node = MAPPER.readTree(file.toFile());
-            return node.has("nodeId") ? node.get("nodeId").asText() : null;
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
-    }
-
-    private boolean isRootNode(String worldId, String nodeId) {
-        return readParentNodeId(worldId, nodeId) == null;
-    }
-
-    private String readParentNodeId(String worldId, String nodeId) {
-        try {
-            var file =
-                    mapService.getWorldsDir().resolve(worldId).resolve("nodes").resolve(nodeId + ".json");
-            if (!java.nio.file.Files.exists(file)) return null;
-            var node = MAPPER.readTree(file.toFile());
-            if (node.has("parentId") && !node.get("parentId").isNull()) {
-                String pid = node.get("parentId").asText();
-                return pid.isBlank() ? null : pid;
-            }
-            return null;
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
-    }
 }

@@ -22,6 +22,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- JSON serialization (direct dependency — also transitively from gsim-lib) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
         <!-- JUnit 5 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

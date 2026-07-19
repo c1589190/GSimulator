@@ -1,7 +1,6 @@
 package com.gsimap.map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.gsim.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +21,7 @@ import org.slf4j.LoggerFactory;
 public final class MapStore {
 
     private static final Logger log = LoggerFactory.getLogger(MapStore.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private MapStore() {}
 
@@ -90,7 +89,7 @@ public final class MapStore {
         try {
             Path parent = file.getParent();
             if (parent != null) Files.createDirectories(parent);
-            MAPPER.writeValue(file.toFile(), data);
+                        Files.writeString(file, JsonUtils.toJson(data));
             log.debug("Saved full map: {}", file);
         } catch (IOException e) {
             log.error("Failed to save map: {}", file, e);

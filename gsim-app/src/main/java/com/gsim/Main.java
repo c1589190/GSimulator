@@ -119,11 +119,11 @@ public class Main {
             }
 
             // 5. 确定启动模式
-            // 未指定任何模式标志时，默认启用 CLI + HTTP API + WebUI
+            // 默认启动 CLI + WebUI（无 HTTP API，交互走 MCP）
             boolean monitorMode = cliArgs.monitor();
             boolean cliMode = monitorMode ? false : (cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui()));
-            boolean httpMode = monitorMode || cliArgs.http() || (!cliArgs.cli() && !cliArgs.webui());
-            boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http());
+            boolean httpMode = monitorMode || cliArgs.http();
+            boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http() && !monitorMode);
 
             // 6. 启动 Gsimap 地图 HTTP 服务器（端口 8711）
             int gsimapPort = Integer.parseInt(System.getProperty(
@@ -236,7 +236,7 @@ public class Main {
         System.out.println();
         System.out.println("用法: java -jar GSimulator.jar [选项]");
         System.out.println();
-        System.out.println("默认启动 CLI + HTTP API(8710) + Web GUI(8711) + CLI WS(8712)");
+        System.out.println("默认启动 CLI + Web GUI(8710) + Map UI(8711)");
         System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");

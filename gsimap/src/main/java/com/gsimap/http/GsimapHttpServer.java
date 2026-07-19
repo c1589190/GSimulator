@@ -39,7 +39,7 @@ public class GsimapHttpServer {
      */
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.createContext("/api/map", new MapApiHandler(mapService));
+        server.createContext("/api/map", new MapWebUIHandler(mapService));
         server.createContext("/", new StaticFileHandler());
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();

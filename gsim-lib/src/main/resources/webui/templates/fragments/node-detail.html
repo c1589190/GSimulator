@@ -1,0 +1,35 @@
+<div class="p-2 bg-gray-800 rounded" th:if="${id != null}">
+    <div class="font-bold terminal-green" th:text="${name}">Node Name</div>
+    <div class="mt-1 space-y-1">
+        <div>ID: <span class="text-gray-400" th:text="${id}">—</span></div>
+        <div>Turn: <span class="text-gray-400" th:text="${turn}">0</span></div>
+        <div>世界时间: <span class="text-gray-400" th:text="${worldTime}">?</span></div>
+        <div>状态: <span class="text-gray-400" th:text="${status}">active</span></div>
+        <div>更新: <span class="text-gray-400" th:text="${updated}">—</span></div>
+    </div>
+    <div class="mt-2 flex gap-2" th:if="${!isActive}">
+        <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
+                hx-post="/timeline/activate"
+                th:attr="hx-vals='{&quot;branchId&quot;:&quot;' + ${id} + '&quot;}'"
+                hx-swap="none"
+                hx-on::after-request="
+                    if(event.detail.successful){
+                        try{
+                            var d=JSON.parse(event.detail.xhr.responseText);
+                            if(d&&d.success) location.reload();
+                            else document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>'+(d&&d.message?d.message:'切换失败')+'</div>';
+                        }catch(e){location.reload();}
+                    } else {
+                        try{
+                            var d=JSON.parse(event.detail.xhr.responseText);
+                            document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>'+(d&&d.message?d.message:'请求失败')+'</div>';
+                        }catch(e){
+                            document.getElementById('timeline-detail').innerHTML='<div class=\'text-red-400 text-xs\'>请求失败，请重试</div>';
+                        }
+                    }
+                ">
+            切换到此分支
+        </button>
+    </div>
+    <div class="text-xs text-green-400 mt-1" th:if="${isActive}">✔ 当前活动分支</div>
+</div>

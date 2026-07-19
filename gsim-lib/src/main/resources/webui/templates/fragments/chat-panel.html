@@ -1,0 +1,77 @@
+<div class="flex flex-col flex-1 min-h-0">
+    <div class="text-sm font-bold terminal-green mb-2">&#x1F4AC; Agent 对话</div>
+    <!-- 对话选择器 -->
+    <div id="chat-conversation-bar" class="flex gap-1 mb-2 items-center">
+        <select id="conversation-select" class="flex-1 px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded text-gray-300"
+                onchange="switchConversation(this.value)">
+            <option value="">加载中...</option>
+        </select>
+        <button class="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded"
+                onclick="newConversation()" title="新建对话">+</button>
+        <button class="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded"
+                onclick="deleteConversation()" title="删除当前对话">×</button>
+    </div>
+
+    <div id="chat-context" class="text-xs text-gray-500 mb-2 px-2 py-1 bg-gray-800 rounded"
+         hx-get="/chat/context-bar" hx-trigger="load" hx-swap="innerHTML">
+        分支: —
+    </div>
+    <!-- 待上传文件标签 -->
+    <div id="chat-uploads" class="hidden flex flex-wrap gap-1 mb-2"></div>
+    <style>
+        /* === 间距修复 === */
+        .tool-card { margin-bottom: 6px; }
+        .content-block { margin-bottom: 4px; }
+        .reasoning-block { margin-bottom: 8px; }
+        .blocks > * + * { margin-top: 4px; }
+
+        /* === 推理链折叠 === */
+        .reasoning-header { user-select: none; }
+        .reasoning-header:hover { color: #9ca3af; }
+        .reasoning-body { max-height: 8rem; overflow-y: auto; }
+
+        /* === SubAgent 卡片 === */
+        .sub-agent-card {
+            background: #0f1724;
+            border: 1px solid #1e293b;
+            border-left: 3px solid #6366f1;
+        }
+        .sub-agent-card[data-agent-type="sim"] {
+            border-left-color: #a78bfa;
+        }
+        .sub-agent-card[data-agent-type="search"] {
+            border-left-color: #22d3ee;
+        }
+        .sub-agent-header { user-select: none; }
+        .sub-agent-header:hover { color: #e2e8f0; }
+        .sub-agent-label { color: #cbd5e1; }
+        .sub-agent-id { font-family: monospace; }
+        .sub-agent-body { padding-left: 0.5rem; }
+        .sub-reasoning { max-height: 6rem; overflow-y: auto; }
+        .sub-content-block { color: #e2e8f0; line-height: 1.5; }
+        .sub-tool-card { background: #0a0e17; border-left: 3px solid #6366f1; padding: 2px 6px; }
+        .sub-tool-card.success { border-left-color: #34d399; }
+        .sub-tool-card.error { border-left-color: #ef4444; }
+    </style>
+    <div id="chat-messages" class="flex-1 overflow-y-auto mb-2 space-y-2 pr-1">
+        <div id="chat-empty-state" class="text-gray-600 text-sm">发送消息开始对话</div>
+    </div>
+    <form id="chat-form" class="flex gap-2" autocomplete="off" onsubmit="return false;">
+        <button type="button" id="chat-upload-btn"
+                class="px-2 py-2 text-gray-400 hover:text-green-400 text-lg"
+                title="上传文件" onclick="document.getElementById('chat-file-input').click()">
+            &#x1F4CE;
+        </button>
+        <input type="file" id="chat-file-input" class="hidden"
+               onchange="window._chatUpload && window._chatUpload(this)">
+        <input type="text" name="message" id="chat-input"
+               placeholder="输入消息..." autocomplete="off"
+               class="flex-1 input-area rounded px-3 py-2 text-sm text-gray-200"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window._chatSend&&window._chatSend();}">
+        <button type="button" id="chat-send-btn"
+                class="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded"
+                onclick="window._chatSend&&window._chatSend()">
+            发送
+        </button>
+    </form>
+</div>

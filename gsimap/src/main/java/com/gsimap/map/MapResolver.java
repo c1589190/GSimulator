@@ -1,6 +1,6 @@
 package com.gsimap.map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsim.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 public final class MapResolver {
 
     private static final Logger log = LoggerFactory.getLogger(MapResolver.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     /** Maximum chain depth to prevent infinite loops. */
     private static final int MAX_CHAIN_DEPTH = 200;

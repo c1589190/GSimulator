@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSimulator — 推演工作台</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4/dist/ext/sse.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: #111827; color: #e5e7eb;
+        }
+        .panel { background-color: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; }
+        .terminal-green { color: #34d399; }
+        .bg-terminal { background-color: #34d399; }
+        .input-area { background-color: #111827; border: 1px solid #4b5563; }
+        .input-area:focus { border-color: #34d399; outline: none; }
+        .msg-user { background-color: #1e3a5f; }
+        .msg-assistant { background-color: #1f2937; }
+        .tool-card { background-color: #1a1a2e; border-left: 3px solid #f59e0b; }
+        .tool-card.success { border-left-color: #34d399; }
+        .tool-card.error { border-left-color: #ef4444; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 40; }
+        .sidebar { display: none; position: fixed; top: 0; left: 0; width: 16rem; height: 100%; background: #1f2937; z-index: 50; padding: 1rem; }
+        @media (min-width: 768px) {
+            .mobile-only { display: none !important; }
+            .sidebar-overlay, .sidebar { display: none !important; }
+        }
+        @media (max-width: 767px) {
+            #chat-messages {
+                -webkit-overflow-scrolling: touch !important;
+            }
+        }
+        .timeline-selected {
+            background-color: rgba(52, 211, 153, 0.12);
+        }
+        /* 推文卡片 — 推演内容展示 */
+        .tweet-card {
+            margin: 0.5rem 0;
+            padding: 0.75rem;
+            background-color: #1a2332;
+            border: 1px solid #34d399;
+            border-left: 3px solid #34d399;
+            border-radius: 0.5rem;
+        }
+        .tweet-header {
+            font-weight: bold;
+            color: #34d399;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        .tweet-body {
+            width: 100%;
+            min-height: 4rem;
+            max-height: 16rem;
+            overflow-y: auto;
+            background-color: #0f1724;
+            color: #e5e7eb;
+            border: 1px solid #374151;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            -webkit-user-select: text;
+            user-select: text;
+            -webkit-overflow-scrolling: touch;
+        }
+        .tweet-body:focus {
+            border-color: #34d399;
+        }
+        .tweet-copy-btn {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background-color: #065f46;
+            color: #d1fae5;
+            border: 1px solid #34d399;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .tweet-copy-btn:hover {
+            background-color: #047857;
+        }
+        /* 上传文件标签 */
+        .upload-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.125rem 0.5rem;
+            font-size: 0.75rem;
+            background: #065f46;
+            color: #d1fae5;
+            border-radius: 0.25rem;
+        }
+        .upload-tag button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0;
+            color: #6ee7b7;
+        }
+        .upload-tag button:hover { color: #f87171; }
+        /* 桌面侧栏导航激活态 */
+        .nav-item.active {
+            background-color: rgba(52, 211, 153, 0.12);
+            color: #34d399;
+            border-left: 3px solid #34d399;
+        }
+    </style>
+</head>
+<body class="flex flex-col overflow-hidden">
+
+    <!-- ===== 顶栏 ===== -->
+    <header class="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+        <div class="flex items-center gap-3">
+            <button class="mobile-only text-gray-400 hover:text-green-400 text-xl"
+                    onclick="toggleSidebar()">&#9776;</button>
+            <h1 class="text-lg font-bold terminal-green">GSimulator</h1>
+        </div>
+        <div class="text-xs text-gray-500">
+            <span>世界: <span th:text="${activeWorld}">—</span></span>
+            <span class="ml-4">分支: <span th:text="${activeBranchId}">—</span></span>
+        </div>
+    </header>
+
+    <!-- ===== 移动端侧边栏 ===== -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div id="sidebar" class="sidebar">
+        <button class="text-gray-400 hover:text-white mb-6" onclick="toggleSidebar()">&times; 关闭</button>
+        <nav class="flex flex-col gap-2">
+            <button onclick="loadMobilePage('chat')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F4AC; Agent 对话</button>
+            <button onclick="loadMobilePage('scenario')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F4DC; 剧本管理</button>
+            <button onclick="loadMobilePage('cli')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x1F4BB; CLI 终端</button>
+            <button onclick="loadMobilePage('settings')"
+                    class="text-left px-3 py-2 rounded hover:bg-gray-700 text-gray-300 hover:text-green-400">
+                &#x2699; 设置</button>
+        </nav>
+    </div>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="flex-1 flex overflow-hidden min-h-0">
+
+        <!-- 桌面版：左侧固定导航栏 + 右侧主内容区 -->
+        <div class="hidden md:flex w-full min-h-0">
+            <!-- 左侧导航栏 -->
+            <aside class="w-52 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col">
+                <div class="px-4 py-4 border-b border-gray-700">
+                    <div class="text-lg font-bold terminal-green">⚔ GSimulator</div>
+                    <div class="text-xs text-gray-500 mt-1">推演工作台</div>
+                </div>
+                <nav class="flex-1 py-3 flex flex-col gap-1 px-2">
+                    <button onclick="loadDesktopPage('chat')" data-panel="chat"
+                            class="nav-item active text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        💬 Agent 对话
+                    </button>
+                    <button onclick="loadDesktopPage('scenario')" data-panel="scenario"
+                            class="nav-item text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        📜 剧本管理
+                    </button>
+                    <button onclick="loadDesktopPage('cli')" data-panel="cli"
+                            class="nav-item text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        💻 CLI
+                    </button>
+                    <button onclick="loadDesktopPage('settings')" data-panel="settings"
+                            class="nav-item text-left px-3 py-2.5 rounded text-sm text-gray-300 hover:bg-gray-700 hover:text-green-400 transition-colors">
+                        ⚙ 设置
+                    </button>
+                </nav>
+                <div class="px-4 py-3 border-t border-gray-700 text-xs text-gray-500 space-y-0.5">
+                    <div>世界: <span th:text="${activeWorld}">—</span></div>
+                    <div>分支: <span th:text="${activeBranchId}">—</span></div>
+                </div>
+            </aside>
+
+            <!-- 右侧主内容区：单容器，HTMX 加载不同模块 -->
+            <div class="flex-1 p-2 min-h-0 flex flex-col">
+                <div id="desktop-page" class="panel flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div id="desktop-page-body" class="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
+                        <div class="text-gray-500 text-sm">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 移动版：单容器，HTMX 加载不同模块 -->
+        <div class="md:hidden flex-1 w-full p-2 min-h-0 flex flex-col">
+            <div id="mobile-page" class="panel flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div id="mobile-page-body" class="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col">
+                    <div class="text-gray-500 text-sm">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/message-store.js"></script>
+    <script src="/static/chat-renderer.js"></script>
+    <script src="/static/client-cache.js"></script>
+    <script src="/static/session-ws.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

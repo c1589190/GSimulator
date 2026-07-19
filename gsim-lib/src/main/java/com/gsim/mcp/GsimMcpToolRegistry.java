@@ -832,7 +832,7 @@ public class GsimMcpToolRegistry {
 
     private String handleGetNodeInfo(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         ObjectNode node = readNodeFile(worldId, nodeId);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -873,7 +873,7 @@ public class GsimMcpToolRegistry {
 
     private String handleListCheckpoints(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         ObjectNode node = readNodeFile(worldId, nodeId);
 
         List<Map<String, Object>> cps = new ArrayList<>();
@@ -899,7 +899,7 @@ public class GsimMcpToolRegistry {
 
     private String handleGetCheckpoint(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String checkpointName = args.get("checkpoint").asText();
         String filterKey = args.has("key") ? args.get("key").asText() : null;
         int limit = args.has("limit") ? args.get("limit").asInt() : 50;
@@ -976,7 +976,7 @@ public class GsimMcpToolRegistry {
 
     private String handleAddCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 
@@ -1029,7 +1029,7 @@ public class GsimMcpToolRegistry {
 
     private String handleUpdateCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 
@@ -1069,7 +1069,7 @@ public class GsimMcpToolRegistry {
 
     private String handleDeleteCheckpointElement(JsonNode args) throws Exception {
         String worldId = args.get("worldId").asText();
-        String nodeId = args.get("nodeId").asText();
+        String nodeId = args.has("nodeId") ? args.get("nodeId").asText() : "n0000";
         String checkpointName = args.get("checkpoint").asText();
         String key = args.get("key").asText();
 

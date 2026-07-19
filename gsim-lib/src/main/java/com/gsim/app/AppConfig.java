@@ -154,7 +154,7 @@ public class AppConfig {
 
         // WebUI 配置
         this.webUiHost = isBlank(result.get("webui.host")) ? "127.0.0.1" : result.get("webui.host");
-        this.webUiPort = parseInt(result.get("webui.port"), 8711);
+        this.webUiPort = parseInt(result.get("webui.port"), 8710);
         this.webUiEnabled = parseBoolean(result.get("webui.enabled"), false);
     }
 
