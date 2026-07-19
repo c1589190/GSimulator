@@ -140,7 +140,7 @@ public class GsimMcpToolRegistry {
      */
     public String execute(String name, JsonNode args) throws Exception {
         ToolDef tool = tools.get(name);
-        if (tool == null) throw new IllegalArgumentException("Unknown tool: " + name);
+        if (tool == null) throw new UnknownToolException(name);
         return switch (name) {
             case "gsim_list_worlds" -> handleListWorlds(args);
             case "gsim_get_world_info" -> handleGetWorldInfo(args);
@@ -217,7 +217,7 @@ public class GsimMcpToolRegistry {
                             "Using static tool list (gsim-app HTTP API unavailable)"));
                 }
             }
-            default -> throw new IllegalArgumentException("Unknown tool: " + name);
+            default -> throw new UnknownToolException(name);
         };
     }
 

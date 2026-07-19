@@ -69,7 +69,7 @@ class McpProtocolTest {
                     yield "{\"sum\":" + (a + b) + "}";
                 }
                 case "test_no_args" -> "{\"greeting\":\"Hello, MCP!\"}";
-                default -> throw new IllegalArgumentException("Unknown tool: " + name);
+                default -> throw new UnknownToolException(name);
             };
         }
     }

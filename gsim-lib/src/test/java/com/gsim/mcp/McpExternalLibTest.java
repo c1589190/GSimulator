@@ -66,7 +66,7 @@ class McpExternalLibTest {
                     yield "{\"greeting\":\"Hello, " + n + "!\"}";
                 }
                 case "my_status" -> "{\"status\":\"ok\",\"version\":\"1.0-custom\"}";
-                default -> throw new IllegalArgumentException("Unknown tool: " + name);
+                default -> throw new UnknownToolException(name);
             };
         }
     }
@@ -155,7 +155,7 @@ class McpExternalLibTest {
         @DisplayName("未知工具抛出 IllegalArgumentException")
         void unknownToolThrows() {
             ExternalAppRegistry reg = new ExternalAppRegistry();
-            assertThrows(IllegalArgumentException.class, () -> reg.execute("unknown_tool", MAPPER.createObjectNode()));
+            assertThrows(UnknownToolException.class, () -> reg.execute("unknown_tool", MAPPER.createObjectNode()));
         }
     }
 
@@ -212,7 +212,7 @@ class McpExternalLibTest {
                     new ExternalAppRegistry(), new GsimMcpToolRegistry(tempDir).asMcpRegistry());
 
             assertThrows(
-                    IllegalArgumentException.class,
+                    UnknownToolException.class,
                     () -> composite.execute("completely_unknown", MAPPER.createObjectNode()));
         }
 
@@ -297,7 +297,7 @@ class McpExternalLibTest {
             ExternalAppServer server = new ExternalAppServer(tempDir);
 
             assertThrows(
-                    IllegalArgumentException.class,
+                    UnknownToolException.class,
                     () -> server.executeTool("no_such_tool", MAPPER.createObjectNode()));
         }
 
@@ -343,7 +343,7 @@ class McpExternalLibTest {
         }
 
         @Test
-        @DisplayName("start() 和 stop() 方法可用")
+        @DisplayName("start() 和 stop() 方法可用（System.in 受 CloseShieldInputStream 保护）")
         void startAndStopAvailable(@TempDir Path tempDir) {
             GsimMcpServer server = new GsimMcpServer(tempDir);
             assertDoesNotThrow(server::stop);
@@ -365,7 +365,7 @@ class McpExternalLibTest {
             GsimMcpServer server = new GsimMcpServer(tempDir);
 
             assertThrows(
-                    IllegalArgumentException.class,
+                    UnknownToolException.class,
                     () -> server.executeTool("gsim_nonexistent", MAPPER.createObjectNode()));
         }
     }

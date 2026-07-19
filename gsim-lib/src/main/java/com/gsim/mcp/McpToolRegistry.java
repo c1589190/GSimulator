@@ -43,11 +43,22 @@ public interface McpToolRegistry {
     /**
      * 执行指定名称的工具。
      *
+     * <p><b>异常契约：</b>
+     * <ul>
+     *   <li>{@link UnknownToolException} — 工具名称在此注册表中不存在（路由失败）</li>
+     *   <li>{@link IllegalArgumentException} — 工具存在但提供的参数无效（参数验证失败）</li>
+     *   <li>其他异常 — 工具执行过程中的运行时错误</li>
+     * </ul>
+     *
+     * <p>{@link CompositeMcpToolRegistry} 仅捕获 {@link UnknownToolException}
+     * 来尝试下一个注册表，不会将参数验证失败误判为路由失败。
+     *
      * @param name 工具名称（如 {@code gsim_list_worlds}）
      * @param args 工具参数的 JSON 树
      * @return JSON 编码的结果字符串
-     * @throws IllegalArgumentException 如果工具名称未知
-     * @throws Exception                如果工具执行失败
+     * @throws UnknownToolException  如果工具名称未知
+     * @throws IllegalArgumentException 如果参数无效
+     * @throws Exception             如果工具执行失败
      */
     String execute(String name, JsonNode args) throws Exception;
 }

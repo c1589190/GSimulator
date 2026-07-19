@@ -4,11 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,31 +57,35 @@ public abstract class AbstractMcpServer implements Runnable {
     protected volatile boolean running = true;
 
     private final List<McpToolRegistry> registries;
+    private final McpTransport transport;
 
     // ── 构造函数 ─────────────────────────────────────────────
 
     /**
      * 无参构造器，供完全覆盖所有模板方法的子类使用。
+     * 默认使用 {@link StdioMcpTransport}（{@code stdin}/{@code stdout}）。
      *
      * <p>使用此构造器的子类必须覆盖 {@link #getAllTools()} 和 {@link #executeTool(String, JsonNode)}。
-     * 不需要覆盖 {@link #getServerName()} 和 {@link #getServerVersion()}——它们在所有情况下均由子类实现。
      */
     protected AbstractMcpServer() {
         this.registries = List.of();
+        this.transport = new StdioMcpTransport();
     }
 
     /**
      * 使用单个工具注册表创建 MCP 服务器。
+     * 默认使用 {@link StdioMcpTransport}。
      *
      * @param registry 工具注册表（不可为 null）
      */
     protected AbstractMcpServer(McpToolRegistry registry) {
         this.registries = List.of(registry);
+        this.transport = new StdioMcpTransport();
     }
 
     /**
      * 使用多个工具注册表创建 MCP 服务器。
-     * 工具按列表顺序合并；工具调用按列表顺序查找第一个能处理的注册表。
+     * 默认使用 {@link StdioMcpTransport}。
      *
      * @param registries 工具注册表列表（不可为 null，不可为空）
      */
@@ -94,6 +94,24 @@ public abstract class AbstractMcpServer implements Runnable {
             throw new IllegalArgumentException("At least one McpToolRegistry is required");
         }
         this.registries = List.copyOf(registries);
+        this.transport = new StdioMcpTransport();
+    }
+
+    /**
+     * 使用自定义传输层创建 MCP 服务器（供测试或非 stdio 传输使用）。
+     *
+     * @param registries 工具注册表列表
+     * @param transport  传输层实现
+     */
+    protected AbstractMcpServer(List<McpToolRegistry> registries, McpTransport transport) {
+        if (registries == null || registries.isEmpty()) {
+            throw new IllegalArgumentException("At least one McpToolRegistry is required");
+        }
+        if (transport == null) {
+            throw new IllegalArgumentException("transport must not be null");
+        }
+        this.registries = List.copyOf(registries);
+        this.transport = transport;
     }
 
     // ── 子类模板方法 ─────────────────────────────────────────
@@ -139,11 +157,12 @@ public abstract class AbstractMcpServer implements Runnable {
         for (McpToolRegistry r : registries) {
             try {
                 return r.execute(name, args);
-            } catch (IllegalArgumentException e) {
-                // 该注册表不认识这个工具，继续尝试下一个
+            } catch (UnknownToolException e) {
+                // 仅 UnknownToolException 表示路由失败
+                // IllegalArgumentException 表示参数错误，向上传播
             }
         }
-        throw new IllegalArgumentException("Unknown tool: " + name);
+        throw new UnknownToolException(name);
     }
 
     // ── 生命周期 ─────────────────────────────────────────────
@@ -158,18 +177,18 @@ public abstract class AbstractMcpServer implements Runnable {
      * <p>记录完整的请求/响应/错误日志到 Log4j2。
      */
     public void start() {
+        String transportType = transport.getClass().getSimpleName();
         log.info(
-                "[MCP-LIFECYCLE] {} v{} starting on stdio, {} registries, {} tools total",
+                "[MCP-LIFECYCLE] {} v{} starting (transport={}, registries={}, tools={})",
                 getServerName(),
                 getServerVersion(),
+                transportType,
                 registries.size(),
                 getAllTools().size());
 
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-                PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out), true)) {
-
+        try {
             String line;
-            while (running && (line = in.readLine()) != null) {
+            while (running && (line = transport.readLine()) != null) {
                 if (line.isBlank()) continue;
 
                 String method = "";
@@ -206,28 +225,41 @@ public abstract class AbstractMcpServer implements Runnable {
                         case "tools/call" -> {
                             String toolName = extractToolName(req);
                             JsonNode args = extractToolArgs(req);
-                            log.info("[MCP-TOOL] name={}, args={}", toolName, args);
+                            log.info("[MCP-TOOL] name={}", toolName);
+                            log.debug("[MCP-TOOL] name={}, args={}", toolName, args);
 
                             try {
+                                long startNs = System.nanoTime();
                                 JsonNode result = handleToolCall(req);
+                                long durationMs = (System.nanoTime() - startNs) / 1_000_000;
                                 response = jsonRpc(id, result);
 
-                                // 提取工具执行结果摘要用于日志
                                 String resultText = extractResultText(result);
-                                int maxLogLen = Math.min(resultText.length(), 500);
                                 log.info(
-                                        "[MCP-TOOL-RESULT] name={}, resultSize={}bytes, result={}",
+                                        "[MCP-TOOL-RESULT] name={}, status=success, resultSize={}bytes, duration={}ms",
                                         toolName,
                                         resultText.length(),
-                                        resultText.substring(0, maxLogLen));
+                                        durationMs);
+                                log.debug(
+                                        "[MCP-TOOL-RESULT] name={}, result={}",
+                                        toolName,
+                                        resultText.substring(0, Math.min(resultText.length(), 2000)));
                                 log.debug("[MCP-RES] method=tools/call, id={}, size={}bytes", id, response.length());
+                            } catch (UnknownToolException e) {
+                                log.warn(
+                                        "[MCP-TOOL-RESULT] name={}, status=fail, error=unknown_tool, message={}",
+                                        toolName,
+                                        e.getMessage());
+                                response = jsonRpcError(id, -32602, "Unknown tool: " + toolName);
                             } catch (IllegalArgumentException e) {
                                 log.warn(
-                                        "[MCP-TOOL] name={}, error=unknown_tool, message={}", toolName, e.getMessage());
-                                response = jsonRpcError(id, -32602, "Unknown tool: " + toolName);
+                                        "[MCP-TOOL-RESULT] name={}, status=fail, error=invalid_args, message={}",
+                                        toolName,
+                                        e.getMessage());
+                                response = jsonRpcError(id, -32602, "Invalid arguments: " + e.getMessage());
                             } catch (Exception e) {
                                 log.error(
-                                        "[MCP-TOOL] name={}, error=execution_failed, message={}",
+                                        "[MCP-TOOL-RESULT] name={}, status=fail, error=execution_error, message={}",
                                         toolName,
                                         e.getMessage(),
                                         e);
@@ -240,30 +272,39 @@ public abstract class AbstractMcpServer implements Runnable {
                         }
                     }
 
-                    out.println(response);
-                    log.debug("[MCP-RES] sent {} bytes to stdout", response.length());
+                    transport.writeLine(response);
+                    log.debug("[MCP-RES] sent {} bytes via {}", response.length(), transportType);
 
                 } catch (IOException e) {
                     log.error("[MCP-ERR] parse_error, id={}, message={}", id, e.getMessage(), e);
-                    out.println(jsonRpcError(id, -32700, "Parse error: " + e.getMessage()));
+                    try {
+                        transport.writeLine(jsonRpcError(id, -32700, "Parse error: " + e.getMessage()));
+                    } catch (IOException writeErr) {
+                        log.error("[MCP-ERR] Failed to write error response", writeErr);
+                    }
                 }
             }
         } catch (IOException e) {
-            log.error("[MCP-ERR] I/O error in main loop", e);
+            log.error("[MCP-ERR] Transport I/O error in main loop", e);
         }
 
         log.info("[MCP-LIFECYCLE] {} stopped", getServerName());
     }
 
     /**
-     * 发出停止信号。
+     * 发出停止信号并关闭传输层。
      *
-     * <p>设置 {@code running = false} 标志，使主循环在下一次迭代时退出。
-     * 注意：不关闭 {@link System#in}，因为调用方（如测试框架）可能依赖 stdin 进行进程间通信。
+     * <p>设置 {@code running = false} 标志并关闭底层传输，
+     * 这会解除主循环中阻塞的 {@link McpTransport#readLine()} 调用。
      */
     public void stop() {
         log.info("[MCP-LIFECYCLE] {} stop requested", getServerName());
         running = false;
+        try {
+            transport.close();
+        } catch (IOException e) {
+            log.warn("[MCP-LIFECYCLE] {} transport close error: {}", getServerName(), e.getMessage());
+        }
     }
 
     @Override

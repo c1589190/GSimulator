@@ -17,9 +17,15 @@ import java.util.List;
  *   GsimMcpServer server = new GsimMcpServer(worldsDir);
  *   server.start();  // 阻塞，从 stdin 读取，向 stdout 写入
  *
- *   // 方式 2: 注册自定义 MCP 工具（与 GSim 工具共存）
- *   GsimMcpServer server = new GsimMcpServer(worldsDir);
- *   server.addRegistry(new MyCustomRegistry());
+ *   // 方式 2: 注册自定义 MCP 工具（与 GSim 工具合并）
+ *   var composite = new CompositeMcpToolRegistry(
+ *       new MyCustomRegistry(),
+ *       new GsimMcpToolRegistry(worldsDir).asMcpRegistry()
+ *   );
+ *   var server = new AbstractMcpServer(composite) {
+ *       {@literal @}Override protected String getServerName() { return "MyApp"; }
+ *       {@literal @}Override protected String getServerVersion() { return "1.0"; }
+ *   };
  *   server.start();
  *
  *   // 方式 3: ApplicationContext 模式（Agent/LLM 工具直调 Java API）
