@@ -297,8 +297,7 @@ class McpExternalLibTest {
             ExternalAppServer server = new ExternalAppServer(tempDir);
 
             assertThrows(
-                    UnknownToolException.class,
-                    () -> server.executeTool("no_such_tool", MAPPER.createObjectNode()));
+                    UnknownToolException.class, () -> server.executeTool("no_such_tool", MAPPER.createObjectNode()));
         }
 
         @Test
