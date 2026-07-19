@@ -8,27 +8,46 @@
         <version>0.1.0-Alpha1</version>
     </parent>
 
-    <artifactId>gsim-app</artifactId>
+    <artifactId>gsimap</artifactId>
     <packaging>jar</packaging>
 
-    <name>GSimulator App</name>
-    <description>GSimulator CLI entry point — thin wrapper around gsim-lib</description>
+    <name>GSimap</name>
+    <description>Hex map editor and MCP bridge for GSim — map data, terrain editing, HTTP API, MCP tools</description>
 
     <dependencies>
+        <!-- GSimulator library (Agent, WorldInfo, MCP base, HTTP API, WebUI) -->
         <dependency>
             <groupId>com.gsim</groupId>
             <artifactId>gsim-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- JUnit 5 -->
         <dependency>
-            <groupId>com.gsim</groupId>
-            <artifactId>gsimap</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- SpotBugs annotations for @SuppressFBWarnings -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.2</version>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -41,11 +60,9 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.gsim.Main</mainClass>
+                                    <mainClass>com.gsimap.GsimapApp</mainClass>
                                 </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
                         </configuration>
                     </execution>
                 </executions>

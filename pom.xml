@@ -13,6 +13,7 @@
     <modules>
         <module>gsim-lib</module>
         <module>gsim-app</module>
+        <module>gsimap</module>
     </modules>
 
     <properties>
