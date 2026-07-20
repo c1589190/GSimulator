@@ -17,14 +17,14 @@ public final class WorldInformation {
     private final String worldId;
     private final String rootNodeId;
     private final String activeNodeId;
-    private final List<NodeSnapshot> branchChain; // root → active
+    private final List<NodeSnapshot> branchChain; // root → active (mutable for lazy-load)
     private final Map<String, List<ElementRef>> byCheckpoint; // checkpointId → all elements
     private final Map<String, List<ElementRef>> byTag; // tag → elements
     private final KeywordIndex keywordIndex;
 
     public WorldInformation(String worldId, List<NodeSnapshot> branchChain) {
         this.worldId = worldId;
-        this.branchChain = List.copyOf(branchChain);
+        this.branchChain = new ArrayList<>(branchChain);  // mutable to support lazy-load
         this.rootNodeId = branchChain.isEmpty() ? null : branchChain.get(0).nodeId();
         this.activeNodeId = branchChain.isEmpty()
                 ? null
@@ -71,6 +71,40 @@ public final class WorldInformation {
                 .filter(n -> n.nodeId().equals(nodeId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Lazily register a node loaded from disk into the in-memory chain.
+     *
+     * <p>This is used when a tool references a node that was not part of the
+     * session's original branch chain (e.g. created by another session, or
+     * renamed on disk). The node's elements are merged into the existing
+     * checkpoint, tag, and keyword indexes.
+     *
+     * @param node the node snapshot loaded from disk
+     * @throws IllegalStateException if a node with the same id is already present
+     */
+    public synchronized void ensureNode(NodeSnapshot node) {
+        if (nodeById(node.nodeId()) != null) {
+            return; // already loaded
+        }
+        branchChain.add(node);
+        addNodeToIndexes(node);
+    }
+
+    /** Add a single node's elements to all three indexes. */
+    private void addNodeToIndexes(NodeSnapshot node) {
+        for (var entry : node.checkpoints().entrySet()) {
+            String cpId = entry.getKey();
+            for (Element el : entry.getValue().elements()) {
+                ElementRef ref = ElementRef.from(node.nodeId(), node.turn(), node.worldTime(), cpId, el);
+                byCheckpoint.computeIfAbsent(cpId, k -> new ArrayList<>()).add(ref);
+                for (String t : el.tags()) {
+                    byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
+                }
+                keywordIndex.add(ref);
+            }
+        }
     }
 
     // -- checkpoint queries --

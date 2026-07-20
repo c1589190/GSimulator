@@ -6,13 +6,17 @@ import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.Element;
+import com.gsim.worldinfo.NodeSnapshot;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.NodeLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * write_element -- LLM 向节点检查点写入信息元素。
@@ -31,6 +35,8 @@ import java.util.function.Supplier;
  * links 应使用相同的 {@code nodeId:checkpointId:key} 格式以便交叉引用。
  */
 public final class WriteElementTool implements AgentTool {
+
+    private static final Logger log = LoggerFactory.getLogger(WriteElementTool.class);
 
     private final Supplier<WorldInformation> worldInfo;
     private final Path worldsDir;
@@ -90,6 +96,9 @@ public final class WriteElementTool implements AgentTool {
         if (checkpointId.isEmpty() || key.isEmpty()) {
             return ToolResult.fail("write_element", "checkpointId and key must not be empty");
         }
+
+        // Lazily load node from disk if not in the in-memory chain
+        lazyLoadNode(wi, nodeId);
 
         String type = call.param("type");
         String value = call.param("value");
@@ -187,5 +196,27 @@ public final class WriteElementTool implements AgentTool {
     @Override
     public Permission permission() {
         return Permission.WRITE;
+    }
+
+    /**
+     * Lazily load a node from disk into the WorldInformation if it is not already
+     * in the in-memory chain. This allows writing to nodes that were created or
+     * renamed on disk after the session started.
+     */
+    private void lazyLoadNode(WorldInformation wi, String nodeId) {
+        if (wi.nodeById(nodeId) != null) return; // already loaded
+
+        Path nodeFile = NodeLoader.nodeFile(worldsDir, wi.worldId(), nodeId);
+        if (!Files.exists(nodeFile)) {
+            throw new IllegalArgumentException("Unknown node: " + nodeId + " (not in chain and not on disk)");
+        }
+        try {
+            NodeSnapshot node = NodeLoader.load(nodeFile);
+            wi.ensureNode(node);
+            log.info("Lazy-loaded node {} from disk into WorldInformation", nodeId);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException(
+                    "Failed to load node " + nodeId + " from disk: " + e.getMessage(), e);
+        }
     }
 }

@@ -8,11 +8,14 @@ import com.gsim.worldinfo.Checkpoint;
 import com.gsim.worldinfo.NodeSnapshot;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.NodeLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * create_checkpoint -- 在节点中显式创建新检查点。
@@ -24,6 +27,8 @@ import java.util.function.Supplier;
  * 如果目标节点不存在，返回错误并附带可用节点列表引导。
  */
 public final class CreateCheckpointTool implements AgentTool {
+
+    private static final Logger log = LoggerFactory.getLogger(CreateCheckpointTool.class);
 
     private final Supplier<WorldInformation> worldInfo;
     private final Path worldsDir;
@@ -61,6 +66,9 @@ public final class CreateCheckpointTool implements AgentTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = wi.activeNodeId();
         }
+
+        // Lazily load node from disk if not in the in-memory chain
+        lazyLoadNode(wi, nodeId);
 
         NodeSnapshot node = wi.nodeById(nodeId);
         if (node == null) {
@@ -138,5 +146,18 @@ public final class CreateCheckpointTool implements AgentTool {
     @Override
     public Permission permission() {
         return Permission.WRITE;
+    }
+
+    private void lazyLoadNode(WorldInformation wi, String nodeId) {
+        if (wi.nodeById(nodeId) != null) return;
+        Path nodeFile = NodeLoader.nodeFile(worldsDir, wi.worldId(), nodeId);
+        if (!Files.exists(nodeFile)) return; // let caller handle the error
+        try {
+            NodeSnapshot node = NodeLoader.load(nodeFile);
+            wi.ensureNode(node);
+            log.info("Lazy-loaded node {} from disk into WorldInformation", nodeId);
+        } catch (RuntimeException e) {
+            log.warn("Failed to lazy-load node {} from disk: {}", nodeId, e.getMessage());
+        }
     }
 }
