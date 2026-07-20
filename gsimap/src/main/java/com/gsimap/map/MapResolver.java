@@ -153,7 +153,10 @@ public final class MapResolver {
             var node = com.gsim.worldinfo.loader.NodeLoader.load(nodesDir.resolve(nodeId + ".json"));
             String pid = node.parentId();
             return (pid != null && !pid.isBlank()) ? pid : null;
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
+            // Corrupt or missing node file — log and treat as chain end
+            log.warn("Failed to read parentId for node {} (file may be corrupt or missing): {}",
+                    nodeId, e.getMessage());
             return null;
         }
     }

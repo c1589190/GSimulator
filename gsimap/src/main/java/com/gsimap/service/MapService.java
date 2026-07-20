@@ -106,8 +106,14 @@ public class MapService {
             // File truly absent (first access, node not yet created) → treat as root
             return true;
         }
-        // File exists — let any parse error propagate, don't silently degrade
-        return com.gsim.worldinfo.loader.NodeLoader.load(nodeFile).isRoot();
+        // File exists — try to parse it
+        try {
+            return com.gsim.worldinfo.loader.NodeLoader.load(nodeFile).isRoot();
+        } catch (RuntimeException e) {
+            // Corrupt node file (e.g. 0 bytes from failed write) — log and treat as non-root
+            log.warn("Cannot determine if {} is root node (file may be corrupt): {}", nodeId, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -1342,7 +1348,10 @@ public class MapService {
                     com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId));
             String pid = node.parentId();
             return (pid != null && !pid.isBlank()) ? pid : "n0000";
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
+            // Corrupt or missing node file — log loudly so this doesn't go unnoticed
+            log.warn("Failed to read parentId for node {} (file may be corrupt or missing): {}",
+                    nodeId, e.getMessage());
             return "n0000";
         }
     }

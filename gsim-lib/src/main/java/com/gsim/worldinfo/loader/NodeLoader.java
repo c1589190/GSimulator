@@ -102,11 +102,15 @@ public final class NodeLoader {
      * <p>Writes data to {@code nXXXX_{key}.json} and updates the node JSON's
      * {@code attachments} map with a light reference: {@code {"_file": "...", "_type": "external"}}.
      *
+     * <p>If the node JSON update fails after the attachment file has been written,
+     * the attachment file is deleted (best-effort rollback) to prevent orphan files.
+     *
      * @param worldsDir worlds root directory
      * @param worldId   world ID
      * @param nodeId    node ID
      * @param key       attachment key (e.g. "map", "contour")
      * @param data      the data to persist (will be serialized to JSON)
+     * @throws RuntimeException if the attachment cannot be saved or the node JSON update fails
      */
     public static void saveAttachmentFile(Path worldsDir, String worldId, String nodeId, String key, Object data) {
         Path attachFile = attachmentFilePath(worldsDir, worldId, nodeId, key);
@@ -120,22 +124,36 @@ public final class NodeLoader {
         // Update the node JSON with a light reference
         Path nodeFile = nodeFile(worldsDir, worldId, nodeId);
         if (Files.exists(nodeFile)) {
-            NodeSnapshot node = load(nodeFile);
-            Map<String, Object> att = new LinkedHashMap<>(node.attachments());
-            Map<String, String> ref = new LinkedHashMap<>();
-            ref.put("_file", attachFile.getFileName().toString());
-            ref.put("_type", "external");
-            att.put(key, ref);
-            NodeSnapshot updated = new NodeSnapshot(
-                    node.nodeId(),
-                    node.parentId(),
-                    node.turn(),
-                    node.worldTime(),
-                    node.status(),
-                    node.createdAt(),
-                    node.checkpoints(),
-                    att);
-            save(nodeFile, updated);
+            try {
+                NodeSnapshot node = load(nodeFile);
+                Map<String, Object> att = new LinkedHashMap<>(node.attachments());
+                Map<String, String> ref = new LinkedHashMap<>();
+                ref.put("_file", attachFile.getFileName().toString());
+                ref.put("_type", "external");
+                att.put(key, ref);
+                NodeSnapshot updated = new NodeSnapshot(
+                        node.nodeId(),
+                        node.parentId(),
+                        node.turn(),
+                        node.worldTime(),
+                        node.status(),
+                        node.createdAt(),
+                        node.checkpoints(),
+                        att);
+                save(nodeFile, updated);
+            } catch (RuntimeException e) {
+                // Rollback: delete the attachment file to prevent orphan files
+                // when the node JSON is corrupt (e.g. empty file from partial write)
+                try {
+                    Files.deleteIfExists(attachFile);
+                } catch (IOException ignored) {
+                    // best-effort cleanup
+                }
+                throw new RuntimeException(
+                        "Failed to update node JSON for attachment '" + key
+                                + "', rolled back attachment file: " + attachFile,
+                        e);
+            }
         }
     }
 
