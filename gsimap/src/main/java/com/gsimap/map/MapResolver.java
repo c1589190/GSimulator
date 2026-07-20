@@ -1,7 +1,5 @@
 package com.gsimap.map;
 
-import com.gsim.util.JsonUtils;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -29,7 +27,6 @@ import org.slf4j.LoggerFactory;
 public final class MapResolver {
 
     private static final Logger log = LoggerFactory.getLogger(MapResolver.class);
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     /** Maximum chain depth to prevent infinite loops. */
     private static final int MAX_CHAIN_DEPTH = 200;
@@ -143,7 +140,7 @@ public final class MapResolver {
             }
             chain.add(current);
 
-            String parentId = readParentId(nodesDir, current);
+            String parentId = readParentId(worldsDir, worldId, current, nodesDir);
             current = parentId;
         }
 
@@ -151,18 +148,12 @@ public final class MapResolver {
         return chain;
     }
 
-    private static String readParentId(Path nodesDir, String nodeId) {
-        Path file = nodesDir.resolve(nodeId + ".json");
-        if (!Files.exists(file)) return null;
+    private static String readParentId(Path worldsDir, String worldId, String nodeId, Path nodesDir) {
         try {
-            var node = MAPPER.readTree(file.toFile());
-            if (node.has("parentId") && !node.get("parentId").isNull()) {
-                String pid = node.get("parentId").asText();
-                return pid.isBlank() ? null : pid;
-            }
-            return null;
-        } catch (IOException e) {
-            log.warn("Failed to read node file: {}", file, e);
+            var node = com.gsim.worldinfo.loader.NodeLoader.load(nodesDir.resolve(nodeId + ".json"));
+            String pid = node.parentId();
+            return (pid != null && !pid.isBlank()) ? pid : null;
+        } catch (IllegalArgumentException e) {
             return null;
         }
     }
