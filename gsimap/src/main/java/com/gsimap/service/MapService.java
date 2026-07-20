@@ -393,8 +393,8 @@ public class MapService {
                             info.put("worldTime", node.worldTime());
                             info.put(
                                     "hasMap",
-                                    Files.exists(com.gsim.worldinfo.loader.NodeLoader
-                                            .attachmentFilePath(worldsDir, worldId, nid, "map")));
+                                    Files.exists(com.gsim.worldinfo.loader.NodeLoader.attachmentFilePath(
+                                            worldsDir, worldId, nid, "map")));
                             result.add(info);
                         } catch (IllegalArgumentException ignored) {
                         }

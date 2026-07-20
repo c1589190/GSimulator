@@ -108,7 +108,11 @@ public class GsimapGetDistanceTool implements AgentTool {
         sb.append("  - Coordinates: (").append(toQ).append(",").append(toR).append(")\n");
         sb.append("- **Hex Distance**: **").append(distance).append("**\n");
 
-        sb.append("\n\nfrom: gsimap:hex:").append(fromQ).append("_").append(fromR).append("\n");
+        sb.append("\n\nfrom: gsimap:hex:")
+                .append(fromQ)
+                .append("_")
+                .append(fromR)
+                .append("\n");
         sb.append("to: gsimap:hex:").append(toQ).append("_").append(toR).append("\n");
 
         return ToolResult.ok(

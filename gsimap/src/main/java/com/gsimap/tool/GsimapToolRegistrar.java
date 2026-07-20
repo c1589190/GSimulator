@@ -14,17 +14,18 @@ public final class GsimapToolRegistrar {
     private GsimapToolRegistrar() {}
 
     /**
-     * Register all 20 gsimap tools into the given registry.
+     * Register all 21 gsimap tools into the given registry.
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
      */
     public static void registerAll(ToolRegistry registry, MapService mapService) {
-        // ── Query tools (8) ─────────────────────────────────
+        // ── Query tools (9) ─────────────────────────────────
         registry.register(new GsimapGetHexTool(mapService));
         registry.register(new GsimapGetProvinceTool(mapService));
         registry.register(new GsimapGetNeighborsTool(mapService));
         registry.register(new GsimapQueryRadiusTool(mapService));
+        registry.register(new GsimapRenderTextTool(mapService));
         registry.register(new GsimapGetCitiesTool(mapService));
         registry.register(new GsimapFindRiverPathTool(mapService));
         registry.register(new GsimapListRegionsTool(mapService));

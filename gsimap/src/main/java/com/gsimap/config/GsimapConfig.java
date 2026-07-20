@@ -17,14 +17,13 @@ public record GsimapConfig(Path worldsDir, Path importDir, int httpPort) {
      * @return resolved configuration instance
      */
     public static GsimapConfig load() {
-        String worldsDir = System.getProperty(
-                "gsimap.worldsDir", System.getenv().getOrDefault("GSIMAP_WORLDS_DIR", "worlds"));
-        String importDir = System.getProperty(
-                "gsimap.importDir", System.getenv().getOrDefault("GSIMAP_IMPORT_DIR", null));
+        String worldsDir =
+                System.getProperty("gsimap.worldsDir", System.getenv().getOrDefault("GSIMAP_WORLDS_DIR", "worlds"));
+        String importDir =
+                System.getProperty("gsimap.importDir", System.getenv().getOrDefault("GSIMAP_IMPORT_DIR", null));
         int port = Integer.parseInt(
                 System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
 
-        return new GsimapConfig(
-                Path.of(worldsDir), importDir != null ? Path.of(importDir) : null, port);
+        return new GsimapConfig(Path.of(worldsDir), importDir != null ? Path.of(importDir) : null, port);
     }
 }

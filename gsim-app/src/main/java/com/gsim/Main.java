@@ -120,10 +120,12 @@ public class Main {
             if (!noCli) {
                 System.out.println("World loaded: " + bootResult.worldId()
                         + ", active node: " + bootResult.activeNodeId()
-                        + ", chain length: " + bootResult.worldInfo().branchChain().size());
+                        + ", chain length: "
+                        + bootResult.worldInfo().branchChain().size());
                 if (bootResult.activeCache() != null) {
-                    System.out.println("Active cache: " + bootResult.activeCache().sessionId() + " ("
-                            + bootResult.activeCache().messageCount() + " messages)");
+                    System.out.println(
+                            "Active cache: " + bootResult.activeCache().sessionId() + " ("
+                                    + bootResult.activeCache().messageCount() + " messages)");
                 }
             }
 
@@ -156,11 +158,14 @@ public class Main {
                 GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, transport);
 
                 // Shutdown hook: clean up HTTP servers when MCP loop exits
-                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                    System.err.println("[MCP] Shutting down...");
-                    gsimapServer.stop();
-                    app.stop();
-                }, "mcp-shutdown"));
+                Runtime.getRuntime()
+                        .addShutdownHook(new Thread(
+                                () -> {
+                                    System.err.println("[MCP] Shutting down...");
+                                    gsimapServer.stop();
+                                    app.stop();
+                                },
+                                "mcp-shutdown"));
 
                 System.err.println("[MCP] READY — listening on stdio");
                 mcpServer.start(); // blocks on stdin

@@ -95,7 +95,11 @@ public class GsimapFindRiverPathTool implements AgentTool {
         sb.append("\n\nsource: gsimap:hex:").append(q).append("_").append(r).append("\n");
         if (!path.isEmpty()) {
             int[] lastQr = MapData.parseHexKey(path.get(path.size() - 1));
-            sb.append("destination: gsimap:hex:").append(lastQr[0]).append("_").append(lastQr[1]).append("\n");
+            sb.append("destination: gsimap:hex:")
+                    .append(lastQr[0])
+                    .append("_")
+                    .append(lastQr[1])
+                    .append("\n");
         }
 
         return ToolResult.ok(

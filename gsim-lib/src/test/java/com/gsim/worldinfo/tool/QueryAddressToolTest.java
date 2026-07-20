@@ -33,7 +33,8 @@ class QueryAddressToolTest {
         Files.createDirectories(nodesDir);
 
         // n0000
-        String n0000Json = """
+        String n0000Json =
+                """
             {
               "nodeId": "n0000",
               "parentId": "",
@@ -65,16 +66,16 @@ class QueryAddressToolTest {
         Files.writeString(nodesDir.resolve("n0000.json"), n0000Json);
 
         // active.json
-        Files.writeString(worldDir.resolve("active.json"), """
+        Files.writeString(
+                worldDir.resolve("active.json"), """
             {"nodeId": "n0000", "sessions": {}}
             """);
-        Files.writeString(worldDir.resolve("world.json"), """
+        Files.writeString(
+                worldDir.resolve("world.json"), """
             {"id": "testworld", "name": "Test"}
             """);
 
-        wiSupplier = () -> new WorldInformation(
-                "testworld",
-                List.of(NodeLoader.load(nodesDir.resolve("n0000.json"))));
+        wiSupplier = () -> new WorldInformation("testworld", List.of(NodeLoader.load(nodesDir.resolve("n0000.json"))));
 
         toolRegistry = new ToolRegistry();
         // Register the tools query_address needs
@@ -87,8 +88,7 @@ class QueryAddressToolTest {
     @DisplayName("GSim ref 地址路由到 query_element")
     void routesGsimRefToQueryElement() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of(
-                "address", "n0000:characters:曹操")));
+        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "n0000:characters:曹操")));
 
         assertTrue(result.success(), "Should resolve: " + result.error());
         assertTrue(result.items().get(0).snippet().contains("魏武帝"));
@@ -98,8 +98,7 @@ class QueryAddressToolTest {
     @DisplayName("checkpointId:key 格式默认当前节点")
     void routesShortRefToCurrentNode() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of(
-                "address", "characters:曹操")));
+        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "characters:曹操")));
 
         assertTrue(result.success(), "Should resolve short ref");
         assertTrue(result.items().get(0).snippet().contains("魏武帝"));
@@ -109,8 +108,7 @@ class QueryAddressToolTest {
     @DisplayName("纯 tag 文本走 byTag 索引")
     void routesPlainTextToByTag() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of(
-                "address", "曹魏")));
+        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "曹魏")));
 
         assertTrue(result.success(), "Should find by tag");
         assertTrue(result.items().get(0).snippet().contains("曹操")
@@ -121,8 +119,7 @@ class QueryAddressToolTest {
     @DisplayName("gsimap: 前缀需要 worldId")
     void gsimapPrefixRequiresWorldId() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of(
-                "address", "gsimap:region:蜀")));
+        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "gsimap:region:蜀")));
 
         // Should fail because worldId is missing (gsimap tools not registered in this test)
         assertFalse(result.success());
@@ -133,8 +130,7 @@ class QueryAddressToolTest {
     @DisplayName("不存在的 tag 返回失败")
     void nonexistentTagFails() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of(
-                "address", "不存在的标签")));
+        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "不存在的标签")));
 
         assertFalse(result.success());
     }

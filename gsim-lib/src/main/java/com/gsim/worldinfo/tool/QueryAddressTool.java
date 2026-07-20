@@ -63,8 +63,8 @@ public final class QueryAddressTool implements AgentTool {
             if (worldId == null || worldId.isBlank()) {
                 return ToolResult.fail(name(), "worldId is required for gsimap: addresses");
             }
-            ToolCall gsimapCall = new ToolCall("gsimap_query_by_address",
-                    Map.of("worldId", worldId, "address", address));
+            ToolCall gsimapCall =
+                    new ToolCall("gsimap_query_by_address", Map.of("worldId", worldId, "address", address));
             return toolRegistry.call(gsimapCall);
         }
 
@@ -89,11 +89,18 @@ public final class QueryAddressTool implements AgentTool {
         int limit = Math.min(refs.size(), 20);
         for (int i = 0; i < limit; i++) {
             ElementRef ref = refs.get(i);
-            sb.append("### ").append(ref.element().key())
-                    .append(" (").append(ref.nodeId()).append(":").append(ref.checkpointId()).append(")\n\n");
+            sb.append("### ")
+                    .append(ref.element().key())
+                    .append(" (")
+                    .append(ref.nodeId())
+                    .append(":")
+                    .append(ref.checkpointId())
+                    .append(")\n\n");
             sb.append("- **type**: ").append(ref.element().type()).append("\n");
             if (ref.element().links() != null && !ref.element().links().isEmpty()) {
-                sb.append("- **links**: ").append(String.join(", ", ref.element().links())).append("\n");
+                sb.append("- **links**: ")
+                        .append(String.join(", ", ref.element().links()))
+                        .append("\n");
             }
             sb.append("- **updatedAt**: ").append(ref.element().updatedAt()).append("\n\n");
             String val = ref.element().value();
@@ -103,7 +110,11 @@ public final class QueryAddressTool implements AgentTool {
             sb.append("---\n\n");
         }
         if (refs.size() > limit) {
-            sb.append("(showing ").append(limit).append(" of ").append(refs.size()).append(" results)\n");
+            sb.append("(showing ")
+                    .append(limit)
+                    .append(" of ")
+                    .append(refs.size())
+                    .append(" results)\n");
         }
 
         return ToolResult.ok(name(), List.of(new ToolResult.Item(address, "tag:" + address, sb.toString(), 1.0)));
@@ -113,11 +124,20 @@ public final class QueryAddressTool implements AgentTool {
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "address", Map.of("type", "string",
-                                "description", "Address: gsimap:region:name, nodeId:cp:key, cp:key, or plain tag"),
-                        "worldId", Map.of("type", "string",
-                                "description", "GSim world ID (required for gsimap: addresses)")),
+                "properties",
+                        Map.of(
+                                "address",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Address: gsimap:region:name, nodeId:cp:key, cp:key, or plain tag"),
+                                "worldId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "GSim world ID (required for gsimap: addresses)")),
                 "required", List.of("address"));
     }
 

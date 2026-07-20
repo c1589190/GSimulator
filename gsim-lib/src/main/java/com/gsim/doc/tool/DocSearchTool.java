@@ -81,8 +81,7 @@ public final class DocSearchTool implements AgentTool {
                 }
             }
             if (matched.isEmpty()) {
-                return ToolResult.ok(name(),
-                        List.of(new ToolResult.Item("无结果", "", "未找到匹配的文档（关键词模式）", 0)));
+                return ToolResult.ok(name(), List.of(new ToolResult.Item("无结果", "", "未找到匹配的文档（关键词模式）", 0)));
             }
             var items = new ArrayList<ToolResult.Item>();
             int count = 0;
@@ -92,8 +91,8 @@ public final class DocSearchTool implements AgentTool {
                 String snippet = doc.content() != null && doc.content().length() > 100
                         ? doc.content().substring(0, 100) + "..."
                         : (doc.content() != null ? doc.content() : "");
-                items.add(new ToolResult.Item(doc.title(), doc.id(),
-                        "score=0.5 | type=" + typeStr + " | " + snippet, 0.5));
+                items.add(new ToolResult.Item(
+                        doc.title(), doc.id(), "score=0.5 | type=" + typeStr + " | " + snippet, 0.5));
                 count++;
             }
             return ToolResult.ok(name(), items);

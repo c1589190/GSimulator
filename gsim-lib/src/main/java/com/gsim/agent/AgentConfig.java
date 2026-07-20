@@ -143,7 +143,17 @@ public record AgentConfig(
                 : java.util.List.<String>of();
 
         return new AgentConfig(
-                agentId, llmProvider, staticSys, sysPrompt, userTemplate, filter, maxRounds, temp, maxTok, maxPerm, allowList);
+                agentId,
+                llmProvider,
+                staticSys,
+                sysPrompt,
+                userTemplate,
+                filter,
+                maxRounds,
+                temp,
+                maxTok,
+                maxPerm,
+                allowList);
     }
 
     // ---- 工具方法 ----

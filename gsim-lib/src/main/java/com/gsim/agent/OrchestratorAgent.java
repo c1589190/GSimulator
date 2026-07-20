@@ -1391,15 +1391,14 @@ public class OrchestratorAgent extends AbstractAgent {
                     ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
                             parsed.tool(),
                             parsed.args(),
-                            ToolRouteDecision.wildcard(
-                                    java.util.Collections.emptySet(), "SIM_MODE", "Sim 模式 — 所有工具可用"),
+                            ToolRouteDecision.wildcard(java.util.Collections.emptySet(), "SIM_MODE", "Sim 模式 — 所有工具可用"),
                             false,
                             toolPerm);
 
                     if (execDecision.decision() == ToolExecutionDecisionType.REJECT
                             || execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
-                        String rejectMsg = "[系统] Sim 模式拒绝执行工具 " + parsed.tool()
-                                + "（权限等级: " + toolPerm + "）。Sim 模式仅允许 READ 工具。";
+                        String rejectMsg =
+                                "[系统] Sim 模式拒绝执行工具 " + parsed.tool() + "（权限等级: " + toolPerm + "）。Sim 模式仅允许 READ 工具。";
                         messages.add(LlmMessage.user(rejectMsg));
                         trace.add(new MessageTrace("system", "tool_rejected", execDecision.reason()));
                         progressSink.onProgress(AgentProgressEvent.toolFailed(

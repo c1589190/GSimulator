@@ -314,10 +314,13 @@ public abstract class AbstractMcpServer implements Runnable {
                                         e.getMessage());
                                 response = jsonRpcError(id, ERR_INVALID_PARAMS, "Invalid arguments: " + e.getMessage());
                             } catch (Exception e) {
-                                String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                                String detail = e.getMessage() != null
+                                        ? e.getMessage()
+                                        : e.getClass().getSimpleName();
                                 Throwable cause = e.getCause();
                                 String causeInfo = cause != null
-                                        ? " (caused by: " + cause.getClass().getSimpleName() + ": " + cause.getMessage() + ")"
+                                        ? " (caused by: " + cause.getClass().getSimpleName() + ": " + cause.getMessage()
+                                                + ")"
                                         : "";
                                 log.error(
                                         "[MCP-TOOL-RESULT] name={}, status=fail, error=execution_error, detail={}, exception={}",
@@ -325,7 +328,9 @@ public abstract class AbstractMcpServer implements Runnable {
                                         detail + causeInfo,
                                         e.getClass().getSimpleName(),
                                         e);
-                                response = jsonRpcError(id, ERR_TOOL_EXECUTION,
+                                response = jsonRpcError(
+                                        id,
+                                        ERR_TOOL_EXECUTION,
                                         "Tool '" + toolName + "' failed: " + detail + causeInfo);
                             }
                         }
@@ -446,7 +451,22 @@ public abstract class AbstractMcpServer implements Runnable {
         }
 
         String toolName = params.get("name").asText();
-        JsonNode args = params.has("arguments") ? params.get("arguments") : MAPPER.createObjectNode();
+        JsonNode args;
+        if (params.has("arguments")) {
+            JsonNode argsNode = params.get("arguments");
+            // Claude Code wraps tool arguments as:
+            //   {"arguments": "<json-string-of-actual-args>"}
+            // Handle both single and double wrapping.
+            if (argsNode.isObject() && argsNode.has("arguments") && argsNode.get("arguments").isTextual()) {
+                args = MAPPER.readTree(argsNode.get("arguments").asText());
+            } else if (argsNode.isTextual()) {
+                args = MAPPER.readTree(argsNode.asText());
+            } else {
+                args = argsNode;
+            }
+        } else {
+            args = MAPPER.createObjectNode();
+        }
 
         String rawResult = executeTool(toolName, args);
 

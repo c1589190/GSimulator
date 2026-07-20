@@ -59,8 +59,14 @@ public final class DocDeleteTool implements AgentTool {
 
         try {
             store.delete(docId);
-            return ToolResult.ok(name(), List.of(new ToolResult.Item(docId, docId,
-                    "Document deleted: " + docId + " (type=" + doc.type().key() + ")", 1.0)));
+            return ToolResult.ok(
+                    name(),
+                    List.of(new ToolResult.Item(
+                            docId,
+                            docId,
+                            "Document deleted: " + docId + " (type="
+                                    + doc.type().key() + ")",
+                            1.0)));
         } catch (IOException e) {
             return ToolResult.fail(name(), "Failed to delete document: " + e.getMessage());
         }

@@ -518,11 +518,7 @@ public class AbstractAgent {
         List<ToolDef> defs = new ArrayList<>();
         for (var tool : allTools.all().values()) {
             if (ToolFilterEvaluator.allowsWithPermission(
-                    config.toolFilter(),
-                    tool.name(),
-                    tool.permission(),
-                    config.maxPermission(),
-                    config.allowList())) {
+                    config.toolFilter(), tool.name(), tool.permission(), config.maxPermission(), config.allowList())) {
                 var params = tool.getParameters();
                 defs.add(
                         params != null

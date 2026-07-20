@@ -50,7 +50,12 @@ public interface AgentTool {
      * <p>排序: SELF < READ < WRITE < SYSTEM（用于 maxPermission 比较）。
      * 默认返回 READ（保守策略：未知工具不得写入）。
      */
-    enum Permission { SELF, READ, WRITE, SYSTEM }
+    enum Permission {
+        SELF,
+        READ,
+        WRITE,
+        SYSTEM
+    }
 
     /**
      * 此工具的权限等级。

@@ -3,8 +3,8 @@ package com.gsimap.http;
 import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
-import com.gsimap.map.MapStore;
 import com.gsimap.map.MapResolver;
+import com.gsimap.map.MapStore;
 import com.gsimap.service.ContinentContour;
 import com.gsimap.service.ContourLayer;
 import com.gsimap.service.ContourQueryEngine;
@@ -619,7 +619,7 @@ public class MapWebUIHandler implements HttpHandler {
             mapService.saveMap(worldId, nodeId, data);
             log.info("Created map for world={} node={}", worldId, nodeId);
             try {
-                    } catch (RuntimeException ex) {
+            } catch (RuntimeException ex) {
                 log.warn("GSim node sync failed", ex);
             }
             sendJson(exchange, 200, Map.of("ok", true, "worldId", worldId, "nodeId", nodeId));

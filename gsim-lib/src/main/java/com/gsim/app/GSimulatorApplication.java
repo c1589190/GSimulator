@@ -382,18 +382,14 @@ public class GSimulatorApplication {
         toolRegistry.register(new QueryKeywordTool(wiSupplier));
         toolRegistry.register(new QueryNodeTool(wiSupplier));
         toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
-        toolRegistry.register(
-                new com.gsim.worldinfo.tool.QueryByTagTool(wiSupplier));
-        toolRegistry.register(
-                new com.gsim.worldinfo.tool.QueryAddressTool(wiSupplier, toolRegistry));
+        toolRegistry.register(new com.gsim.worldinfo.tool.QueryByTagTool(wiSupplier));
+        toolRegistry.register(new com.gsim.worldinfo.tool.QueryAddressTool(wiSupplier, toolRegistry));
 
         // Write tools
         toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir, docCacheManager));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
-        toolRegistry.register(
-                new com.gsim.worldinfo.tool.AttachmentWriteTool(worldsDir, wiSupplier));
-        toolRegistry.register(
-                new com.gsim.worldinfo.tool.AttachmentReadTool(worldsDir, wiSupplier));
+        toolRegistry.register(new com.gsim.worldinfo.tool.AttachmentWriteTool(worldsDir, wiSupplier));
+        toolRegistry.register(new com.gsim.worldinfo.tool.AttachmentReadTool(worldsDir, wiSupplier));
 
         // Node management tools
         toolRegistry.register(new NodeListTool(wiSupplier));
@@ -570,7 +566,8 @@ public class GSimulatorApplication {
             System.out.println("   /sim  — 推演结算");
             System.out.println();
             System.out.println("编辑 " + config.getLlmsPath() + " 设置 API Key，或设置 LLM_API_KEY 环境变量。");
-            System.out.println("当前已从 llms.json 加载 " + ctx.getLlmProviderRegistry().size() + " 个 provider，");
+            System.out.println(
+                    "当前已从 llms.json 加载 " + ctx.getLlmProviderRegistry().size() + " 个 provider，");
             System.out.println("但 API Key 无效（401 错误）。");
             System.out.println();
         }

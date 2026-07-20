@@ -71,18 +71,28 @@ public final class AttachmentReadTool implements AgentTool {
 
         String snippet = JsonUtils.toJson(data);
         String ref = nodeId + ":" + key;
-        return ToolResult.ok(
-                name(), List.of(new ToolResult.Item(key, ref, snippet, 1.0)));
+        return ToolResult.ok(name(), List.of(new ToolResult.Item(key, ref, snippet, 1.0)));
     }
 
     @Override
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "worldId", Map.of("type", "string", "description", "GSim world ID"),
-                        "key", Map.of("type", "string", "description", "Attachment key (e.g. 'map', 'contour')"),
-                        "nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)")),
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "key",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Attachment key (e.g. 'map', 'contour')"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to active node)")),
                 "required", List.of("worldId", "key"));
     }
 

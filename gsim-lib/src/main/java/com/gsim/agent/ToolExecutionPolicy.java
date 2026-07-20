@@ -80,9 +80,7 @@ public class ToolExecutionPolicy {
                 return ToolExecutionDecision.allow("MCP 入口 — 系统级工具免确认。", ToolCategory.CONTROL, true);
             }
             return ToolExecutionDecision.needConfirmation(
-                    "⚠ 系统级操作：" + toolName + " 可能删除/覆盖数据，需要用户确认。",
-                    ToolCategory.MUTATING,
-                    true);
+                    "⚠ 系统级操作：" + toolName + " 可能删除/覆盖数据，需要用户确认。", ToolCategory.MUTATING, true);
         }
 
         // Rule 5: WRITE → 需确认（unless allowAllMutations）
@@ -91,9 +89,7 @@ public class ToolExecutionPolicy {
                 return ToolExecutionDecision.allow("写入工具，本轮已授权全部写入。", ToolCategory.MUTATING, true);
             }
             return ToolExecutionDecision.needConfirmation(
-                    "写入工具：" + toolName + " 将修改数据，需要用户确认。",
-                    ToolCategory.MUTATING,
-                    true);
+                    "写入工具：" + toolName + " 将修改数据，需要用户确认。", ToolCategory.MUTATING, true);
         }
 
         // Fallback: conservative

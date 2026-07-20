@@ -33,7 +33,8 @@ class AttachmentToolTest {
         Files.createDirectories(nodesDir);
 
         // Create a minimal node JSON
-        String nodeJson = """
+        String nodeJson =
+                """
             {
               "nodeId": "n0000",
               "parentId": "",
@@ -55,23 +56,24 @@ class AttachmentToolTest {
         Files.writeString(worldDir.resolve("active.json"), activeJson);
 
         // Create world.json
-        Files.writeString(worldDir.resolve("world.json"), """
+        Files.writeString(
+                worldDir.resolve("world.json"), """
             {"id": "testworld", "name": "Test"}
             """);
 
-        wiSupplier = () -> new WorldInformation(
-                "testworld",
-                List.of(NodeLoader.load(nodeFile)));
+        wiSupplier = () -> new WorldInformation("testworld", List.of(NodeLoader.load(nodeFile)));
     }
 
     @Test
     @DisplayName("AttachmentWriteTool 写入独立文件")
     void writeToolCreatesIndependentFile() {
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
-        ToolCall call = new ToolCall("gsim_attachment_write", Map.of(
-                "worldId", "testworld",
-                "key", "test_data",
-                "data", "{\"hello\": \"world\"}"));
+        ToolCall call = new ToolCall(
+                "gsim_attachment_write",
+                Map.of(
+                        "worldId", "testworld",
+                        "key", "test_data",
+                        "data", "{\"hello\": \"world\"}"));
 
         ToolResult result = writeTool.execute(call);
         assertTrue(result.success(), "Should succeed: " + result.error());
@@ -96,16 +98,20 @@ class AttachmentToolTest {
     void readToolLoadsIndependentFile() {
         // Write first
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
-        writeTool.execute(new ToolCall("gsim_attachment_write", Map.of(
-                "worldId", "testworld",
-                "key", "read_test",
-                "data", "\"some value\"")));
+        writeTool.execute(new ToolCall(
+                "gsim_attachment_write",
+                Map.of(
+                        "worldId", "testworld",
+                        "key", "read_test",
+                        "data", "\"some value\"")));
 
         // Read back
         var readTool = new AttachmentReadTool(worldsDir, wiSupplier);
-        ToolResult result = readTool.execute(new ToolCall("gsim_attachment_read", Map.of(
-                "worldId", "testworld",
-                "key", "read_test")));
+        ToolResult result = readTool.execute(new ToolCall(
+                "gsim_attachment_read",
+                Map.of(
+                        "worldId", "testworld",
+                        "key", "read_test")));
 
         assertTrue(result.success(), "Should succeed: " + result.error());
         assertTrue(result.items().get(0).snippet().contains("some value"));
@@ -124,9 +130,11 @@ class AttachmentToolTest {
     @DisplayName("缺少 worldId 时失败")
     void failsWithoutWorldId() {
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
-        ToolResult result = writeTool.execute(new ToolCall("gsim_attachment_write", Map.of(
-                "key", "x",
-                "data", "{}")));
+        ToolResult result = writeTool.execute(new ToolCall(
+                "gsim_attachment_write",
+                Map.of(
+                        "key", "x",
+                        "data", "{}")));
         assertFalse(result.success());
         assertTrue(result.error().contains("worldId"));
     }

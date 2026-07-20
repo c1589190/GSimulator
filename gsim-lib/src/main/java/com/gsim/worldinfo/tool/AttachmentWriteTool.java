@@ -4,9 +4,9 @@ import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
+import com.gsim.util.JsonUtils;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.NodeLoader;
-import com.gsim.util.JsonUtils;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -81,19 +81,29 @@ public final class AttachmentWriteTool implements AgentTool {
         NodeLoader.saveAttachmentFile(worldsDir, worldId, nodeId, key, data);
 
         String ref = nodeId + ":" + key;
-        return ToolResult.ok(
-                name(), List.of(new ToolResult.Item(key, ref, "Attachment written: " + ref, 1.0)));
+        return ToolResult.ok(name(), List.of(new ToolResult.Item(key, ref, "Attachment written: " + ref, 1.0)));
     }
 
     @Override
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "worldId", Map.of("type", "string", "description", "GSim world ID"),
-                        "key", Map.of("type", "string", "description", "Attachment key (e.g. 'map', 'contour')"),
-                        "data", Map.of("type", "string", "description", "JSON data string to store"),
-                        "nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)")),
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "key",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Attachment key (e.g. 'map', 'contour')"),
+                                "data", Map.of("type", "string", "description", "JSON data string to store"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to active node)")),
                 "required", List.of("worldId", "key", "data"));
     }
 

@@ -87,7 +87,8 @@ public class GsimMcpServer extends AbstractMcpServer {
      */
     @Deprecated
     public static void main(String[] args) {
-        System.err.println("[MCP] WARNING: GsimMcpServer.main() is deprecated. Use 'java -jar GSimulator.jar --no-cli' instead.");
+        System.err.println(
+                "[MCP] WARNING: GsimMcpServer.main() is deprecated. Use 'java -jar GSimulator.jar --no-cli' instead.");
         if (args.length < 1) {
             System.err.println("Usage: gsim-mcp <worldsDir> [importDir]");
             System.exit(1);

@@ -68,18 +68,32 @@ public final class QueryByTagTool implements AgentTool {
 
         StringBuilder sb = new StringBuilder();
         sb.append("## query_by_tag: `").append(tag).append("`\n\n");
-        sb.append("total: ").append(total).append(", offset: ").append(offset)
-                .append(", limit: ").append(limit).append("\n\n");
+        sb.append("total: ")
+                .append(total)
+                .append(", offset: ")
+                .append(offset)
+                .append(", limit: ")
+                .append(limit)
+                .append("\n\n");
 
         for (ElementRef ref : page) {
-            sb.append("### ").append(ref.element().key())
-                    .append(" (").append(ref.nodeId()).append(":").append(ref.checkpointId()).append(")\n\n");
+            sb.append("### ")
+                    .append(ref.element().key())
+                    .append(" (")
+                    .append(ref.nodeId())
+                    .append(":")
+                    .append(ref.checkpointId())
+                    .append(")\n\n");
             sb.append("- **type**: ").append(ref.element().type()).append("\n");
             if (ref.element().tags() != null && !ref.element().tags().isEmpty()) {
-                sb.append("- **tags**: ").append(String.join(", ", ref.element().tags())).append("\n");
+                sb.append("- **tags**: ")
+                        .append(String.join(", ", ref.element().tags()))
+                        .append("\n");
             }
             if (ref.element().links() != null && !ref.element().links().isEmpty()) {
-                sb.append("- **links**: ").append(String.join(", ", ref.element().links())).append("\n");
+                sb.append("- **links**: ")
+                        .append(String.join(", ", ref.element().links()))
+                        .append("\n");
             }
             sb.append("- **updatedAt**: ").append(ref.element().updatedAt()).append("\n\n");
             String val = ref.element().value();
@@ -100,11 +114,12 @@ public final class QueryByTagTool implements AgentTool {
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "tag", Map.of("type", "string", "description", "Tag to search for"),
-                        "checkpointId", Map.of("type", "string", "description", "Optional checkpoint filter"),
-                        "limit", Map.of("type", "integer", "description", "Max results (default 20, max 100)"),
-                        "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)")),
+                "properties",
+                        Map.of(
+                                "tag", Map.of("type", "string", "description", "Tag to search for"),
+                                "checkpointId", Map.of("type", "string", "description", "Optional checkpoint filter"),
+                                "limit", Map.of("type", "integer", "description", "Max results (default 20, max 100)"),
+                                "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)")),
                 "required", List.of("tag"));
     }
 

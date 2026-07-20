@@ -88,8 +88,8 @@ public final class GsimapQueryByAddressTool implements AgentTool {
             case "hex" -> resolveHex(map, entityId, address);
             case "city" -> resolveCity(map, entityId, address);
             case "terrain" -> resolveTerrain(map, entityId, address);
-            default -> ToolResult.fail(name(), "Unknown entity type: " + entityType
-                    + ". Valid types: region, hex, city, terrain");
+            default -> ToolResult.fail(
+                    name(), "Unknown entity type: " + entityType + ". Valid types: region, hex, city, terrain");
         };
     }
 
@@ -106,8 +106,8 @@ public final class GsimapQueryByAddressTool implements AgentTool {
         result.put("color", province.color());
         result.put("hexCount", province.hexes().size());
         result.put("hexes", province.hexes());
-        return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                name, "gsimap:region:" + name, JsonUtils.toJson(result), 1.0)));
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(name, "gsimap:region:" + name, JsonUtils.toJson(result), 1.0)));
     }
 
     private ToolResult resolveHex(MapData map, String hexKey, String address) {
@@ -131,8 +131,8 @@ public final class GsimapQueryByAddressTool implements AgentTool {
         result.put("color", cell.color());
         result.put("symbol", cell.symbol());
         if (owner != null) result.put("province", owner);
-        return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                hexKey, "gsimap:hex:" + hexKey, JsonUtils.toJson(result), 1.0)));
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(hexKey, "gsimap:hex:" + hexKey, JsonUtils.toJson(result), 1.0)));
     }
 
     private ToolResult resolveCity(MapData map, String name, String address) {
@@ -157,8 +157,8 @@ public final class GsimapQueryByAddressTool implements AgentTool {
         result.put("r", city.r());
         if (owner != null) result.put("province", owner);
         result.put("description", city.description());
-        return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                name, "gsimap:city:" + name, JsonUtils.toJson(result), 1.0)));
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(name, "gsimap:city:" + name, JsonUtils.toJson(result), 1.0)));
     }
 
     private ToolResult resolveTerrain(MapData map, String key, String address) {
@@ -176,18 +176,29 @@ public final class GsimapQueryByAddressTool implements AgentTool {
         result.put("gold", terrain.gold());
         result.put("stone", terrain.stone());
         result.put("moveCost", terrain.moveCost());
-        return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                key, "gsimap:terrain:" + key, JsonUtils.toJson(result), 1.0)));
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(key, "gsimap:terrain:" + key, JsonUtils.toJson(result), 1.0)));
     }
 
     @Override
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "worldId", Map.of("type", "string", "description", "GSim world ID"),
-                        "address", Map.of("type", "string", "description", "Address in gsimap:entityType:entityId format"),
-                        "nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)")),
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "address",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Address in gsimap:entityType:entityId format"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to active node)")),
                 "required", List.of("worldId", "address"));
     }
 

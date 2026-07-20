@@ -30,7 +30,8 @@ public class ToolFilterEvaluator {
         return allowsByMode(config.mode(), config.allow(), config.deny(), toolName);
     }
 
-    private static boolean allowsByMode(String mode, java.util.List<String> allow, java.util.List<String> deny, String toolName) {
+    private static boolean allowsByMode(
+            String mode, java.util.List<String> allow, java.util.List<String> deny, String toolName) {
         return switch (mode) {
             case "all" -> true;
             case "read_only" -> {
