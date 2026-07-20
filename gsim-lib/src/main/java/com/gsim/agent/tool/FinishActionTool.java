@@ -1,6 +1,7 @@
 package com.gsim.agent.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -97,5 +98,10 @@ public class FinishActionTool implements AgentTool {
             items.add(new ToolResult.Item("finish_action_summary", NAME, summary, 0.5));
         }
         return ToolResult.ok(NAME, items);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SELF;
     }
 }

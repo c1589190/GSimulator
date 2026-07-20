@@ -2,6 +2,7 @@ package com.gsim.cache.tool;
 
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -119,5 +120,10 @@ public class CacheGetTool implements AgentTool {
         sb.append("```\n").append(excerpt).append("\n```\n");
 
         return ToolResult.ok(NAME, List.of(new ToolResult.Item("cache:" + cacheId, NAME, sb.toString(), 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

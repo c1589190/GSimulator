@@ -1,5 +1,6 @@
 package com.gsim.tool;
 
+import com.gsim.tool.AgentTool.Permission;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,5 +64,10 @@ public class WikiSearchTool implements AgentTool {
         }
 
         return ToolResult.ok(NAME, items);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

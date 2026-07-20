@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.Checkpoint;
@@ -132,5 +133,10 @@ public final class CreateCheckpointTool implements AgentTool {
                                                 "description",
                                                 "Target node ID. Defaults to the current active node.")),
                 "required", List.of("checkpointId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

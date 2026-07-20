@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -133,6 +134,8 @@ public class GsimapGetProvinceTool implements AgentTool {
             sb.append("\n");
         }
 
+        sb.append("\n\naddress: gsimap:region:").append(name).append("\n");
+
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
@@ -146,5 +149,10 @@ public class GsimapGetProvinceTool implements AgentTool {
         props.put("nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"));
         props.put("name", Map.of("type", "string", "description", "Province name"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "name"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

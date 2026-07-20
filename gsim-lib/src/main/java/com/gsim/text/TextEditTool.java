@@ -7,6 +7,7 @@ import com.gsim.importing.ImportDocumentService;
 import com.gsim.text.TextEditor.EditResult;
 import com.gsim.text.TextEditor.Op;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.Element;
@@ -298,5 +299,10 @@ public final class TextEditTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

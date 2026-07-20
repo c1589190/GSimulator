@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.agent.management.AgentsManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -64,5 +65,10 @@ public class AgentOutputTool implements AgentTool {
         }
 
         return ToolResult.ok(NAME, List.of(new ToolResult.Item("output:" + instanceId, NAME, output, 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

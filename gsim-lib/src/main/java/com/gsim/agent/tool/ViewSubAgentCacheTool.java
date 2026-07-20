@@ -5,6 +5,7 @@ import com.gsim.cache.CacheSession;
 import com.gsim.cache.CachesManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -133,5 +134,10 @@ public class ViewSubAgentCacheTool implements AgentTool {
     private static String truncate(String text, int maxLen) {
         if (text == null || text.length() <= maxLen) return text;
         return text.substring(0, maxLen) + "...";
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.loader.WorldIndexManager;
@@ -54,5 +55,10 @@ public final class WorldListTool implements AgentTool {
             items.add(new ToolResult.Item(title, w.id(), snippet, isActive ? 1.0 : 0.5));
         }
         return ToolResult.ok(name(), items);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

@@ -1,6 +1,7 @@
 package com.gsim.doc.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -77,5 +78,10 @@ public final class DocDeleteTool implements AgentTool {
         } catch (IOException e) {
             return ToolResult.fail(name(), "Failed to delete document: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

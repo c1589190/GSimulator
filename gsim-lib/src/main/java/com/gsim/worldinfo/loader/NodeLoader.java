@@ -83,6 +83,129 @@ public final class NodeLoader {
     // ── Attachment helpers ──────────────────────────────
 
     /**
+     * Returns the path for an independent attachment file.
+     * Files are stored as {@code worlds/{worldId}/nodes/{nodeId}_{key}.json}.
+     *
+     * @param worldsDir worlds root directory
+     * @param worldId   world ID
+     * @param nodeId    node ID (e.g. "n0000")
+     * @param key       attachment key (e.g. "map")
+     * @return path to the attachment file
+     */
+    public static Path attachmentFilePath(Path worldsDir, String worldId, String nodeId, String key) {
+        return nodesDir(worldsDir, worldId).resolve(nodeId + "_" + key + ".json");
+    }
+
+    /**
+     * Save an attachment as an independent file alongside the node JSON.
+     *
+     * <p>Writes data to {@code nXXXX_{key}.json} and updates the node JSON's
+     * {@code attachments} map with a light reference: {@code {"_file": "...", "_type": "external"}}.
+     *
+     * @param worldsDir worlds root directory
+     * @param worldId   world ID
+     * @param nodeId    node ID
+     * @param key       attachment key (e.g. "map", "contour")
+     * @param data      the data to persist (will be serialized to JSON)
+     */
+    public static void saveAttachmentFile(Path worldsDir, String worldId, String nodeId, String key, Object data) {
+        Path attachFile = attachmentFilePath(worldsDir, worldId, nodeId, key);
+        try {
+            Files.createDirectories(attachFile.getParent());
+            Files.writeString(attachFile, JsonUtils.toJson(data));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to save attachment file: " + attachFile, e);
+        }
+
+        // Update the node JSON with a light reference
+        Path nodeFile = nodeFile(worldsDir, worldId, nodeId);
+        if (Files.exists(nodeFile)) {
+            NodeSnapshot node = load(nodeFile);
+            Map<String, Object> att = new LinkedHashMap<>(node.attachments());
+            Map<String, String> ref = new LinkedHashMap<>();
+            ref.put("_file", attachFile.getFileName().toString());
+            ref.put("_type", "external");
+            att.put(key, ref);
+            NodeSnapshot updated = new NodeSnapshot(
+                    node.nodeId(),
+                    node.parentId(),
+                    node.turn(),
+                    node.worldTime(),
+                    node.status(),
+                    node.createdAt(),
+                    node.checkpoints(),
+                    att);
+            save(nodeFile, updated);
+        }
+    }
+
+    /**
+     * Load an attachment, preferring independent file over inline data.
+     *
+     * <p>If the node's attachments map has a reference with {@code _type: "external"},
+     * reads from the independent file. Otherwise falls back to inline data (backward compat).
+     *
+     * @param worldsDir worlds root directory
+     * @param worldId   world ID
+     * @param nodeId    node ID
+     * @param key       attachment key
+     * @param type      expected type class
+     * @param <T>       return type
+     * @return the attachment data, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T loadAttachmentFile(Path worldsDir, String worldId, String nodeId, String key, Class<T> type) {
+        Path nodeFile = nodeFile(worldsDir, worldId, nodeId);
+        if (!Files.exists(nodeFile)) return null;
+
+        NodeSnapshot node = load(nodeFile);
+        Object raw = node.attachments().get(key);
+        if (raw == null) return null;
+
+        // Check if it's an external file reference
+        if (raw instanceof Map<?, ?> ref && "external".equals(ref.get("_type"))) {
+            String fileName = (String) ref.get("_file");
+            if (fileName != null) {
+                Path attachFile = nodesDir(worldsDir, worldId).resolve(fileName);
+                if (Files.exists(attachFile)) {
+                    try {
+                        String json = Files.readString(attachFile);
+                        return JsonUtils.fromJson(json, type);
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to load attachment file: " + attachFile, e);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Backward compat: inline data
+        return JsonUtils.MAPPER.convertValue(raw, type);
+    }
+
+    /**
+     * List all attachment file references for a node.
+     *
+     * @param worldsDir worlds root directory
+     * @param worldId   world ID
+     * @param nodeId    node ID
+     * @return list of attachment keys that have external file references
+     */
+    public static java.util.List<String> listAttachments(Path worldsDir, String worldId, String nodeId) {
+        Path nodeFile = nodeFile(worldsDir, worldId, nodeId);
+        if (!Files.exists(nodeFile)) return java.util.List.of();
+
+        NodeSnapshot node = load(nodeFile);
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        for (var entry : node.attachments().entrySet()) {
+            if (entry.getValue() instanceof Map<?, ?> ref && "external".equals(ref.get("_type"))) {
+                keys.add(entry.getKey());
+            }
+        }
+        return keys;
+    }
+
+    /**
      * 为节点保存附件值。读取当前节点，合并附件后写回。
      * 附件是外部应用可存储的任意键值数据，与节点状态关联但不属于 WorldInfo 元素体系。
      *

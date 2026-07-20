@@ -1,5 +1,6 @@
 package com.gsim.tool;
 
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.webimport.MediaWikiApiClient;
 import java.util.ArrayList;
 import java.util.List;
@@ -127,5 +128,10 @@ public class MediaWikiSearchTool implements AgentTool {
         } catch (NumberFormatException e) {
             return defaultVal;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

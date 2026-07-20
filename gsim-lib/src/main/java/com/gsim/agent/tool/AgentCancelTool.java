@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.agent.management.AgentsManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -66,5 +67,10 @@ public class AgentCancelTool implements AgentTool {
         }
 
         return ToolResult.fail(NAME, "Agent 实例不存在或已不在运行中: " + instanceId);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

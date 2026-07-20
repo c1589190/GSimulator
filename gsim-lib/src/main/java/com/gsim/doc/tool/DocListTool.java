@@ -4,6 +4,7 @@ import com.gsim.doc.DocStore;
 import com.gsim.doc.DocType;
 import com.gsim.doc.Document;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.ArrayList;
@@ -75,5 +76,10 @@ public final class DocListTool implements AgentTool {
             items.add(new ToolResult.Item(doc.title(), doc.id(), snippet, 0));
         }
         return ToolResult.ok(name(), items);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

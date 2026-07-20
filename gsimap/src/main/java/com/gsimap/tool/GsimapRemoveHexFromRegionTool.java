@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -57,6 +58,7 @@ public final class GsimapRemoveHexFromRegionTool implements AgentTool {
         }
 
         Map<String, Object> result = mapService.removeHexFromRegion(worldId, nodeId, name, q, r);
+        result.put("address", "gsimap:region:" + name);
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(name, "gsimap_remove_hex_from_region", JsonUtils.toJson(result), 1.0)));
@@ -79,5 +81,10 @@ public final class GsimapRemoveHexFromRegionTool implements AgentTool {
                                 "q", Map.of("type", "integer", "description", "Hex axial q coordinate"),
                                 "r", Map.of("type", "integer", "description", "Hex axial r coordinate")),
                 "required", List.of("worldId", "name", "q", "r"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -119,6 +120,8 @@ public class GsimapQueryRadiusTool implements AgentTool {
 
         sb.append("\n### Hex Details\n\n").append(terrainSummary);
 
+        sb.append("\n\naddress: gsimap:hex:").append(cq).append("_").append(cr).append("\n");
+
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
@@ -137,5 +140,10 @@ public class GsimapQueryRadiusTool implements AgentTool {
         props.put("r", Map.of("type", "integer", "description", "Axial r coordinate of center"));
         props.put("radius", Map.of("type", "integer", "description", "Search radius in hex steps"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "q", "r", "radius"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

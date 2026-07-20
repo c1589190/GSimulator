@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -42,6 +43,7 @@ public final class GsimapDeleteRegionTool implements AgentTool {
         }
 
         Map<String, Object> result = mapService.deleteRegion(worldId, nodeId, name);
+        result.put("address", "gsimap:region:" + name);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(name, "gsimap_delete_region", JsonUtils.toJson(result), 1.0)));
     }
@@ -61,5 +63,10 @@ public final class GsimapDeleteRegionTool implements AgentTool {
                                                 "Node ID (optional, defaults to n0000)"),
                                 "name", Map.of("type", "string", "description", "Region name to delete")),
                 "required", List.of("worldId", "name"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

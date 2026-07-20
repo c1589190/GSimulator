@@ -1,6 +1,5 @@
 package com.gsimap.service;
 
-import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
 import com.gsimap.map.MapResolver;
@@ -43,8 +42,6 @@ public class MapService {
     }
 
     private final ConcurrentHashMap<String, TerrainCanvas> canvases = new ConcurrentHashMap<>();
-    private final NodeSyncService nodeSyncService;
-    private final CheckpointService checkpointService;
 
     /**
      * Creates a new MapService for the given worlds directory.
@@ -52,8 +49,6 @@ public class MapService {
      */
     public MapService(Path worldsDir) {
         this.worldsDir = worldsDir;
-        this.nodeSyncService = new NodeSyncService(worldsDir);
-        this.checkpointService = new CheckpointService(worldsDir);
         if (!Files.isDirectory(worldsDir)) {
             log.warn("Worlds directory does not exist: {}", worldsDir);
         }
@@ -65,14 +60,6 @@ public class MapService {
      */
     public Path getWorldsDir() {
         return worldsDir;
-    }
-
-    /**
-     * Returns a defensive copy of the CheckpointService for this world directory.
-     * @return a new CheckpointService instance backed by the same worldsDir
-     */
-    public CheckpointService getCheckpointService() {
-        return new CheckpointService(worldsDir);
     }
 
     // ── Query ────────────────────────────────────────────
@@ -110,18 +97,13 @@ public class MapService {
     }
 
     public boolean isRootNode(String worldId, String nodeId) {
-        Path nodeFile = worldsDir.resolve(worldId).resolve("nodes").resolve(nodeId + ".json");
-        if (!Files.exists(nodeFile)) return true;
         try {
-            var node = MAPPER.readTree(nodeFile.toFile());
-            if (node.has("parentId") && !node.get("parentId").isNull()) {
-                String pid = node.get("parentId").asText();
-                return pid.isBlank();
-            }
-        } catch (IOException e) {
-            /* fall through */
+            return com.gsim.worldinfo.loader.NodeLoader.load(
+                            com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId))
+                    .isRoot();
+        } catch (IllegalArgumentException e) {
+            return true; // node file not found → treat as root
         }
-        return true;
     }
 
     /**
@@ -539,23 +521,14 @@ public class MapService {
 
     // ── Contour ────────────────────────────────────────────
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
-
     /**
      * Save continent contour for a world.
      * @param worldId the world identifier
      * @param contour the continent contour to save
      */
     public void saveContour(String worldId, ContinentContour contour) {
-        try {
-            Path dir = worldsDir.resolve(worldId).resolve("nodes");
-            Files.createDirectories(dir);
-            Path file = dir.resolve("contour.json");
-            Files.writeString(file, JsonUtils.toJson(contour));
-            evict(worldId, "n0000");
-        } catch (IOException e) {
-            log.error("Failed to save contour for world {}", worldId, e);
-        }
+        com.gsim.worldinfo.loader.NodeLoader.saveAttachmentFile(worldsDir, worldId, "n0000", "contour", contour);
+        evict(worldId, "n0000");
     }
 
     /**
@@ -564,14 +537,8 @@ public class MapService {
      * @return the loaded continent contour, or null if not found
      */
     public ContinentContour loadContour(String worldId) {
-        try {
-            Path file = worldsDir.resolve(worldId).resolve("nodes").resolve("contour.json");
-            if (!Files.exists(file)) return null;
-            return MAPPER.readValue(file.toFile(), ContinentContour.class);
-        } catch (IOException e) {
-            log.error("Failed to load contour for world {}", worldId, e);
-            return null;
-        }
+        return com.gsim.worldinfo.loader.NodeLoader.loadAttachmentFile(
+                worldsDir, worldId, "n0000", "contour", ContinentContour.class);
     }
 
     /**
@@ -640,14 +607,7 @@ public class MapService {
                 map.pathwayGroups());
         saveFull(worldId, nodeId, newMap);
 
-        // 2. Update checkpoint references in node JSON
-        try {
-            checkpointService.renameReferences(worldId, nodeId, oldName, newName);
-        } catch (IOException ex) {
-            log.warn("Checkpoint rename partially failed: {}", ex.getMessage());
-        }
-
-        // 3. Re-sync map checkpoint with new name
+        // 2. Re-sync map (checkpoint references managed by GSim Core, not gsimap)
         evict(worldId, nodeId); // ensure HTTP cache sees MCP writes
         syncToGSimNode(worldId, nodeId);
 
@@ -670,7 +630,8 @@ public class MapService {
     public void syncToGSimNode(String worldId, String nodeId) {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty()) return;
-        nodeSyncService.sync(worldId, nodeId, map);
+        // Map data is persisted via NodeLoader attachment — no separate sync needed.
+        // GSim Core manages its own WorldInfo checkpoints independently.
 
         // Cache invalidation: only attempt if GSim API is expected to be running.
         if (Boolean.parseBoolean(System.getProperty("gsimap.noGsim", "false"))) return;
@@ -1385,33 +1346,13 @@ public class MapService {
         saveFull(worldId, nodeId, result);
         syncToGSimNode(worldId, nodeId);
 
-        // 3. Build tags for checkpoint elements
+        // 3. Build tags (for output only — checkpoint writes handled by GSim Core via write_element)
         List<String> tags = new ArrayList<>(List.of("Nation", name));
         if (ruler != null && !ruler.isBlank()) tags.add(ruler);
         if (religion != null && !religion.isBlank()) tags.add(religion);
 
-        var cp = getCheckpointService();
-        List<String> created = new ArrayList<>();
-
-        if (faction != null && !faction.isBlank()) {
-            cp.addElement(worldId, nodeId, "factions", name, "text", faction, tags);
-            created.add("factions:" + name);
-        }
-        if (narrative != null && !narrative.isBlank()) {
-            cp.addElement(worldId, nodeId, "narrative", name + "开局", "text", narrative, tags);
-            created.add("narrative:" + name + "开局");
-        }
-        if (worldview != null && !worldview.isBlank()) {
-            cp.addElement(worldId, nodeId, "worldview", name + "世界观", "text", worldview, tags);
-            created.add("worldview:" + name + "世界观");
-        }
-        if (capital != null && !capital.isBlank()) {
-            String cityValue = "名称: " + capital + "\n类型: 首都\n所属: " + name + "\n描述: "
-                    + (faction != null ? faction.split("\n")[0] : "");
-            cp.addElement(
-                    worldId, nodeId, "map", "City:" + capital, "map-city", cityValue, List.of("首都", name, capital));
-            created.add("map:City:" + capital);
-        }
+        // Note: faction/narrative/worldview/capital checkpoint entries are NOT created here.
+        // They should be written by the GSim Agent via write_element instead.
 
         // 4. Compute center
         int sq = 0, sr = 0;
@@ -1421,7 +1362,7 @@ public class MapService {
             sr += qr[1];
         }
 
-        log.info("init_nation '{}': {} hexes, {} checkpoint entries created", name, hexList.size(), created.size());
+        log.info("init_nation '{}': {} hexes (checkpoint entries managed by GSim Core)", name, hexList.size());
         return Map.of(
                 "ok",
                 true,
@@ -1434,49 +1375,31 @@ public class MapService {
                 "color",
                 c,
                 "center",
-                Map.of("q", Math.round((float) sq / hexList.size()), "r", Math.round((float) sr / hexList.size())),
-                "checkpointsCreated",
-                created);
+                Map.of("q", Math.round((float) sq / hexList.size()), "r", Math.round((float) sr / hexList.size())));
     }
 
     // ── Helpers ───────────────────────────────────────────
 
     public String readActiveNodeId(String worldId) {
-        Path activeFile = worldsDir.resolve(worldId).resolve("active.json");
-        Path nodesDir = worldsDir.resolve(worldId).resolve("nodes");
-        if (!Files.exists(activeFile)) return "n0000";
         try {
-            var node = MAPPER.readTree(activeFile.toFile());
-            if (node.has("nodeId")) {
-                String nid = node.get("nodeId").asText();
-                // Validate: node file must actually exist
-                Path nodeFile = nodesDir.resolve(nid + ".json");
-                if (Files.exists(nodeFile)) return nid;
-                log.warn("Active node {} for world {} does not exist, falling back to n0000", nid, worldId);
-                // Auto-fix stale active.json
-                var fixed = MAPPER.createObjectNode();
-                fixed.put("nodeId", "n0000");
-                fixed.putObject("sessions");
-                MAPPER.writeValue(activeFile.toFile(), fixed);
+            var state = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, worldId);
+            if (state != null && state.nodeId() != null && !state.nodeId().isBlank()) {
+                return state.nodeId();
             }
-        } catch (IOException e) {
-            log.warn("Failed to read active.json for world {}", worldId, e);
+        } catch (Exception e) {
+            log.warn("Failed to read active state for world {}: {}", worldId, e.getMessage());
         }
         return "n0000";
     }
 
     public String readParentId(String worldId, String nodeId) {
-        Path nodeFile = worldsDir.resolve(worldId).resolve("nodes").resolve(nodeId + ".json");
-        if (!Files.exists(nodeFile)) return "n0000";
         try {
-            var node = MAPPER.readTree(nodeFile.toFile());
-            if (node.has("parentId") && !node.get("parentId").isNull()) {
-                String pid = node.get("parentId").asText();
-                if (!pid.isBlank()) return pid;
-            }
-        } catch (IOException e) {
-            log.warn("Failed to read parentId for {}/{}", worldId, nodeId, e);
+            var node = com.gsim.worldinfo.loader.NodeLoader.load(
+                    com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId));
+            String pid = node.parentId();
+            return (pid != null && !pid.isBlank()) ? pid : "n0000";
+        } catch (IllegalArgumentException e) {
+            return "n0000";
         }
-        return "n0000";
     }
 }

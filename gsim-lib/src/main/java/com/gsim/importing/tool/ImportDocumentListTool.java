@@ -2,6 +2,7 @@ package com.gsim.importing.tool;
 
 import com.gsim.importing.ImportDocumentService;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -68,5 +69,10 @@ public class ImportDocumentListTool implements AgentTool {
             log.error("import_document_list failed: {}", e.getMessage());
             return ToolResult.fail(NAME, "IMPORT_LIST_FAILED: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

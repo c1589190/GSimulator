@@ -9,6 +9,7 @@ import com.gsim.agent.core.AgentResult;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
@@ -244,5 +245,10 @@ public class DispatchSubAgentTool implements AgentTool {
             log.warn("[DispatchSubAgent] {} interrupted: {}", agentId, e.getMessage());
             return ToolResult.fail(NAME, "子代理 " + agentId + " 被中断: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.agent.ToolGroup;
 import com.gsim.agent.ToolGroupManager;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.ArrayList;
@@ -199,5 +200,10 @@ public class ActivateToolGroupsTool implements AgentTool {
 
         // 单个 key
         return List.of(trimmed);
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SELF;
     }
 }

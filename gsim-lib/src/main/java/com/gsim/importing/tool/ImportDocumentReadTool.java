@@ -2,6 +2,7 @@ package com.gsim.importing.tool;
 
 import com.gsim.importing.ImportDocumentService;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -88,5 +89,10 @@ public class ImportDocumentReadTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

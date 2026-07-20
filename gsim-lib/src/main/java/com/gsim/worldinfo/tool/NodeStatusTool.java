@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.NodeSnapshot;
@@ -84,5 +85,10 @@ public final class NodeStatusTool implements AgentTool {
                 "type", "object",
                 "properties", Map.of(),
                 "required", List.of());
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

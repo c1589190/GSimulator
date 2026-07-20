@@ -6,6 +6,7 @@ import com.gsim.llm.EmbeddingClient;
 import com.gsim.skill.SkillIndex;
 import com.gsim.skill.SkillIndex.SearchResult;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -107,5 +108,10 @@ public final class DocSearchTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

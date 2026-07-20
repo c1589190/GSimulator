@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -78,5 +79,10 @@ public class DeleteAgentConfigTool implements AgentTool {
         } catch (IOException e) {
             return ToolResult.fail(NAME, "删除 Agent 配置失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

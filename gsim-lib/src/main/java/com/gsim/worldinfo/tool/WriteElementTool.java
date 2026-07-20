@@ -2,6 +2,7 @@ package com.gsim.worldinfo.tool;
 
 import com.gsim.doc.DocCacheManager;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.Element;
@@ -181,5 +182,10 @@ public final class WriteElementTool implements AgentTool {
                                                 "description",
                                                 "'replace' (default, upsert by key) or 'append' (always add new element)")),
                 "required", List.of("ref", "value"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

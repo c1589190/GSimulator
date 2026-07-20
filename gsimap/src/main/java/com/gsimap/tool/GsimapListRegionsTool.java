@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -98,6 +99,7 @@ public class GsimapListRegionsTool implements AgentTool {
             sb.append("- **Description**: ")
                     .append(prov.description() != null ? prov.description() : "")
                     .append("\n");
+            sb.append("- **Address**: gsimap:region:").append(name).append("\n");
 
             sb.append("\n  **Terrain Composition:**\n");
             if (terrainComp.isEmpty()) {
@@ -140,5 +142,10 @@ public class GsimapListRegionsTool implements AgentTool {
         props.put("worldId", Map.of("type", "string", "description", "GSim world ID"));
         props.put("nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

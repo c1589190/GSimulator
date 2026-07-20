@@ -509,14 +509,20 @@ public class AbstractAgent {
     // ══════════════════════════════════════════
 
     /**
-     * 根据 {@code ToolFilterConfig} 过滤工具列表，返回 LLM 可见的工具定义。
+     * 根据 {@code ToolFilterConfig} 和 {@code maxPermission}/{@code allowList} 过滤工具列表，
+     * 返回 LLM 可见的工具定义。
      *
      * @return 过滤后的工具定义列表
      */
     protected List<ToolDef> buildFilteredToolDefs() {
         List<ToolDef> defs = new ArrayList<>();
         for (var tool : allTools.all().values()) {
-            if (ToolFilterEvaluator.allows(config.toolFilter(), tool.name())) {
+            if (ToolFilterEvaluator.allowsWithPermission(
+                    config.toolFilter(),
+                    tool.name(),
+                    tool.permission(),
+                    config.maxPermission(),
+                    config.allowList())) {
                 var params = tool.getParameters();
                 defs.add(
                         params != null

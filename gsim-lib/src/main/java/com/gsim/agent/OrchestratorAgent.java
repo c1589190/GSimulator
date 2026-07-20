@@ -15,6 +15,7 @@ import com.gsim.llm.LlmResult;
 import com.gsim.llm.LlmToolCall;
 import com.gsim.llm.StreamPool;
 import com.gsim.llm.ToolDef;
+import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
@@ -1382,6 +1383,29 @@ public class OrchestratorAgent extends AbstractAgent {
 
                     // progress: 正在执行工具
                     progressSink.onProgress(AgentProgressEvent.toolExecuting(toolRound, maxToolRounds, parsed.tool()));
+
+                    // === 执行前门禁：权限等级检查（Sim 模式无确认循环，WRITE+/SYSTEM 直接拒绝） ===
+                    AgentTool agentTool = toolRegistry.get(parsed.tool());
+                    AgentTool.Permission toolPerm =
+                            agentTool != null ? agentTool.permission() : AgentTool.Permission.READ;
+                    ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
+                            parsed.tool(),
+                            parsed.args(),
+                            ToolRouteDecision.wildcard(
+                                    java.util.Collections.emptySet(), "SIM_MODE", "Sim 模式 — 所有工具可用"),
+                            false,
+                            toolPerm);
+
+                    if (execDecision.decision() == ToolExecutionDecisionType.REJECT
+                            || execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {
+                        String rejectMsg = "[系统] Sim 模式拒绝执行工具 " + parsed.tool()
+                                + "（权限等级: " + toolPerm + "）。Sim 模式仅允许 READ 工具。";
+                        messages.add(LlmMessage.user(rejectMsg));
+                        trace.add(new MessageTrace("system", "tool_rejected", execDecision.reason()));
+                        progressSink.onProgress(AgentProgressEvent.toolFailed(
+                                toolRound, maxToolRounds, parsed.tool(), "REJECTED: " + execDecision.reason()));
+                        continue;
+                    }
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
                     ToolResult result = toolRegistry.call(call);

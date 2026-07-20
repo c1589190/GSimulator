@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -91,6 +92,12 @@ public class GsimapFindRiverPathTool implements AgentTool {
             }
         }
 
+        sb.append("\n\nsource: gsimap:hex:").append(q).append("_").append(r).append("\n");
+        if (!path.isEmpty()) {
+            int[] lastQr = MapData.parseHexKey(path.get(path.size() - 1));
+            sb.append("destination: gsimap:hex:").append(lastQr[0]).append("_").append(lastQr[1]).append("\n");
+        }
+
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
@@ -105,5 +112,10 @@ public class GsimapFindRiverPathTool implements AgentTool {
         props.put("q", Map.of("type", "integer", "description", "Source hex axial q coordinate"));
         props.put("r", Map.of("type", "integer", "description", "Source hex axial r coordinate"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "q", "r"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

@@ -4,6 +4,7 @@ import com.gsim.llm.LlmProvider;
 import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.llm.ProviderConfig;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -79,5 +80,10 @@ public class ListLlmProvidersTool implements AgentTool {
         } catch (Exception e) {
             return ToolResult.fail(NAME, "获取 LLM Provider 列表失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

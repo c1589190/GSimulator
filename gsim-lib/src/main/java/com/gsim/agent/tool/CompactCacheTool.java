@@ -7,6 +7,7 @@ import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
 import com.gsim.compact.CacheCompactor;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.nio.file.Path;
@@ -130,5 +131,10 @@ public final class CompactCacheTool implements AgentTool {
      */
     static boolean isSubAgentCache(String cacheId) {
         return cacheId != null && cacheId.matches("^(sim|search)-\\d+.*");
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

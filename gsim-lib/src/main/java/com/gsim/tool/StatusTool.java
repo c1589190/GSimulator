@@ -1,5 +1,6 @@
 package com.gsim.tool;
 
+import com.gsim.tool.AgentTool.Permission;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -89,5 +90,10 @@ public final class StatusTool implements AgentTool {
                 name(),
                 List.of(new ToolResult.Item(
                         "Server Status", "status", sb.toString().trim(), 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

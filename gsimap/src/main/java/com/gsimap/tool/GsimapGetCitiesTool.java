@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -83,8 +84,11 @@ public class GsimapGetCitiesTool implements AgentTool {
             if (city.description() != null && !city.description().isBlank()) {
                 sb.append("- **Description**: ").append(city.description()).append("\n");
             }
+            sb.append("- **Address**: gsimap:city:").append(entry.getKey()).append("\n");
             sb.append("\n");
         }
+
+        sb.append("\n---\nTotal: **").append(map.cities().size()).append("** cities\n");
 
         return ToolResult.ok(
                 name(),
@@ -98,5 +102,10 @@ public class GsimapGetCitiesTool implements AgentTool {
         props.put("worldId", Map.of("type", "string", "description", "GSim world ID"));
         props.put("nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

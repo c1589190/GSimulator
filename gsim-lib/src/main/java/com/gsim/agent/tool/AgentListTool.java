@@ -5,6 +5,7 @@ import com.gsim.agent.AgentStatus;
 import com.gsim.agent.management.AgentsManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.time.Instant;
@@ -104,5 +105,10 @@ public class AgentListTool implements AgentTool {
         if (instant == null) return "-";
         String s = instant.toString();
         return s.length() > 19 ? s.substring(0, 19) : s;
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

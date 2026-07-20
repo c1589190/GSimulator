@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CachesManager;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.ArrayList;
@@ -179,5 +180,10 @@ public final class ViewSubAgentOutputTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

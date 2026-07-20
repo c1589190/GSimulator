@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.WorldInformation;
@@ -177,5 +178,10 @@ public final class DeleteElementTool implements AgentTool {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

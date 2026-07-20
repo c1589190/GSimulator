@@ -2,6 +2,7 @@ package com.gsim.llm.tool;
 
 import com.gsim.llm.LlmConfigManager;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -62,5 +63,10 @@ public class LlmDeleteTool implements AgentTool {
         } catch (Exception e) {
             return ToolResult.fail(NAME, "Failed to delete provider: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.SYSTEM;
     }
 }

@@ -2,6 +2,7 @@ package com.gsim.cache.tool;
 
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -158,5 +159,10 @@ public class CacheEditTool implements AgentTool {
     private static String truncate(String s, int maxLen) {
         if (s == null || s.length() <= maxLen) return s;
         return s.substring(0, maxLen) + "...";
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

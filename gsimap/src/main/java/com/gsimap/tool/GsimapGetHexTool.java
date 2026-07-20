@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -113,6 +114,8 @@ public class GsimapGetHexTool implements AgentTool {
             }
         }
 
+        sb.append("\n\naddress: gsimap:hex:").append(q).append("_").append(r).append("\n");
+
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
@@ -127,5 +130,10 @@ public class GsimapGetHexTool implements AgentTool {
         props.put("q", Map.of("type", "integer", "description", "Axial q coordinate"));
         props.put("r", Map.of("type", "integer", "description", "Axial r coordinate"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "q", "r"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

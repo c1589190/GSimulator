@@ -399,11 +399,19 @@ public class GSimulatorApplication {
         toolRegistry.register(new QueryCheckpointTool(wiSupplier));
         toolRegistry.register(new QueryKeywordTool(wiSupplier));
         toolRegistry.register(new QueryNodeTool(wiSupplier));
-        toolRegistry.register(new QueryElementTool(wiSupplier));
+        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
+        toolRegistry.register(
+                new com.gsim.worldinfo.tool.QueryByTagTool(wiSupplier));
+        toolRegistry.register(
+                new com.gsim.worldinfo.tool.QueryAddressTool(wiSupplier, toolRegistry));
 
         // Write tools
         toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir, docCacheManager));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
+        toolRegistry.register(
+                new com.gsim.worldinfo.tool.AttachmentWriteTool(worldsDir, wiSupplier));
+        toolRegistry.register(
+                new com.gsim.worldinfo.tool.AttachmentReadTool(worldsDir, wiSupplier));
 
         // Node management tools
         toolRegistry.register(new NodeListTool(wiSupplier));

@@ -1,7 +1,9 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
+import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.Checkpoint;
 import com.gsim.worldinfo.Element;
@@ -19,16 +21,18 @@ import java.util.function.Supplier;
  * <p>引用格式：{@code nodeId:checkpointId:key}（如 {@code n0002:characters:曹操}）。
  * 如果省略 nodeId（使用 {@code checkpointId:key} 格式），默认查询当前活跃节点。
  *
- * <p>这是 {@link WriteElementTool} 的对应读取工具。写入时使用 key，查询时返回
- * {@code nodeId:checkpointId:key} 格式的结果，此工具再将这些引用解析回元素内容。
- * 同时会解析元素中的 links 字段，展示链接目标摘要。
+ * <p>这是 {@link WriteElementTool} 的对应读取工具。links 字段中的引用会先尝试
+ * 内部解析（GSim ref 格式），失败时自动通过 {@code query_address} 路由到其他
+ * 模块（如 gsimap）。
  */
 public final class QueryElementTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
+    private final ToolRegistry toolRegistry;
 
-    public QueryElementTool(Supplier<WorldInformation> worldInfo) {
+    public QueryElementTool(Supplier<WorldInformation> worldInfo, ToolRegistry toolRegistry) {
         this.worldInfo = worldInfo;
+        this.toolRegistry = toolRegistry;
     }
 
     @Override
@@ -146,7 +150,7 @@ public final class QueryElementTool implements AgentTool {
             StringBuilder linkPreview = new StringBuilder();
             for (String link : found.links()) {
                 linkPreview.append("- ").append(link);
-                // Try to resolve the link target (best-effort, may be to another node)
+                // Try internal resolution first, then fall back to query_address router
                 try {
                     ElementRef resolved = resolveRef(wi, link, nodeId);
                     if (resolved != null) {
@@ -154,7 +158,13 @@ public final class QueryElementTool implements AgentTool {
                         if (snippet.length() > 80) snippet = snippet.substring(0, 80) + "...";
                         linkPreview.append("  → ").append(snippet.replace("\n", " "));
                     } else {
-                        linkPreview.append("  → (unresolved)");
+                        // Fallback: route through query_address for cross-module addresses
+                        String fallback = resolveViaAddressRouter(link);
+                        if (fallback != null) {
+                            linkPreview.append("  → ").append(fallback);
+                        } else {
+                            linkPreview.append("  → (unresolved)");
+                        }
                     }
                 } catch (Exception ignored) {
                     linkPreview.append("  → (parse error)");
@@ -186,6 +196,31 @@ public final class QueryElementTool implements AgentTool {
     }
 
     /**
+     * Fallback: route an unresolvable link through the query_address router.
+     * This handles cross-module addresses (gsimap:*, etc.) that GSim internal
+     * resolution cannot parse.
+     *
+     * @return a brief preview string, or null if routing also failed
+     */
+    private String resolveViaAddressRouter(String link) {
+        if (toolRegistry == null) return null;
+        try {
+            ToolResult result = toolRegistry.call(new ToolCall("query_address", Map.of("address", link)));
+            if (result.success() && !result.items().isEmpty()) {
+                String snippet = result.items().get(0).snippet();
+                if (snippet != null) {
+                    // Take first line as preview
+                    String firstLine = snippet.split("\n")[0];
+                    if (firstLine.length() > 80) firstLine = firstLine.substring(0, 80) + "...";
+                    return firstLine;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /**
      * Best-effort resolve a link reference to an ElementRef.
      * The link may be in any of these forms:
      * <ul>
@@ -193,6 +228,7 @@ public final class QueryElementTool implements AgentTool {
      *   <li>{@code checkpointId:key} — same node (caller provides defaultNodeId)</li>
      *   <li>{@code key} — search across all nodes (slow, fallback)</li>
      * </ul>
+     * If internal resolution fails, caller should fall back to {@link #resolveViaAddressRouter}.
      */
     static ElementRef resolveRef(WorldInformation wi, String link, String defaultNodeId) {
         String[] parts = link.split(":", 3);
@@ -230,5 +266,10 @@ public final class QueryElementTool implements AgentTool {
             }
         }
         return null;
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

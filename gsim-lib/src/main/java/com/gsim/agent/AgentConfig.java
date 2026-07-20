@@ -1,6 +1,7 @@
 package com.gsim.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsim.tool.AgentTool;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +24,8 @@ import java.util.Map;
  * @param maxToolRounds       最大工具调用轮数
  * @param temperature         LLM 温度参数
  * @param maxTokens           LLM 最大输出 token 数
+ * @param maxPermission       SubAgent 最大权限等级（null = 不限制，默认 READ）
+ * @param allowList           SubAgent 白名单工具，始终放行（null/empty = 无白名单）
  */
 public record AgentConfig(
         String agentId,
@@ -33,17 +36,19 @@ public record AgentConfig(
         ToolFilterConfig toolFilter,
         int maxToolRounds,
         double temperature,
-        int maxTokens) {
+        int maxTokens,
+        AgentTool.Permission maxPermission,
+        java.util.List<String> allowList) {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** 默认主 Agent 配置 */
     public static AgentConfig defaultOrchestrator() {
-        return new AgentConfig("orchestrator", "base", "", "", "", ToolFilterConfig.ALL, 32, 0.3, 2048);
+        return new AgentConfig("orchestrator", "base", "", "", "", ToolFilterConfig.ALL, 32, 0.3, 2048, null, null);
     }
 
     // ---- 兼容工厂方法 ----
 
-    /** 旧版构造（不含 llmProvider / staticSystemPrompt）。 */
+    /** 旧版构造（不含 llmProvider / staticSystemPrompt / maxPermission / allowList）。 */
     public static AgentConfig of(
             String agentId,
             String systemPrompt,
@@ -61,7 +66,9 @@ public record AgentConfig(
                 toolFilter,
                 maxToolRounds,
                 temperature,
-                maxTokens);
+                maxTokens,
+                null,
+                null);
     }
 
     // ---- 加载方法 ----
@@ -95,27 +102,48 @@ public record AgentConfig(
         String toolMode = node.path("toolFilter").path("mode").asText("all");
         var allow = node.path("toolFilter").path("allow");
         var deny = node.path("toolFilter").path("deny");
-        var allowList = allow.isArray()
+        var tfAllowList = allow.isArray()
                 ? new java.util.ArrayList<String>() {
                     {
                         for (var n : allow) add(n.asText());
                     }
                 }
                 : java.util.List.<String>of();
-        var denyList = deny.isArray()
+        var tfDenyList = deny.isArray()
                 ? new java.util.ArrayList<String>() {
                     {
                         for (var n : deny) add(n.asText());
                     }
                 }
                 : java.util.List.<String>of();
-        var filter = new ToolFilterConfig(toolMode, allowList, denyList);
+        var filter = new ToolFilterConfig(toolMode, tfAllowList, tfDenyList);
         int maxRounds = node.path("maxToolRounds").asInt(32);
         double temp = node.path("temperature").asDouble(0.3);
         int maxTok = node.path("maxTokens").asInt(2048);
 
+        // maxPermission: "SYSTEM" | "WRITE" | "READ" (default null = no restriction)
+        AgentTool.Permission maxPerm = null;
+        String maxPermStr = node.path("maxPermission").asText("");
+        if (!maxPermStr.isBlank()) {
+            try {
+                maxPerm = AgentTool.Permission.valueOf(maxPermStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // ignore invalid values
+            }
+        }
+
+        // allowList
+        var alNode = node.path("allowList");
+        java.util.List<String> allowList = alNode.isArray()
+                ? new java.util.ArrayList<String>() {
+                    {
+                        for (var n : alNode) add(n.asText());
+                    }
+                }
+                : java.util.List.<String>of();
+
         return new AgentConfig(
-                agentId, llmProvider, staticSys, sysPrompt, userTemplate, filter, maxRounds, temp, maxTok);
+                agentId, llmProvider, staticSys, sysPrompt, userTemplate, filter, maxRounds, temp, maxTok, maxPerm, allowList);
     }
 
     // ---- 工具方法 ----

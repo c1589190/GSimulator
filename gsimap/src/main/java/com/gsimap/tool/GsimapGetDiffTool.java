@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -82,5 +83,10 @@ public final class GsimapGetDiffTool implements AgentTool {
                                 "worldId", Map.of("type", "string", "description", "GSim world ID"),
                                 "nodeId", Map.of("type", "string", "description", "Node ID (e.g. n0001)")),
                 "required", List.of("worldId", "nodeId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

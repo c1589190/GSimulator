@@ -3,6 +3,7 @@ package com.gsimap.tool;
 import static java.util.Map.entry;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -82,6 +83,10 @@ public final class GsimapInitNationTool implements AgentTool {
             Map<String, Object> result = mapService.initNation(
                     worldId, nodeId, name, seedQ, seedR, maxHexes, tag, color, faction, narrative, worldview, capital,
                     ruler, religion, false);
+            result.put("address", "gsimap:region:" + name);
+            if (capital != null && !capital.isBlank()) {
+                result.put("address_city", "gsimap:city:" + capital);
+            }
             return ToolResult.ok(
                     name(), List.of(new ToolResult.Item(name, "gsimap_init_nation", JsonUtils.toJson(result), 1.0)));
         } catch (IOException e) {
@@ -180,5 +185,10 @@ public final class GsimapInitNationTool implements AgentTool {
                                                 "description",
                                                 "Religion (optional, appended to faction tags)"))),
                 "required", List.of("worldId", "name", "seedQ", "seedR"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

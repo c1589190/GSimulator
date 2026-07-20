@@ -4,6 +4,7 @@ import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CachesManager;
 import com.gsim.llm.ToolDef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -101,5 +102,10 @@ public class ListSubAgentCachesTool implements AgentTool {
         sb.append("\n使用 `dispatch_sub_agent` 的 `cacheId` 参数传入上述 `cacheId` 以续接上下文。");
 
         return ToolResult.ok(NAME, List.of(new ToolResult.Item("sub_agent_caches", NAME, sb.toString(), 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

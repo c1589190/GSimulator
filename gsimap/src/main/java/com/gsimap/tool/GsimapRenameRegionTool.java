@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -54,6 +55,7 @@ public final class GsimapRenameRegionTool implements AgentTool {
         }
 
         Map<String, Object> result = mapService.renameRegion(worldId, nodeId, oldName, newName);
+        result.put("address", "gsimap:region:" + newName);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(newName, "gsimap_rename_region", JsonUtils.toJson(result), 1.0)));
     }
@@ -74,5 +76,10 @@ public final class GsimapRenameRegionTool implements AgentTool {
                                 "oldName", Map.of("type", "string", "description", "Current region name"),
                                 "newName", Map.of("type", "string", "description", "New region name")),
                 "required", List.of("worldId", "oldName", "newName"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

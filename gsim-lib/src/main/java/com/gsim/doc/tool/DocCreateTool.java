@@ -4,6 +4,7 @@ import com.gsim.doc.DocStore;
 import com.gsim.doc.DocType;
 import com.gsim.doc.Document;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -107,5 +108,10 @@ public final class DocCreateTool implements AgentTool {
         } catch (IOException e) {
             return ToolResult.fail(name(), "创建失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

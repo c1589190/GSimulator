@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -121,5 +122,10 @@ public final class GsimapGenerateTool implements AgentTool {
                                 "coastRoughness",
                                         Map.of("type", "number", "description", "Coast roughness 0..1 (default: 0.6)")),
                 "required", List.of("worldId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

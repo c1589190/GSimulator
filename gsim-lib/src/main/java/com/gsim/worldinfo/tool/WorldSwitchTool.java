@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.loader.WorldIndexManager;
@@ -66,5 +67,10 @@ public final class WorldSwitchTool implements AgentTool {
 
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item("已切换到 " + worldId, worldId, "World 切换成功。系统提示词、节点状态、缓存均已刷新。", 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

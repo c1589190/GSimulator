@@ -14,7 +14,7 @@ public final class GsimapToolRegistrar {
     private GsimapToolRegistrar() {}
 
     /**
-     * Register all 19 gsimap tools into the given registry.
+     * Register all 20 gsimap tools into the given registry.
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
@@ -29,6 +29,9 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapFindRiverPathTool(mapService));
         registry.register(new GsimapListRegionsTool(mapService));
         registry.register(new GsimapGetDistanceTool(mapService));
+
+        // ── Address resolution (1) ──────────────────────────
+        registry.register(new GsimapQueryByAddressTool(mapService));
 
         // ── Diff tools (2) ──────────────────────────────────
         registry.register(new GsimapGetDiffTool(mapService));

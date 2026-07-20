@@ -3,6 +3,7 @@ package com.gsim.doc.tool;
 import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.ArrayList;
@@ -274,5 +275,10 @@ public final class DocCropTool implements AgentTool {
         }
 
         return ToolResult.ok(name(), List.of(new ToolResult.Item(docTitle + " (裁剪视图)", docId, output.toString(), 1.0)));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

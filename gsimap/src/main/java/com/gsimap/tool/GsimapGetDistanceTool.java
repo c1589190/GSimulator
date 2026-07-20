@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsimap.map.MapData;
@@ -107,6 +108,9 @@ public class GsimapGetDistanceTool implements AgentTool {
         sb.append("  - Coordinates: (").append(toQ).append(",").append(toR).append(")\n");
         sb.append("- **Hex Distance**: **").append(distance).append("**\n");
 
+        sb.append("\n\nfrom: gsimap:hex:").append(fromQ).append("_").append(fromR).append("\n");
+        sb.append("to: gsimap:hex:").append(toQ).append("_").append(toR).append("\n");
+
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
@@ -144,5 +148,10 @@ public class GsimapGetDistanceTool implements AgentTool {
                 Map.of("type", "string", "description", "Source region name (alternative to fromQ/fromR)"));
         props.put("toRegion", Map.of("type", "string", "description", "Target region name (alternative to toQ/toR)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

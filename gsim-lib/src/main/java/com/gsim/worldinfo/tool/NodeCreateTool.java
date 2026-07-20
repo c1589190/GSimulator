@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.IdGenerator;
@@ -156,5 +157,10 @@ public final class NodeCreateTool implements AgentTool {
         if (max >= 0) {
             IdGenerator.seedNodeCounter(max + 1);
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

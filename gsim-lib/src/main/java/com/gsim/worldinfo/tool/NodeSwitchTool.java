@@ -1,6 +1,7 @@
 package com.gsim.worldinfo.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.worldinfo.NodeSnapshot;
@@ -95,5 +96,10 @@ public final class NodeSwitchTool implements AgentTool {
                                         "description",
                                         "Target node ID, e.g. 'n0002'. Use node_list to see available nodes.")),
                 "required", List.of("nodeId"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

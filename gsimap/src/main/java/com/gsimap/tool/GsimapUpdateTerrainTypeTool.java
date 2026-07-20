@@ -1,6 +1,7 @@
 package com.gsimap.tool;
 
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
@@ -52,6 +53,7 @@ public final class GsimapUpdateTerrainTypeTool implements AgentTool {
 
         Map<String, Object> result = mapService.updateTerrainType(
                 worldId, nodeId, key, name, color, food, gold, stone, moveCost, description);
+        result.put("address", "gsimap:terrain:" + key);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(key, "gsimap_update_terrain_type", JsonUtils.toJson(result), 1.0)));
     }
@@ -93,5 +95,10 @@ public final class GsimapUpdateTerrainTypeTool implements AgentTool {
                                 "moveCost", Map.of("type", "integer", "description", "Movement cost"),
                                 "description", Map.of("type", "string", "description", "Tooltip description")),
                 "required", List.of("worldId", "key"));
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.WRITE;
     }
 }

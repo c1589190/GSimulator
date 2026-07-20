@@ -4,6 +4,7 @@ import com.gsim.doc.DocCacheManager;
 import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.List;
@@ -133,5 +134,10 @@ public final class DocReadTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }

@@ -4,6 +4,7 @@ import com.gsim.doc.DocCacheManager;
 import com.gsim.doc.DocStore;
 import com.gsim.ref.RefResolver.ResolvedRef;
 import com.gsim.tool.AgentTool;
+import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -113,5 +114,10 @@ public final class ResolveRefTool implements AgentTool {
         } catch (Exception e) {
             return ToolResult.fail(name(), "Failed to resolve ref: " + e.getMessage());
         }
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
     }
 }
