@@ -115,16 +115,16 @@ Agent 一口气跑完指定范围的全部测试，最后输出汇总报告。�
 
 **MCP 工具名映射规则**：
 - `world_create` → `mcp__gsimap__gsim_world_create`
-- `node_create` → `mcp__gsimap__gsim_world_create` 的参数中指定（注：MCP 层 node 操作通过 world 工具间接实现，或需确认具体可用工具）
-- `write_element` → `mcp__gsimap__gsim_doc_write`（MCP 层文档/元素操作走 Doc 工具）
-- `query_element` → `mcp__gsimap__gsim_doc_read` 或 `mcp__gsimap__gsim_resolve_ref`
+- `node_create` → `mcp__gsimap__gsim_node_create`（需先激活 `node_mgmt` 工具组）
+- `write_element` → `mcp__gsimap__gsim_write_element`（需先激活 `world_info` 工具组）
+- `query_element` → `mcp__gsimap__gsim_query_element`
 - `gsimap_*` → `mcp__gsimap__gsimap_*`（地图工具一一对应）
-- Agent 管理工具 → `mcp__gsimap__gsim_create_sub_agent_config` 等
-- Doc 工具 → `mcp__gsimap__gsim_doc_*` 系列
+- Agent 管理工具 → `mcp__gsimap__gsim_agent_config_list`, `mcp__gsimap__gsim_agent_config_delete`, `mcp__gsimap__gsim_create_sub_agent_config` 等
+- Doc 工具 → `mcp__gsimap__gsim_doc_*` 系列（含 `gsim_doc_delete`）
 - Import 工具 → `mcp__gsimap__gsim_import_document_*` 系列
 - Cache 工具 → `mcp__gsimap__gsim_cache_*` 系列
 
-**注意**：MCP 路径可用的工具是 GSimulator 工具集的子集。Node 链操作、Attachment 读写、Skill 管理等工具在 MCP 层可能不可用，需通过 GSimulator 内部路径执行。执行前先调用 `mcp__gsimap__gsim_get_status` 确认 MCP 版本和可用工具数。
+**注意**：MCP 路径在 `--no-cli` 模式下启动完整应用，包含全部工具（当前 ~67 个）。执行前先调用 `mcp__gsimap__gsim_get_status` 确认 MCP 版本和可用工具数。
 
 ---
 
@@ -154,7 +154,6 @@ Agent 一口气跑完指定范围的全部测试，最后输出汇总报告。�
 
 - World ID: `test_integration`
 - Agent Config ID: `test_agent_reader`、`test_agent_writer`
-- Skill ID: `test_skill_bootstrap`
 - Doc ID: `test_doc_character`、`test_doc_skill`
 - Node: 使用 `node_create` 自动生成的编号（从 n0001 开始）
 - Region: `test_region`

@@ -34,9 +34,8 @@
 | World | `world_create`, `world_list` | WRITE, READ |
 | Node | `node_create`, `node_list`, `node_status` | WRITE, READ, READ |
 | WorldInfo | `write_element`, `query_element`, `query_address` | WRITE, READ, READ |
-| Doc | `doc_create`, `doc_read`, `doc_search` | WRITE, READ, READ |
-| Agent | `dispatch_sub_agent`, `create_sub_agent_config`, `list_agent_config` | SYSTEM, WRITE, READ |
-| Skill | `skill_list`, `skill_read`, `skill_create` | READ, READ, WRITE |
+| Doc | `doc_create`, `doc_read`, `doc_search`, `doc_delete` | WRITE, READ, READ, SYSTEM |
+| Agent | `dispatch_sub_agent`, `create_sub_agent_config`, `list_agent_config`, `delete_agent_config` | SYSTEM, WRITE, READ, SYSTEM |
 | GSimap | `gsimap_generate`, `gsimap_get_hex`, `gsimap_create_region` | WRITE, READ, WRITE |
 | Import | `import_document_list`, `import_document_read` | READ, READ |
 | Cache | `list_sub_agent_caches`, `view_sub_agent_cache` | READ, READ |
