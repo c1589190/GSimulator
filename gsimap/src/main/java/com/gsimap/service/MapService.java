@@ -43,6 +43,10 @@ public class MapService {
 
     private final ConcurrentHashMap<String, TerrainCanvas> canvases = new ConcurrentHashMap<>();
 
+    private static String canvasKey(String worldId, String nodeId) {
+        return worldId + ":" + nodeId;
+    }
+
     /**
      * Creates a new MapService for the given worlds directory.
      * @param worldsDir path to the worlds directory
@@ -97,13 +101,13 @@ public class MapService {
     }
 
     public boolean isRootNode(String worldId, String nodeId) {
-        try {
-            return com.gsim.worldinfo.loader.NodeLoader.load(
-                            com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId))
-                    .isRoot();
-        } catch (IllegalArgumentException e) {
-            return true; // node file not found → treat as root
+        Path nodeFile = com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId);
+        if (!Files.exists(nodeFile)) {
+            // File truly absent (first access, node not yet created) → treat as root
+            return true;
         }
+        // File exists — let any parse error propagate, don't silently degrade
+        return com.gsim.worldinfo.loader.NodeLoader.load(nodeFile).isRoot();
     }
 
     /**
@@ -130,22 +134,24 @@ public class MapService {
     // ── TerrainCanvas (block system) ────────────────────────
 
     /**
-     * Get or lazily create the TerrainCanvas for a world.
+     * Get or lazily create the TerrainCanvas for a world + node.
+     * Cache key includes nodeId to prevent cross-branch canvas leakage.
      * @param worldId the world identifier
-     * @return the terrain canvas for the given world
+     * @param nodeId the node identifier
+     * @return the terrain canvas for the given world and node
      */
-    public TerrainCanvas getCanvas(String worldId) {
-        return canvases.computeIfAbsent(worldId, k -> {
-            // Try to load existing blocks from the stored map
-            MapData map = resolveActive(worldId);
+    public TerrainCanvas getCanvas(String worldId, String nodeId) {
+        String key = canvasKey(worldId, nodeId);
+        return canvases.computeIfAbsent(key, k -> {
+            MapData map = resolve(worldId, nodeId);
             TerrainCanvas canvas = new TerrainCanvas();
             if (map != null
                     && map.terrainBlocks() != null
                     && !map.terrainBlocks().isEmpty()) {
                 canvas.setBlocks(map.terrainBlocks());
-                log.info("Loaded {} blocks for world {}", canvas.size(), worldId);
+                log.info("Loaded {} blocks for {}:{}", canvas.size(), worldId, nodeId);
             } else {
-                log.info("Empty canvas for world {}", worldId);
+                log.info("Empty canvas for {}:{}", worldId, nodeId);
             }
             return canvas;
         });
@@ -159,17 +165,19 @@ public class MapService {
      * @return terrain type string, or null if not found
      */
     public String queryTerrainBlock(String worldId, int q, int r) {
-        TerrainCanvas canvas = canvases.get(worldId);
+        String nodeId = readActiveNodeId(worldId);
+        String key = canvasKey(worldId, nodeId);
+        TerrainCanvas canvas = canvases.get(key);
         if (canvas != null) {
             String terrain = canvas.queryHex(q, r);
             if (terrain != null) return terrain;
         }
         // Fallback 1: load stored terrainBlocks into canvas and query
-        MapData map = resolveActive(worldId);
+        MapData map = resolve(worldId, nodeId);
         if (map != null && map.terrainBlocks() != null && !map.terrainBlocks().isEmpty()) {
             canvas = new TerrainCanvas();
             canvas.setBlocks(map.terrainBlocks());
-            canvases.put(worldId, canvas);
+            canvases.put(key, canvas);
             String terrain = canvas.queryHex(q, r);
             if (terrain != null) return terrain;
         }
@@ -190,7 +198,8 @@ public class MapService {
      * @return the block ID, or null if creation failed
      */
     public String addBlock(String worldId, String terrain, List<MapData.Pt> boundary, String seedKey) {
-        TerrainCanvas canvas = getCanvas(worldId);
+        String nodeId = readActiveNodeId(worldId);
+        TerrainCanvas canvas = getCanvas(worldId, nodeId);
         String blockId = canvas.addBlock(terrain, boundary, seedKey);
         if (blockId != null) {
             persistBlocks(worldId, canvas);
@@ -207,7 +216,8 @@ public class MapService {
      * @return the block ID, or null if creation failed
      */
     public String addBlockFromHexSet(String worldId, String terrain, Set<String> hexSet, String seedKey) {
-        TerrainCanvas canvas = getCanvas(worldId);
+        String nodeId = readActiveNodeId(worldId);
+        TerrainCanvas canvas = getCanvas(worldId, nodeId);
         String blockId = canvas.addBlockFromHexSet(terrain, hexSet, seedKey);
         if (blockId != null) {
             persistBlocks(worldId, canvas);
@@ -222,7 +232,8 @@ public class MapService {
      * @return true if the block was found and removed
      */
     public boolean removeBlock(String worldId, String blockId) {
-        TerrainCanvas canvas = canvases.get(worldId);
+        String nodeId = readActiveNodeId(worldId);
+        TerrainCanvas canvas = canvases.get(canvasKey(worldId, nodeId));
         if (canvas == null) return false;
         boolean ok = canvas.removeBlock(blockId);
         if (ok) persistBlocks(worldId, canvas);
@@ -230,11 +241,12 @@ public class MapService {
     }
 
     /**
-     * Evict the in-memory canvas for a world, forcing reload on next access.
+     * Evict the in-memory canvas for a world+node, forcing reload on next access.
      * @param worldId the world identifier
+     * @param nodeId the node identifier
      */
-    public void evictCanvas(String worldId) {
-        canvases.remove(worldId);
+    public void evictCanvas(String worldId, String nodeId) {
+        canvases.remove(canvasKey(worldId, nodeId));
     }
 
     /** Write terrain blocks back to MapData and persist (does NOT evict canvas).
@@ -260,7 +272,7 @@ public class MapService {
                 map.compressedRegions(),
                 map.pathwayGroups());
         // Save to the active node (typically root, but respects current active node)
-        MapStore.saveFull(worldsDir, worldId, activeNodeId, updated);
+        saveMap(worldId, activeNodeId, updated);
         // Update in-memory cache for the saved node and evict descendants (they'll re-resolve)
         evict(worldId, activeNodeId);
     }
@@ -268,20 +280,23 @@ public class MapService {
     // ── Mutation ──────────────────────────────────────────
 
     /**
-     * Save a full map. compressedRegions is a native MapData field — auto-serialized.
-     * @param worldId the world identifier
-     * @param nodeId the node identifier
-     * @param data the map data to save
+     * Save a map — automatically chooses full (root) or diff (child).
+     * This is the ONLY save entry point. Business methods MUST NOT call
+     * MapStore.saveFull/saveDiff directly.
      */
-    public void saveFull(String worldId, String nodeId, MapData data) {
-        MapStore.saveFull(worldsDir, worldId, nodeId, data);
+    public void saveMap(String worldId, String nodeId, MapData updated) {
+        if (isRootNode(worldId, nodeId)) {
+            MapStore.saveFull(worldsDir, worldId, nodeId, updated);
+        } else {
+            MapData parent = resolve(worldId, readParentId(worldId, nodeId));
+            MapDiff diff = MapDiff.compute(readParentId(worldId, nodeId), parent, updated);
+            MapStore.saveDiff(worldsDir, worldId, nodeId, diff);
+        }
         evict(worldId, nodeId);
     }
 
     /**
      * Update pathway groups for a world — replaces the entire groups map and persists.
-     * @param worldId the world identifier
-     * @param groups the new pathway groups map
      */
     public void updatePathwayGroups(String worldId, Map<String, MapData.PathwayGroup> groups) {
         String nodeId = readActiveNodeId(worldId);
@@ -302,18 +317,7 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 groups);
-        saveFull(worldId, nodeId, updated);
-    }
-
-    /**
-     * Save a diff (for child nodes).
-     * @param worldId the world identifier
-     * @param nodeId the node identifier
-     * @param diff the map diff to save
-     */
-    public void saveDiff(String worldId, String nodeId, MapDiff diff) {
-        MapStore.saveDiff(worldsDir, worldId, nodeId, diff);
-        evict(worldId, nodeId);
+        saveMap(worldId, nodeId, updated);
     }
 
     /**
@@ -367,7 +371,6 @@ public class MapService {
         if (!Files.isDirectory(nodesDir)) return result;
 
         try (var stream = Files.list(nodesDir)) {
-            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             stream.filter(f -> {
                         java.nio.file.Path fn = f.getFileName();
                         if (fn == null) return false;
@@ -380,26 +383,20 @@ public class MapService {
                     .sorted()
                     .forEach(f -> {
                         try {
-                            var node = mapper.readTree(f.toFile());
+                            var node = com.gsim.worldinfo.loader.NodeLoader.load(f);
                             Map<String, Object> info = new LinkedHashMap<>();
                             java.nio.file.Path fn = f.getFileName();
                             if (fn == null) return;
                             String nid = fn.toString().replace(".json", "");
                             info.put("nodeId", nid);
-                            info.put("turn", node.has("turn") ? node.get("turn").asInt() : -1);
-                            info.put(
-                                    "worldTime",
-                                    node.has("worldTime")
-                                            ? node.get("worldTime").asText()
-                                            : "");
+                            info.put("turn", node.turn());
+                            info.put("worldTime", node.worldTime());
                             info.put(
                                     "hasMap",
-                                    Files.exists(worldsDir
-                                            .resolve(worldId)
-                                            .resolve("nodes")
-                                            .resolve(nid + "_map.json")));
+                                    Files.exists(com.gsim.worldinfo.loader.NodeLoader
+                                            .attachmentFilePath(worldsDir, worldId, nid, "map")));
                             result.add(info);
-                        } catch (IOException ignored) {
+                        } catch (IllegalArgumentException ignored) {
                         }
                     });
         } catch (IOException ignored) {
@@ -605,51 +602,13 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
-        saveFull(worldId, nodeId, newMap);
+        saveMap(worldId, nodeId, newMap);
 
         // 2. Re-sync map (checkpoint references managed by GSim Core, not gsimap)
         evict(worldId, nodeId); // ensure HTTP cache sees MCP writes
-        syncToGSimNode(worldId, nodeId);
 
         log.info("Renamed region '{}' -> '{}' in world={} node={}", oldName, newName, worldId, nodeId);
         return Map.of("ok", true, "oldName", oldName, "newName", newName);
-    }
-
-    // ── GSim Node Sync ────────────────────────────────────
-
-    /**
-     * Sync map data into the GSim node's "map" checkpoint, then invalidate GSim API cache.
-     *
-     * <p>The cache invalidation step is a no-op when {@code gsimap.noGsim} is set.
-     * Otherwise it sends a lightweight GET to the GSim HTTP API to trigger a read-through
-     * refresh of the node data that was just written to disk.
-     *
-     * @param worldId the world identifier
-     * @param nodeId the node identifier
-     */
-    public void syncToGSimNode(String worldId, String nodeId) {
-        MapData map = resolve(worldId, nodeId);
-        if (map == null || map.hexes().isEmpty()) return;
-        // Map data is persisted via NodeLoader attachment — no separate sync needed.
-        // GSim Core manages its own WorldInfo checkpoints independently.
-
-        // Cache invalidation: only attempt if GSim API is expected to be running.
-        if (Boolean.parseBoolean(System.getProperty("gsimap.noGsim", "false"))) return;
-
-        String baseUrl =
-                System.getProperty("gsim.api.url", "http://127.0.0.1:" + System.getProperty("api.port", "8710"));
-        try {
-            java.net.http.HttpClient.newHttpClient()
-                    .send(
-                            java.net.http.HttpRequest.newBuilder()
-                                    .uri(java.net.URI.create(
-                                            baseUrl + "/api/world-manager/" + worldId + "/nodes/" + nodeId))
-                                    .GET()
-                                    .build(),
-                            java.net.http.HttpResponse.BodyHandlers.discarding());
-        } catch (IOException | InterruptedException e) {
-            log.debug("GSim API cache refresh failed (expected if not running): {}", e.getMessage());
-        }
     }
 
     // ── Map Expansion ──────────────────────────────────────
@@ -821,7 +780,7 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
-        saveFull(worldId, nodeId, expanded);
+        saveMap(worldId, nodeId, expanded);
 
         log.info(
                 "Expanded {} → {} ({} new hexes: {} land + {} water), new center=({},{}), radius={}",
@@ -879,14 +838,7 @@ public class MapService {
                 regions,
                 map.pathwayGroups());
 
-        if (isRootNode(worldId, nodeId)) {
-            saveFull(worldId, nodeId, updated);
-        } else {
-            // For child nodes: save compressed regions as a diff that also carries CRs
-            MapData parent = resolve(worldId, readParentId(worldId, nodeId));
-            MapDiff diff = MapDiff.compute(readParentId(worldId, nodeId), parent, updated);
-            saveDiff(worldId, nodeId, diff);
-        }
+        saveMap(worldId, nodeId, updated);
 
         log.info(
                 "Compressed {}/{}: {} hexes, {} regions",
@@ -939,7 +891,7 @@ public class MapService {
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups());
-        saveFull(worldId, nodeId, updated);
+        saveMap(worldId, nodeId, updated);
         return Map.of("ok", true, "restored", restored, "regionsRemaining", regions.size());
     }
 
@@ -973,7 +925,7 @@ public class MapService {
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups());
-        saveFull(worldId, nodeId, updated);
+        saveMap(worldId, nodeId, updated);
         return Map.of("ok", true, "restored", restored, "regionsRemaining", regions.size(), "q", q, "r", r);
     }
 
@@ -1011,8 +963,7 @@ public class MapService {
             double landRatio,
             double coastRoughness) {
         MapData map = MapGenerator.generate(worldId, seed, radius, ridges, fragments, landRatio, coastRoughness);
-        saveFull(worldId, nodeId, map);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, map);
         long landHexes = map.hexes().values().stream()
                 .filter(h -> !"water".equals(h.terrain()))
                 .count();
@@ -1093,8 +1044,7 @@ public class MapService {
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.put(name, new MapData.Province(newHexes, newColor, newTag, newDesc));
         MapData result = withProvinces(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "tag", newTag, "description", newDesc);
     }
 
@@ -1120,8 +1070,7 @@ public class MapService {
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
         MapData result = withProvinces(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "added", hexKey);
     }
 
@@ -1144,8 +1093,7 @@ public class MapService {
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
         MapData result = withProvinces(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "removed", hexKey);
     }
 
@@ -1174,8 +1122,7 @@ public class MapService {
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.put(name, new MapData.Province(h, c, t, d));
         MapData result = withProvinces(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", h.size(), "tag", t, "color", c);
     }
 
@@ -1192,8 +1139,7 @@ public class MapService {
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.remove(name);
         MapData result = withProvinces(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "action", "deleted");
     }
 
@@ -1229,8 +1175,7 @@ public class MapService {
         Map<String, MapData.TerrainType> updated = new LinkedHashMap<>(map.terrainTypes());
         updated.put(key, new MapData.TerrainType(newName, newColor, newFood, newGold, newStone, newMoveCost, newDesc));
         MapData result = withTerrainTypes(map, updated);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
         return Map.of(
                 "ok",
                 true,
@@ -1343,8 +1288,7 @@ public class MapService {
         Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
         updatedProvinces.put(name, new MapData.Province(hexList, c, t, ""));
         MapData result = withProvinces(map, updatedProvinces);
-        saveFull(worldId, nodeId, result);
-        syncToGSimNode(worldId, nodeId);
+        saveMap(worldId, nodeId, result);
 
         // 3. Build tags (for output only — checkpoint writes handled by GSim Core via write_element)
         List<String> tags = new ArrayList<>(List.of("Nation", name));

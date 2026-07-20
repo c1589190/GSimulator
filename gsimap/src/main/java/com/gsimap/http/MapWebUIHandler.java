@@ -3,6 +3,7 @@ package com.gsimap.http;
 import com.gsim.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
+import com.gsimap.map.MapStore;
 import com.gsimap.map.MapResolver;
 import com.gsimap.service.ContinentContour;
 import com.gsimap.service.ContourLayer;
@@ -159,7 +160,7 @@ public class MapWebUIHandler implements HttpHandler {
             ContourQueryEngine engine = new ContourQueryEngine(contour);
             MapData map = engine.materialize(
                     -contour.getRadius(), contour.getRadius(), -contour.getRadius(), contour.getRadius());
-            mapService.saveFull(worldId, "n0000", map);
+            mapService.saveMap(worldId, "n0000", map);
             sendJson(exchange, 200, Map.of("ok", true, "hexCount", map.hexes().size()));
             return;
         }
@@ -409,17 +410,12 @@ public class MapWebUIHandler implements HttpHandler {
 
         // Also materialize full map for editor rendering
         MapData map = MapGenerator.generate(worldId, seed, radius, mainCount, fragmentCount, landRatio, coastRoughness);
-        mapService.saveFull(worldId, "n0000", map);
+        mapService.saveMap(worldId, "n0000", map);
 
         // Populate terrain blocks from contour: create blocks for land areas
         populateTerrainBlocks(worldId, contour, radius);
-        mapService.evictCanvas(worldId);
+        mapService.evictCanvas(worldId, "n0000");
 
-        try {
-            mapService.syncToGSimNode(worldId, "n0000");
-        } catch (RuntimeException ex) {
-            log.warn("GSim node sync failed", ex);
-        }
         sendJson(
                 exchange,
                 200,
@@ -487,7 +483,8 @@ public class MapWebUIHandler implements HttpHandler {
         switch (method) {
             case "GET" -> {
                 // List blocks
-                TerrainCanvas canvas = mapService.getCanvas(worldId);
+                String activeNodeId = mapService.readActiveNodeId(worldId);
+                TerrainCanvas canvas = mapService.getCanvas(worldId, activeNodeId);
                 List<MapData.TerrainBlock> blocks = canvas.getBlocks();
                 sendJson(exchange, 200, Map.of("worldId", worldId, "blocks", blocks, "count", blocks.size()));
             }
@@ -619,11 +616,10 @@ public class MapWebUIHandler implements HttpHandler {
         }
         try {
             MapData data = MAPPER.readValue(raw, MapData.class);
-            mapService.saveFull(worldId, nodeId, data);
+            mapService.saveMap(worldId, nodeId, data);
             log.info("Created map for world={} node={}", worldId, nodeId);
             try {
-                mapService.syncToGSimNode(worldId, nodeId);
-            } catch (RuntimeException ex) {
+                    } catch (RuntimeException ex) {
                 log.warn("GSim node sync failed", ex);
             }
             sendJson(exchange, 200, Map.of("ok", true, "worldId", worldId, "nodeId", nodeId));
@@ -647,7 +643,7 @@ public class MapWebUIHandler implements HttpHandler {
             if (root.has("parentNodeId")) {
                 // Explicit diff from client
                 MapDiff diff = MAPPER.readValue(body, MapDiff.class);
-                mapService.saveDiff(worldId, nodeId, diff);
+                MapStore.saveDiff(mapService.getWorldsDir(), worldId, nodeId, diff);
                 log.info(
                         "Saved diff for world={} node={} ({} hex changes)",
                         worldId,
@@ -655,31 +651,12 @@ public class MapWebUIHandler implements HttpHandler {
                         diff.changed().size());
             } else {
                 MapData data = MAPPER.readValue(body, MapData.class);
-                if (mapService.isRootNode(worldId, nodeId)) {
-                    mapService.saveFull(worldId, nodeId, data);
-                    log.info(
-                            "Saved full map for root node world={} node={} ({} CRs)",
-                            worldId,
-                            nodeId,
-                            data.compressedRegions().size());
-                } else {
-                    // Child node: auto-compute diff vs parent's resolved map
-                    String parentId = mapService.readParentId(worldId, nodeId);
-                    MapData parentMap = parentId != null ? mapService.resolve(worldId, parentId) : MapData.empty();
-                    MapDiff diff = MapDiff.compute(parentId, parentMap, data);
-                    mapService.saveDiff(worldId, nodeId, diff);
-                    log.info(
-                            "Auto-computed diff for world={} node={} ({} changed, {} removed)",
-                            worldId,
-                            nodeId,
-                            diff.changed().size(),
-                            diff.removed().size());
-                }
-            }
-            try {
-                mapService.syncToGSimNode(worldId, nodeId);
-            } catch (RuntimeException ex) {
-                log.warn("GSim node sync failed", ex);
+                mapService.saveMap(worldId, nodeId, data);
+                log.info(
+                        "Saved map for world={} node={} ({} CRs)",
+                        worldId,
+                        nodeId,
+                        data.compressedRegions().size());
             }
             sendJson(exchange, 200, Map.of("ok", true, "worldId", worldId, "nodeId", nodeId));
         } catch (IOException | RuntimeException e) {
@@ -689,7 +666,7 @@ public class MapWebUIHandler implements HttpHandler {
 
     /** Create terrain blocks from contour ridge lines */
     private void populateTerrainBlocks(String worldId, ContinentContour contour, int radius) {
-        TerrainCanvas canvas = mapService.getCanvas(worldId);
+        TerrainCanvas canvas = mapService.getCanvas(worldId, "n0000");
 
         for (ContinentContour.Ridge ridge : contour.getRidges()) {
             if (ridge.getPoints().size() < 2) continue;
