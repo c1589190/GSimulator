@@ -41,10 +41,7 @@ public class ConfigLoader {
         boolean doctor = false;
         boolean noWizard = false;
         boolean help = false;
-        boolean http = false;
-        boolean cli = false;
-        boolean webui = false;
-        boolean monitor = false;
+        boolean noCli = false;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -63,38 +60,18 @@ public class ConfigLoader {
                 case "--help":
                     help = true;
                     break;
-                case "--http":
-                    http = true;
-                    break;
-                case "--cli":
-                    cli = true;
-                    break;
-                case "--webui":
-                    webui = true;
-                    break;
-                case "--monitor":
-                    monitor = true;
+                case "--no-cli":
+                    noCli = true;
                     break;
                     // ignore unknown args
             }
         }
 
-        // --monitor implies --http
-        if (monitor) http = true;
-
-        return new CliArgs(configPath, initConfig, doctor, noWizard, help, http, cli, webui, monitor);
+        return new CliArgs(configPath, initConfig, doctor, noWizard, help, noCli);
     }
 
     public record CliArgs(
-            String configPath,
-            boolean initConfig,
-            boolean doctor,
-            boolean noWizard,
-            boolean help,
-            boolean http,
-            boolean cli,
-            boolean webui,
-            boolean monitor) {}
+            String configPath, boolean initConfig, boolean doctor, boolean noWizard, boolean help, boolean noCli) {}
 
     public CliArgs getCliArgs() {
         return cliArgs;

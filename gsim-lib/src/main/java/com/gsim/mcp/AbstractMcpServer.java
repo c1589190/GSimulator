@@ -57,6 +57,26 @@ public abstract class AbstractMcpServer implements Runnable {
     /** 服务器运行标志，设为 false 可停止主循环。 */
     protected volatile boolean running = true;
 
+    // ── JSON-RPC 2.0 标准错误码 ──────────────────────────────
+
+    /** Invalid JSON was received by the server. */
+    protected static final int ERR_PARSE_ERROR = -32700;
+    /** The JSON sent is not a valid Request object. */
+    protected static final int ERR_INVALID_REQUEST = -32600;
+    /** The method does not exist / is not available. */
+    protected static final int ERR_METHOD_NOT_FOUND = -32601;
+    /** Invalid method parameter(s). */
+    protected static final int ERR_INVALID_PARAMS = -32602;
+    /** Internal JSON-RPC error. */
+    protected static final int ERR_INTERNAL = -32603;
+
+    // ── MCP 自定义错误码 ──────────────────────────────────────
+
+    /** Tool execution threw an unhandled exception. */
+    protected static final int ERR_TOOL_EXECUTION = -32000;
+    /** Tool was found but its dependencies are not initialized. */
+    protected static final int ERR_TOOL_NOT_READY = -32001;
+
     private final List<McpToolRegistry> registries;
     private final McpTransport transport;
 
@@ -286,25 +306,32 @@ public abstract class AbstractMcpServer implements Runnable {
                                         "[MCP-TOOL-RESULT] name={}, status=fail, error=unknown_tool, message={}",
                                         toolName,
                                         e.getMessage());
-                                response = jsonRpcError(id, -32602, "Unknown tool: " + toolName);
+                                response = jsonRpcError(id, ERR_INVALID_PARAMS, "Unknown tool: " + toolName);
                             } catch (IllegalArgumentException e) {
                                 log.warn(
                                         "[MCP-TOOL-RESULT] name={}, status=fail, error=invalid_args, message={}",
                                         toolName,
                                         e.getMessage());
-                                response = jsonRpcError(id, -32602, "Invalid arguments: " + e.getMessage());
+                                response = jsonRpcError(id, ERR_INVALID_PARAMS, "Invalid arguments: " + e.getMessage());
                             } catch (Exception e) {
+                                String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                                Throwable cause = e.getCause();
+                                String causeInfo = cause != null
+                                        ? " (caused by: " + cause.getClass().getSimpleName() + ": " + cause.getMessage() + ")"
+                                        : "";
                                 log.error(
-                                        "[MCP-TOOL-RESULT] name={}, status=fail, error=execution_error, message={}",
+                                        "[MCP-TOOL-RESULT] name={}, status=fail, error=execution_error, detail={}, exception={}",
                                         toolName,
-                                        e.getMessage(),
+                                        detail + causeInfo,
+                                        e.getClass().getSimpleName(),
                                         e);
-                                response = jsonRpcError(id, -32000, "Tool error: " + e.getMessage());
+                                response = jsonRpcError(id, ERR_TOOL_EXECUTION,
+                                        "Tool '" + toolName + "' failed: " + detail + causeInfo);
                             }
                         }
                         default -> {
                             log.warn("[MCP-REQ] unknown method '{}', id={}", method, id);
-                            response = jsonRpcError(id, -32601, "Method not found: " + method);
+                            response = jsonRpcError(id, ERR_METHOD_NOT_FOUND, "Method not found: " + method);
                         }
                     }
 
@@ -314,7 +341,7 @@ public abstract class AbstractMcpServer implements Runnable {
                 } catch (IOException e) {
                     log.error("[MCP-ERR] parse_error, id={}, message={}", id, e.getMessage(), e);
                     try {
-                        transport.writeLine(jsonRpcError(id, -32700, "Parse error: " + e.getMessage()));
+                        transport.writeLine(jsonRpcError(id, ERR_PARSE_ERROR, "Parse error: " + e.getMessage()));
                     } catch (IOException writeErr) {
                         log.error("[MCP-ERR] Failed to write error response", writeErr);
                     }
@@ -458,7 +485,7 @@ public abstract class AbstractMcpServer implements Runnable {
             return MAPPER.writeValueAsString(response);
         } catch (Exception e) {
             log.error("[MCP-ERR] Failed to serialize JSON-RPC success response", e);
-            return jsonRpcError(null, -32603, "Internal error");
+            return jsonRpcError(null, ERR_INTERNAL, "Internal error");
         }
     }
 

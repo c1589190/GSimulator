@@ -29,11 +29,25 @@ public class GsimMcpServer extends AbstractMcpServer {
 
     /**
      * Creates an MCP server backed by the given ToolRegistry.
+     * Uses default {@link StdioMcpTransport} (captures System.out at call time).
      *
      * @param toolRegistry the tool registry (must not be null)
      */
     public GsimMcpServer(ToolRegistry toolRegistry) {
         super(toolRegistry);
+        this.toolRegistry = toolRegistry;
+    }
+
+    /**
+     * Creates an MCP server with explicit transport.
+     * Use this when System.out has been redirected and you need to pass the
+     * original stdout for clean JSON-RPC output.
+     *
+     * @param toolRegistry the tool registry (must not be null)
+     * @param transport    the transport layer (must not be null)
+     */
+    public GsimMcpServer(ToolRegistry toolRegistry, McpTransport transport) {
+        super(toolRegistry, transport);
         this.toolRegistry = toolRegistry;
     }
 
@@ -65,19 +79,15 @@ public class GsimMcpServer extends AbstractMcpServer {
         return toolRegistry;
     }
 
-    // ── Standalone entry point ───────────────────────────────
+    // ── Standalone entry point (deprecated) ───────────────────
 
     /**
-     * Standalone entry point for launching the MCP server from the command line.
-     *
-     * <p>Usage: {@code java com.gsim.mcp.GsimMcpServer <worldsDir> [importDir]}
-     *
-     * <p>Also starts the Gsimap HTTP map server on port 8711 if gsimap is on classpath,
-     * so MCP and Map WebUI are always launched together.
-     *
-     * @param args command-line arguments
+     * @deprecated Use {@code com.gsim.Main --no-cli} instead.
+     *             This standalone entry point will be removed in a future version.
      */
+    @Deprecated
     public static void main(String[] args) {
+        System.err.println("[MCP] WARNING: GsimMcpServer.main() is deprecated. Use 'java -jar GSimulator.jar --no-cli' instead.");
         if (args.length < 1) {
             System.err.println("Usage: gsim-mcp <worldsDir> [importDir]");
             System.exit(1);
@@ -85,13 +95,7 @@ public class GsimMcpServer extends AbstractMcpServer {
         Path worldsDir = Path.of(args[0]);
         Path importDir = args.length >= 2 ? Path.of(args[1]) : null;
 
-        // Build a minimal ToolRegistry with world/doc tools for standalone use
         ToolRegistry toolRegistry = com.gsim.mcp.McpStandaloneToolRegistry.create(worldsDir, importDir);
-
-        // Try to load map tools via reflection (gsimap may not be on classpath)
-        tryRegisterMapTools(toolRegistry, worldsDir);
-
-        // Start Gsimap HTTP map server alongside MCP (both or neither)
         startMapHttpServer(worldsDir, importDir);
 
         GsimMcpServer server = new GsimMcpServer(toolRegistry);
@@ -99,9 +103,9 @@ public class GsimMcpServer extends AbstractMcpServer {
     }
 
     /**
-     * Starts the Gsimap HTTP map server in a background thread (port 8711).
-     * Uses reflection so gsim-lib does not have a compile-time dependency on gsimap.
+     * @deprecated Map HTTP server is now started by Main.java directly.
      */
+    @Deprecated
     private static void startMapHttpServer(Path worldsDir, Path importDir) {
         try {
             Class<?> mapServiceClass = Class.forName("com.gsimap.service.MapService");
@@ -128,9 +132,9 @@ public class GsimMcpServer extends AbstractMcpServer {
     }
 
     /**
-     * Attempts to register GSimap map tools via reflection.
-     * Silently skips if gsimap is not on the classpath.
+     * @deprecated Map tools are now registered by Main.java directly via GsimapToolRegistrar.
      */
+    @Deprecated
     private static void tryRegisterMapTools(ToolRegistry registry, Path worldsDir) {
         try {
             Class<?> mapServiceClass = Class.forName("com.gsimap.service.MapService");

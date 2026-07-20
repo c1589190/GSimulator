@@ -1,39 +1,38 @@
 package com.gsim.doc.tool;
 
+import com.gsim.doc.DocStore;
+import com.gsim.doc.Document;
 import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 /**
- * gsim_delete_doc -- Delete an import document by docId.
+ * gsim_doc_delete -- Delete a document by docId from the unified DocStore.
  *
- * <p>Directly removes the file from the import documents directory.
- * The docId can be a relative path or just a filename; if not found
- * directly, a walk search is performed as a fallback.
+ * <p>Docs are identified by their docId (e.g. "test_doc_character").
+ * The tool looks up the document in DocStore and removes it, including
+ * the on-disk file and the in-memory cache entry.
  */
 public final class DocDeleteTool implements AgentTool {
 
-    private final Path importDir;
+    private final DocStore store;
 
-    public DocDeleteTool(Path importDir) {
-        this.importDir = importDir;
+    public DocDeleteTool(DocStore store) {
+        this.store = store;
     }
 
     @Override
     public String name() {
-        return "gsim_delete_doc";
+        return "doc_delete";
     }
 
     @Override
     public String description() {
         return """
-            Delete an import document by docId.
+            Delete a document by docId.
             Parameters: docId (required) -- document ID to delete.
             """;
     }
@@ -53,28 +52,15 @@ public final class DocDeleteTool implements AgentTool {
             return ToolResult.fail(name(), "docId is required");
         }
 
-        // Resolve document path
-        Path docPath = importDir.resolve(docId);
-        if (!Files.exists(docPath)) {
-            // Fallback: walk the import dir looking for a matching filename
-            try (var files = Files.walk(importDir)) {
-                var found = files.filter(Files::isRegularFile)
-                        .filter(f -> f.getFileName().toString().equals(docId))
-                        .findFirst();
-                if (found.isPresent()) {
-                    docPath = found.get();
-                }
-            } catch (IOException ignored) {
-            }
-        }
-
-        if (!Files.exists(docPath)) {
+        Document doc = store.get(docId);
+        if (doc == null) {
             return ToolResult.fail(name(), "Document not found: " + docId);
         }
 
         try {
-            Files.delete(docPath);
-            return ToolResult.ok(name(), List.of(new ToolResult.Item(docId, docId, "Document deleted: " + docId, 1.0)));
+            store.delete(docId);
+            return ToolResult.ok(name(), List.of(new ToolResult.Item(docId, docId,
+                    "Document deleted: " + docId + " (type=" + doc.type().key() + ")", 1.0)));
         } catch (IOException e) {
             return ToolResult.fail(name(), "Failed to delete document: " + e.getMessage());
         }

@@ -55,8 +55,6 @@ com.gsim
 ├── resource/          — 资源文件管理（ResourceManager）
 ├── root/              — Root Workspace 管理（根节点初始化、bootstrap）
 ├── session/           — Session 管理（SessionPool、SessionNode、SessionPoolBridge）
-├── skill/             — Skill 系统（文件化技能管理）
-│   └── tool/          — Skill 工具（skill_list/read/create/write/search/index，6 个工具）
 ├── tool/              — 工具系统基础（AgentTool 接口、ToolRegistry、ToolCall、ToolResult）
 ├── util/              — 工具类（ID 生成、JSON、日志脱敏）
 ├── webimport/         — 网页抓取管道（URL → HTML → txt → import）
@@ -77,7 +75,7 @@ com.gsim
 - `task/` → 任务管理分散在 `api/handlers/TasksApiHandler` 和 `session/` 中
 - `timeline/` → 未实现
 - `world/` → 被 `worldinfo/` 替代
-- `storage/` → 持久化由各模块自行管理（WorldInfo JSON 文件、Cache 文件、Skill 文件）
+- `storage/` → 持久化由各模块自行管理（WorldInfo JSON 文件、Cache 文件、Doc 文件）
 - `chroma/` → ChromaDB 集成未实现（当前使用本地文件搜索 + MediaWiki API）
 
 ## 运行命令
@@ -248,9 +246,7 @@ public interface AgentTool {
 | `node_mgmt` | 节点管理 | node_list, node_status, node_create, node_switch, node_goto_parent |
 | `import_doc` | 导入文档浏览 | import_document_list, import_document_read, import_document_search |
 | `search` | 多源搜索 | wiki_search, mediawiki_search |
-| `skill_mgmt` | Skill 管理 | skill_list, skill_read, skill_create, skill_write, skill_search, skill_index |
-
-默认工具（无需激活）：finish_action, activate_tool_groups, dispatch_sub_agent, collect_sub_agent_results, 以及 SubAgent 缓存管理和 World/Skill 基础工具。
+默认工具（无需激活）：finish_action, activate_tool_groups, dispatch_sub_agent, collect_sub_agent_results, 以及 SubAgent 缓存管理和 World/Doc 基础工具。
 
 ### 工具调用提取
 
@@ -299,25 +295,6 @@ public interface AgentTool {
 | `world_create` | MUTATING | 创建新 World |
 | `world_switch` | MUTATING | 切换活跃 World |
 
-## Skill 系统
-
-Skill 是文件化的技能/知识模块，存储在 `data/skills/` 下。每个 Skill 是一个文件夹，包含 `SKILL.md` 文件。
-
-### Skill 工具（6 个）
-
-| 工具 | 用途 |
-|------|------|
-| `skill_list` | 列出所有已安装的 Skill |
-| `skill_read` | 分段读取 Skill 内容（支持 offset/limit） |
-| `skill_create` | 创建新 Skill（文件夹 + SKILL.md） |
-| `skill_write` | 修改 Skill 内容（替换/追加/覆盖） |
-| `skill_search` | 语义搜索 Skill（基于 embedding 向量） |
-| `skill_index` | 为 Skill 建立/更新语义索引 |
-
-### 模板系统
-
-`resources/gsim/templates/` 下包含多个引导模板：`world-template.md`、`input-template.md`、`simulation-method.md`、`skill-system-template.md` 等，用于初始化新 World 和 Skill。
-
 ## 缓存系统（Cache）
 
 SubAgent 对话缓存存储在 `data/worlds/{worldId}/caches/` 下，每个缓存文件为 JSON 格式：
@@ -359,7 +336,7 @@ java -jar target/GSimulator.jar --cli --http    # CLI + HTTP API
 | `PlayersApiHandler` | GET/POST /api/players — 玩家管理 |
 | `RootsApiHandler` | GET/POST /api/roots — Root 管理 |
 | `SaveApiHandler` | POST /api/save — 保存 |
-| `SkillsApiHandler` | GET/POST /api/skills — Skill 管理 |
+| `SkillsApiHandler` | GET/POST /api/skills — Skill 管理（兼容保留，实际委托 DocStore） |
 | `ToolsApiHandler` | GET /api/tools — 工具列表 |
 | `WhereApiHandler` | GET /api/where — 当前位置/上下文 |
 
@@ -402,7 +379,7 @@ Web UI 通过 Javalin 内嵌静态服务提供：
 ### 实际存储位置
 
 - `resources/gsim/prompts/` — Markdown 格式的 prompt 文件：
-  - `orchestrator-system.md` — Orchestrator 系统提示词（~300 行，含工具调用规则、WorldInfo/Node/Skill/Import 使用说明）
+  - `orchestrator-system.md` — Orchestrator 系统提示词（~300 行，含工具调用规则、WorldInfo/Node/Doc/Import 使用说明）
   - `orchestrator-world-state.md` — 世界状态注入模板
   - `sim/system.md` + `sim/user.md` — SimAgent prompt
   - `search/system.md` + `search/user.md` — SearchAgent prompt

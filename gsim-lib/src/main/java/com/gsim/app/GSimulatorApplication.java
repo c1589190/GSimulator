@@ -35,10 +35,7 @@ public class GSimulatorApplication {
     private final ApplicationContext ctx;
     private final ConsoleInteractionAdapter adapter;
     private final AppConfig config;
-    private final boolean cliMode;
-    private final boolean httpMode;
-    private final boolean webuiMode;
-    private final boolean monitorMode;
+    private final boolean interactive;
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
     private com.gsim.agent.CompositeAgentProgressSink compositeSink;
@@ -60,39 +57,21 @@ public class GSimulatorApplication {
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
             new java.util.concurrent.atomic.AtomicReference<>("default");
 
+    /** Backward-compat for tests. */
     public GSimulatorApplication(AppConfig config) {
-        this(config, true, false, false, false, null);
+        this(config, null, true);
     }
 
-    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode) {
-        this(config, cliMode, httpMode, false, false, null);
-    }
-
-    public GSimulatorApplication(AppConfig config, boolean cliMode, boolean httpMode, boolean webuiMode) {
-        this(config, cliMode, httpMode, webuiMode, false, null);
-    }
-
-    public GSimulatorApplication(
-            AppConfig config,
-            boolean cliMode,
-            boolean httpMode,
-            boolean webuiMode,
-            Bootstrap.BootstrapResult bootResult) {
-        this(config, cliMode, httpMode, webuiMode, false, bootResult);
-    }
-
-    public GSimulatorApplication(
-            AppConfig config,
-            boolean cliMode,
-            boolean httpMode,
-            boolean webuiMode,
-            boolean monitorMode,
-            Bootstrap.BootstrapResult bootResult) {
+    /**
+     * Creates the application assembly.
+     *
+     * @param config      application configuration
+     * @param bootResult  bootstrap result (world info, active cache); may be null for tests
+     * @param interactive true for CLI mode (permission gate asks user), false for MCP/headless
+     */
+    public GSimulatorApplication(AppConfig config, Bootstrap.BootstrapResult bootResult, boolean interactive) {
         this.config = config;
-        this.cliMode = cliMode;
-        this.httpMode = httpMode;
-        this.webuiMode = webuiMode;
-        this.monitorMode = monitorMode;
+        this.interactive = interactive;
         this.ctx = new ApplicationContext(config);
         this.worldsDir = config.worldsDir();
 
@@ -224,7 +203,7 @@ public class GSimulatorApplication {
                 toolRegistry,
                 config.getLlmModel(),
                 compositeSink,
-                (httpMode || webuiMode)
+                !interactive
                         ? new com.gsim.agent.AutoApprovePermissionGate()
                         : new com.gsim.agent.CliToolPermissionGate(),
                 toolGroupManager);
@@ -302,6 +281,8 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));
         toolRegistry.register(new com.gsim.agent.tool.CreateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
         toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
+        toolRegistry.register(new com.gsim.agent.tool.ListAgentConfigTool(agentConfigStore));
+        toolRegistry.register(new com.gsim.agent.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
 
         // ── 统一文档管理工具（docs 工具组）──
         var docStore = ctx.getDocStore(docsDir);
@@ -349,6 +330,7 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.doc.tool.DocIndexTool(docStore, docIndex, embeddingClient));
         toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore, docCacheManager));
         toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.doc.tool.DocDeleteTool(docStore));
 
         // 统一 @ 引用解析
         toolRegistry.register(new com.gsim.ref.ResolveRefTool(
@@ -557,68 +539,50 @@ public class GSimulatorApplication {
     }
 
     /**
-     * 启动应用。
+     * 启动 HTTP 服务（WebUI + WebSocket），始终启动，不阻塞。
      */
-    public void start() throws Exception {
+    public void startHttpServers() throws Exception {
         ctx.initialize();
 
-        if (httpMode) {
-            if (monitorMode) {
-                ctx.getApiManager().setMonitorMode(true);
-            }
-            ctx.getApiManager().forceEnable();
-            ctx.getApiManager().start();
-        }
+        // WebUI server (port 8710) — always on
+        webUiServer.forceEnable();
+        webUiServer.start();
 
-        if (webuiMode) {
-            webUiServer.forceEnable();
-            webUiServer.start();
-            cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
-            cliWsServer.setCommands(worldCommand, nodeCommand, chatCommand);
-            try {
-                cliWsServer.start();
-            } catch (Exception e) {
-                log.warn("CLI WebSocket server failed to start: {}", e.getMessage());
-            }
+        // CLI WebSocket server (port 8712) — always on
+        cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
+        cliWsServer.setCommands(worldCommand, nodeCommand, chatCommand);
+        try {
+            cliWsServer.start();
+        } catch (Exception e) {
+            log.warn("CLI WebSocket server failed to start: {}", e.getMessage());
         }
+    }
 
-        // CLI REPL
-        if (cliMode) {
-            if (!config.isLlmConfigured()) {
-                System.out.println();
-                System.out.println("⚠️  LLM 未配置。以下功能不可用:");
-                System.out.println("   /chat — Agent 对话");
-                System.out.println("   /sim  — 推演结算");
-                System.out.println();
-                System.out.println("编辑 " + config.getLlmsPath() + " 设置 API Key，或设置 LLM_API_KEY 环境变量。");
-                System.out.println(
-                        "当前已从 llms.json 加载 " + ctx.getLlmProviderRegistry().size() + " 个 provider，");
-                System.out.println("但 API Key 无效（401 错误）。");
-                System.out.println();
-            }
-            Thread.startVirtualThread(() -> {
-                try {
-                    adapter.start();
-                } catch (Exception e) {
-                    log.error("CLI REPL crashed: {}", e.getMessage(), e);
-                }
-            });
+    /**
+     * 启动 CLI REPL（阻塞直到用户退出）。
+     * 仅在交互模式下调用。
+     */
+    public void startCliRepl() throws Exception {
+        if (!config.isLlmConfigured()) {
+            System.out.println();
+            System.out.println("⚠️  LLM 未配置。以下功能不可用:");
+            System.out.println("   /chat — Agent 对话");
+            System.out.println("   /sim  — 推演结算");
+            System.out.println();
+            System.out.println("编辑 " + config.getLlmsPath() + " 设置 API Key，或设置 LLM_API_KEY 环境变量。");
+            System.out.println("当前已从 llms.json 加载 " + ctx.getLlmProviderRegistry().size() + " 个 provider，");
+            System.out.println("但 API Key 无效（401 错误）。");
+            System.out.println();
         }
 
         System.out.println();
         System.out.println("✅ GSimulator 已启动");
-        if (cliMode) {
-            System.out.println("   CLI REPL:  当前终端（输入 /help）");
-        }
-        if (httpMode) {
-            System.out.println("   HTTP API:  http://" + config.getApiHost() + ":" + config.getApiPort());
-        }
-        if (webuiMode) {
-            System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
-            System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
-        }
+        System.out.println("   CLI REPL:  当前终端（输入 /help）");
+        System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
+        System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
         System.out.println();
-        Thread.currentThread().join();
+
+        adapter.start();
     }
 
     public void stop() {

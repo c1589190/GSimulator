@@ -4,9 +4,7 @@ import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
 import com.gsim.llm.EmbeddingClient;
 import com.gsim.skill.SkillIndex;
-import com.gsim.skill.SkillIndex.SearchResult;
 import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.io.IOException;
@@ -70,11 +68,38 @@ public final class DocSearchTool implements AgentTool {
         int topK = parseInt(call.param("topK"), 5);
         topK = Math.min(Math.max(topK, 1), 20);
 
-        if (index.count() == 0) {
-            return ToolResult.fail(name(), "暂无已索引的文档。请先用 doc_index 工具为文档建立索引。");
+        // 无索引时降级为关键词搜索
+        if (index == null || index.count() == 0) {
+            var allDocs = store.list(null, null);
+            var matched = new ArrayList<Document>();
+            var lowerQ = query.toLowerCase();
+            for (var doc : allDocs) {
+                if (doc.title().toLowerCase().contains(lowerQ)
+                        || doc.id().toLowerCase().contains(lowerQ)
+                        || (doc.content() != null && doc.content().toLowerCase().contains(lowerQ))) {
+                    matched.add(doc);
+                }
+            }
+            if (matched.isEmpty()) {
+                return ToolResult.ok(name(),
+                        List.of(new ToolResult.Item("无结果", "", "未找到匹配的文档（关键词模式）", 0)));
+            }
+            var items = new ArrayList<ToolResult.Item>();
+            int count = 0;
+            for (var doc : matched) {
+                if (count >= topK) break;
+                String typeStr = doc.type().key();
+                String snippet = doc.content() != null && doc.content().length() > 100
+                        ? doc.content().substring(0, 100) + "..."
+                        : (doc.content() != null ? doc.content() : "");
+                items.add(new ToolResult.Item(doc.title(), doc.id(),
+                        "score=0.5 | type=" + typeStr + " | " + snippet, 0.5));
+                count++;
+            }
+            return ToolResult.ok(name(), items);
         }
 
-        List<SearchResult> results;
+        List<com.gsim.skill.SkillIndex.SearchResult> results;
         if (embeddingClient != null && embeddingClient.isConfigured()) {
             try {
                 float[] queryVec = embeddingClient.embed(query);

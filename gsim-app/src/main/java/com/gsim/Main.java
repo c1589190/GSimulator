@@ -9,48 +9,57 @@ import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigWizard;
+import com.gsim.mcp.GsimMcpServer;
+import com.gsim.mcp.McpTransport;
+import com.gsim.mcp.StdioMcpTransport;
 import com.gsim.tool.ToolRegistry;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.service.MapService;
 import com.gsimap.tool.GsimapToolRegistrar;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
 
 /**
  * GSimulator 主入口类。
- * <p>负责解析命令行参数、加载应用配置、执行首次运行 LLM 配置向导，
- * 选择 Orchestrator 历史缓存或新建会话，以及启动 GSimulator 应用。
  *
- * <p>支持的启动模式：
+ * <p>启动模式：
  * <ul>
- *   <li>CLI 交互模式（默认包含）</li>
- *   <li>HTTP API 模式（端口 8710）</li>
- *   <li>Web GUI 模式（端口 8711）</li>
- *   <li>监控模式（HTTP API + 终端实时显示请求/响应）</li>
+ *   <li><b>默认</b> — CLI REPL + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
+ *   <li><b>--no-cli</b> — MCP stdio + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
  * </ul>
+ *
+ * <p>启动流程（三阶段）：
+ * <ol>
+ *   <li>Phase 1: 配置加载 — CLI 参数 → ConfigLoader → AppConfig → Bootstrap</li>
+ *   <li>Phase 2: 应用组装 — GSimulatorApplication + MapService + HTTP 服务器</li>
+ *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP stdio（阻塞主线程）</li>
+ * </ol>
  */
 public class Main {
 
     /**
      * 程序入口点。
-     * <p>依次执行以下步骤：
-     * <ol>
-     *   <li>解析命令行参数（--help、--doctor、--init-config 等）</li>
-     *   <li>加载应用配置（{@code AppConfig}）</li>
-     *   <li>首次运行 LLM 配置向导（交互终端下）</li>
-     *   <li>创建缓存管理器并执行引导（{@code Bootstrap}）</li>
-     *   <li>交互选择 Orchestrator 历史缓存或新建会话</li>
-     *   <li>确定启动模式（CLI/HTTP/WebUI/监控）并启动应用</li>
-     * </ol>
-     *
-     * @param args 命令行参数
      */
     public static void main(String[] args) {
+        // Save original stdout BEFORE any redirection.
+        // In --no-cli mode, System.out is redirected to stderr for the entire
+        // JVM lifetime. MCP transport uses this saved reference for clean JSON-RPC.
+        final PrintStream originalStdout = System.out;
+
         try {
-            // 0. 解析 CLI 参数
+            // ── Phase 1: 配置加载 ─────────────────────────────
+
             ConfigLoader loader = new ConfigLoader(args);
             ConfigLoader.CliArgs cliArgs = loader.getCliArgs();
+            boolean noCli = cliArgs.noCli();
+
+            // --no-cli: permanently redirect System.out → System.err
+            // Any accidental System.out.println() will not corrupt the MCP protocol.
+            if (noCli) {
+                System.setOut(System.err);
+            }
 
             // --help
             if (cliArgs.help()) {
@@ -58,7 +67,7 @@ public class Main {
                 return;
             }
 
-            // 1. 加载配置
+            // 加载配置
             ConfigLoader.ConfigResult configResult = loader.load();
             AppConfig config = new AppConfig(configResult);
 
@@ -77,74 +86,88 @@ public class Main {
                     System.exit(1);
                 }
                 ConfigWizard.run();
-                // 向导完成后退出（用户可能在向导中选择了离线模式）
                 return;
             }
 
-            // 2. 首次运行向导：未配置 LLM + 交互终端 + 未指定 --no-wizard
+            // 首次运行向导
             if (!config.isLlmConfigured() && ConfigLoader.isInteractiveTerminal() && !cliArgs.noWizard()) {
                 System.out.println();
                 System.out.println("⚠️  未检测到 LLM 配置。");
                 System.out.println();
                 Path wizardPath = ConfigWizard.run();
                 if (wizardPath != null) {
-                    // 重新加载配置
                     configResult = loader.load();
                     config = new AppConfig(configResult);
                 }
             }
 
-            // 3. 创建 CachesManager
+            // Bootstrap
             CachesManager cachesManager = new FileSystemCachesManager(config.worldsDir());
-
-            // Bootstrap: load worlds, build WorldInformation, init cache
             Path worldsDir = config.worldsDir();
             Path promptsDir = config.promptsDir();
             Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir, cachesManager);
 
-            // 4. CLI 缓存选择（交互终端下）
+            // 缓存选择（仅交互终端，--no-cli 下 stdin 用于 MCP 协议）
             String selectedSessionId = null;
             String targetWorldId = null;
-            if (ConfigLoader.isInteractiveTerminal()) {
+            if (!noCli && ConfigLoader.isInteractiveTerminal()) {
                 var selection = selectOrchestratorCache(cachesManager, worldsDir);
                 selectedSessionId = selection.sessionId();
                 targetWorldId = selection.worldId();
             }
 
             Bootstrap.BootstrapResult bootResult = bootstrap.boot(selectedSessionId, targetWorldId);
-            System.out.println("World loaded: " + bootResult.worldId()
-                    + ", active node: " + bootResult.activeNodeId()
-                    + ", chain length: " + bootResult.worldInfo().branchChain().size());
-            if (bootResult.activeCache() != null) {
-                System.out.println("Active cache: " + bootResult.activeCache().sessionId() + " ("
-                        + bootResult.activeCache().messageCount() + " messages)");
+            if (!noCli) {
+                System.out.println("World loaded: " + bootResult.worldId()
+                        + ", active node: " + bootResult.activeNodeId()
+                        + ", chain length: " + bootResult.worldInfo().branchChain().size());
+                if (bootResult.activeCache() != null) {
+                    System.out.println("Active cache: " + bootResult.activeCache().sessionId() + " ("
+                            + bootResult.activeCache().messageCount() + " messages)");
+                }
             }
 
-            // 5. 确定启动模式
-            // 默认启动 CLI + WebUI（无 HTTP API，交互走 MCP）
-            boolean monitorMode = cliArgs.monitor();
-            boolean cliMode = monitorMode ? false : (cliArgs.cli() || (!cliArgs.http() && !cliArgs.webui()));
-            boolean httpMode = monitorMode || cliArgs.http();
-            boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http() && !monitorMode);
+            // ── Phase 2: 应用组装 ─────────────────────────────
 
-            // 6. 创建 MapService 并注册地图工具到 ToolRegistry
+            // 创建应用（interactive = !noCli）
+            GSimulatorApplication app = new GSimulatorApplication(config, bootResult, !noCli);
+
+            // 地图服务 + 工具注册
             MapService mapService = new MapService(config.worldsDir());
-
-            // 7. 启动 GSimulator 应用
-            GSimulatorApplication app =
-                    new GSimulatorApplication(config, cliMode, httpMode, webuiMode, monitorMode, bootResult);
-
-            // 注册 gsimap 地图 AgentTool（在 start 前注册，使 MCP 模式可见）
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
             GsimapToolRegistrar.registerAll(toolRegistry, mapService);
 
-            // 8. 启动 Gsimap 地图 HTTP 服务器（端口 8711）
+            // Map HTTP 服务器 (port 8711) — 始终启动
             int gsimapPort = Integer.parseInt(
                     System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
             GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
             gsimapServer.start();
-            System.out.println("Gsimap map server started on http://127.0.0.1:" + gsimapPort);
-            app.start();
+            System.err.println("[BOOT] Map UI: http://127.0.0.1:" + gsimapPort);
+
+            // WebUI + WebSocket 服务器 — 始终启动
+            app.startHttpServers();
+            System.err.println("[BOOT] Web UI: http://127.0.0.1:" + config.getWebUiPort());
+
+            // ── Phase 3: 传输启动 ─────────────────────────────
+
+            if (noCli) {
+                // MCP mode: use SAVED original stdout for clean JSON-RPC
+                McpTransport transport = new StdioMcpTransport(System.in, originalStdout);
+                GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, transport);
+
+                // Shutdown hook: clean up HTTP servers when MCP loop exits
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    System.err.println("[MCP] Shutting down...");
+                    gsimapServer.stop();
+                    app.stop();
+                }, "mcp-shutdown"));
+
+                System.err.println("[MCP] READY — listening on stdio");
+                mcpServer.start(); // blocks on stdin
+            } else {
+                // CLI mode: start interactive REPL (blocks until exit)
+                app.startCliRepl();
+            }
 
         } catch (Exception e) {
             System.err.println("GSimulator failed to start: " + e.getMessage());
@@ -156,14 +179,11 @@ public class Main {
     /** 缓存选择结果：sessionId + worldId 配对。 */
     private record CacheSelection(String sessionId, String worldId) {}
 
-    /** CLI 交互：选择 Orchestrator 历史缓存或新建。
-     *  列出所有 world 下的缓存（而非仅 "default"），选中后自动使用缓存所属的 world。 */
+    /** CLI 交互：选择 Orchestrator 历史缓存或新建。 */
     private static CacheSelection selectOrchestratorCache(CachesManager cachesManager, Path worldsDir) {
-        // 列出所有 world 的 Orchestrator 缓存
         List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
-        if (caches.isEmpty()) return new CacheSelection(null, null); // 将自动新建（使用默认 world）
+        if (caches.isEmpty()) return new CacheSelection(null, null);
 
-        // 获取可用 world 列表（用于新建会话时选择）
         List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
                 com.gsim.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
 
@@ -189,7 +209,6 @@ public class Main {
             Scanner scanner = new Scanner(System.in);
             String line = scanner.nextLine().trim();
             if ("n".equalsIgnoreCase(line) || "N".equals(line)) {
-                // 新建会话 — 选择 world
                 String selectedWorld = selectWorldForNewSession(scanner, worlds);
                 System.out.println("  创建新会话 (world=" + selectedWorld + ")...");
                 return new CacheSelection(null, selectedWorld);
@@ -238,17 +257,14 @@ public class Main {
         System.out.println();
         System.out.println("用法: java -jar GSimulator.jar [选项]");
         System.out.println();
-        System.out.println("默认启动 CLI + Web GUI(8710) + Map UI(8711)");
+        System.out.println("默认启动 CLI REPL + Web GUI(8710) + Map UI(8711)");
         System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");
+        System.out.println("  --no-cli           无 CLI 模式：MCP stdio + Web GUI(8710) + Map(8711)");
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");
-        System.out.println("  --cli              仅 CLI（兼容旧行为）");
-        System.out.println("  --http             仅 HTTP API（兼容旧行为）");
-        System.out.println("  --webui            仅 Web GUI（兼容旧行为）");
-        System.out.println("  --monitor          监控模式：仅 HTTP API，终端实时显示请求/响应");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
         System.out.println("API 配置环境变量:");

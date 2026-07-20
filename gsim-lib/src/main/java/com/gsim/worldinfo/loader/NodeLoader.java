@@ -160,7 +160,26 @@ public final class NodeLoader {
 
         NodeSnapshot node = load(nodeFile);
         Object raw = node.attachments().get(key);
-        if (raw == null) return null;
+
+        // Backward compat: check for external file by naming convention
+        // even when no attachment reference exists in the node JSON.
+        // Also falls back from "map_diff" → "map" key for legacy data
+        // where diffs were stored as nXXXX_map.json alongside full maps.
+        if (raw == null) {
+            Path legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, key);
+            if (!Files.exists(legacyFile) && "map_diff".equals(key)) {
+                legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, "map");
+            }
+            if (Files.exists(legacyFile)) {
+                try {
+                    String json = Files.readString(legacyFile);
+                    return JsonUtils.fromJson(json, type);
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to load legacy attachment file: " + legacyFile, e);
+                }
+            }
+            return null;
+        }
 
         // Check if it's an external file reference
         if (raw instanceof Map<?, ?> ref && "external".equals(ref.get("_type"))) {

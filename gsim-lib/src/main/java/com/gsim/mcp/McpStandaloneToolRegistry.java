@@ -16,7 +16,6 @@ import com.gsim.importing.ImportDocumentService;
 import com.gsim.importing.tool.ImportDocumentListTool;
 import com.gsim.importing.tool.ImportDocumentReadTool;
 import com.gsim.importing.tool.ImportDocumentSearchTool;
-import com.gsim.llm.LlmConfigManager;
 import com.gsim.tool.MediaWikiSearchTool;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.worldinfo.tool.WorldCreateTool;
@@ -30,11 +29,11 @@ import org.slf4j.LoggerFactory;
  * Creates a minimal {@link ToolRegistry} populated with standalone-compatible
  * core tools for MCP use without requiring a full {@code GSimulatorApplication}.
  *
- * <p>This is used by {@link GsimMcpServer#main(String[])} for standalone
- * command-line launch and by {@link com.gsimap.GsimapApp} for its embedded
- * MCP server. Tools that require in-memory state (e.g. Agent lifecycle,
- * WorldInformation, DocStore) are excluded — only file-backed tools are included.
+ * @deprecated Use {@code com.gsim.Main --no-cli} which creates the full
+ *             {@code GSimulatorApplication} and registers all tools via
+ *             {@code ToolRegistry}. This minimal registry will be removed.
  */
+@Deprecated
 public final class McpStandaloneToolRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(McpStandaloneToolRegistry.class);
@@ -84,7 +83,7 @@ public final class McpStandaloneToolRegistry {
         registry.register(new DocCreateTool(docStore, docCacheManager, null));
         registry.register(new DocWriteTool(docStore, docCacheManager, null));
         registry.register(new DocSearchTool(docStore, null, null));
-        registry.register(new DocDeleteTool(importDir));
+        registry.register(new DocDeleteTool(docStore));
 
         // ── Cache tools (file-backed) ──
         registry.register(new CacheListTool(docsDir));
@@ -93,7 +92,6 @@ public final class McpStandaloneToolRegistry {
 
         // ── LLM tools ──
         Path llmsPath = worldsDir.resolveSibling("llms.json");
-        var llmConfigManager = new LlmConfigManager(llmsPath);
         registry.register(new com.gsim.agent.tool.ListLlmProvidersTool(com.gsim.llm.LlmProviderRegistry.fromConfig(
                 new com.gsim.llm.LlmsConfigLoader(llmsPath).load().file())));
 

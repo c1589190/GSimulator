@@ -51,8 +51,9 @@ public final class GsimapUpdateTerrainTypeTool implements AgentTool {
         Integer moveCost = parseIntParam(call, "moveCost");
         String description = call.param("description");
 
-        Map<String, Object> result = mapService.updateTerrainType(
+        Map<String, Object> partial = mapService.updateTerrainType(
                 worldId, nodeId, key, name, color, food, gold, stone, moveCost, description);
+        Map<String, Object> result = new java.util.LinkedHashMap<>(partial);
         result.put("address", "gsimap:terrain:" + key);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(key, "gsimap_update_terrain_type", JsonUtils.toJson(result), 1.0)));
