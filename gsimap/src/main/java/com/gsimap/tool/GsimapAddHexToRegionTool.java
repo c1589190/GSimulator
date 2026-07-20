@@ -1,0 +1,82 @@
+package com.gsimap.tool;
+
+import com.gsim.tool.AgentTool;
+import com.gsim.tool.ToolCall;
+import com.gsim.tool.ToolResult;
+import com.gsim.util.JsonUtils;
+import com.gsimap.service.MapService;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * gsimap_add_hex_to_region — Add a single hex to a region. Auto-saves after change.
+ */
+public final class GsimapAddHexToRegionTool implements AgentTool {
+
+    private final MapService mapService;
+
+    public GsimapAddHexToRegionTool(MapService mapService) {
+        this.mapService = mapService;
+    }
+
+    @Override
+    public String name() {
+        return "gsimap_add_hex_to_region";
+    }
+
+    @Override
+    public String description() {
+        return "Add a single hex to a region. Auto-saves after change.";
+    }
+
+    @Override
+    public ToolResult execute(ToolCall call) {
+        String worldId = call.param("worldId");
+        if (worldId == null || worldId.isBlank()) {
+            return ToolResult.fail(name(), "worldId is required");
+        }
+        String nodeId = call.param("nodeId", "n0000");
+        String name = call.param("name");
+        if (name == null || name.isBlank()) {
+            return ToolResult.fail(name(), "name is required");
+        }
+        String qStr = call.param("q");
+        if (qStr == null) {
+            return ToolResult.fail(name(), "q (integer) is required");
+        }
+        String rStr = call.param("r");
+        if (rStr == null) {
+            return ToolResult.fail(name(), "r (integer) is required");
+        }
+        int q, r;
+        try {
+            q = Integer.parseInt(qStr);
+            r = Integer.parseInt(rStr);
+        } catch (NumberFormatException e) {
+            return ToolResult.fail(name(), "q and r must be valid integers");
+        }
+
+        Map<String, Object> result = mapService.addHexToRegion(worldId, nodeId, name, q, r);
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(name, "gsimap_add_hex_to_region", JsonUtils.toJson(result), 1.0)));
+    }
+
+    @Override
+    public Map<String, Object> getParameters() {
+        return Map.of(
+                "type", "object",
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to n0000)"),
+                                "name", Map.of("type", "string", "description", "Region name"),
+                                "q", Map.of("type", "integer", "description", "Hex axial q coordinate"),
+                                "r", Map.of("type", "integer", "description", "Hex axial r coordinate")),
+                "required", List.of("worldId", "name", "q", "r"));
+    }
+}

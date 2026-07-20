@@ -796,5 +796,4 @@ public class MapWebUIHandler implements HttpHandler {
         }
         return params;
     }
-
 }

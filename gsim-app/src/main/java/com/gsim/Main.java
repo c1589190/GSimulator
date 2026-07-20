@@ -9,8 +9,10 @@ import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigWizard;
+import com.gsim.tool.ToolRegistry;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.service.MapService;
+import com.gsimap.tool.GsimapToolRegistrar;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
@@ -125,23 +127,23 @@ public class Main {
             boolean httpMode = monitorMode || cliArgs.http();
             boolean webuiMode = cliArgs.webui() || (!cliArgs.cli() && !cliArgs.http() && !monitorMode);
 
-            // 6. 启动 Gsimap 地图 HTTP 服务器（端口 8711）
-            int gsimapPort = Integer.parseInt(System.getProperty(
-                    "gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
+            // 6. 创建 MapService 并注册地图工具到 ToolRegistry
             MapService mapService = new MapService(config.worldsDir());
-            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
-            gsimapServer.start();
-            System.out.println("Gsimap map server started on http://127.0.0.1:" + gsimapPort);
-
-            // Shutdown hook
-            final GsimapHttpServer ms = gsimapServer;
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                ms.stop();
-            }));
 
             // 7. 启动 GSimulator 应用
             GSimulatorApplication app =
                     new GSimulatorApplication(config, cliMode, httpMode, webuiMode, monitorMode, bootResult);
+
+            // 注册 gsimap 地图 AgentTool（在 start 前注册，使 MCP 模式可见）
+            ToolRegistry toolRegistry = app.getContext().getToolRegistry();
+            GsimapToolRegistrar.registerAll(toolRegistry, mapService);
+
+            // 8. 启动 Gsimap 地图 HTTP 服务器（端口 8711）
+            int gsimapPort = Integer.parseInt(
+                    System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
+            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
+            gsimapServer.start();
+            System.out.println("Gsimap map server started on http://127.0.0.1:" + gsimapPort);
             app.start();
 
         } catch (Exception e) {

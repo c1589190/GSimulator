@@ -1,103 +1,52 @@
 package com.gsim.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gsim.app.ApplicationContext;
+import com.gsim.tool.ToolRegistry;
 import java.nio.file.Path;
-import java.util.List;
 
 /**
  * GSimulator MCP (Model Context Protocol) JSON-RPC 2.0 server over stdio.
  *
- * <p>继承 {@link AbstractMcpServer}，复用 JSON-RPC 2.0 协议处理逻辑。
- * 工具注册表为 {@link GsimMcpToolRegistry}（前缀 {@code gsim_} 的工具集）。
+ * <p>Extends {@link AbstractMcpServer} and uses {@link ToolRegistry} as the
+ * single source of truth for all tool definitions. Tools are exposed via the
+ * {@link ToolRegistryMcpAdapter} which maps {@link com.gsim.tool.AgentTool}
+ * instances to MCP {@link ToolDef} entries automatically.
  *
- * <h3>使用方式</h3>
+ * <h3>Usage</h3>
  * <pre>{@code
- *   // 方式 1: 仅 GSim 工具
- *   GsimMcpServer server = new GsimMcpServer(worldsDir);
- *   server.start();  // 阻塞，从 stdin 读取，向 stdout 写入
+ *   // From ToolRegistry directly
+ *   GsimMcpServer server = new GsimMcpServer(toolRegistry);
+ *   server.start();  // blocking, reads from stdin, writes to stdout
  *
- *   // 方式 2: 注册自定义 MCP 工具（与 GSim 工具合并）
- *   var composite = new CompositeMcpToolRegistry(
- *       new MyCustomRegistry(),
- *       new GsimMcpToolRegistry(worldsDir).asMcpRegistry()
- *   );
- *   var server = new AbstractMcpServer(composite) {
- *       {@literal @}Override protected String getServerName() { return "MyApp"; }
- *       {@literal @}Override protected String getServerVersion() { return "1.0"; }
- *   };
- *   server.start();
- *
- *   // 方式 3: ApplicationContext 模式（Agent/LLM 工具直调 Java API）
+ *   // From ApplicationContext
  *   GsimMcpServer server = new GsimMcpServer(applicationContext);
  *   server.start();
- * }</pre>
- *
- * <h3>独立命令行启动</h3>
- * <pre>{@code
- *   java -cp gsim-lib.jar com.gsim.mcp.GsimMcpServer &lt;worldsDir&gt; [importDir] [httpBaseUrl]
  * }</pre>
  */
 public class GsimMcpServer extends AbstractMcpServer {
 
-    private final GsimMcpToolRegistry registry;
-
-    // ── 构造函数 ─────────────────────────────────────────────
+    private final ToolRegistry toolRegistry;
 
     /**
-     * 使用指定的 worlds 目录创建 MCP 服务器。
+     * Creates an MCP server backed by the given ToolRegistry.
      *
-     * @param worldsDir 世界观数据目录路径
+     * @param toolRegistry the tool registry (must not be null)
      */
-    public GsimMcpServer(Path worldsDir) {
-        this(worldsDir, null, null);
+    public GsimMcpServer(ToolRegistry toolRegistry) {
+        super(toolRegistry);
+        this.toolRegistry = toolRegistry;
     }
 
     /**
-     * 使用指定的 worlds 目录和导入目录创建 MCP 服务器。
+     * Creates an MCP server using the ToolRegistry from an ApplicationContext.
      *
-     * @param worldsDir 世界观数据目录路径
-     * @param importDir 导入文档目录路径
-     */
-    public GsimMcpServer(Path worldsDir, Path importDir) {
-        this(worldsDir, importDir, null);
-    }
-
-    /**
-     * 创建 MCP 服务器，指定 worlds 目录、导入目录和 HTTP 基础 URL。
-     *
-     * @param worldsDir   世界观数据目录路径
-     * @param importDir   导入文档目录路径（可为 null）
-     * @param httpBaseUrl gsim-app HTTP API 的基础 URL（可为 null，默认 http://127.0.0.1:8710）
-     */
-    public GsimMcpServer(Path worldsDir, Path importDir, String httpBaseUrl) {
-        this(new GsimMcpToolRegistry(worldsDir, importDir, httpBaseUrl));
-    }
-
-    /**
-     * 使用 ApplicationContext 创建 MCP 服务器。
-     * Agent/LLM 工具直接调用内部 Java API，不依赖 HTTP 服务器。
-     *
-     * @param ctx 应用上下文
+     * @param ctx the application context
      */
     public GsimMcpServer(ApplicationContext ctx) {
-        this(new GsimMcpToolRegistry(ctx));
+        this(ctx.getToolRegistry());
     }
 
-    /**
-     * 使用已配置好的工具注册表创建 MCP 服务器。
-     *
-     * <p>此构造函数允许外部调用者在传入前对注册表做额外配置
-     *（如添加自定义工具），然后再创建 MCP 服务器。
-     *
-     * @param registry 已初始化的 GSim MCP 工具注册表
-     */
-    public GsimMcpServer(GsimMcpToolRegistry registry) {
-        super();
-        this.registry = registry;
-    }
-
-    // ── AbstractMcpServer 模板方法实现 ────────────────────────
+    // ── AbstractMcpServer template methods ───────────────────
 
     @Override
     protected String getServerName() {
@@ -109,49 +58,92 @@ public class GsimMcpServer extends AbstractMcpServer {
         return "0.1.0";
     }
 
-    @Override
-    protected List<com.gsim.mcp.ToolDef> getAllTools() {
-        return registry.all().stream()
-                .map(t -> new com.gsim.mcp.ToolDef(t.name(), t.description(), t.schema()))
-                .toList();
+    // ── Public API ──────────────────────────────────────────
+
+    /** Returns the underlying ToolRegistry. */
+    public ToolRegistry getToolRegistry() {
+        return toolRegistry;
     }
 
-    @Override
-    protected String executeTool(String name, JsonNode args) throws Exception {
-        return registry.execute(name, args);
-    }
-
-    // ── 公共 API ─────────────────────────────────────────────
+    // ── Standalone entry point ───────────────────────────────
 
     /**
-     * 获取 GSim 工具注册表。
+     * Standalone entry point for launching the MCP server from the command line.
      *
-     * <p>返回的注册表可用于与其他工具注册表合并，以扩展 MCP 工具集。
+     * <p>Usage: {@code java com.gsim.mcp.GsimMcpServer <worldsDir> [importDir]}
      *
-     * @return GSim MCP 工具注册表实例
-     */
-    public GsimMcpToolRegistry getRegistry() {
-        return registry;
-    }
-
-    // ── 独立入口点 ───────────────────────────────────────────
-
-    /**
-     * 独立入口点，用于从命令行启动 MCP 服务器。
+     * <p>Also starts the Gsimap HTTP map server on port 8711 if gsimap is on classpath,
+     * so MCP and Map WebUI are always launched together.
      *
-     * <p>用法: {@code java com.gsim.mcp.GsimMcpServer &lt;worldsDir&gt; [importDir] [httpBaseUrl]}
-     *
-     * @param args 命令行参数：worldsDir（必需）、importDir（可选）、httpBaseUrl（可选）
+     * @param args command-line arguments
      */
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Usage: gsim-mcp <worldsDir> [importDir] [httpBaseUrl]");
+            System.err.println("Usage: gsim-mcp <worldsDir> [importDir]");
             System.exit(1);
         }
         Path worldsDir = Path.of(args[0]);
         Path importDir = args.length >= 2 ? Path.of(args[1]) : null;
-        String httpBaseUrl = args.length >= 3 ? args[2] : null;
-        GsimMcpServer server = new GsimMcpServer(worldsDir, importDir, httpBaseUrl);
+
+        // Build a minimal ToolRegistry with world/doc tools for standalone use
+        ToolRegistry toolRegistry = com.gsim.mcp.McpStandaloneToolRegistry.create(worldsDir, importDir);
+
+        // Try to load map tools via reflection (gsimap may not be on classpath)
+        tryRegisterMapTools(toolRegistry, worldsDir);
+
+        // Start Gsimap HTTP map server alongside MCP (both or neither)
+        startMapHttpServer(worldsDir, importDir);
+
+        GsimMcpServer server = new GsimMcpServer(toolRegistry);
         server.start();
+    }
+
+    /**
+     * Starts the Gsimap HTTP map server in a background thread (port 8711).
+     * Uses reflection so gsim-lib does not have a compile-time dependency on gsimap.
+     */
+    private static void startMapHttpServer(Path worldsDir, Path importDir) {
+        try {
+            Class<?> mapServiceClass = Class.forName("com.gsimap.service.MapService");
+            Class<?> httpServerClass = Class.forName("com.gsimap.http.GsimapHttpServer");
+            Object mapService = mapServiceClass.getConstructor(Path.class).newInstance(worldsDir);
+            int port = Integer.parseInt(
+                    System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
+            Object httpServer =
+                    httpServerClass.getConstructor(int.class, mapServiceClass).newInstance(port, mapService);
+            httpServerClass.getMethod("start").invoke(httpServer);
+            System.err.println("[MCP] Gsimap map server started on http://127.0.0.1:" + port);
+            // Register shutdown hook
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    httpServerClass.getMethod("stop").invoke(httpServer);
+                } catch (Exception ignored) {
+                }
+            }));
+        } catch (ClassNotFoundException e) {
+            // gsimap not on classpath — skip map HTTP server
+        } catch (Exception e) {
+            System.err.println("[MCP] Warning: Failed to start Gsimap HTTP server: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Attempts to register GSimap map tools via reflection.
+     * Silently skips if gsimap is not on the classpath.
+     */
+    private static void tryRegisterMapTools(ToolRegistry registry, Path worldsDir) {
+        try {
+            Class<?> mapServiceClass = Class.forName("com.gsimap.service.MapService");
+            Class<?> registrarClass = Class.forName("com.gsimap.tool.GsimapToolRegistrar");
+            Object mapService = mapServiceClass.getConstructor(Path.class).newInstance(worldsDir);
+            registrarClass
+                    .getMethod("registerAll", ToolRegistry.class, mapServiceClass)
+                    .invoke(null, registry, mapService);
+            System.err.println("[MCP] Registered GSimap map tools via reflection");
+        } catch (ClassNotFoundException e) {
+            // gsimap not on classpath — that's fine, MCP works without map tools
+        } catch (Exception e) {
+            System.err.println("[MCP] Warning: Failed to load GSimap map tools: " + e.getMessage());
+        }
     }
 }

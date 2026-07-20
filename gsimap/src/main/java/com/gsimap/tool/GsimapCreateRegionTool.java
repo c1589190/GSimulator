@@ -1,0 +1,94 @@
+package com.gsimap.tool;
+
+import com.gsim.tool.AgentTool;
+import com.gsim.tool.ToolCall;
+import com.gsim.tool.ToolResult;
+import com.gsim.util.JsonUtils;
+import com.gsimap.service.MapService;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * gsimap_create_region — Create a new region. Auto-saves.
+ */
+public final class GsimapCreateRegionTool implements AgentTool {
+
+    private final MapService mapService;
+
+    public GsimapCreateRegionTool(MapService mapService) {
+        this.mapService = mapService;
+    }
+
+    @Override
+    public String name() {
+        return "gsimap_create_region";
+    }
+
+    @Override
+    public String description() {
+        return "Create a new region. Auto-saves.";
+    }
+
+    @Override
+    public ToolResult execute(ToolCall call) {
+        String worldId = call.param("worldId");
+        if (worldId == null || worldId.isBlank()) {
+            return ToolResult.fail(name(), "worldId is required");
+        }
+        String nodeId = call.param("nodeId", "n0000");
+        String name = call.param("name");
+        if (name == null || name.isBlank()) {
+            return ToolResult.fail(name(), "name is required");
+        }
+        String tag = call.param("tag");
+        String color = call.param("color");
+        String description = call.param("description");
+        String hexesStr = call.param("hexes");
+        List<String> hexes = null;
+        if (hexesStr != null && !hexesStr.isBlank()) {
+            hexes = new ArrayList<>();
+            for (String h : hexesStr.split(",")) {
+                String trimmed = h.trim();
+                if (!trimmed.isEmpty()) {
+                    hexes.add(trimmed);
+                }
+            }
+        }
+
+        Map<String, Object> result = mapService.createRegion(worldId, nodeId, name, tag, color, description, hexes);
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(name, "gsimap_create_region", JsonUtils.toJson(result), 1.0)));
+    }
+
+    @Override
+    public Map<String, Object> getParameters() {
+        return Map.of(
+                "type", "object",
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to n0000)"),
+                                "name", Map.of("type", "string", "description", "New region name"),
+                                "tag", Map.of("type", "string", "description", "Tag (optional)"),
+                                "color",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Hex color (optional, default auto-generated)"),
+                                "description", Map.of("type", "string", "description", "Description (optional)"),
+                                "hexes",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Initial hex keys as CSV e.g. '10_-5,11_-5' (optional)")),
+                "required", List.of("worldId", "name"));
+    }
+}

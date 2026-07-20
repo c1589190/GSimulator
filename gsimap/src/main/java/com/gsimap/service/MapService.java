@@ -675,9 +675,8 @@ public class MapService {
         // Cache invalidation: only attempt if GSim API is expected to be running.
         if (Boolean.parseBoolean(System.getProperty("gsimap.noGsim", "false"))) return;
 
-        String baseUrl = System.getProperty(
-                "gsim.api.url",
-                "http://127.0.0.1:" + System.getProperty("api.port", "8710"));
+        String baseUrl =
+                System.getProperty("gsim.api.url", "http://127.0.0.1:" + System.getProperty("api.port", "8710"));
         try {
             java.net.http.HttpClient.newHttpClient()
                     .send(
@@ -696,6 +695,7 @@ public class MapService {
 
     /** Hex neighbor directions in axial coordinates (q, r). */
     public static final int[][] HEX_DIRS = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
+
     private static final String[] EXPAND_NAMES = {"E", "NE", "NW", "W", "SW", "SE"};
 
     // ── Geometry helpers (public, shared across gsimap) ──
@@ -1040,14 +1040,34 @@ public class MapService {
      * Generate a full terrain map for a world using MapGenerator.
      * @return result map with ok, worldId, nodeId, hexCount, landHexes, seed
      */
-    public Map<String, Object> generate(String worldId, String nodeId, long seed, int radius,
-            int ridges, int fragments, double landRatio, double coastRoughness) {
+    public Map<String, Object> generate(
+            String worldId,
+            String nodeId,
+            long seed,
+            int radius,
+            int ridges,
+            int fragments,
+            double landRatio,
+            double coastRoughness) {
         MapData map = MapGenerator.generate(worldId, seed, radius, ridges, fragments, landRatio, coastRoughness);
         saveFull(worldId, nodeId, map);
         syncToGSimNode(worldId, nodeId);
-        long landHexes = map.hexes().values().stream().filter(h -> !"water".equals(h.terrain())).count();
-        return Map.of("ok", true, "worldId", worldId, "nodeId", nodeId,
-                "hexCount", map.hexes().size(), "landHexes", landHexes, "seed", seed);
+        long landHexes = map.hexes().values().stream()
+                .filter(h -> !"water".equals(h.terrain()))
+                .count();
+        return Map.of(
+                "ok",
+                true,
+                "worldId",
+                worldId,
+                "nodeId",
+                nodeId,
+                "hexCount",
+                map.hexes().size(),
+                "landHexes",
+                landHexes,
+                "seed",
+                seed);
     }
 
     // ── Region CRUD ───────────────────────────────────────
@@ -1057,18 +1077,32 @@ public class MapService {
     /** Rebuild MapData with updated provinces, preserving all other fields. */
     private MapData withProvinces(MapData source, Map<String, MapData.Province> newProvinces) {
         return new MapData(
-                source.gridSize(), source.hexOrientation(), source.hexes(),
-                source.terrainBlocks(), newProvinces, source.cities(), source.rivers(),
-                source.roads(), source.terrainTypes(), source.compressedRegions(),
+                source.gridSize(),
+                source.hexOrientation(),
+                source.hexes(),
+                source.terrainBlocks(),
+                newProvinces,
+                source.cities(),
+                source.rivers(),
+                source.roads(),
+                source.terrainTypes(),
+                source.compressedRegions(),
                 source.pathwayGroups());
     }
 
     /** Rebuild MapData with updated terrain types, preserving all other fields. */
     private MapData withTerrainTypes(MapData source, Map<String, MapData.TerrainType> newTypes) {
         return new MapData(
-                source.gridSize(), source.hexOrientation(), source.hexes(),
-                source.terrainBlocks(), source.provinces(), source.cities(), source.rivers(),
-                source.roads(), newTypes, source.compressedRegions(),
+                source.gridSize(),
+                source.hexOrientation(),
+                source.hexes(),
+                source.terrainBlocks(),
+                source.provinces(),
+                source.cities(),
+                source.rivers(),
+                source.roads(),
+                newTypes,
+                source.compressedRegions(),
                 source.pathwayGroups());
     }
 
@@ -1076,8 +1110,14 @@ public class MapService {
      * Update an existing region's properties and/or hex list.
      * @return result map with ok, name, hexCount, tag, description
      */
-    public Map<String, Object> updateRegion(String worldId, String nodeId, String name,
-            String tag, String description, String color, List<String> hexes) {
+    public Map<String, Object> updateRegion(
+            String worldId,
+            String nodeId,
+            String name,
+            String tag,
+            String description,
+            String color,
+            List<String> hexes) {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty())
             return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
@@ -1109,8 +1149,7 @@ public class MapService {
         if (prov == null) return Map.of("ok", false, "error", "Region not found: " + name);
 
         String hexKey = MapData.hexKey(q, r);
-        if (!map.hexes().containsKey(hexKey))
-            return Map.of("ok", false, "error", "Hex not on map: " + hexKey);
+        if (!map.hexes().containsKey(hexKey)) return Map.of("ok", false, "error", "Hex not on map: " + hexKey);
 
         List<String> newHexes = new ArrayList<>(prov.hexes());
         if (newHexes.contains(hexKey))
@@ -1153,17 +1192,21 @@ public class MapService {
      * Create a new region with optional initial hex list.
      * @return result map with ok, name, hexCount, tag, color
      */
-    public Map<String, Object> createRegion(String worldId, String nodeId, String name,
-            String tag, String color, String description, List<String> hexes) {
+    public Map<String, Object> createRegion(
+            String worldId,
+            String nodeId,
+            String name,
+            String tag,
+            String color,
+            String description,
+            List<String> hexes) {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty())
             return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
-        if (map.provinces().containsKey(name))
-            return Map.of("ok", false, "error", "Region already exists: " + name);
+        if (map.provinces().containsKey(name)) return Map.of("ok", false, "error", "Region already exists: " + name);
 
         String t = tag != null ? tag : "";
-        String c = color != null ? color : String.format("#%06x",
-                new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
+        String c = color != null ? color : String.format("#%06x", new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
         String d = description != null ? description : "";
         List<String> h = hexes != null ? new ArrayList<>(hexes) : new ArrayList<>();
 
@@ -1183,8 +1226,7 @@ public class MapService {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty())
             return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
-        if (!map.provinces().containsKey(name))
-            return Map.of("ok", false, "error", "Region not found: " + name);
+        if (!map.provinces().containsKey(name)) return Map.of("ok", false, "error", "Region not found: " + name);
 
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
         updated.remove(name);
@@ -1198,14 +1240,21 @@ public class MapService {
      * Update a terrain type definition, preserving unspecified fields.
      * @return result map with ok, key, name, color, food, gold, stone, moveCost
      */
-    public Map<String, Object> updateTerrainType(String worldId, String nodeId, String key,
-            String name, String color, Integer food, Integer gold, Integer stone,
-            Integer moveCost, String description) {
+    public Map<String, Object> updateTerrainType(
+            String worldId,
+            String nodeId,
+            String key,
+            String name,
+            String color,
+            Integer food,
+            Integer gold,
+            Integer stone,
+            Integer moveCost,
+            String description) {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty())
             return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
-        if (!map.terrainTypes().containsKey(key))
-            return Map.of("ok", false, "error", "Terrain type not found: " + key);
+        if (!map.terrainTypes().containsKey(key)) return Map.of("ok", false, "error", "Terrain type not found: " + key);
 
         MapData.TerrainType existing = map.terrainTypes().get(key);
         String newName = name != null ? name : existing.name();
@@ -1217,13 +1266,27 @@ public class MapService {
         String newDesc = description != null ? description : existing.description();
 
         Map<String, MapData.TerrainType> updated = new LinkedHashMap<>(map.terrainTypes());
-        updated.put(key, new MapData.TerrainType(newName, newColor, newFood, newGold, newStone,
-                newMoveCost, newDesc));
+        updated.put(key, new MapData.TerrainType(newName, newColor, newFood, newGold, newStone, newMoveCost, newDesc));
         MapData result = withTerrainTypes(map, updated);
         saveFull(worldId, nodeId, result);
         syncToGSimNode(worldId, nodeId);
-        return Map.of("ok", true, "key", key, "name", newName, "color", newColor,
-                "food", newFood, "gold", newGold, "stone", newStone, "moveCost", newMoveCost);
+        return Map.of(
+                "ok",
+                true,
+                "key",
+                key,
+                "name",
+                newName,
+                "color",
+                newColor,
+                "food",
+                newFood,
+                "gold",
+                newGold,
+                "stone",
+                newStone,
+                "moveCost",
+                newMoveCost);
     }
 
     /**
@@ -1231,20 +1294,45 @@ public class MapService {
      * and optionally writing checkpoint elements.
      * @return result map with ok, name, hexCount, tag, color, center, checkpointsCreated
      */
-    public Map<String, Object> initNation(String worldId, String nodeId, String name,
-            int seedQ, int seedR, int maxHexes, String tag, String color,
-            String faction, String narrative, String worldview,
-            String capital, String ruler, String religion) throws IOException {
-        return initNation(worldId, nodeId, name, seedQ, seedR, maxHexes, tag, color,
-                faction, narrative, worldview, capital, ruler, religion, false);
+    public Map<String, Object> initNation(
+            String worldId,
+            String nodeId,
+            String name,
+            int seedQ,
+            int seedR,
+            int maxHexes,
+            String tag,
+            String color,
+            String faction,
+            String narrative,
+            String worldview,
+            String capital,
+            String ruler,
+            String religion)
+            throws IOException {
+        return initNation(
+                worldId, nodeId, name, seedQ, seedR, maxHexes, tag, color, faction, narrative, worldview, capital,
+                ruler, religion, false);
     }
 
     /** initNation with autoGenerate option — creates terrain if none exists. */
-    public Map<String, Object> initNation(String worldId, String nodeId, String name,
-            int seedQ, int seedR, int maxHexes, String tag, String color,
-            String faction, String narrative, String worldview,
-            String capital, String ruler, String religion,
-            boolean autoGenerate) throws IOException {
+    public Map<String, Object> initNation(
+            String worldId,
+            String nodeId,
+            String name,
+            int seedQ,
+            int seedR,
+            int maxHexes,
+            String tag,
+            String color,
+            String faction,
+            String narrative,
+            String worldview,
+            String capital,
+            String ruler,
+            String religion,
+            boolean autoGenerate)
+            throws IOException {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty()) {
             if (autoGenerate) {
@@ -1257,12 +1345,10 @@ public class MapService {
                 return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
             }
         }
-        if (map.provinces().containsKey(name))
-            return Map.of("ok", false, "error", "Region already exists: " + name);
+        if (map.provinces().containsKey(name)) return Map.of("ok", false, "error", "Region already exists: " + name);
 
         String seedKey = MapData.hexKey(seedQ, seedR);
-        if (!map.hexes().containsKey(seedKey))
-            return Map.of("ok", false, "error", "Seed hex not on map: " + seedKey);
+        if (!map.hexes().containsKey(seedKey)) return Map.of("ok", false, "error", "Seed hex not on map: " + seedKey);
 
         // Build owned hex set
         Set<String> owned = new HashSet<>();
@@ -1286,13 +1372,11 @@ public class MapService {
                 }
             }
         }
-        if (collected.isEmpty())
-            return Map.of("ok", false, "error", "No unowned hexes reachable from seed");
+        if (collected.isEmpty()) return Map.of("ok", false, "error", "No unowned hexes reachable from seed");
 
         // 2. Create province
         String t = tag != null ? tag : "Nation";
-        String c = color != null ? color
-                : String.format("#%06x", new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
+        String c = color != null ? color : String.format("#%06x", new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
         List<String> hexList = new ArrayList<>(collected);
 
         Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
@@ -1324,8 +1408,8 @@ public class MapService {
         if (capital != null && !capital.isBlank()) {
             String cityValue = "名称: " + capital + "\n类型: 首都\n所属: " + name + "\n描述: "
                     + (faction != null ? faction.split("\n")[0] : "");
-            cp.addElement(worldId, nodeId, "map", "City:" + capital, "map-city", cityValue,
-                    List.of("首都", name, capital));
+            cp.addElement(
+                    worldId, nodeId, "map", "City:" + capital, "map-city", cityValue, List.of("首都", name, capital));
             created.add("map:City:" + capital);
         }
 
@@ -1338,10 +1422,21 @@ public class MapService {
         }
 
         log.info("init_nation '{}': {} hexes, {} checkpoint entries created", name, hexList.size(), created.size());
-        return Map.of("ok", true, "name", name, "hexCount", hexList.size(), "tag", t, "color", c,
-                "center", Map.of("q", Math.round((float) sq / hexList.size()),
-                        "r", Math.round((float) sr / hexList.size())),
-                "checkpointsCreated", created);
+        return Map.of(
+                "ok",
+                true,
+                "name",
+                name,
+                "hexCount",
+                hexList.size(),
+                "tag",
+                t,
+                "color",
+                c,
+                "center",
+                Map.of("q", Math.round((float) sq / hexList.size()), "r", Math.round((float) sr / hexList.size())),
+                "checkpointsCreated",
+                created);
     }
 
     // ── Helpers ───────────────────────────────────────────

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.gsim.tool.ToolRegistry;
 import java.io.IOException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -111,6 +112,41 @@ public abstract class AbstractMcpServer implements Runnable {
             throw new IllegalArgumentException("transport must not be null");
         }
         this.registries = List.copyOf(registries);
+        this.transport = transport;
+    }
+
+    /**
+     * 使用 {@link ToolRegistry} 创建 MCP 服务器。
+     *
+     * <p>内部将 {@link ToolRegistry} 通过 {@link ToolRegistryMcpAdapter} 包装为
+     * {@link McpToolRegistry}。所有注册在 {@link ToolRegistry} 中的
+     * {@link com.gsim.tool.AgentTool} 将自动暴露为 MCP 工具。
+     * 默认使用 {@link StdioMcpTransport}。
+     *
+     * @param toolRegistry 工具注册表（不可为 null）
+     */
+    protected AbstractMcpServer(ToolRegistry toolRegistry) {
+        if (toolRegistry == null) {
+            throw new IllegalArgumentException("ToolRegistry must not be null");
+        }
+        this.registries = List.of(new ToolRegistryMcpAdapter(toolRegistry));
+        this.transport = new StdioMcpTransport();
+    }
+
+    /**
+     * 使用 {@link ToolRegistry} 和自定义传输层创建 MCP 服务器。
+     *
+     * @param toolRegistry 工具注册表（不可为 null）
+     * @param transport    传输层实现（不可为 null）
+     */
+    protected AbstractMcpServer(ToolRegistry toolRegistry, McpTransport transport) {
+        if (toolRegistry == null) {
+            throw new IllegalArgumentException("ToolRegistry must not be null");
+        }
+        if (transport == null) {
+            throw new IllegalArgumentException("transport must not be null");
+        }
+        this.registries = List.of(new ToolRegistryMcpAdapter(toolRegistry));
         this.transport = transport;
     }
 

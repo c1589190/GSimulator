@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 世界索引管理器 -- 管理 _index.json 和 world.json 文件。
@@ -22,6 +24,8 @@ import java.util.Map;
  * <p>此类为纯静态工具类，不可实例化。
  */
 public final class WorldIndexManager {
+
+    private static final Logger log = LoggerFactory.getLogger(WorldIndexManager.class);
 
     private WorldIndexManager() {}
 
@@ -44,23 +48,6 @@ public final class WorldIndexManager {
      */
     public static Path indexFile(Path worldsDir) {
         return worldsDir.resolve("_index.json");
-    }
-
-    /**
-     * 列出所有已注册的世界。
-     *
-     * @param worldsDir worlds 根目录
-     * @return 世界条目列表，若 _index.json 不存在则返回空列表
-     */
-    public static List<WorldEntry> listWorlds(Path worldsDir) {
-        Path file = indexFile(worldsDir);
-        if (!Files.exists(file)) return List.of();
-        try {
-            WorldEntry[] arr = JsonUtils.fromJson(Files.readString(file), WorldEntry[].class);
-            return arr != null ? List.of(arr) : List.of();
-        } catch (IOException e) {
-            return List.of();
-        }
     }
 
     private static void saveIndex(Path worldsDir, List<WorldEntry> entries) {
@@ -98,6 +85,8 @@ public final class WorldIndexManager {
     /**
      * 加载指定世界的元数据。
      *
+     * <p>如果 world.json 中的 id 字段与目录名不匹配，自动修复并保存。
+     *
      * @param worldsDir worlds 根目录
      * @param worldId   世界 ID
      * @return WorldMeta 记录，若 world.json 不存在则返回 null
@@ -107,9 +96,70 @@ public final class WorldIndexManager {
         Path file = worldFile(worldsDir, worldId);
         if (!Files.exists(file)) return null;
         try {
-            return JsonUtils.fromJson(Files.readString(file), WorldMeta.class);
+            String raw = Files.readString(file);
+            WorldMeta meta = JsonUtils.fromJson(raw, WorldMeta.class);
+            if (meta != null && !meta.id().equals(worldId)) {
+                log.warn(
+                        "World '{}' has mismatched id '{}' in world.json — auto-fixing to '{}'",
+                        worldId,
+                        meta.id(),
+                        worldId);
+                WorldMeta fixed = new WorldMeta(worldId, meta.name(), meta.createdAt(), meta.currentNodeId());
+                Files.writeString(file, JsonUtils.toJson(fixed));
+                return fixed;
+            }
+            return meta;
         } catch (IOException e) {
             throw new RuntimeException("Failed to load world.json: " + worldId, e);
+        }
+    }
+
+    /**
+     * 列出所有世界，结合 _index.json 和文件系统扫描。
+     *
+     * <p>首先从 _index.json 读取，然后扫描 worlds 目录找出未被索引的世界目录
+     * （例如手动复制而未调用 world_create 创建的目录），读取其 world.json 并追加。
+     * 不存在 world.json 的目录会被跳过并记录警告。
+     *
+     * @param worldsDir worlds 根目录
+     * @return 完整的世界条目列表
+     */
+    public static List<WorldEntry> listWorlds(Path worldsDir) {
+        List<WorldEntry> entries = loadIndexEntries(worldsDir);
+
+        // 扫描文件系统，发现 _index.json 中未记录的世界目录
+        java.io.File[] dirs = worldsDir.toFile().listFiles(java.io.File::isDirectory);
+        if (dirs != null) {
+            for (java.io.File d : dirs) {
+                String dirName = d.getName();
+                if (dirName.startsWith(".")) continue;
+
+                boolean inIndex = entries.stream().anyMatch(e -> e.id().equals(dirName));
+                if (!inIndex) {
+                    // 尝试从 world.json 加载
+                    WorldMeta meta = loadWorldMeta(worldsDir, dirName);
+                    if (meta != null) {
+                        log.info("Discovered unindexed world '{}' ({}) — adding to listing", dirName, meta.name());
+                        entries.add(new WorldEntry(meta.id(), meta.name(), meta.createdAt()));
+                    } else {
+                        log.warn("Directory '{}' exists under worlds/ but has no world.json — skipping", dirName);
+                    }
+                }
+            }
+        }
+
+        return entries;
+    }
+
+    /** Load entries from _index.json only. */
+    private static List<WorldEntry> loadIndexEntries(Path worldsDir) {
+        Path file = indexFile(worldsDir);
+        if (!Files.exists(file)) return new ArrayList<>();
+        try {
+            WorldEntry[] arr = JsonUtils.fromJson(Files.readString(file), WorldEntry[].class);
+            return arr != null ? new ArrayList<>(List.of(arr)) : new ArrayList<>();
+        } catch (IOException e) {
+            return new ArrayList<>();
         }
     }
 
@@ -145,8 +195,8 @@ public final class WorldIndexManager {
                 new LinkedHashMap<>());
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, worldId, "n0000"), root);
 
-        // _index.json
-        List<WorldEntry> entries = new ArrayList<>(listWorlds(worldsDir));
+        // _index.json (use loadIndexEntries to avoid double-counting partially-created dirs)
+        List<WorldEntry> entries = new ArrayList<>(loadIndexEntries(worldsDir));
         entries.add(new WorldEntry(worldId, name, now));
         saveIndex(worldsDir, entries);
 

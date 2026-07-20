@@ -2,23 +2,25 @@ package com.gsimap;
 
 import com.gsimap.config.GsimapConfig;
 import com.gsimap.http.GsimapHttpServer;
-import com.gsimap.mcp.GsimapMcpServer;
 import com.gsimap.service.MapService;
-import com.gsim.app.GSimulatorApplication;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Gsimap entry point.
+ * Gsimap entry point — hex map editor HTTP server.
+ *
+ * <p>This is a standalone HTTP-only launcher for the map Web UI.
+ * MCP functionality is handled by the GSimulator core application
+ * ({@code GSimulatorApplication --mcp}), which exposes all tools
+ * (including map tools registered via {@link com.gsimap.tool.GsimapToolRegistrar})
+ * through a unified MCP protocol layer.
  *
  * <p>Usage:
  * <pre>
- *   java -jar gsimap.jar                    → HTTP + MCP (default)
- *   java -jar gsimap.jar --http-only        → HTTP only
- *   java -jar gsimap.jar --mcp-only         → MCP stdio only
- *   java -Dgsimap.worldsDir=/path/to/worlds → custom worlds dir
- *   java -Dgsimap.port=8711                 → custom HTTP port
+ *   java -jar gsimap.jar                      → HTTP (default)
+ *   -Dgsimap.worldsDir=/path/to/worlds        → custom worlds dir
+ *   -Dgsimap.port=8711                        → custom HTTP port
  * </pre>
  */
 public final class GsimapApp {
@@ -29,11 +31,10 @@ public final class GsimapApp {
     private GsimapApp() {}
 
     /**
-     * Application entry point. Parses CLI arguments, initialises MapService,
-     * optionally starts the embedded GSimulator API, then starts the HTTP
-     * server and/or MCP server according to the resolved configuration.
+     * Application entry point. Initialises MapService and starts the
+     * HTTP server for the map Web UI.
      *
-     * @param args command-line arguments (--http-only, --mcp-only, --help)
+     * @param args command-line arguments
      * @throws Exception if server initialisation fails critically
      */
     @SuppressFBWarnings("THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION")
@@ -43,79 +44,37 @@ public final class GsimapApp {
 
         log.info("Gsimap v0.1.0 starting...");
         log.info("  worlds dir: {}", config.worldsDir());
-        log.info("  HTTP mode: {} (port {})", config.httpMode(), config.httpPort());
-        log.info("  MCP mode: {}", config.mcpMode());
-
-        // ── Embedded GSimulator HTTP API server (for LLM/Agent MCP tools) ──
-        GSimulatorApplication gsimApp = null;
-        if (!Boolean.parseBoolean(System.getProperty("gsimap.noGsim", "false"))) {
-            int gsimPort = config.gsimPort();
-            gsimApp = GsimEmbeddedLauncher.launch(config.worldsDir(), config.importDir(), gsimPort);
-        }
+        log.info("  HTTP port: {}", config.httpPort());
 
         // Start HTTP server
-        GsimapHttpServer httpServer = null;
-        if (config.httpMode()) {
-            httpServer = new GsimapHttpServer(config.httpPort(), mapService);
-            httpServer.start();
-        }
+        GsimapHttpServer httpServer = new GsimapHttpServer(config.httpPort(), mapService);
+        httpServer.start();
+        log.info("Gsimap map server started on http://127.0.0.1:{}", config.httpPort());
 
-        // Start MCP server (on main thread if MCP-only, background thread otherwise)
-        GsimapMcpServer mcpServer = new GsimapMcpServer(mapService, config.importDir());
-        if (config.mcpMode() && !config.httpMode()) {
-            // MCP-only: run on main thread (blocking)
-            mcpServer.start();
-        } else if (config.mcpMode()) {
-            // HTTP + MCP: MCP in background thread
-            Thread mcpThread = new Thread(mcpServer, "mcp-stdio");
-            mcpThread.setDaemon(true);
-            mcpThread.start();
-            log.info("MCP server running in background thread");
-        }
+        final GsimapHttpServer hs = httpServer;
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("Shutting down...");
+            hs.stop();
+        }));
 
-        // If HTTP-only or HTTP+MCP, keep main thread alive
-        if (config.httpMode()) {
-            final GsimapHttpServer hs = httpServer;
-            final GsimapMcpServer ms = mcpServer;
-            final GSimulatorApplication gs = gsimApp;
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                log.info("Shutting down...");
-                if (hs != null) hs.stop();
-                ms.stop();
-                if (gs != null) gs.stop();
-            }));
-            log.info("Gsimap ready. Press Ctrl+C to stop.");
-            Thread.currentThread().join();
-        }
+        log.info("Gsimap ready. Press Ctrl+C to stop.");
+        Thread.currentThread().join();
     }
 
     @SuppressFBWarnings("DM_EXIT")
     private static GsimapConfig parseArgs(String[] args) {
-        boolean httpOnly = false;
-        boolean mcpOnly = false;
-
         for (String arg : args) {
             switch (arg) {
-                case "--http-only" -> httpOnly = true;
-                case "--mcp-only" -> mcpOnly = true;
                 case "--help", "-h" -> {
                     System.out.println(
                             """
-                        Gsimap — Hex map editor and MCP bridge for GSim
+                        Gsimap — Hex map editor for GSim
 
                         Usage: java -jar gsimap.jar [options]
 
-                        Options:
-                          --http-only     Start HTTP server only (no MCP)
-                          --mcp-only      Start MCP stdio server only (no HTTP)
-                          --help, -h      Show this help
-
                         System properties:
                           -Dgsimap.worldsDir=<path>   GSim worlds directory (default: ./worlds)
-                          -Dgsimap.importDir=<path>   GSim import/docs directory (default: ./import)
                           -Dgsimap.port=<port>        HTTP port (default: 8711)
-                          -Dgsimap.gsimPort=<port>    GSim embedded API port (default: 8710)
-                          -Dgsimap.noGsim=true        Disable embedded GSim API
                         """);
                     System.exit(0);
                 }
@@ -124,9 +83,6 @@ public final class GsimapApp {
                 }
             }
         }
-
-        if (httpOnly) System.setProperty("gsimap.httpOnly", "true");
-        if (mcpOnly) System.setProperty("gsimap.mcpOnly", "true");
 
         return GsimapConfig.load();
     }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsim.tool.ToolRegistry;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
  *   <li>实现 {@link McpToolRegistry} 注册自定义工具</li>
  *   <li>使用 {@link CompositeMcpToolRegistry} 合并 GSim 工具和自定义工具</li>
  *   <li>通过 {@link AbstractMcpServer} 启动 MCP 服务</li>
- *   <li>GSim 工具（如 gsim_list_worlds）仍可正常使用</li>
+ *   <li>GSim 工具（如 world_list）仍可正常使用</li>
  * </ul>
  */
 @DisplayName("外部项目集成测试")
@@ -71,6 +72,11 @@ class McpExternalLibTest {
         }
     }
 
+    /** Helper: creates a GSim ToolRegistry wrapped as an McpToolRegistry adapter. */
+    private static McpToolRegistry gsimAdapter(Path worldsDir) {
+        return new ToolRegistryMcpAdapter(McpStandaloneToolRegistry.create(worldsDir, null));
+    }
+
     /**
      * 模拟外部项目的 MCP 服务器。
      * 继承 AbstractMcpServer 并合并 GSim 工具和自定义工具。
@@ -81,8 +87,7 @@ class McpExternalLibTest {
         ExternalAppServer(Path worldsDir) {
             super();
             // 合并 GSim 工具和自定义工具
-            this.composite = new CompositeMcpToolRegistry(
-                    new ExternalAppRegistry(), new GsimMcpToolRegistry(worldsDir).asMcpRegistry());
+            this.composite = new CompositeMcpToolRegistry(new ExternalAppRegistry(), gsimAdapter(worldsDir));
         }
 
         @Override
@@ -167,8 +172,8 @@ class McpExternalLibTest {
         @DisplayName("合并后包含 GSim 工具和自定义工具")
         void compositeIncludesBoth(@TempDir Path tempDir) {
             ExternalAppRegistry custom = new ExternalAppRegistry();
-            GsimMcpToolRegistry gsim = new GsimMcpToolRegistry(tempDir);
-            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(custom, gsim.asMcpRegistry());
+            McpToolRegistry gsim = gsimAdapter(tempDir);
+            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(custom, gsim);
 
             List<ToolDef> allTools = composite.all();
             List<String> names = allTools.stream().map(ToolDef::name).toList();
@@ -177,21 +182,21 @@ class McpExternalLibTest {
             assertTrue(names.contains("my_hello"));
             assertTrue(names.contains("my_status"));
 
-            // GSim 工具存在
-            assertTrue(names.contains("gsim_list_worlds"));
-            assertTrue(names.contains("gsim_get_status"));
+            // GSim 工具存在（adapter 自动添加 gsim_ 前缀）
+            assertTrue(names.contains("gsim_world_list"), "Should contain gsim_world_list tool");
+            assertTrue(names.contains("gsim_get_status"), "Should contain gsim_get_status tool");
 
             // 自定义工具在前
             int myHelloIdx = names.indexOf("my_hello");
-            int gsimWorldsIdx = names.indexOf("gsim_list_worlds");
+            int gsimWorldsIdx = names.indexOf("gsim_world_list");
             assertTrue(myHelloIdx < gsimWorldsIdx, "Custom tools should appear before GSim tools");
         }
 
         @Test
         @DisplayName("execute 正确路由到对应注册表")
         void executeRoutesCorrectly(@TempDir Path tempDir) throws Exception {
-            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(
-                    new ExternalAppRegistry(), new GsimMcpToolRegistry(tempDir).asMcpRegistry());
+            CompositeMcpToolRegistry composite =
+                    new CompositeMcpToolRegistry(new ExternalAppRegistry(), gsimAdapter(tempDir));
 
             // 自定义工具路由
             var args = MAPPER.createObjectNode();
@@ -200,16 +205,16 @@ class McpExternalLibTest {
             assertEquals("{\"greeting\":\"Hello, Claude!\"}", result);
 
             // GSim 工具路由
-            String gsimResult = composite.execute("gsim_list_worlds", MAPPER.createObjectNode());
+            String gsimResult = composite.execute("gsim_world_list", MAPPER.createObjectNode());
             JsonNode node = MAPPER.readTree(gsimResult);
-            assertTrue(node.has("worlds"), "gsim_list_worlds should return 'worlds' key");
+            assertTrue(node.has("success"), "world_list should return success wrapper");
         }
 
         @Test
         @DisplayName("未知工具抛出异常")
         void unknownToolThrows(@TempDir Path tempDir) {
-            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(
-                    new ExternalAppRegistry(), new GsimMcpToolRegistry(tempDir).asMcpRegistry());
+            CompositeMcpToolRegistry composite =
+                    new CompositeMcpToolRegistry(new ExternalAppRegistry(), gsimAdapter(tempDir));
 
             assertThrows(
                     UnknownToolException.class,
@@ -218,10 +223,10 @@ class McpExternalLibTest {
 
         @Test
         @DisplayName("getRegistries 返回所有子注册表")
-        void getRegistriesReturnsAll() {
+        void getRegistriesReturnsAll(@TempDir Path tempDir) {
             ExternalAppRegistry custom = new ExternalAppRegistry();
-            McpToolRegistry gsimAdapter = new GsimMcpToolRegistry(Path.of("/tmp/test")).asMcpRegistry();
-            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(custom, gsimAdapter);
+            McpToolRegistry gsim = gsimAdapter(tempDir);
+            CompositeMcpToolRegistry composite = new CompositeMcpToolRegistry(custom, gsim);
 
             assertEquals(2, composite.getRegistries().size());
             assertInstanceOf(
@@ -251,7 +256,7 @@ class McpExternalLibTest {
 
             List<String> names = tools.stream().map(ToolDef::name).toList();
             assertTrue(names.contains("my_hello"), "Should include custom hello tool");
-            assertTrue(names.contains("gsim_list_worlds"), "Should include GSim worlds tool");
+            assertTrue(names.contains("gsim_world_list"), "Should include GSim worlds tool");
         }
 
         @Test
@@ -285,10 +290,10 @@ class McpExternalLibTest {
         void executeToolRoutesGsim(@TempDir Path tempDir) throws Exception {
             ExternalAppServer server = new ExternalAppServer(tempDir);
 
-            String result = server.executeTool("gsim_list_worlds", MAPPER.createObjectNode());
+            String result = server.executeTool("gsim_world_list", MAPPER.createObjectNode());
             assertNotNull(result);
             JsonNode node = MAPPER.readTree(result);
-            assertTrue(node.has("worlds"), "gsim_list_worlds should return 'worlds' key");
+            assertTrue(node.has("success"), "world_list should return success");
         }
 
         @Test
@@ -313,55 +318,52 @@ class McpExternalLibTest {
     }
 
     @Nested
-    @DisplayName("GsimMcpServer 向后兼容")
-    class GsimMcpServerBackwardCompatTests {
+    @DisplayName("GsimMcpServer 基于 ToolRegistry 构造")
+    class GsimMcpServerTests {
 
         @Test
-        @DisplayName("原有构造函数仍然可用")
-        void legacyConstructorWorks(@TempDir Path tempDir) {
-            GsimMcpServer server = new GsimMcpServer(tempDir);
+        @DisplayName("ToolRegistry 构造函数可用")
+        void toolRegistryConstructorWorks(@TempDir Path tempDir) {
+            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            GsimMcpServer server = new GsimMcpServer(toolRegistry);
             assertNotNull(server);
-            assertNotNull(server.getRegistry());
+            assertNotNull(server.getToolRegistry());
             assertEquals("GSimulator-MCP", server.getServerName());
         }
 
         @Test
-        @DisplayName("ApplicationContext 构造函数仍然可用")
-        void legacyApplicationContextConstructorWorks(@TempDir Path tempDir) {
-            // GsimMcpServer can be constructed with directories
-            GsimMcpServer server = new GsimMcpServer(tempDir, tempDir.resolve("import"));
-            assertNotNull(server);
-            assertNotNull(server.getRegistry());
+        @DisplayName("getToolRegistry 返回正确的类型")
+        void getToolRegistryReturnsCorrectType(@TempDir Path tempDir) {
+            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            GsimMcpServer server = new GsimMcpServer(toolRegistry);
+            assertNotNull(server.getToolRegistry());
+            assertTrue(server.getToolRegistry().all().size() > 0, "Should have registered tools");
         }
 
         @Test
-        @DisplayName("getRegistry 返回 GsimMcpToolRegistry")
-        void getRegistryReturnsCorrectType(@TempDir Path tempDir) {
-            GsimMcpServer server = new GsimMcpServer(tempDir);
-            assertInstanceOf(GsimMcpToolRegistry.class, server.getRegistry());
-        }
-
-        @Test
-        @DisplayName("start() 和 stop() 方法可用（System.in 受 CloseShieldInputStream 保护）")
+        @DisplayName("start() 和 stop() 方法可用")
         void startAndStopAvailable(@TempDir Path tempDir) {
-            GsimMcpServer server = new GsimMcpServer(tempDir);
+            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            GsimMcpServer server = new GsimMcpServer(toolRegistry);
             assertDoesNotThrow(server::stop);
         }
 
         @Test
-        @DisplayName("gsim_list_worlds 工具仍可执行")
+        @DisplayName("world_list 工具仍可执行")
         void gsimListWorldsStillWorks(@TempDir Path tempDir) throws Exception {
-            GsimMcpServer server = new GsimMcpServer(tempDir);
+            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            GsimMcpServer server = new GsimMcpServer(toolRegistry);
 
-            String result = server.executeTool("gsim_list_worlds", MAPPER.createObjectNode());
+            String result = server.executeTool("gsim_world_list", MAPPER.createObjectNode());
             JsonNode node = MAPPER.readTree(result);
-            assertTrue(node.has("worlds"));
+            assertTrue(node.has("success"));
         }
 
         @Test
         @DisplayName("未知 gsim_ 工具抛出异常")
         void unknownGsimToolThrows(@TempDir Path tempDir) {
-            GsimMcpServer server = new GsimMcpServer(tempDir);
+            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            GsimMcpServer server = new GsimMcpServer(toolRegistry);
 
             assertThrows(
                     UnknownToolException.class,

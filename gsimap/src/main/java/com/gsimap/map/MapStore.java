@@ -89,7 +89,7 @@ public final class MapStore {
         try {
             Path parent = file.getParent();
             if (parent != null) Files.createDirectories(parent);
-                        Files.writeString(file, JsonUtils.toJson(data));
+            Files.writeString(file, JsonUtils.toJson(data));
             log.debug("Saved full map: {}", file);
         } catch (IOException e) {
             log.error("Failed to save map: {}", file, e);
