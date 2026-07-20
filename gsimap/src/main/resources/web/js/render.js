@@ -214,6 +214,8 @@ function renderProvinceHighlight() {
   const highlightSet = new Set();
   if (activeTag) {
     for (const [name, p] of Object.entries(provs)) {
+      // Skip annexed regions — they are no longer displayed on the map
+      if (p.annexedBy && p.annexedBy !== '') continue;
       if (p.tag === activeTag && p.hexes?.length) {
         toRender.push({name, ...p});
         for (const k of p.hexes) highlightSet.add(k);

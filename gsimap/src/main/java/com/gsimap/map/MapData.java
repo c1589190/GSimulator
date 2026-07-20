@@ -273,20 +273,28 @@ public record MapData(
      * @param color       display color
      * @param tag         short identifier tag
      * @param description optional description
+     * @param annexedBy   if non-empty, this province has been annexed by another (not rendered)
      */
     @JsonDeserialize
     public record Province(
             @JsonProperty("hexes") List<String> hexes,
             @JsonProperty("color") String color,
             @JsonProperty("tag") String tag,
-            @JsonProperty("description") String description) {
+            @JsonProperty("description") String description,
+            @JsonProperty("annexedBy") String annexedBy) {
         public Province {
             if (hexes == null) hexes = List.of();
             if (color == null) color = "#ff0000";
             if (tag == null) tag = "";
             if (description == null) description = "";
+            if (annexedBy == null) annexedBy = "";
             // Defensive copy + freeze (SpotBugs EI_EXPOSE_REP)
             hexes = List.copyOf(hexes);
+        }
+
+        /** Backward-compatible constructor without annexedBy. */
+        public Province(List<String> hexes, String color, String tag, String description) {
+            this(hexes, color, tag, description, "");
         }
     }
 

@@ -91,6 +91,9 @@ public class GsimapGetProvinceTool implements AgentTool {
         sb.append("- **Description**: ")
                 .append(prov.description() != null ? prov.description() : "")
                 .append("\n");
+        if (!prov.annexedBy().isBlank()) {
+            sb.append("- **Annexed By**: ⚔ ").append(prov.annexedBy()).append(" (不在地图上显示)\n");
+        }
         sb.append("- **Center**: (")
                 .append(center[0])
                 .append(",")

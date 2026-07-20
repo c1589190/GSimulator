@@ -186,6 +186,92 @@
 {"tool": "gsimap_find_river_path", "args": {"worldId": "test_integration", "nodeId": "n0001", "q": 10, "r": 0}}
 ```
 
+---
+
+## 合并区域测试 (Steps 13-18)
+
+### Step 13: 创建被吞并区域
+
+在 test_nation 附近找一个不同的种子 hex，创建一个独立的小区域作为被吞并目标。
+
+- **工具**: `gsimap_init_nation`
+- **参数**:
+  - `worldId`: `test_integration`
+  - `nodeId`: `n0001`
+  - `name`: `test_annex_target`
+  - `seedQ`: `-10`（test_nation 的反方向，找另一个陆地坐标）
+  - `seedR`: `0`
+  - `maxHexes`: `200`
+  - `tag`: `AnnexTarget`
+  - `description`: `将被吞并的目标区域`
+- **预期结果**: test_annex_target 创建成功，hexCount > 0
+
+```json
+{"tool": "gsimap_init_nation", "args": {"worldId": "test_integration", "nodeId": "n0001", "name": "test_annex_target", "seedQ": -10, "seedR": 0, "maxHexes": 200, "tag": "AnnexTarget", "description": "将被吞并的目标区域"}}
+```
+
+### Step 14: 吞并区域
+
+让 test_nation 吞并 test_annex_target。
+
+- **工具**: `gsimap_merge_regions`
+- **参数**:
+  - `worldId`: `test_integration`
+  - `nodeId`: `n0001`
+  - `dominantName`: `test_nation`
+  - `annexedName`: `test_annex_target`
+- **预期结果**: 吞并成功，transferredHexes > 0，dominantHexCount = 原 test_nation hex 数 + 被吞并 hex 数
+
+```json
+{"tool": "gsimap_merge_regions", "args": {"worldId": "test_integration", "nodeId": "n0001", "dominantName": "test_nation", "annexedName": "test_annex_target"}}
+```
+
+### Step 15: 验证主导区域 hex 增加
+
+- **工具**: `gsimap_get_province`
+- **参数**: `worldId`: `test_integration`, `nodeId`: `n0001`, `name`: `test_nation`
+- **预期结果**: hexCount = 原数量 + transferredHexes
+
+```json
+{"tool": "gsimap_get_province", "args": {"worldId": "test_integration", "nodeId": "n0001", "name": "test_nation"}}
+```
+
+### Step 16: 验证被吞并区域已标记
+
+- **工具**: `gsimap_get_province`
+- **参数**: `worldId`: `test_integration`, `nodeId`: `n0001`, `name`: `test_annex_target`
+- **预期结果**: 返回成功，annexedBy = "test_nation"，原有 hexes/color/tag/description 保持不变
+
+```json
+{"tool": "gsimap_get_province", "args": {"worldId": "test_integration", "nodeId": "n0001", "name": "test_annex_target"}}
+```
+
+### Step 17: 重复吞并应被拒绝
+
+尝试再次吞并已经标记为被吞并的区域。
+
+- **工具**: `gsimap_merge_regions`
+- **参数**:
+  - `worldId`: `test_integration`
+  - `nodeId`: `n0001`
+  - `dominantName`: `test_nation`
+  - `annexedName`: `test_annex_target`
+- **预期结果**: 返回错误，提示该区域已被吞并
+
+```json
+{"tool": "gsimap_merge_regions", "args": {"worldId": "test_integration", "nodeId": "n0001", "dominantName": "test_nation", "annexedName": "test_annex_target"}}
+```
+
+### Step 18: 列出全部区域验证
+
+- **工具**: `gsimap_list_regions`
+- **参数**: `worldId`: `test_integration`, `nodeId`: `n0001`
+- **预期结果**: test_annex_target 仍在列表中（未删除），但标注为已吞并；test_nation 的 hexCount 增大
+
+```json
+{"tool": "gsimap_list_regions", "args": {"worldId": "test_integration", "nodeId": "n0001"}}
+```
+
 ## 预期通过标准
 
 - [ ] Step 1: 切换到 n0001 成功
@@ -200,6 +286,12 @@
 - [ ] Step 10: Region 重命名成功
 - [ ] Step 11: terrain type 定义更新成功
 - [ ] Step 12: 河流寻路返回有效路径
+- [ ] Step 13: test_annex_target 创建成功
+- [ ] Step 14: 吞并成功，transferredHexes > 0
+- [ ] Step 15: test_nation hexCount 增加
+- [ ] Step 16: test_annex_target.annexedBy = "test_nation"，原数据不变
+- [ ] Step 17: 重复吞并被正确拒绝
+- [ ] Step 18: list_regions 中两个区域均存在，被吞并区域已标记
 
 ## 失败排查提示
 
@@ -210,6 +302,9 @@
 | rename_region 后旧名仍存在 | checkpoint 引用未更新 | 检查 renameRegion 中所有引用更新逻辑 |
 | rename_region 后城市丢失 | cities map key 未同步 | 确认 MapData rename 逻辑覆盖 cities |
 | find_river_path 返回空 | 无相邻水体 | 尝试不同起始坐标或降低期望（允许返回空） |
+| merge_regions transferredHexes = 0 | 目标区域 hex 为空 | 检查 test_annex_target 初始化是否成功 |
+| merge_regions 返回已吞并错误 | Step 13 创建失败用了别的坐标 | 确认 test_annex_target 未被 Step 3 覆盖 |
+| Step 17 未拒绝重复吞并 | annexedBy 检查逻辑未生效 | 检查 mergeRegions 中的 annexedBy 校验 |
 
 ## 扩展测试（可选）
 
@@ -217,3 +312,5 @@
 - **E5.2**: 地形修改后查询 hex 验证新定义生效
 - **E5.3**: Region 增删 hex 后 list_regions 验证 hexCount 变化
 - **E5.4**: 在 n0002 创建一个新 Nation，验证 diff 应用后 n0002 底图 = n0001 底图 + n0002 diff
+- **E5.5**: 已吞并区域尝试吞并其他区域应被拒绝（不能反向操作）
+- **E5.6**: 验证被吞并区域在 Web UI 中不渲染但列表仍可见

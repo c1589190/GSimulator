@@ -99,6 +99,9 @@ public class GsimapListRegionsTool implements AgentTool {
             sb.append("- **Description**: ")
                     .append(prov.description() != null ? prov.description() : "")
                     .append("\n");
+            if (!prov.annexedBy().isBlank()) {
+                sb.append("- **Annexed By**: ⚔ ").append(prov.annexedBy()).append(" (不在地图上显示)\n");
+            }
             sb.append("- **Address**: gsimap:region:").append(name).append("\n");
 
             sb.append("\n  **Terrain Composition:**\n");

@@ -1048,7 +1048,7 @@ public class MapService {
         List<String> newHexes = hexes != null ? new ArrayList<>(hexes) : prov.hexes();
 
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
-        updated.put(name, new MapData.Province(newHexes, newColor, newTag, newDesc));
+        updated.put(name, new MapData.Province(newHexes, newColor, newTag, newDesc, prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "tag", newTag, "description", newDesc);
@@ -1074,7 +1074,7 @@ public class MapService {
 
         newHexes.add(hexKey);
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
-        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
+        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "added", hexKey);
@@ -1097,7 +1097,7 @@ public class MapService {
             return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex was not in region");
 
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
-        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description()));
+        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "removed", hexKey);
@@ -1147,6 +1147,70 @@ public class MapService {
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
         return Map.of("ok", true, "name", name, "action", "deleted");
+    }
+
+    /**
+     * Merge two regions: dominant absorbs annexed.
+     * The annexed region keeps all its original data but is marked with annexedBy = dominantName.
+     * The dominant region's hexes expand to include all of the annexed region's hexes.
+     * The annexed region is no longer rendered on the map.
+     *
+     * @param worldId       the world identifier
+     * @param nodeId        the node identifier
+     * @param dominantName  the region that absorbs the other
+     * @param annexedName   the region being absorbed
+     * @return result map with ok, dominantName, annexedName, transferredHexes
+     */
+    public Map<String, Object> mergeRegions(String worldId, String nodeId, String dominantName, String annexedName) {
+        MapData map = resolve(worldId, nodeId);
+        if (map == null || map.hexes().isEmpty())
+            return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
+
+        MapData.Province dominant = map.provinces().get(dominantName);
+        if (dominant == null) return Map.of("ok", false, "error", "Dominant region not found: " + dominantName);
+
+        MapData.Province annexed = map.provinces().get(annexedName);
+        if (annexed == null) return Map.of("ok", false, "error", "Annexed region not found: " + annexedName);
+
+        if (dominantName.equals(annexedName))
+            return Map.of("ok", false, "error", "Cannot merge a region into itself");
+
+        if (!annexed.annexedBy().isBlank())
+            return Map.of("ok", false, "error", "Region '" + annexedName + "' has already been annexed by " + annexed.annexedBy());
+
+        if (!dominant.annexedBy().isBlank())
+            return Map.of("ok", false, "error", "Dominant region '" + dominantName + "' has been annexed and cannot absorb others");
+
+        // Transfer hexes from annexed to dominant
+        Set<String> mergedHexes = new LinkedHashSet<>(dominant.hexes());
+        mergedHexes.addAll(annexed.hexes());
+        List<String> newDominantHexes = new ArrayList<>(mergedHexes);
+
+        // Keep annexed with all original info, just mark annexedBy
+        MapData.Province newAnnexed = new MapData.Province(
+                annexed.hexes(), annexed.color(), annexed.tag(), annexed.description(), dominantName);
+
+        MapData.Province newDominant = new MapData.Province(
+                newDominantHexes, dominant.color(), dominant.tag(), dominant.description(), dominant.annexedBy());
+
+        Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
+        updated.put(dominantName, newDominant);
+        updated.put(annexedName, newAnnexed);
+
+        MapData result = withProvinces(map, updated);
+        saveMap(worldId, nodeId, result);
+
+        int transferred = annexed.hexes().size();
+        int newTotal = newDominantHexes.size();
+        log.info("Merged '{}' into '{}': {} hexes transferred (dominant now has {} total) in {}/{}",
+                annexedName, dominantName, transferred, newTotal, worldId, nodeId);
+
+        return Map.of(
+                "ok", true,
+                "dominantName", dominantName,
+                "annexedName", annexedName,
+                "transferredHexes", transferred,
+                "dominantHexCount", newTotal);
     }
 
     /**

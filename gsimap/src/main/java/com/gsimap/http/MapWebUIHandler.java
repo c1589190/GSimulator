@@ -104,6 +104,8 @@ public class MapWebUIHandler implements HttpHandler {
                 handleBlocks(exchange, sub, params);
             } else if (sub.endsWith("/query-terrain")) {
                 handleQueryTerrain(exchange, sub, params);
+            } else if (sub.endsWith("/merge-regions")) {
+                handleMergeRegions(exchange, sub, params);
             } else if (sub.endsWith("/rename-region")) {
                 handleRenameRegion(exchange, sub, params);
             } else if (sub.endsWith("/latest-texts")) {
@@ -564,6 +566,31 @@ public class MapWebUIHandler implements HttpHandler {
             }
             default -> sendError(exchange, 405, "Method not allowed: " + method);
         }
+    }
+
+    // ── POST /api/map/{worldId}/merge-regions ─────────────
+
+    private void handleMergeRegions(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            sendError(exchange, 405, "Method not allowed, use POST");
+            return;
+        }
+        String worldId = sub.substring(1, sub.indexOf("/merge-regions"));
+        String nodeId = mapService.readActiveNodeId(worldId);
+        if (nodeId == null) {
+            sendError(exchange, 404, "No active node for world: " + worldId);
+            return;
+        }
+        var body = MAPPER.readTree(exchange.getRequestBody());
+        String dominantName = body.get("dominantName").asText();
+        String annexedName = body.get("annexedName").asText();
+        if (dominantName == null || annexedName == null) {
+            sendError(exchange, 400, "Missing dominantName or annexedName");
+            return;
+        }
+        var result = mapService.mergeRegions(worldId, nodeId, dominantName, annexedName);
+        int status = Boolean.TRUE.equals(result.get("ok")) ? 200 : 400;
+        sendJson(exchange, status, result);
     }
 
     // ── POST /api/map/{worldId}/rename-region ─────────────

@@ -38,13 +38,14 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapGetDiffTool(mapService));
         registry.register(new GsimapGetHistoryTool(mapService));
 
-        // ── Region CRUD tools (6) ───────────────────────────
+        // ── Region CRUD tools (7) ───────────────────────────
         registry.register(new GsimapUpdateRegionTool(mapService));
         registry.register(new GsimapAddHexToRegionTool(mapService));
         registry.register(new GsimapRemoveHexFromRegionTool(mapService));
         registry.register(new GsimapCreateRegionTool(mapService));
         registry.register(new GsimapDeleteRegionTool(mapService));
         registry.register(new GsimapRenameRegionTool(mapService));
+        registry.register(new GsimapMergeRegionsTool(mapService));
 
         // ── Init tools (3) ──────────────────────────────────
         registry.register(new GsimapGenerateTool(mapService));

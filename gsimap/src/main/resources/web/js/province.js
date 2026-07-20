@@ -48,11 +48,19 @@ function showRegionList() {
     html += filtered.map(name => {
       const p = provs[name];
       const sel = selectedProvince === name ? 'border:1px solid var(--accent);' : '';
-      return `<div style="margin-bottom:4px;padding:6px;background:var(--bg);border-radius:4px;cursor:pointer;${sel}"
+      const annexed = p.annexedBy && p.annexedBy !== '';
+      const style = annexed
+        ? 'opacity:0.5;text-decoration:line-through;'
+        : '';
+      const annexedBadge = annexed
+        ? `<span style="color:#e74c3c;font-size:9px;margin-left:2px" title="已被${p.annexedBy}吞并">⚔${p.annexedBy}</span>`
+        : '';
+      return `<div style="margin-bottom:4px;padding:6px;background:var(--bg);border-radius:4px;cursor:pointer;${sel}${style}"
         onclick="selectProvince('${name}')">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${p.color||'#888'};margin-right:6px"></span>
         <b>${name}</b> <span style="color:var(--dim);font-size:10px">${(p.hexes||[]).length}格</span>
         ${p.tag ? '<span style="background:#333;color:#aaa;font-size:9px;padding:1px 4px;border-radius:2px">'+p.tag+'</span>' : ''}
+        ${annexedBadge}
       </div>`;
     }).join('');
   }
@@ -66,6 +74,7 @@ function showRegionDetail(name) {
   const p = mapData?.provinces?.[name];
   if (!p) return;
 
+  const isAnnexed = p.annexedBy && p.annexedBy !== '';
   const keys = p.hexes || [];
   const hexCount = keys.length;
   const mapTotal = Object.keys(mapData?.hexes || {}).length;
@@ -96,12 +105,17 @@ function showRegionDetail(name) {
   }
   adj.sort((a,b) => b.sharedEdges - a.sharedEdges);
 
-  title.textContent = `📐 区域`;
+  title.textContent = isAnnexed ? `📐 区域 (已吞并)` : `📐 区域`;
   document.getElementById('leftPanel').style.display = 'block';
 
+  const annexedNote = isAnnexed
+    ? `<div class="field" style="color:#e74c3c;font-weight:600">⚠ 已被「${p.annexedBy}」吞并 — 不在地图上显示</div>`
+    : '';
+
   body.innerHTML = `<div class="field"><label>名称</label>
-      <input value="${name}" onchange="renameProvince('${name}',this.value)" style="font-size:13px;font-weight:600">
+      <input value="${name}" onchange="renameProvince('${name}',this.value)" style="font-size:13px;font-weight:600;${isAnnexed?'text-decoration:line-through;color:var(--dim)':''}">
     </div>
+    ${annexedNote}
     <div class="field">
       <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${p.color||'#888'};margin-right:4px;vertical-align:middle"></span>
       <input value="${p.tag||''}" onchange="updateProvTag('${name}',this.value);showRegionDetail('${name}')" placeholder="tag" style="width:80px;font-size:11px">
@@ -128,6 +142,7 @@ function showRegionDetail(name) {
         </span>`
       ).join('')}</div>
     </div>` : '<div class="field" style="color:var(--dim)">无邻接区域</div>'}
+    ${!isAnnexed ? `<button onclick="mergeIntoRegion('${name}')" style="margin-top:4px;background:#e67e22;border-color:#e67e22;color:#fff">⚔ 吞并</button>` : ''}
     <button onclick="relassoProvince('${name}')" style="margin-top:4px" title="右键拖动重新划定区域边界">🔄 重圈</button>
     <button onclick="deleteProvince('${name}')" style="color:#e74c3c;border-color:#e74c3c;margin-top:4px;margin-left:4px">🗑 删除</button>
     <button onclick="document.getElementById('leftPanel').style.display='none';showTagList()" style="margin-top:4px;margin-left:4px">← 关闭详情</button>`;
@@ -276,4 +291,103 @@ function finishProvinceLasso() {
   mapData.provinces[name] = {hexes:[...interior,...boundSet], color:color||'#ff0000', tag:activeTag||'',description:desc||''};
   provinceLasso=[]; selectedProvince=name;
   showRegionDetail(name); showTagList(); render();
+}
+
+// ── Region Merge ────────────────────────────────────────
+async function mergeIntoRegion(dominantName) {
+  const provs = mapData?.provinces || {};
+  const targets = Object.keys(provs).filter(n =>
+    n !== dominantName && (!provs[n].annexedBy || provs[n].annexedBy === '')
+  );
+  if (targets.length === 0) { showToast('没有可吞并的区域'); return; }
+
+  // Build selection modal content
+  let listHtml = targets.map(name => {
+    const p = provs[name];
+    return `<div class="merge-option" onclick="confirmMerge('${dominantName}','${name}')"
+      style="padding:6px 8px;margin:2px 0;background:var(--bg);border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:6px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${p.color||'#888'}"></span>
+      <b>${name}</b>
+      <span style="color:var(--dim);font-size:10px">${(p.hexes||[]).length}格</span>
+      ${p.tag ? '<span style="background:#333;color:#aaa;font-size:9px;padding:1px 4px;border-radius:2px">'+p.tag+'</span>' : ''}
+    </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'goat-modal-overlay';
+  overlay.innerHTML = `
+    <div class="goat-modal" style="max-width:360px">
+      <h3>⚔ 吞并区域</h3>
+      <p style="font-size:12px;color:var(--dim)">选择要吞并的目标区域，其领土将全部归入「${dominantName}」。</p>
+      <div style="max-height:300px;overflow-y:auto">${listHtml}</div>
+      <div class="goat-modal-buttons">
+        <button class="goat-btn-cancel">取消</button>
+      </div>
+    </div>`;
+  overlay.querySelector('.goat-btn-cancel').onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
+async function confirmMerge(dominantName, annexedName) {
+  // Remove the selection modal (find and remove all overlays)
+  document.querySelectorAll('.goat-modal-overlay').forEach(o => o.remove());
+
+  // Confirmation dialog
+  const dominant = mapData.provinces[dominantName];
+  const annexed = mapData.provinces[annexedName];
+  const annexedHexCount = (annexed.hexes||[]).length;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'goat-modal-overlay';
+  overlay.innerHTML = `
+    <div class="goat-modal" style="max-width:380px">
+      <h3>⚔ 确认吞并</h3>
+      <p style="font-size:13px;line-height:1.6">
+        确定让 <b style="color:${dominant.color||'#fff'}">${dominantName}</b> 吞并
+        <b style="color:${annexed.color||'#888'}">${annexedName}</b> ？
+      </p>
+      <p style="font-size:11px;color:var(--dim)">
+        ${annexedName} 的 <b>${annexedHexCount}</b> 个领土格子将全部归入 ${dominantName}。<br>
+        ${annexedName} 的数据将保留，标记为已被吞并，不再显示在地图上。
+      </p>
+      <div class="goat-modal-buttons">
+        <button class="goat-btn-cancel">取消</button>
+        <button class="goat-btn-confirm" style="background:#e67e22;border-color:#e67e22">⚔ 确认吞并</button>
+      </div>
+    </div>`;
+  overlay.querySelector('.goat-btn-cancel').onclick = () => overlay.remove();
+  overlay.querySelector('.goat-btn-confirm').onclick = async () => {
+    overlay.remove();
+    await doMerge(dominantName, annexedName);
+  };
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
+async function doMerge(dominantName, annexedName) {
+  try {
+    const r = await fetch(`/api/map/${MapAPI.worldId}/merge-regions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({dominantName, annexedName})
+    });
+    const data = await r.json();
+    if (data.ok) {
+      // Reload map to get updated data from server
+      await loadMap();
+      selectedProvince = dominantName;
+      showRegionDetail(dominantName);
+      showTagList();
+      render();
+      showToast(`吞并完成: ${annexedName} → ${dominantName} (${data.transferredHexes}格已转移)`);
+      // Auto-save after merge
+      await saveMap();
+      setStatus(`已吞并并保存: ${annexedName} 并入 ${dominantName}`);
+    } else {
+      showToast('吞并失败: ' + (data.error || 'unknown'));
+    }
+  } catch(e) {
+    showToast('吞并失败: ' + e.message);
+  }
 }
