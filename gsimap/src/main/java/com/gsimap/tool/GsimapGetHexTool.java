@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -16,12 +15,10 @@ import java.util.Map;
  * <p>Returns color, terrain type, symbol, province ownership, and terrain resource
  * yields for the hex at (q, r).
  */
-public class GsimapGetHexTool implements AgentTool {
-
-    private final MapService mapService;
+public class GsimapGetHexTool extends AbstractGsimapTool {
 
     public GsimapGetHexTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -38,9 +35,12 @@ public class GsimapGetHexTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
 
         String nodeId = call.param("nodeId");

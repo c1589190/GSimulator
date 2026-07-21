@@ -204,8 +204,10 @@ class McpExternalLibTest {
             String result = composite.execute("my_hello", args);
             assertEquals("{\"greeting\":\"Hello, Claude!\"}", result);
 
-            // GSim 工具路由
-            String gsimResult = composite.execute("gsim_world_list", MAPPER.createObjectNode());
+            // GSim 工具路由（worldId 现在是必填参数）
+            var gsimArgs = MAPPER.createObjectNode();
+            gsimArgs.put("worldId", "test");
+            String gsimResult = composite.execute("gsim_world_list", gsimArgs);
             JsonNode node = MAPPER.readTree(gsimResult);
             assertTrue(node.has("success"), "world_list should return success wrapper");
         }
@@ -290,7 +292,9 @@ class McpExternalLibTest {
         void executeToolRoutesGsim(@TempDir Path tempDir) throws Exception {
             ExternalAppServer server = new ExternalAppServer(tempDir);
 
-            String result = server.executeTool("gsim_world_list", MAPPER.createObjectNode());
+            var gsimArgs = MAPPER.createObjectNode();
+            gsimArgs.put("worldId", "test");
+            String result = server.executeTool("gsim_world_list", gsimArgs);
             assertNotNull(result);
             JsonNode node = MAPPER.readTree(result);
             assertTrue(node.has("success"), "world_list should return success");
@@ -354,7 +358,9 @@ class McpExternalLibTest {
             ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
 
-            String result = server.executeTool("gsim_world_list", MAPPER.createObjectNode());
+            var gsimArgs = MAPPER.createObjectNode();
+            gsimArgs.put("worldId", "test");
+            String result = server.executeTool("gsim_world_list", gsimArgs);
             JsonNode node = MAPPER.readTree(result);
             assertTrue(node.has("success"));
         }

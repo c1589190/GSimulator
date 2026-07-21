@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -18,12 +17,10 @@ import java.util.Map;
  * {@code (|dq| + |dr| + |dq+dr|) / 2}. When region names are provided, the
  * center of each region is used as the coordinate.
  */
-public class GsimapGetDistanceTool implements AgentTool {
-
-    private final MapService mapService;
+public class GsimapGetDistanceTool extends AbstractGsimapTool {
 
     public GsimapGetDistanceTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -39,9 +36,12 @@ public class GsimapGetDistanceTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
 
         String nodeId = call.param("nodeId");

@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -16,15 +15,13 @@ import java.util.Map;
  * <p>Each neighbor is returned with its coordinates, terrain, color, and whether
  * the hex exists on the map.
  */
-public class GsimapGetNeighborsTool implements AgentTool {
+public class GsimapGetNeighborsTool extends AbstractGsimapTool {
 
     private static final int[][] HEX_DIRS = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
     private static final String[] DIR_NAMES = {"E", "NE", "NW", "W", "SW", "SE"};
 
-    private final MapService mapService;
-
     public GsimapGetNeighborsTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -40,9 +37,12 @@ public class GsimapGetNeighborsTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
 
         String nodeId = call.param("nodeId");

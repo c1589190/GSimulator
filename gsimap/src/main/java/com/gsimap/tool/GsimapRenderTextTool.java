@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -21,12 +20,10 @@ import java.util.Map;
  *
  * <p>Radius is clamped to 1–10 (larger maps lose readability in text).
  */
-public class GsimapRenderTextTool implements AgentTool {
-
-    private final MapService mapService;
+public class GsimapRenderTextTool extends AbstractGsimapTool {
 
     public GsimapRenderTextTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -44,9 +41,12 @@ public class GsimapRenderTextTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
 
         String nodeId = call.param("nodeId");

@@ -65,4 +65,23 @@ public interface AgentTool {
     default Permission permission() {
         return Permission.READ;
     }
+
+    /**
+     * 此工具是否需要 {@code worldId} 参数。
+     *
+     * <p>返回 {@code true} 时，MCP 适配器会：
+     * <ol>
+     *   <li>在 JSON Schema 中注入 {@code worldId} 作为必填参数</li>
+     *   <li>在 execute 前校验 worldId 存在性（空白则拒绝）</li>
+     *   <li>对 worldinfo 类工具额外校验 worldId 与活跃 world 一致</li>
+     * </ol>
+     *
+     * <p>默认返回 {@code false} — 不需要 worldId 的工具（Doc、Import、
+     * Agent 配置、搜索等）无需任何改动。
+     *
+     * @return true 需要 worldId，false 不需要
+     */
+    default boolean requiresWorldId() {
+        return false;
+    }
 }

@@ -170,6 +170,42 @@ public abstract class AbstractMcpServer implements Runnable {
         this.transport = transport;
     }
 
+    /**
+     * 使用 {@link ToolRegistry} 和活跃 world ID supplier 创建 MCP 服务器。
+     * worldinfo 工具将校验调用者传入的 worldId 是否与活跃 world 一致。
+     *
+     * @param toolRegistry   工具注册表（不可为 null）
+     * @param activeWorldId  活跃 world ID supplier（可为 null，null 时不做匹配校验）
+     */
+    protected AbstractMcpServer(ToolRegistry toolRegistry, java.util.function.Supplier<String> activeWorldId) {
+        if (toolRegistry == null) {
+            throw new IllegalArgumentException("ToolRegistry must not be null");
+        }
+        this.registries = List.of(new ToolRegistryMcpAdapter(toolRegistry, activeWorldId));
+        this.transport = new StdioMcpTransport();
+    }
+
+    /**
+     * 使用 {@link ToolRegistry}、活跃 world ID supplier 和自定义传输层创建 MCP 服务器。
+     *
+     * @param toolRegistry   工具注册表（不可为 null）
+     * @param activeWorldId  活跃 world ID supplier（可为 null）
+     * @param transport      传输层实现（不可为 null）
+     */
+    protected AbstractMcpServer(
+            ToolRegistry toolRegistry,
+            java.util.function.Supplier<String> activeWorldId,
+            McpTransport transport) {
+        if (toolRegistry == null) {
+            throw new IllegalArgumentException("ToolRegistry must not be null");
+        }
+        if (transport == null) {
+            throw new IllegalArgumentException("transport must not be null");
+        }
+        this.registries = List.of(new ToolRegistryMcpAdapter(toolRegistry, activeWorldId));
+        this.transport = transport;
+    }
+
     // ── 子类模板方法 ─────────────────────────────────────────
 
     /**

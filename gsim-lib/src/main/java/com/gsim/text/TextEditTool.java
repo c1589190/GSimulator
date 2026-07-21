@@ -302,6 +302,11 @@ public final class TextEditTool implements AgentTool {
     }
 
     @Override
+    public boolean requiresWorldId() {
+        return true;
+    }
+
+    @Override
     public Permission permission() {
         return Permission.WRITE;
     }

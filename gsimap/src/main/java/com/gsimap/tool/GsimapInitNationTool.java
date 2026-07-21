@@ -2,7 +2,6 @@ package com.gsimap.tool;
 
 import static java.util.Map.entry;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -18,12 +17,10 @@ import java.util.Map;
  * sync to GSim map checkpoint, and optionally write faction/narrative/worldview
  * checkpoint entries and a capital city.
  */
-public final class GsimapInitNationTool implements AgentTool {
-
-    private final MapService mapService;
+public final class GsimapInitNationTool extends AbstractGsimapTool {
 
     public GsimapInitNationTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -40,9 +37,12 @@ public final class GsimapInitNationTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {

@@ -47,7 +47,10 @@ public final class AttachmentReadTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+        }
         if (worldId == null || worldId.isBlank()) {
             return ToolResult.fail(name(), "worldId is required");
         }
@@ -94,6 +97,11 @@ public final class AttachmentReadTool implements AgentTool {
                                                 "description",
                                                 "Node ID (optional, defaults to active node)")),
                 "required", List.of("worldId", "key"));
+    }
+
+    @Override
+    public boolean requiresWorldId() {
+        return true;
     }
 
     @Override

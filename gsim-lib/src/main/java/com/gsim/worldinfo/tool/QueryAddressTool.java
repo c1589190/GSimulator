@@ -59,7 +59,10 @@ public final class QueryAddressTool implements AgentTool {
 
         // Route 1: gsimap:* → delegate to gsimap_query_by_address
         if (address.startsWith("gsimap:")) {
-            String worldId = call.param("worldId");
+            String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+            if (worldId == null) {
+                worldId = call.param("worldId");
+            }
             if (worldId == null || worldId.isBlank()) {
                 return ToolResult.fail(name(), "worldId is required for gsimap: addresses");
             }
@@ -139,6 +142,11 @@ public final class QueryAddressTool implements AgentTool {
                                                 "description",
                                                 "GSim world ID (required for gsimap: addresses)")),
                 "required", List.of("address"));
+    }
+
+    @Override
+    public boolean requiresWorldId() {
+        return true;
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -14,12 +13,10 @@ import java.util.Map;
  * The annexed region keeps all its original data but is marked as annexed,
  * and its hexes are transferred to the dominant region.
  */
-public final class GsimapMergeRegionsTool implements AgentTool {
-
-    private final MapService mapService;
+public final class GsimapMergeRegionsTool extends AbstractGsimapTool {
 
     public GsimapMergeRegionsTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -36,9 +33,12 @@ public final class GsimapMergeRegionsTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {

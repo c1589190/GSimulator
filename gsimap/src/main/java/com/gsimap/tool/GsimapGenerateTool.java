@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -14,12 +13,10 @@ import java.util.Map;
  * Creates continents with mountain ridges, lowlands, and water.
  * Required before using gsimap_init_nation.
  */
-public final class GsimapGenerateTool implements AgentTool {
-
-    private final MapService mapService;
+public final class GsimapGenerateTool extends AbstractGsimapTool {
 
     public GsimapGenerateTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -36,7 +33,10 @@ public final class GsimapGenerateTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+        }
         if (worldId == null || worldId.isBlank()) {
             return ToolResult.fail(name(), "worldId is required");
         }

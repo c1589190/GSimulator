@@ -60,6 +60,43 @@ public class GsimMcpServer extends AbstractMcpServer {
         this(ctx.getToolRegistry());
     }
 
+    /**
+     * Creates an MCP server with active world tracking.
+     * Worldinfo tools will validate that caller-provided worldId matches the active world.
+     *
+     * @param toolRegistry   the tool registry (must not be null)
+     * @param activeWorldId  supplier for the active world ID (may be null)
+     */
+    public GsimMcpServer(ToolRegistry toolRegistry, java.util.function.Supplier<String> activeWorldId) {
+        super(toolRegistry, activeWorldId);
+        this.toolRegistry = toolRegistry;
+    }
+
+    /**
+     * Creates an MCP server with active world tracking and explicit transport.
+     *
+     * @param toolRegistry   the tool registry (must not be null)
+     * @param activeWorldId  supplier for the active world ID (may be null)
+     * @param transport      the transport layer (must not be null)
+     */
+    public GsimMcpServer(
+            ToolRegistry toolRegistry,
+            java.util.function.Supplier<String> activeWorldId,
+            McpTransport transport) {
+        super(toolRegistry, activeWorldId, transport);
+        this.toolRegistry = toolRegistry;
+    }
+
+    /**
+     * Creates an MCP server with active world tracking from ApplicationContext.
+     *
+     * @param ctx            the application context
+     * @param activeWorldId  supplier for the active world ID (may be null)
+     */
+    public GsimMcpServer(ApplicationContext ctx, java.util.function.Supplier<String> activeWorldId) {
+        this(ctx.getToolRegistry(), activeWorldId);
+    }
+
     // ── AbstractMcpServer template methods ───────────────────
 
     @Override

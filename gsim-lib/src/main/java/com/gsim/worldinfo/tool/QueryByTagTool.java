@@ -135,6 +135,11 @@ public final class QueryByTagTool implements AgentTool {
     }
 
     @Override
+    public boolean requiresWorldId() {
+        return true;
+    }
+
+    @Override
     public Permission permission() {
         return Permission.READ;
     }

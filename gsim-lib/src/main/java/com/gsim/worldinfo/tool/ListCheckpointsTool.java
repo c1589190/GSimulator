@@ -67,7 +67,10 @@ public final class ListCheckpointsTool implements AgentTool {
             return ToolResult.fail(name(), "No active world information available");
         }
 
-        String worldId = call.param("worldId");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+        }
         if (worldId == null || worldId.isBlank()) {
             worldId = wi.worldId();
         }
@@ -115,6 +118,11 @@ public final class ListCheckpointsTool implements AgentTool {
                         "checkpoints",
                         sb.toString().trim(),
                         1.0)));
+    }
+
+    @Override
+    public boolean requiresWorldId() {
+        return true;
     }
 
     @Override

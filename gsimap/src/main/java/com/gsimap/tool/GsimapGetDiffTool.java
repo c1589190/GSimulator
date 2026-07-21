@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -16,12 +15,10 @@ import java.util.Map;
  * gsimap_get_diff — Get the map changes (diff) for a specific node.
  * Shows what hexes changed and which were removed this turn.
  */
-public final class GsimapGetDiffTool implements AgentTool {
-
-    private final MapService mapService;
+public final class GsimapGetDiffTool extends AbstractGsimapTool {
 
     public GsimapGetDiffTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -36,9 +33,12 @@ public final class GsimapGetDiffTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {

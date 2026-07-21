@@ -591,4 +591,9 @@ public class GSimulatorApplication {
     public ApplicationContext getContext() {
         return ctx;
     }
+
+    /** Returns a dynamic supplier for the current active world ID. */
+    public java.util.function.Supplier<String> getActiveWorldIdSupplier() {
+        return activeWorldId::get;
+    }
 }

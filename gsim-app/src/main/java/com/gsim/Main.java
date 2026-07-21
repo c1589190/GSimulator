@@ -155,7 +155,7 @@ public class Main {
             if (noCli) {
                 // MCP mode: use SAVED original stdout for clean JSON-RPC
                 McpTransport transport = new StdioMcpTransport(System.in, originalStdout);
-                GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, transport);
+                GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, app.getActiveWorldIdSupplier(), transport);
 
                 // Shutdown hook: clean up HTTP servers when MCP loop exits
                 Runtime.getRuntime()

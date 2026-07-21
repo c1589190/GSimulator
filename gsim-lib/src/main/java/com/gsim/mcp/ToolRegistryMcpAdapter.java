@@ -8,9 +8,12 @@ import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,9 +43,6 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     private static final Logger log = LoggerFactory.getLogger(ToolRegistryMcpAdapter.class);
     private static final ObjectMapper MAPPER = JsonUtils.MAPPER;
 
-    /** Default wide schema used when an AgentTool returns null from getParameters(). */
-    private static final String WIDE_SCHEMA = "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}";
-
     /** Reserved parameter names consumed by the adapter (not passed to tools). */
     private static final String PARAM_PAGE = "_page";
 
@@ -55,15 +55,46 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     private final ToolRegistry registry;
 
     /**
+     * Optional supplier for the active world ID. When set, worldinfo tools will
+     * validate that the caller-provided {@code worldId} matches the active world.
+     * When null, only worldId presence is validated (no match check).
+     */
+    private final Supplier<String> activeWorldId;
+
+    /**
+     * Tools that should additionally validate worldId matches the active world.
+     * These are worldinfo tools that use {@code Supplier<WorldInformation>}.
+     */
+    private static final Set<String> ACTIVE_WORLD_MATCH_TOOLS = Set.of(
+            "query_node", "query_checkpoint", "query_keyword", "query_element",
+            "query_by_tag", "query_address", "write_element", "create_checkpoint",
+            "attachment_write", "attachment_read", "delete_element",
+            "node_list", "node_status", "node_create", "node_switch", "node_goto_parent",
+            "list_checkpoints");
+
+    /**
      * Creates an MCP adapter wrapping the given ToolRegistry.
+     * No worldId match validation — only presence is enforced.
      *
      * @param registry the tool registry to expose via MCP (must not be null)
      */
     public ToolRegistryMcpAdapter(ToolRegistry registry) {
+        this(registry, null);
+    }
+
+    /**
+     * Creates an MCP adapter wrapping the given ToolRegistry with active world tracking.
+     *
+     * @param registry       the tool registry to expose via MCP (must not be null)
+     * @param activeWorldId  optional supplier for the active world ID;
+     *                       when set, worldinfo tools validate worldId matches the active world
+     */
+    public ToolRegistryMcpAdapter(ToolRegistry registry, Supplier<String> activeWorldId) {
         if (registry == null) {
             throw new IllegalArgumentException("ToolRegistry must not be null");
         }
         this.registry = registry;
+        this.activeWorldId = activeWorldId;
     }
 
     // ── McpToolRegistry ─────────────────────────────────────
@@ -88,7 +119,27 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             throw new UnknownToolException(name);
         }
 
-        // Build tool params, stripping reserved pagination keys so tools never see them
+        // ── Validate worldId (only for tools that declare they need it) ──
+        String worldId = extractString(args, "worldId", null);
+        if (tool.requiresWorldId()) {
+            if (worldId == null || worldId.isBlank()) {
+                throw new IllegalArgumentException(
+                        "worldId is required for " + name + " — please specify the target world ID");
+            }
+            // For worldinfo tools: also validate the worldId matches the active world
+            if (ACTIVE_WORLD_MATCH_TOOLS.contains(tool.name()) && activeWorldId != null) {
+                String active = activeWorldId.get();
+                if (active != null && !active.isEmpty() && !active.equals(worldId)) {
+                    throw new IllegalArgumentException(
+                            "worldId '" + worldId + "' does not match the active world '"
+                                    + active + "'. Use world_switch first or correct the worldId.");
+                }
+            }
+        }
+
+        // Build tool params, stripping reserved pagination keys
+        // NOTE: worldId is NOT stripped — tools that need it (gsimap, attachment, etc.)
+        // access it via call.param("worldId"). The adapter has already validated it.
         Map<String, String> toolParams = jsonNodeToParams(args);
         toolParams.remove(PARAM_PAGE);
         toolParams.remove(PARAM_PAGE_SIZE);
@@ -96,18 +147,24 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
         ToolCall call = new ToolCall(name, toolParams);
         ToolResult result;
 
+        // Set request-scoped worldId so tools can use GsimRequestContext.worldId()
+        if (worldId != null && !worldId.isBlank()) {
+            GsimRequestContext.setWorldId(worldId);
+        }
         try {
             result = tool.execute(call);
         } catch (Exception e) {
             log.error("Tool '{}' execution threw exception: {}", name, e.getMessage(), e);
             throw new IllegalArgumentException("Tool '" + name + "' execution failed: " + e.getMessage());
+        } finally {
+            GsimRequestContext.clear();
         }
 
         if (!result.success()) {
             throw new IllegalArgumentException("Tool '" + name + "' failed: " + result.error());
         }
 
-        // Pass original args (with pagination params) to the serialization layer
+        // Pass original args (with pagination params and worldId) to the serialization layer
         return toolResultToJson(result, args);
     }
 
@@ -162,16 +219,23 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     static String schemaForTool(AgentTool tool) {
         Map<String, Object> params = tool.getParameters();
         if (params == null) {
-            return WIDE_SCHEMA;
+            if (tool.requiresWorldId()) {
+                return "{\"type\":\"object\",\"properties\":"
+                        + "{\"worldId\":{\"type\":\"string\",\"description\":\"GSim world ID\"}},"
+                        + "\"required\":[\"worldId\"],\"additionalProperties\":true}";
+            }
+            return "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":true}";
         }
         try {
-            // Inject reserved pagination params into properties
-            Map<String, Object> properties = (Map<String, Object>) params.get("properties");
-            if (properties != null && !properties.containsKey(PARAM_PAGE)) {
-                // Must create mutable copies to avoid corrupting the tool's original schema
-                properties = new LinkedHashMap<>(properties);
-                params = new LinkedHashMap<>(params);
-                params.put("properties", properties);
+            // Clone to mutable copies so we don't corrupt the tool's original schema
+            Map<String, Object> properties =
+                    (Map<String, Object>) params.getOrDefault("properties", new LinkedHashMap<>());
+            properties = new LinkedHashMap<>(properties);
+            params = new LinkedHashMap<>(params);
+            params.put("properties", properties);
+
+            // Inject reserved pagination params
+            if (!properties.containsKey(PARAM_PAGE)) {
                 properties.put(
                         PARAM_PAGE,
                         Map.of(
@@ -186,6 +250,24 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
                                 "For multi-item results: items per page (default 20, max 100). "
                                         + "For single-item results: characters per 200-char unit (default 20 = 4000 chars)."));
             }
+
+            // Inject worldId as required param — only for tools that declare they need it
+            if (tool.requiresWorldId() && !properties.containsKey("worldId")) {
+                properties.put(
+                        "worldId",
+                        Map.of(
+                                "type", "string",
+                                "description", "GSim world ID"));
+                List<Object> required =
+                        params.containsKey("required")
+                                ? new ArrayList<>((List<Object>) params.get("required"))
+                                : new ArrayList<>();
+                if (!required.contains("worldId")) {
+                    required.add(0, "worldId");
+                    params.put("required", required);
+                }
+            }
+
             return MAPPER.writeValueAsString(params);
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize schema for tool '{}', using fallback", tool.name(), e);
@@ -279,7 +361,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
                 var item = allItems.get(0);
                 pageItems = List.of(new ToolResult.Item(item.title(), item.path(), chunk, item.score()));
 
-                map = buildResponseMap(result, pageItems);
+                map = buildResponseMap(result, pageItems, args);
                 if (totalChars > charPageSize || page > 1) {
                     map.put("_totalItems", totalItems);
                     map.put("_totalChars", totalChars);
@@ -296,7 +378,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
 
                 pageItems = (fromIndex < totalItems) ? allItems.subList(fromIndex, toIndex) : List.of();
 
-                map = buildResponseMap(result, pageItems);
+                map = buildResponseMap(result, pageItems, args);
                 if (totalItems > pageSize || page > 1) {
                     map.put("_totalItems", totalItems);
                     map.put("_page", page);
@@ -319,7 +401,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     }
 
     /** Build the common response map from a result and its (already-sliced) page items. */
-    private static Map<String, Object> buildResponseMap(ToolResult result, List<ToolResult.Item> pageItems) {
+    private static Map<String, Object> buildResponseMap(
+            ToolResult result, List<ToolResult.Item> pageItems, JsonNode args) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("success", result.success());
         map.put("toolName", result.toolName());
@@ -332,6 +415,29 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
                     pageItems.stream().map(ToolRegistryMcpAdapter::itemToMap).toList());
         }
         map.put("itemCount", pageItems.size());
+
+        // ── Inject _context with worldId and resource address ──
+        Map<String, Object> context = new LinkedHashMap<>();
+        String worldId = extractString(args, "worldId", null);
+        if (worldId != null && !worldId.isBlank()) {
+            context.put("worldId", worldId);
+        }
+        // Extract nodeId and address from the first item's path
+        if (!pageItems.isEmpty()) {
+            String firstPath = pageItems.get(0).path();
+            if (firstPath != null && !firstPath.isBlank()) {
+                context.put("address", firstPath);
+                // Try to extract nodeId from path patterns like "n0003:..." or "worldId:n0003:..."
+                String nodeId = extractNodeIdFromPath(firstPath);
+                if (nodeId != null) {
+                    context.put("nodeId", nodeId);
+                }
+            }
+        }
+        if (!context.isEmpty()) {
+            map.put("_context", context);
+        }
+
         return map;
     }
 
@@ -389,5 +495,37 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             }
         }
         return defaultValue;
+    }
+
+    /** Extract a string parameter from JsonNode args, returning defaultValue if absent. */
+    private static String extractString(JsonNode args, String key, String defaultValue) {
+        if (args == null || !args.has(key)) return defaultValue;
+        JsonNode node = args.get(key);
+        if (node.isTextual()) return node.asText();
+        if (node.isValueNode()) return node.asText();
+        return defaultValue;
+    }
+
+    /**
+     * Extract a nodeId from a resource path string.
+     * Handles formats like "n0003:characters:曹操" → "n0003",
+     * "logdemo:n0003:characters:曹操" → "n0003",
+     * and "gsimap:region:魏" → null (gsimap paths don't use nodeIds this way).
+     */
+    private static String extractNodeIdFromPath(String path) {
+        if (path == null || path.isBlank()) return null;
+        // Pattern 1: "nDDDD:..." — nodeId is the first segment
+        if (path.matches("^n\\d{4}:.*")) {
+            return path.substring(0, 5); // e.g. "n0003"
+        }
+        // Pattern 2: "worldId:nDDDD:..." — nodeId is the second segment
+        int firstColon = path.indexOf(':');
+        if (firstColon > 0) {
+            String afterFirst = path.substring(firstColon + 1);
+            if (afterFirst.matches("^n\\d{4}:.*")) {
+                return afterFirst.substring(0, 5);
+            }
+        }
+        return null;
     }
 }

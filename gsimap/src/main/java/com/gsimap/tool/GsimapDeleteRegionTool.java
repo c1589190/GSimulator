@@ -1,6 +1,5 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
@@ -12,12 +11,10 @@ import java.util.Map;
 /**
  * gsimap_delete_region — Delete a region. Auto-saves.
  */
-public final class GsimapDeleteRegionTool implements AgentTool {
-
-    private final MapService mapService;
+public final class GsimapDeleteRegionTool extends AbstractGsimapTool {
 
     public GsimapDeleteRegionTool(MapService mapService) {
-        this.mapService = mapService;
+        super(mapService);
     }
 
     @Override
@@ -32,9 +29,12 @@ public final class GsimapDeleteRegionTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = call.param("worldId");
-        if (worldId == null || worldId.isBlank()) {
-            return ToolResult.fail(name(), "worldId is required");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+            if (worldId == null || worldId.isBlank()) {
+                return ToolResult.fail(name(), "worldId is required");
+            }
         }
         String nodeId = call.param("nodeId", "n0000");
         String name = call.param("name");

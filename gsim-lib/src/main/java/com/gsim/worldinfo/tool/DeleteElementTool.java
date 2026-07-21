@@ -74,7 +74,10 @@ public final class DeleteElementTool implements AgentTool {
     public ToolResult execute(ToolCall call) {
         // Resolve worldId
         WorldInformation wi = worldInfo.get();
-        String worldId = call.param("worldId");
+        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        if (worldId == null) {
+            worldId = call.param("worldId");
+        }
         if (worldId == null || worldId.isBlank()) {
             worldId = wi != null ? wi.worldId() : resolveActiveWorldId();
         }
@@ -178,6 +181,11 @@ public final class DeleteElementTool implements AgentTool {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    @Override
+    public boolean requiresWorldId() {
+        return true;
     }
 
     @Override
