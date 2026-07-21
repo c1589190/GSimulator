@@ -178,3 +178,17 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 6. **测试结束后清理** — 删除测试 doc/region/world
 7. **不要假设当前 active world** — 每个 Agent 先调 world_list 确认
 8. **不要跳过错误测试** — 缺 worldId、无效参数、不存在 ID 也必须覆盖
+
+## Bug 知识沉淀
+
+每发现并修复一个真实 bug，必须调用子流程 `capture-bug.md`
+将触发场景、修复过程、检验方法写入 `bugs/` 文件夹。
+
+命名规范: `bugs/{{YYYY-MM-DD}}-{{category}}-{{slug}}.md`
+分类: `spotbugs` | `logic` | `null` | `concurrency` | `api` | `build`
+
+已沉淀的 bug:
+- `bugs/2026-07-22-logic-canvas-cache-key.md` — Canvas 缓存键 worldId 匹配失败
+- `bugs/_template.md` — 新 bug 模板
+
+沉淀时读取 `capture-bug.md` 了解完整工作流。
