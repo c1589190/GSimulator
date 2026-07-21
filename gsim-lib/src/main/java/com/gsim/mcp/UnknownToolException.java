@@ -14,6 +14,8 @@ package com.gsim.mcp;
  * 来尝试下一个注册表，不会将参数验证失败误判为路由失败。
  */
 public class UnknownToolException extends RuntimeException {
+    @java.io.Serial
+    private static final long serialVersionUID = 1L;
 
     private final String toolName;
 

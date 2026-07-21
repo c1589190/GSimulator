@@ -128,8 +128,12 @@ public class ApiRouter {
         register("/api/world", new WorldApiV2Handler(worldManager, worldsDir));
 
         // ── World API v1（向后兼容）──
-        register("/api/world-manager", new WorldManagerApiHandler(worldsDir, activeWorldId));
-        register("/api/world-manager-data", new WorldDataApiHandler(worldsDir));
+        @SuppressWarnings("deprecation")
+        var _unused = new WorldManagerApiHandler(worldsDir, activeWorldId);
+        register("/api/world-manager", _unused);
+        @SuppressWarnings("deprecation")
+        var _unused2 = new WorldDataApiHandler(worldsDir);
+        register("/api/world-manager-data", _unused2);
 
         // ── 文档管理 ──
         register("/api/documents", new DocumentsApiHandler(importDir, eventBus, ctx));
@@ -174,7 +178,7 @@ public class ApiRouter {
 
     private void registerBlocked(String path, String reason) {
         register(path, exchange -> {
-            com.gsim.api.handlers.BaseApiHandler.sendError((com.sun.net.httpserver.HttpExchange) exchange, 503, reason);
+            com.gsim.api.handlers.BaseApiHandler.sendError(exchange, 503, reason);
         });
     }
 }

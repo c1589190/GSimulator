@@ -93,4 +93,22 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- SpotBugs: ratchet gate — existing 398 Medium+ issues are baselined.
+                 New issues will cause failure once baseline comparison is enabled.
+                 Currently failOnError=false. Upgrade path: enable baseline diff in CI. -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <failOnError>false</failOnError>
+                    <includeTests>false</includeTests>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

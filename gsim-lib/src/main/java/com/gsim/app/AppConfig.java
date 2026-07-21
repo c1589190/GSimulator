@@ -78,6 +78,7 @@ public class AppConfig {
     /**
      * 从 ConfigLoader 结果构造。
      */
+    @SuppressWarnings("this-escape")
     public AppConfig(ConfigLoader.ConfigResult result) {
         // 先从旧 properties/env 读取作为 fallback
         String fallbackBaseUrl = result.get("llm.base_url");

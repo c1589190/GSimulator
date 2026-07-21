@@ -4,8 +4,17 @@
         "https://checkstyle.org/dtds/configuration_1_3.dtd">
 
 <!--
-    GSimulator 自定义 Checkstyle 配置。
-    基于 sun_checks，移除了过度严格的检查项。
+    GSimulator Checkstyle 配置 — 棘轮门策略。
+
+    与 Spotless 重叠的规则已移除（Spotless 通过 palantirJavaFormat + trimTrailingWhitespace
+    + endWithNewline + removeUnusedImports 已覆盖）：
+      - 行尾空白 / 文件末尾空行 → Spotless
+      - 未使用 import / 冗余 import → Spotless
+      - 空白布局 / 括号位置 → Spotless (palantirJavaFormat)
+      - 左花括号 / 右花括号 → Spotless
+
+    保留规则：命名、Javadoc、结构安全、危险代码检测。
+    这些是 Spotless 无法自动修复的语义级别检查。
 -->
 
 <module name="Checker">
@@ -13,29 +22,17 @@
     <property name="severity" value="warning"/>
     <property name="fileExtensions" value="java, properties, xml"/>
 
-    <!-- 排除自动生成的模块信息 -->
     <module name="BeforeExecutionExclusionFileFilter">
         <property name="fileNamePattern" value="module\-info\.java$"/>
     </module>
 
-    <!-- 文件长度：最多 3000 行 -->
     <module name="FileLength">
         <property name="max" value="3000"/>
     </module>
 
-    <!-- 行长度：120 字符 -->
     <module name="LineLength">
         <property name="max" value="120"/>
         <property name="ignorePattern" value="^package.*|^import.*|a href|a http|@see|@link|@param|@return"/>
-    </module>
-
-    <!-- 文件必须以空行结尾 -->
-    <module name="NewlineAtEndOfFile"/>
-
-    <!-- 不允许行尾空白 -->
-    <module name="RegexpSingleline">
-        <property name="format" value="\s+$"/>
-        <property name="message" value="行尾有多余空白"/>
     </module>
 
     <!-- TreeWalker：AST 级别的检查 -->
@@ -55,39 +52,30 @@
         <module name="StaticVariableName"/>
         <module name="TypeName"/>
 
-        <!-- ===== 导入检查 ===== -->
+        <!-- ===== 导入检查（语义规则，Spotless 不覆盖）===== -->
         <module name="AvoidStarImport"/>
         <module name="IllegalImport"/>
-        <module name="RedundantImport"/>
-        <module name="UnusedImports"/>
 
         <!-- ===== 代码块 ===== -->
         <module name="EmptyBlock"/>
         <module name="NeedBraces">
             <property name="tokens" value="LITERAL_DO, LITERAL_ELSE, LITERAL_FOR, LITERAL_WHILE"/>
         </module>
-        <module name="LeftCurly"/>
-        <module name="RightCurly"/>
-        <!-- AvoidNestedBlocks 已禁用 -->
 
-        <!-- ===== 编码规范 ===== -->
+        <!-- ===== 编码规范（危险代码检测）===== -->
         <module name="EmptyStatement"/>
         <module name="EqualsHashCode"/>
         <module name="HiddenField">
             <property name="ignoreConstructorParameter" value="true"/>
             <property name="ignoreSetter" value="true"/>
         </module>
-        <module name="IllegalInstantiation"/>
         <module name="InnerAssignment"/>
         <module name="MissingSwitchDefault"/>
         <module name="MultipleVariableDeclarations"/>
         <module name="SimplifyBooleanExpression"/>
         <module name="SimplifyBooleanReturn"/>
-        <!-- MagicNumber 已禁用 -->
-        <!-- FinalParameters 已禁用 -->
 
         <!-- ===== 类设计 ===== -->
-        <!-- DesignForExtension 已禁用 -->
         <module name="FinalClass"/>
         <module name="HideUtilityClassConstructor"/>
         <module name="VisibilityModifier">
@@ -101,20 +89,7 @@
         </module>
         <module name="UpperEll"/>
 
-        <!-- ===== 空白 ===== -->
-        <module name="GenericWhitespace"/>
-        <module name="MethodParamPad"/>
-        <module name="NoWhitespaceAfter"/>
-        <module name="NoWhitespaceBefore"/>
-        <module name="OperatorWrap"/>
-        <module name="ParenPad"/>
-        <module name="TypecastParenPad"/>
-        <module name="WhitespaceAfter"/>
-        <module name="WhitespaceAround"/>
-
         <!-- ===== Javadoc 注释 ===== -->
-        <!-- JavadocVariable 已禁用（不要求字段 Javadoc） -->
-        <!-- JavadocPackage 已禁用（不要求 package-info.java） -->
         <module name="JavadocMethod">
             <property name="accessModifiers" value="public"/>
             <property name="allowMissingParamTags" value="false"/>
@@ -139,7 +114,6 @@
         </module>
         <module name="InvalidJavadocPosition"/>
         <module name="NonEmptyAtclauseDescription"/>
-        <!-- SummaryJavadoc 已禁用（不强求句号结束） -->
 
         <!-- ===== 代码规模 ===== -->
         <module name="MethodLength">

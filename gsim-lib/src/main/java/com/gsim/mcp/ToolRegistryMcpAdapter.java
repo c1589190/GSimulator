@@ -66,10 +66,22 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      * These are worldinfo tools that use {@code Supplier<WorldInformation>}.
      */
     private static final Set<String> ACTIVE_WORLD_MATCH_TOOLS = Set.of(
-            "query_node", "query_checkpoint", "query_keyword", "query_element",
-            "query_by_tag", "query_address", "write_element", "create_checkpoint",
-            "attachment_write", "attachment_read", "delete_element",
-            "node_list", "node_status", "node_create", "node_switch", "node_goto_parent",
+            "query_node",
+            "query_checkpoint",
+            "query_keyword",
+            "query_element",
+            "query_by_tag",
+            "query_address",
+            "write_element",
+            "create_checkpoint",
+            "attachment_write",
+            "attachment_read",
+            "delete_element",
+            "node_list",
+            "node_status",
+            "node_create",
+            "node_switch",
+            "node_goto_parent",
             "list_checkpoints");
 
     /**
@@ -130,9 +142,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             if (ACTIVE_WORLD_MATCH_TOOLS.contains(tool.name()) && activeWorldId != null) {
                 String active = activeWorldId.get();
                 if (active != null && !active.isEmpty() && !active.equals(worldId)) {
-                    throw new IllegalArgumentException(
-                            "worldId '" + worldId + "' does not match the active world '"
-                                    + active + "'. Use world_switch first or correct the worldId.");
+                    throw new IllegalArgumentException("worldId '" + worldId + "' does not match the active world '"
+                            + active + "'. Use world_switch first or correct the worldId.");
                 }
             }
         }
@@ -258,10 +269,9 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
                         Map.of(
                                 "type", "string",
                                 "description", "GSim world ID"));
-                List<Object> required =
-                        params.containsKey("required")
-                                ? new ArrayList<>((List<Object>) params.get("required"))
-                                : new ArrayList<>();
+                List<Object> required = params.containsKey("required")
+                        ? new ArrayList<>((List<Object>) params.get("required"))
+                        : new ArrayList<>();
                 if (!required.contains("worldId")) {
                     required.add(0, "worldId");
                     params.put("required", required);

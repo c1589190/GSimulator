@@ -80,9 +80,7 @@ public class GsimMcpServer extends AbstractMcpServer {
      * @param transport      the transport layer (must not be null)
      */
     public GsimMcpServer(
-            ToolRegistry toolRegistry,
-            java.util.function.Supplier<String> activeWorldId,
-            McpTransport transport) {
+            ToolRegistry toolRegistry, java.util.function.Supplier<String> activeWorldId, McpTransport transport) {
         super(toolRegistry, activeWorldId, transport);
         this.toolRegistry = toolRegistry;
     }

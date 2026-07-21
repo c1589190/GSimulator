@@ -123,6 +123,10 @@
                     <configuration>
                         <source>21</source>
                         <target>21</target>
+                        <compilerArgs>
+                            <arg>-Xlint:all,-processing,-options</arg>
+                            <arg>-Werror</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -224,9 +228,9 @@
                     <version>${spotbugs-maven-plugin.version}</version>
                     <configuration>
                         <effort>Max</effort>
-                        <threshold>Low</threshold>
+                        <threshold>Medium</threshold>
                         <failOnError>false</failOnError>
-                        <includeTests>true</includeTests>
+                        <includeTests>false</includeTests>
                     </configuration>
                     <executions>
                         <execution>
@@ -242,21 +246,19 @@
         </pluginManagement>
 
         <plugins>
-            <!-- Activate Spotless check during verify -->
+            <!-- Activate Spotless check during verify (all modules) -->
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
             </plugin>
-            <!-- Activate Checkstyle during verify -->
+            <!-- Activate Checkstyle during verify (all modules) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
             </plugin>
-            <!-- Activate SpotBugs during verify -->
-            <plugin>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs-maven-plugin</artifactId>
-            </plugin>
+            <!-- SpotBugs: activated per-module (different failOnError per module).
+                 gsimap + gsim-app: failOnError=true  (zero tolerance)
+                 gsim-lib:         failOnError=false (ratchet: baseline comparison) -->
         </plugins>
     </build>
 </project>

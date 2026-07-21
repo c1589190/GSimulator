@@ -124,7 +124,7 @@ public class CliWsProgressSink implements AgentProgressSink {
                 out.write(len & 0xff);
             } else {
                 out.write(127);
-                for (int i = 7; i >= 0; i--) out.write((int) ((len >> (i * 8)) & 0xff));
+                for (int i = 7; i >= 0; i--) out.write(((len >> (i * 8)) & 0xff));
             }
             out.write(payload);
             out.flush();

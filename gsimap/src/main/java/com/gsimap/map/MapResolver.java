@@ -79,6 +79,7 @@ public final class MapResolver {
      */
     public static List<HistoryEntry> history(Path worldsDir, String worldId, String nodeId) {
         List<String> chain = walkParentChain(worldsDir, worldId, nodeId);
+        if (chain.isEmpty()) return List.of();
         List<HistoryEntry> entries = new ArrayList<>();
 
         MapData resolved = MapStore.loadFull(worldsDir, worldId, chain.get(0));

@@ -2,12 +2,8 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - "phase-*"
+    branches: ["**"]
   pull_request:
-    branches:
-      - main
 
 jobs:
   build:
@@ -23,8 +19,5 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Run tests
-        run: mvn test --batch-mode
-
-      - name: Package
-        run: mvn package --batch-mode -DskipTests
+      - name: Verify (test + static analysis + package)
+        run: mvn verify --batch-mode

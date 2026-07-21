@@ -326,6 +326,7 @@ public class LlmConfigManager {
     }
 
     /** @deprecated Use {@link #removeProvider(String)} instead. */
+    @Deprecated
     public Map<String, Object> deleteProvider(String id) {
         UpdateResult r = removeProvider(id);
         return Map.of("ok", r.success(), "message", r.message());

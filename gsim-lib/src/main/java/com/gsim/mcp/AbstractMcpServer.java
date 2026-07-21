@@ -193,9 +193,7 @@ public abstract class AbstractMcpServer implements Runnable {
      * @param transport      传输层实现（不可为 null）
      */
     protected AbstractMcpServer(
-            ToolRegistry toolRegistry,
-            java.util.function.Supplier<String> activeWorldId,
-            McpTransport transport) {
+            ToolRegistry toolRegistry, java.util.function.Supplier<String> activeWorldId, McpTransport transport) {
         if (toolRegistry == null) {
             throw new IllegalArgumentException("ToolRegistry must not be null");
         }

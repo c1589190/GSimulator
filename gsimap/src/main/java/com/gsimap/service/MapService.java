@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -257,7 +258,9 @@ public class MapService {
 
     /** Write terrain blocks back to MapData and persist (does NOT evict canvas).
      *  Terrain blocks are a world-level concept — saved to the active node and
-     *  inherited by child nodes through the diff chain. */
+     *  inherited by child nodes through the diff chain.
+     *  Deprecation suppressed: internal construction passes deprecated rivers/roads. */
+    @SuppressWarnings("deprecation")
     private void persistBlocks(String worldId, TerrainCanvas canvas) {
         List<MapData.TerrainBlock> blocks = canvas.getBlocks();
         String activeNodeId = readActiveNodeId(worldId);
@@ -277,10 +280,9 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
-        // Save to the active node (typically root, but respects current active node)
+        // Save to the active node (typically root, but respects current active node).
+        // saveMap() already calls evict(), so no need to duplicate here.
         saveMap(worldId, activeNodeId, updated);
-        // Update in-memory cache for the saved node and evict descendants (they'll re-resolve)
-        evict(worldId, activeNodeId);
     }
 
     // ── Mutation ──────────────────────────────────────────
@@ -620,7 +622,7 @@ public class MapService {
     // ── Map Expansion ──────────────────────────────────────
 
     /** Hex neighbor directions in axial coordinates (q, r). */
-    public static final int[][] HEX_DIRS = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
+    static final int[][] HEX_DIRS = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
 
     private static final String[] EXPAND_NAMES = {"E", "NE", "NW", "W", "SW", "SE"};
 
@@ -936,17 +938,22 @@ public class MapService {
     }
 
     /**
-     * Evict a specific node from cache, plus all descendants and the world's canvas.
+     * Evict a specific node and all descendants from both the MapData cache and
+     * the TerrainCanvas cache.  Canvas keys use {@code worldId:nodeId} format
+     * (see {@link #canvasKey}), so we must remove by prefix, not by worldId alone.
+     *
      * @param worldId the world identifier
      * @param nodeId the node identifier to evict
      */
     public void evict(String worldId, String nodeId) {
         String key = cacheKey(worldId, nodeId);
         cache.remove(key);
-        // Also evict any descendant nodes' cached resolved map (they inherit from this)
-        String prefix = worldId + "/";
-        cache.keySet().removeIf(k -> k.startsWith(prefix));
-        canvases.remove(worldId);
+        // Evict all descendant nodes' cached resolved maps (they inherit from this node)
+        String cachePrefix = worldId + "/";
+        cache.keySet().removeIf(k -> k.startsWith(cachePrefix));
+        // Evict all canvases for this world (keys are worldId:nodeId)
+        String canvasPrefix = worldId + ":";
+        canvases.keySet().removeIf(k -> k.startsWith(canvasPrefix));
     }
 
     private static String cacheKey(String worldId, String nodeId) {
@@ -1002,7 +1009,10 @@ public class MapService {
         return map;
     }
 
-    /** Rebuild MapData with updated provinces, preserving all other fields. */
+    /** Rebuild MapData with updated provinces, preserving all other fields.
+     *  Deprecation suppressed: internal construction requires pass-through of
+     *  deprecated rivers/roads fields for backward compat with serialized data. */
+    @SuppressWarnings("deprecation")
     private MapData withProvinces(MapData source, Map<String, MapData.Province> newProvinces) {
         return new MapData(
                 source.gridSize(),
@@ -1018,7 +1028,10 @@ public class MapService {
                 source.pathwayGroups());
     }
 
-    /** Rebuild MapData with updated terrain types, preserving all other fields. */
+    /** Rebuild MapData with updated terrain types.
+     *  Deprecation suppressed: internal construction requires pass-through of
+     *  deprecated rivers/roads fields for backward compat with serialized data. */
+    @SuppressWarnings("deprecation")
     private MapData withTerrainTypes(MapData source, Map<String, MapData.TerrainType> newTypes) {
         return new MapData(
                 source.gridSize(),
@@ -1133,7 +1146,9 @@ public class MapService {
         if (map.provinces().containsKey(name)) return Map.of("ok", false, "error", "Region already exists: " + name);
 
         String t = tag != null ? tag : "";
-        String c = color != null ? color : String.format("#%06x", new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
+        String c = color != null
+                ? color
+                : String.format("#%06x", ThreadLocalRandom.current().nextInt(0xFFFFFF) | 0x404040);
         String d = description != null ? description : "";
         List<String> h = hexes != null ? new ArrayList<>(hexes) : new ArrayList<>();
 
@@ -1377,7 +1392,9 @@ public class MapService {
 
         // 2. Create province
         String t = tag != null ? tag : "Nation";
-        String c = color != null ? color : String.format("#%06x", new java.util.Random().nextInt(0xFFFFFF) | 0x404040);
+        String c = color != null
+                ? color
+                : String.format("#%06x", ThreadLocalRandom.current().nextInt(0xFFFFFF) | 0x404040);
         List<String> hexList = new ArrayList<>(collected);
 
         Map<String, MapData.Province> updatedProvinces = new LinkedHashMap<>(map.provinces());
@@ -1385,13 +1402,7 @@ public class MapService {
         MapData result = withProvinces(map, updatedProvinces);
         saveMap(worldId, nodeId, result);
 
-        // 3. Build tags (for output only — checkpoint writes handled by GSim Core via write_element)
-        List<String> tags = new ArrayList<>(List.of("Nation", name));
-        if (ruler != null && !ruler.isBlank()) tags.add(ruler);
-        if (religion != null && !religion.isBlank()) tags.add(religion);
-
-        // Note: faction/narrative/worldview/capital checkpoint entries are NOT created here.
-        // They should be written by the GSim Agent via write_element instead.
+        // 3. Checkpoint entries managed by GSim Core via write_element
 
         // 4. Compute center
         int sq = 0, sr = 0;

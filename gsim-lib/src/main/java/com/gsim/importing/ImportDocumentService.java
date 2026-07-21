@@ -306,6 +306,9 @@ public class ImportDocumentService {
 
     /** Import 文档操作异常。 */
     public static class ImportDocumentException extends IOException {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
         private final String errorCode;
 
         /**
