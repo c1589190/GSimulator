@@ -155,8 +155,8 @@ public final class MapResolver {
             return (pid != null && !pid.isBlank()) ? pid : null;
         } catch (RuntimeException e) {
             // Corrupt or missing node file — log and treat as chain end
-            log.warn("Failed to read parentId for node {} (file may be corrupt or missing): {}",
-                    nodeId, e.getMessage());
+            log.warn(
+                    "Failed to read parentId for node {} (file may be corrupt or missing): {}", nodeId, e.getMessage());
             return null;
         }
     }

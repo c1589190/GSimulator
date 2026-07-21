@@ -614,7 +614,7 @@ public class MapService {
         evict(worldId, nodeId); // ensure HTTP cache sees MCP writes
 
         log.info("Renamed region '{}' -> '{}' in world={} node={}", oldName, newName, worldId, nodeId);
-        return Map.of("ok", true, "oldName", oldName, "newName", newName);
+        return resultMap("ok", true, "oldName", oldName, "newName", newName);
     }
 
     // ── Map Expansion ──────────────────────────────────────
@@ -898,7 +898,7 @@ public class MapService {
                 regions,
                 map.pathwayGroups());
         saveMap(worldId, nodeId, updated);
-        return Map.of("ok", true, "restored", restored, "regionsRemaining", regions.size());
+        return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size());
     }
 
     /**
@@ -914,10 +914,10 @@ public class MapService {
         if (map == null || map.hexes().isEmpty())
             return Map.of("ok", false, "error", String.format(NO_MAP_MSG, worldId));
         List<MapData.CompressedRegion> regions = new ArrayList<>(map.compressedRegions());
-        if (regions.isEmpty()) return Map.of("ok", true, "note", "no compressed regions", "q", q, "r", r);
+        if (regions.isEmpty()) return resultMap("ok", true, "note", "no compressed regions", "q", q, "r", r);
 
         int restored = CompressionService.decompressAt(regions, q, r);
-        if (restored == 0) return Map.of("ok", true, "note", "hex not in any compressed region", "q", q, "r", r);
+        if (restored == 0) return resultMap("ok", true, "note", "hex not in any compressed region", "q", q, "r", r);
 
         MapData updated = new MapData(
                 map.gridSize(),
@@ -932,7 +932,7 @@ public class MapService {
                 regions,
                 map.pathwayGroups());
         saveMap(worldId, nodeId, updated);
-        return Map.of("ok", true, "restored", restored, "regionsRemaining", regions.size(), "q", q, "r", r);
+        return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size(), "q", q, "r", r);
     }
 
     /**
@@ -973,7 +973,7 @@ public class MapService {
         long landHexes = map.hexes().values().stream()
                 .filter(h -> !"water".equals(h.terrain()))
                 .count();
-        return Map.of(
+        return resultMap(
                 "ok",
                 true,
                 "worldId",
@@ -991,6 +991,16 @@ public class MapService {
     // ── Region CRUD ───────────────────────────────────────
 
     private static final String NO_MAP_MSG = "No map data for world '%s'. Generate a terrain first (gsimap_generate).";
+
+    /** Build a mutable result map from alternating key-value pairs.
+     *  Use instead of {@code Map.of()} when callers may add extra keys (e.g. "address"). */
+    private static LinkedHashMap<String, Object> resultMap(Object... kvs) {
+        LinkedHashMap<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < kvs.length; i += 2) {
+            map.put((String) kvs[i], kvs[i + 1]);
+        }
+        return map;
+    }
 
     /** Rebuild MapData with updated provinces, preserving all other fields. */
     private MapData withProvinces(MapData source, Map<String, MapData.Province> newProvinces) {
@@ -1051,7 +1061,7 @@ public class MapService {
         updated.put(name, new MapData.Province(newHexes, newColor, newTag, newDesc, prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "tag", newTag, "description", newDesc);
+        return resultMap("ok", true, "name", name, "hexCount", newHexes.size(), "tag", newTag, "description", newDesc);
     }
 
     /**
@@ -1070,14 +1080,15 @@ public class MapService {
 
         List<String> newHexes = new ArrayList<>(prov.hexes());
         if (newHexes.contains(hexKey))
-            return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex already in region");
+            return resultMap("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex already in region");
 
         newHexes.add(hexKey);
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
-        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
+        updated.put(
+                name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "added", hexKey);
+        return resultMap("ok", true, "name", name, "hexCount", newHexes.size(), "added", hexKey);
     }
 
     /**
@@ -1094,13 +1105,14 @@ public class MapService {
         String hexKey = MapData.hexKey(q, r);
         List<String> newHexes = new ArrayList<>(prov.hexes());
         if (!newHexes.remove(hexKey))
-            return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex was not in region");
+            return resultMap("ok", true, "name", name, "hexCount", newHexes.size(), "note", "hex was not in region");
 
         Map<String, MapData.Province> updated = new LinkedHashMap<>(map.provinces());
-        updated.put(name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
+        updated.put(
+                name, new MapData.Province(newHexes, prov.color(), prov.tag(), prov.description(), prov.annexedBy()));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of("ok", true, "name", name, "hexCount", newHexes.size(), "removed", hexKey);
+        return resultMap("ok", true, "name", name, "hexCount", newHexes.size(), "removed", hexKey);
     }
 
     /**
@@ -1129,7 +1141,7 @@ public class MapService {
         updated.put(name, new MapData.Province(h, c, t, d));
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of("ok", true, "name", name, "hexCount", h.size(), "tag", t, "color", c);
+        return resultMap("ok", true, "name", name, "hexCount", h.size(), "tag", t, "color", c);
     }
 
     /**
@@ -1146,7 +1158,7 @@ public class MapService {
         updated.remove(name);
         MapData result = withProvinces(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of("ok", true, "name", name, "action", "deleted");
+        return resultMap("ok", true, "name", name, "action", "deleted");
     }
 
     /**
@@ -1172,14 +1184,21 @@ public class MapService {
         MapData.Province annexed = map.provinces().get(annexedName);
         if (annexed == null) return Map.of("ok", false, "error", "Annexed region not found: " + annexedName);
 
-        if (dominantName.equals(annexedName))
-            return Map.of("ok", false, "error", "Cannot merge a region into itself");
+        if (dominantName.equals(annexedName)) return Map.of("ok", false, "error", "Cannot merge a region into itself");
 
         if (!annexed.annexedBy().isBlank())
-            return Map.of("ok", false, "error", "Region '" + annexedName + "' has already been annexed by " + annexed.annexedBy());
+            return Map.of(
+                    "ok",
+                    false,
+                    "error",
+                    "Region '" + annexedName + "' has already been annexed by " + annexed.annexedBy());
 
         if (!dominant.annexedBy().isBlank())
-            return Map.of("ok", false, "error", "Dominant region '" + dominantName + "' has been annexed and cannot absorb others");
+            return Map.of(
+                    "ok",
+                    false,
+                    "error",
+                    "Dominant region '" + dominantName + "' has been annexed and cannot absorb others");
 
         // Transfer hexes from annexed to dominant
         Set<String> mergedHexes = new LinkedHashSet<>(dominant.hexes());
@@ -1202,10 +1221,16 @@ public class MapService {
 
         int transferred = annexed.hexes().size();
         int newTotal = newDominantHexes.size();
-        log.info("Merged '{}' into '{}': {} hexes transferred (dominant now has {} total) in {}/{}",
-                annexedName, dominantName, transferred, newTotal, worldId, nodeId);
+        log.info(
+                "Merged '{}' into '{}': {} hexes transferred (dominant now has {} total) in {}/{}",
+                annexedName,
+                dominantName,
+                transferred,
+                newTotal,
+                worldId,
+                nodeId);
 
-        return Map.of(
+        return resultMap(
                 "ok", true,
                 "dominantName", dominantName,
                 "annexedName", annexedName,
@@ -1246,7 +1271,7 @@ public class MapService {
         updated.put(key, new MapData.TerrainType(newName, newColor, newFood, newGold, newStone, newMoveCost, newDesc));
         MapData result = withTerrainTypes(map, updated);
         saveMap(worldId, nodeId, result);
-        return Map.of(
+        return resultMap(
                 "ok",
                 true,
                 "key",
@@ -1377,7 +1402,7 @@ public class MapService {
         }
 
         log.info("init_nation '{}': {} hexes (checkpoint entries managed by GSim Core)", name, hexList.size());
-        return Map.of(
+        return resultMap(
                 "ok",
                 true,
                 "name",
@@ -1414,8 +1439,8 @@ public class MapService {
             return (pid != null && !pid.isBlank()) ? pid : "n0000";
         } catch (RuntimeException e) {
             // Corrupt or missing node file — log loudly so this doesn't go unnoticed
-            log.warn("Failed to read parentId for node {} (file may be corrupt or missing): {}",
-                    nodeId, e.getMessage());
+            log.warn(
+                    "Failed to read parentId for node {} (file may be corrupt or missing): {}", nodeId, e.getMessage());
             return "n0000";
         }
     }

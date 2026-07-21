@@ -150,8 +150,8 @@ public final class NodeLoader {
                     // best-effort cleanup
                 }
                 throw new RuntimeException(
-                        "Failed to update node JSON for attachment '" + key
-                                + "', rolled back attachment file: " + attachFile,
+                        "Failed to update node JSON for attachment '" + key + "', rolled back attachment file: "
+                                + attachFile,
                         e);
             }
         }

@@ -7,14 +7,14 @@ import com.gsimap.service.MapService;
  * Registers all gsimap AgentTools into a ToolRegistry.
  *
  * <p>Call {@link #registerAll(ToolRegistry, MapService)} during application
- * startup to make all 19 gsimap map tools available to the agent system.
+ * startup to make all 20 gsimap map tools available to the agent system.
  */
 public final class GsimapToolRegistrar {
 
     private GsimapToolRegistrar() {}
 
     /**
-     * Register all 21 gsimap tools into the given registry.
+     * Register all 20 gsimap tools into the given registry.
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
@@ -47,9 +47,11 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapRenameRegionTool(mapService));
         registry.register(new GsimapMergeRegionsTool(mapService));
 
-        // ── Init tools (3) ──────────────────────────────────
+        // ── Init tools (2) ──────────────────────────────────
         registry.register(new GsimapGenerateTool(mapService));
-        registry.register(new GsimapInitNationTool(mapService));
         registry.register(new GsimapUpdateTerrainTypeTool(mapService));
+        // gsimap_init_nation — deprecated: nation narrative data belongs in GSim doc system.
+        // The flood-fill province creation is still available via gsimap_create_region.
+        // registry.register(new GsimapInitNationTool(mapService));
     }
 }

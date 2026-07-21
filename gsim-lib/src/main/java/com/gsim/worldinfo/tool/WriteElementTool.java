@@ -215,8 +215,7 @@ public final class WriteElementTool implements AgentTool {
             wi.ensureNode(node);
             log.info("Lazy-loaded node {} from disk into WorldInformation", nodeId);
         } catch (RuntimeException e) {
-            throw new IllegalArgumentException(
-                    "Failed to load node " + nodeId + " from disk: " + e.getMessage(), e);
+            throw new IllegalArgumentException("Failed to load node " + nodeId + " from disk: " + e.getMessage(), e);
         }
     }
 }

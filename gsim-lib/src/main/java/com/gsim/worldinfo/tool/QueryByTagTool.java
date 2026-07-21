@@ -76,6 +76,7 @@ public final class QueryByTagTool implements AgentTool {
                 .append(limit)
                 .append("\n\n");
 
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         for (ElementRef ref : page) {
             sb.append("### ")
                     .append(ref.element().key())
@@ -98,7 +99,11 @@ public final class QueryByTagTool implements AgentTool {
             sb.append("- **updatedAt**: ").append(ref.element().updatedAt()).append("\n\n");
             String val = ref.element().value();
             if (val != null && !val.isBlank()) {
-                sb.append(val).append("\n\n");
+                if (!detail && val.length() > 200) {
+                    sb.append(val, 0, 200).append("... (truncated, use detail=true for full content)\n\n");
+                } else {
+                    sb.append(val).append("\n\n");
+                }
             }
             sb.append("---\n\n");
         }
@@ -119,7 +124,13 @@ public final class QueryByTagTool implements AgentTool {
                                 "tag", Map.of("type", "string", "description", "Tag to search for"),
                                 "checkpointId", Map.of("type", "string", "description", "Optional checkpoint filter"),
                                 "limit", Map.of("type", "integer", "description", "Max results (default 20, max 100)"),
-                                "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)")),
+                                "offset", Map.of("type", "integer", "description", "Pagination offset (default 0)"),
+                                "detail",
+                                        Map.of(
+                                                "type",
+                                                "boolean",
+                                                "description",
+                                                "Set to true for full element values (default: truncated to 200 chars)")),
                 "required", List.of("tag"));
     }
 

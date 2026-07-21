@@ -89,12 +89,20 @@ public final class QueryCheckpointTool implements AgentTool {
             }
         }
 
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         List<ToolResult.Item> items = refs.stream()
-                .map(r -> new ToolResult.Item(
-                        r.element().key(),
-                        r.nodeId() + ":" + r.checkpointId() + ":" + r.element().key(),
-                        r.element().value(),
-                        1.0))
+                .map(r -> {
+                    String value = r.element().value();
+                    if (!detail && value != null && value.length() > 200) {
+                        value = value.substring(0, 200) + "... (truncated, use detail=true for full content)";
+                    }
+                    return new ToolResult.Item(
+                            r.element().key(),
+                            r.nodeId() + ":" + r.checkpointId() + ":"
+                                    + r.element().key(),
+                            value,
+                            1.0);
+                })
                 .toList();
 
         return ToolResult.ok("query_checkpoint", items);
@@ -113,7 +121,13 @@ public final class QueryCheckpointTool implements AgentTool {
                                                 "description",
                                                 "Checkpoint ID like 'player.曹操' or 'worldview'. Supports '*' wildcard for prefix matching, e.g. 'player.*' returns all player.* checkpoints"),
                                 "turnFrom", Map.of("type", "integer", "description", "Optional start turn (inclusive)"),
-                                "turnTo", Map.of("type", "integer", "description", "Optional end turn (inclusive)")),
+                                "turnTo", Map.of("type", "integer", "description", "Optional end turn (inclusive)"),
+                                "detail",
+                                        Map.of(
+                                                "type",
+                                                "boolean",
+                                                "description",
+                                                "Set to true for full element values (default: truncated to 200 chars)")),
                 "required", List.of("checkpointId"));
     }
 

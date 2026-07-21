@@ -126,15 +126,22 @@ public class GsimapGetProvinceTool implements AgentTool {
             }
         }
 
-        sb.append("\n### Hex List\n\n");
-        for (String key : prov.hexes()) {
-            MapData.HexCell cell = map.hexes().get(key);
-            int[] qr = MapData.parseHexKey(key);
-            sb.append("- (").append(qr[0]).append(",").append(qr[1]).append(")");
-            if (cell != null) {
-                sb.append(" — ").append(cell.terrain());
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
+        if (detail) {
+            sb.append("\n### Hex List\n\n");
+            for (String key : prov.hexes()) {
+                MapData.HexCell cell = map.hexes().get(key);
+                int[] qr = MapData.parseHexKey(key);
+                sb.append("- (").append(qr[0]).append(",").append(qr[1]).append(")");
+                if (cell != null) {
+                    sb.append(" — ").append(cell.terrain());
+                }
+                sb.append("\n");
             }
-            sb.append("\n");
+        } else {
+            sb.append("\n(")
+                    .append(prov.hexes().size())
+                    .append(" hexes omitted — use detail=true for full hex list)\n");
         }
 
         sb.append("\n\naddress: gsimap:region:").append(name).append("\n");
@@ -151,6 +158,13 @@ public class GsimapGetProvinceTool implements AgentTool {
         props.put("worldId", Map.of("type", "string", "description", "GSim world ID"));
         props.put("nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"));
         props.put("name", Map.of("type", "string", "description", "Province name"));
+        props.put(
+                "detail",
+                Map.of(
+                        "type",
+                        "boolean",
+                        "description",
+                        "Set to true for full hex list (default: summary with stats only)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "name"));
     }
 

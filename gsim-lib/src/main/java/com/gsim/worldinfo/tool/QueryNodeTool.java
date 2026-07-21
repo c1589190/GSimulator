@@ -51,12 +51,17 @@ public final class QueryNodeTool implements AgentTool {
             return ToolResult.fail("query_node", "Unknown node: " + nodeId);
         }
 
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         List<ToolResult.Item> items = new java.util.ArrayList<>();
         for (var entry : node.checkpoints().entrySet()) {
             String cpId = entry.getKey();
             var cp = entry.getValue();
             for (var el : cp.elements()) {
-                items.add(new ToolResult.Item(el.key(), nodeId + ":" + cpId + ":" + el.key(), el.value(), 1.0));
+                String value = el.value();
+                if (!detail && value != null && value.length() > 200) {
+                    value = value.substring(0, 200) + "... (truncated, use detail=true for full content)";
+                }
+                items.add(new ToolResult.Item(el.key(), nodeId + ":" + cpId + ":" + el.key(), value, 1.0));
             }
         }
 
@@ -67,7 +72,15 @@ public final class QueryNodeTool implements AgentTool {
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of("nodeId", Map.of("type", "string", "description", "Node ID like 'n0002'")),
+                "properties",
+                        Map.of(
+                                "nodeId", Map.of("type", "string", "description", "Node ID like 'n0002'"),
+                                "detail",
+                                        Map.of(
+                                                "type",
+                                                "boolean",
+                                                "description",
+                                                "Set to true for full element values (default: truncated to 200 chars)")),
                 "required", List.of("nodeId"));
     }
 

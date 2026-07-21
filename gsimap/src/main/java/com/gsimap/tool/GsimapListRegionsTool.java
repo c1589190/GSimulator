@@ -71,6 +71,7 @@ public class GsimapListRegionsTool implements AgentTool {
             regionHexSets.put(entry.getKey(), new HashSet<>(entry.getValue().hexes()));
         }
 
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         StringBuilder sb = new StringBuilder();
         sb.append("## Regions in ").append(worldId).append("\n\n");
         sb.append("Total regions: **").append(map.provinces().size()).append("**\n\n");
@@ -104,30 +105,34 @@ public class GsimapListRegionsTool implements AgentTool {
             }
             sb.append("- **Address**: gsimap:region:").append(name).append("\n");
 
-            sb.append("\n  **Terrain Composition:**\n");
-            if (terrainComp.isEmpty()) {
-                sb.append("  (no data)\n");
-            } else {
-                for (var te : terrainComp.entrySet()) {
-                    sb.append("  - ")
-                            .append(te.getKey())
-                            .append(": ")
-                            .append(te.getValue())
-                            .append("\n");
+            if (detail) {
+                sb.append("\n  **Terrain Composition:**\n");
+                if (terrainComp.isEmpty()) {
+                    sb.append("  (no data)\n");
+                } else {
+                    for (var te : terrainComp.entrySet()) {
+                        sb.append("  - ")
+                                .append(te.getKey())
+                                .append(": ")
+                                .append(te.getValue())
+                                .append("\n");
+                    }
                 }
-            }
 
-            sb.append("\n  **Adjacent Regions:**\n");
-            if (adj.isEmpty()) {
-                sb.append("  (none)\n");
-            } else {
-                for (var a : adj) {
-                    sb.append("  - ")
-                            .append(a.get("name"))
-                            .append(" (shared edges: ")
-                            .append(a.get("sharedEdges"))
-                            .append(")\n");
+                sb.append("\n  **Adjacent Regions:**\n");
+                if (adj.isEmpty()) {
+                    sb.append("  (none)\n");
+                } else {
+                    for (var a : adj) {
+                        sb.append("  - ")
+                                .append(a.get("name"))
+                                .append(" (shared edges: ")
+                                .append(a.get("sharedEdges"))
+                                .append(")\n");
+                    }
                 }
+            } else {
+                sb.append("(use detail=true for terrain composition and adjacency per region)\n");
             }
             sb.append("\n");
             index++;
@@ -144,6 +149,13 @@ public class GsimapListRegionsTool implements AgentTool {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("worldId", Map.of("type", "string", "description", "GSim world ID"));
         props.put("nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"));
+        props.put(
+                "detail",
+                Map.of(
+                        "type",
+                        "boolean",
+                        "description",
+                        "Set to true for full hex list (default: summary with stats only)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId"));
     }
 

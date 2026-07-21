@@ -28,6 +28,7 @@ tags: [integration-test, acceptance, regression, mcp, full-coverage]
 | T11 | 缓存与压缩 | cache, compact | T07 |
 | T12 | 权限矩阵全覆盖 | AgentTool.Permission | T07 |
 | T13 | 清理 | 全部 | 全部 |
+| T14 | MCP 输出分级管控（分页 & 截断） | ToolRegistryMcpAdapter, gsimap, worldinfo | T04, T05 |
 
 ---
 
@@ -179,5 +180,6 @@ Agent 一口气跑完指定范围的全部测试，最后输出汇总报告。�
 | [T11-cache-compact.md](T11-cache-compact.md) | 缓存与压缩 | 6 | 2min |
 | [T12-permission-matrix.md](T12-permission-matrix.md) | 权限矩阵全覆盖 | 10 | 5min |
 | [T13-cleanup.md](T13-cleanup.md) | 清理 | 7 | 1min |
+| [T14-output-pagination.md](T14-output-pagination.md) | MCP 输出分级管控 | 20 | 5min |
 
-**总计: 107 步骤, 预计 31 分钟**（不含 LLM 推理耗时）
+**总计: 127 步骤, 预计 36 分钟**（不含 LLM 推理耗时）

@@ -24,7 +24,7 @@ public final class WorldInformation {
 
     public WorldInformation(String worldId, List<NodeSnapshot> branchChain) {
         this.worldId = worldId;
-        this.branchChain = new ArrayList<>(branchChain);  // mutable to support lazy-load
+        this.branchChain = new ArrayList<>(branchChain); // mutable to support lazy-load
         this.rootNodeId = branchChain.isEmpty() ? null : branchChain.get(0).nodeId();
         this.activeNodeId = branchChain.isEmpty()
                 ? null

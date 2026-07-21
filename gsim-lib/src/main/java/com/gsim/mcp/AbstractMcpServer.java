@@ -457,7 +457,9 @@ public abstract class AbstractMcpServer implements Runnable {
             // Claude Code wraps tool arguments as:
             //   {"arguments": "<json-string-of-actual-args>"}
             // Handle both single and double wrapping.
-            if (argsNode.isObject() && argsNode.has("arguments") && argsNode.get("arguments").isTextual()) {
+            if (argsNode.isObject()
+                    && argsNode.has("arguments")
+                    && argsNode.get("arguments").isTextual()) {
                 args = MAPPER.readTree(argsNode.get("arguments").asText());
             } else if (argsNode.isTextual()) {
                 args = MAPPER.readTree(argsNode.asText());

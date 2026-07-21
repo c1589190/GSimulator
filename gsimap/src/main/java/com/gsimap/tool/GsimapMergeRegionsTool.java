@@ -60,21 +60,34 @@ public final class GsimapMergeRegionsTool implements AgentTool {
         return ToolResult.ok(
                 name(),
                 List.of(new ToolResult.Item(
-                        dominantName + " + " + annexedName,
-                        "gsimap_merge_regions",
-                        JsonUtils.toJson(result),
-                        1.0)));
+                        dominantName + " + " + annexedName, "gsimap_merge_regions", JsonUtils.toJson(result), 1.0)));
     }
 
     @Override
     public Map<String, Object> getParameters() {
         return Map.of(
                 "type", "object",
-                "properties", Map.of(
-                        "worldId", Map.of("type", "string", "description", "GSim world ID"),
-                        "nodeId", Map.of("type", "string", "description", "Node ID (optional, defaults to active node)"),
-                        "dominantName", Map.of("type", "string", "description", "The region that absorbs the other (keeps its name/description)"),
-                        "annexedName", Map.of("type", "string", "description", "The region being absorbed (preserved but marked as annexed)")),
+                "properties",
+                        Map.of(
+                                "worldId", Map.of("type", "string", "description", "GSim world ID"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID (optional, defaults to active node)"),
+                                "dominantName",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "The region that absorbs the other (keeps its name/description)"),
+                                "annexedName",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "The region being absorbed (preserved but marked as annexed)")),
                 "required", List.of("worldId", "dominantName", "annexedName"));
     }
 

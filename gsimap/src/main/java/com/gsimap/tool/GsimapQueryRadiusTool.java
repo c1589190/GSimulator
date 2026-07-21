@@ -77,6 +77,7 @@ public class GsimapQueryRadiusTool implements AgentTool {
                 .append(radius)
                 .append("\n\n");
 
+        boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         int found = 0;
         StringBuilder terrainSummary = new StringBuilder();
         Map<String, Integer> terrainCounts = new LinkedHashMap<>();
@@ -118,7 +119,11 @@ public class GsimapQueryRadiusTool implements AgentTool {
                     .append("\n");
         }
 
-        sb.append("\n### Hex Details\n\n").append(terrainSummary);
+        if (detail) {
+            sb.append("\n### Hex Details\n\n").append(terrainSummary);
+        } else {
+            sb.append("\n(").append(found).append(" hexes omitted — use detail=true for full hex list)\n");
+        }
 
         sb.append("\n\naddress: gsimap:hex:").append(cq).append("_").append(cr).append("\n");
 
@@ -139,6 +144,13 @@ public class GsimapQueryRadiusTool implements AgentTool {
         props.put("q", Map.of("type", "integer", "description", "Axial q coordinate of center"));
         props.put("r", Map.of("type", "integer", "description", "Axial r coordinate of center"));
         props.put("radius", Map.of("type", "integer", "description", "Search radius in hex steps"));
+        props.put(
+                "detail",
+                Map.of(
+                        "type",
+                        "boolean",
+                        "description",
+                        "Set to true for full hex list (default: summary with stats only)"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "q", "r", "radius"));
     }
 
