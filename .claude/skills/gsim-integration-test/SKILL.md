@@ -115,6 +115,10 @@ cp gsim-lib/target/spotbugsXml.xml config/spotbugs/gsim-lib-baseline.xml
 
 测试 generate → create_region → list_regions → get_hex → query_radius → get_neighbors → add/remove hex → render_text → get_distance → query_by_address → merge_regions → rename_region → 缺 worldId 校验。
 
+### Phase 4b: GSimap Edge Pathway（边连通系统）
+
+测试 edge_set → edge_get → edge_list → edge_remove → 同一段边多标签共存 → 标签清空后边自动删除 → 缺 worldId 校验 → 无效 pathwayId 校验。
+
 ### Phase 5: WorldInfo 元素
 
 测试 create_checkpoint → write_element(×3) → query_element → query_checkpoint → query_keyword → query_by_tag → query_address → query_node → attachment_write/read → resolve_ref → text_edit → 缺 worldId 校验。
@@ -151,6 +155,7 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 | 2 | MCP 连通性 | | |
 | 3 | World & Node | | |
 | 4 | GSimap 地图 | | |
+| 4b | Edge Pathway | | |
 | 5 | WorldInfo | | |
 | 6 | Doc CRUD | | |
 | 7 | SubAgent 权限 | | |

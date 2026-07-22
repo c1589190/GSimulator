@@ -268,6 +268,7 @@ async function loadMap() {
     for (const b of mapData.terrainBlocks) {
       if (b.hexKeys && Array.isArray(b.hexKeys)) b._hexSet = new Set(b.hexKeys);
     }
+    syncEdgesToHexTags();
     setStatus(`已加载: ${MapAPI.worldId}`);
   } catch(e) {
     mapData = {hexes:{}, terrainBlocks:[], provinces:{}, tags:{}, cities:{}, terrainTypes:{...DEFAULT_TERRAINS}, gridSize:120, hexOrientation:false, rivers:[], roads:[], pathwayGroups:{river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}}};
@@ -284,7 +285,8 @@ async function saveMap() {
     mapData.terrainTypes = {...DEFAULT_TERRAINS};
   }
   try {
-    // compressedRegions is a server-side rendering cache — no client cleanup needed
+    // Convert pathway edge tags to backend edges format, then strip client-only fields
+    syncHexTagsToEdges();
     const {tags, _compressedMeta, _compressedById, ...clean} = mapData;
     await MapAPI.save(clean);
     saveTags();

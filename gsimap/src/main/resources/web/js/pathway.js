@@ -447,6 +447,74 @@ function deletePathwayGroup(groupId) {
   showToast(`已删除组别: ${g.name || groupId}`);
 }
 
+// ── Backend sync: MapData.edges ↔ HexCell.edgeTags ─────
+
+/**
+ * edgeKey: "minQ_minR|maxQ_maxR" (lexicographic).
+ * Must stay in sync with MapData.edgeKey() in Java.
+ */
+function buildEdgeKey(q1, r1, q2, r2) {
+  const a = `${q1}_${r1}`, b = `${q2}_${r2}`;
+  return a <= b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Convert backend MapData.edges → frontend HexCell.edgeTags (call after load). */
+function syncEdgesToHexTags() {
+  if (!mapData?.edges || Object.keys(mapData.edges).length === 0) return;
+  if (!mapData.hexes) mapData.hexes = {};
+
+  for (const [edgeKey, edgeData] of Object.entries(mapData.edges)) {
+    const [a, b] = edgeKey.split('|');
+    const [q1, r1] = a.split('_').map(Number);
+    const [q2, r2] = b.split('_').map(Number);
+
+    for (const pathwayId of Object.keys(edgeData)) {
+      // set on hex1 → hex2 direction
+      const d1 = direction(q1, r1, q2, r2);
+      if (d1 >= 0) {
+        if (!mapData.hexes[a]) mapData.hexes[a] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+        if (!mapData.hexes[a].edgeTags) mapData.hexes[a].edgeTags = {};
+        if (!mapData.hexes[a].edgeTags[d1]) mapData.hexes[a].edgeTags[d1] = [];
+        if (!mapData.hexes[a].edgeTags[d1].includes(pathwayId)) mapData.hexes[a].edgeTags[d1].push(pathwayId);
+      }
+      // set on hex2 → hex1 direction
+      const d2 = direction(q2, r2, q1, r1);
+      if (d2 >= 0) {
+        if (!mapData.hexes[b]) mapData.hexes[b] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+        if (!mapData.hexes[b].edgeTags) mapData.hexes[b].edgeTags = {};
+        if (!mapData.hexes[b].edgeTags[d2]) mapData.hexes[b].edgeTags[d2] = [];
+        if (!mapData.hexes[b].edgeTags[d2].includes(pathwayId)) mapData.hexes[b].edgeTags[d2].push(pathwayId);
+      }
+    }
+  }
+}
+
+/** Convert frontend HexCell.edgeTags → backend MapData.edges (call before save). */
+function syncHexTagsToEdges() {
+  if (!mapData?.hexes) { mapData.edges = {}; return; }
+  const edges = {};
+
+  for (const [key, cell] of Object.entries(mapData.hexes)) {
+    if (!cell.edgeTags) continue;
+    const [q, r] = key.split('_').map(Number);
+
+    for (let d = 0; d < 6; d++) {
+      const tags = cell.edgeTags[d];
+      if (!tags || !Array.isArray(tags) || tags.length === 0) continue;
+      const [dq, dr] = DIR_VECTORS[d];
+      const nk = `${q+dq}_${r+dr}`;
+      const edgeKey = buildEdgeKey(q, r, q+dq, r+dr);
+
+      for (const tag of tags) {
+        if (!edges[edgeKey]) edges[edgeKey] = {};
+        // Props are empty by default — frontend doesn't edit edge properties yet
+        if (!edges[edgeKey][tag]) edges[edgeKey][tag] = {};
+      }
+    }
+  }
+  mapData.edges = edges;
+}
+
 // ── Utility ──────────────────────────────────────────────
 
 function escHtml(s) {
