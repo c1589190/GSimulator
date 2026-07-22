@@ -3,6 +3,7 @@ package com.gsimap.map;
 /**
  * Exception thrown by {@link MapStore} on persistence failures.
  */
+@SuppressWarnings("serial")
 public class MapStoreException extends RuntimeException {
     /**
      * Constructs a new exception with the specified detail message.

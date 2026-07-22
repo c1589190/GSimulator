@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
  * MediaWikiSiteDetector 测试 — 使用 mock 响应数据，不访问外网。
  */
 @DisplayName("MediaWikiSiteDetector")
+@SuppressWarnings("deprecation")
 class MediaWikiSiteDetectorTest {
 
     @Test

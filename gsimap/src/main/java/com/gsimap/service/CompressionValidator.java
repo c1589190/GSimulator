@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
  * {@link TerrainGeometry#hexSetToBoundaryWithHoles}, which includes hole rings
  * for any regions of other terrain enclosed by this CR.
  */
+@SuppressWarnings("deprecation")
 public final class CompressionValidator {
 
     private CompressionValidator() {

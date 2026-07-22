@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
  * Core map service — resolves map data from the GSim worlds directory,
  * applies diffs, manages an in-memory LRU cache.
  */
+@SuppressWarnings("deprecation")
 public class MapService {
 
     private static final Logger log = LoggerFactory.getLogger(MapService.class);

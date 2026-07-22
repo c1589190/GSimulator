@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
  *   <li>Return the resolved MapData</li>
  * </ol>
  */
+@SuppressWarnings("deprecation")
 public final class MapResolver {
 
     private static final Logger log = LoggerFactory.getLogger(MapResolver.class);

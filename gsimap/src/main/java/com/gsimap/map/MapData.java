@@ -26,6 +26,7 @@ import java.util.Set;
  * @param pathwayGroups     pathway group definitions (river, road, etc.)
  */
 @JsonDeserialize
+@SuppressWarnings("deprecation")
 public record MapData(
         @JsonProperty("gridSize") int gridSize,
         @JsonProperty("hexOrientation") boolean hexOrientation,

@@ -28,6 +28,7 @@ import java.util.Set;
  * @param compressedRegions compressed region data
  */
 @JsonDeserialize
+@SuppressWarnings("deprecation")
 public record MapDiff(
         @JsonProperty("parentNodeId") String parentNodeId,
         @JsonProperty("changed") Map<String, MapData.HexCell> changed,

@@ -129,11 +129,14 @@ public final class TextEditTool implements AgentTool {
         String source = call.param("source", "").trim();
         if (source.isEmpty()) return ToolResult.fail(NAME, "source 不能为空");
 
+        // 从 ToolCall 参数获取 worldId，支持 world_switch 后的动态切换
+        String worldId = call.param("worldId", activeWorldId);
+
         // Resolve source text
         String sourceText;
         String sourceLabel;
         try {
-            SourceResolved resolved = resolveSource(source);
+            SourceResolved resolved = resolveSource(source, worldId);
             sourceText = resolved.text;
             sourceLabel = resolved.label;
         } catch (Exception e) {
@@ -210,7 +213,7 @@ public final class TextEditTool implements AgentTool {
 
     private record SourceResolved(String text, String label) {}
 
-    private SourceResolved resolveSource(String source) throws Exception {
+    private SourceResolved resolveSource(String source, String worldId) throws Exception {
         if (source.startsWith("@cache:")) {
             String id = source.substring(7).trim();
             String cached = cacheManager.get(id);
@@ -220,7 +223,7 @@ public final class TextEditTool implements AgentTool {
 
         if (source.startsWith("@world:")) {
             String path = source.substring(7).trim();
-            return resolveWorldSource(path);
+            return resolveWorldSource(path, worldId);
         }
 
         if (source.startsWith("@doc:")) {
@@ -242,8 +245,8 @@ public final class TextEditTool implements AgentTool {
         return new SourceResolved(source, "raw text (" + source.length() + " chars)");
     }
 
-    private SourceResolved resolveWorldSource(String path) {
-        if (activeWorldId == null || activeWorldId.isBlank()) {
+    private SourceResolved resolveWorldSource(String path, String worldId) {
+        if (worldId == null || worldId.isBlank()) {
             throw new IllegalStateException("没有活跃 World");
         }
         String[] parts = path.split(":", 3);
@@ -261,12 +264,12 @@ public final class TextEditTool implements AgentTool {
             throw new IllegalArgumentException("@world: 格式需为 <cpId>:<key> 或 <nodeId>:<cpId>:<key>");
         }
 
-        var active = ActiveStateManager.load(worldsDir, activeWorldId);
-        if (active == null) throw new IllegalStateException("World 无活跃状态: " + activeWorldId);
+        var active = ActiveStateManager.load(worldsDir, worldId);
+        if (active == null) throw new IllegalStateException("World 无活跃状态: " + worldId);
 
         String resolveNodeId = nodeId != null ? nodeId : active.nodeId();
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, activeWorldId, active.nodeId());
-        if (wi == null) throw new IllegalStateException("无法加载 World: " + activeWorldId);
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, active.nodeId());
+        if (wi == null) throw new IllegalStateException("无法加载 World: " + worldId);
 
         NodeSnapshot node = wi.nodeById(resolveNodeId);
         if (node == null) throw new IllegalArgumentException("Node 不存在: " + resolveNodeId);

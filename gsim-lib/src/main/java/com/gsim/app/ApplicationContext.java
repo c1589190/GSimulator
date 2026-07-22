@@ -59,6 +59,7 @@ public class ApplicationContext {
     private LlmCommand llmCommand;
     private AgentCommand agentCommand;
 
+    @SuppressWarnings("this-escape")
     public ApplicationContext(AppConfig config) {
         this.config = config;
         this.timeProvider = new TimeProvider();

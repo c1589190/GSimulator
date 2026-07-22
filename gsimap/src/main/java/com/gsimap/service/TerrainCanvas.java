@@ -29,6 +29,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>Query order: for any hex, the <em>last</em> (topmost) block that contains
  * it determines the terrain. Returns {@code null} for empty canvas.
  */
+@SuppressWarnings("deprecation")
 public class TerrainCanvas {
 
     private static final int DEFAULT_MAP_RADIUS = 80;

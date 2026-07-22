@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * authoritative data source. compressedRegions is a pure rendering optimization — it can
  * be regenerated at any time by re-running {@link #compress}.
  */
+@SuppressWarnings("deprecation")
 public final class CompressionService {
 
     private CompressionService() {

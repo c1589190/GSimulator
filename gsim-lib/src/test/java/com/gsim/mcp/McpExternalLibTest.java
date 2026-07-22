@@ -26,6 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
  * </ul>
  */
 @DisplayName("外部项目集成测试")
+@SuppressWarnings("deprecation")
 class McpExternalLibTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

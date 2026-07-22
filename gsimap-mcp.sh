@@ -3,9 +3,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Build all modules
-echo "Building GSimulator..."
-mvn -q package -DskipTests -pl gsim-lib,gsimap,gsim-app 2>&1
+# Build all modules (output to stderr to avoid corrupting MCP stdio)
+echo "Building GSimulator..." >&2
+mvn -q package -DskipTests -Dmaven.test.skip=true -pl gsim-lib,gsimap,gsim-app >&2 2>&1
 
 # Launch full GSimulator in --no-cli mode
 # This starts: MCP(stdio) + WebUI(8710) + Map(8711) + CLI-WS(8712)

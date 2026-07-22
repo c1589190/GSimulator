@@ -111,7 +111,8 @@ public final class DocSearchTool implements AgentTool {
         }
 
         if (results.isEmpty()) {
-            return ToolResult.ok(name(), List.of(new ToolResult.Item("无结果", "", "未找到匹配的文档", 0)));
+            // 索引搜索无结果时 fallback 到全文搜索
+            return fallbackKeywordSearch(query, topK);
         }
 
         List<ToolResult.Item> items = new ArrayList<>();
@@ -122,6 +123,37 @@ public final class DocSearchTool implements AgentTool {
             items.add(new ToolResult.Item(r.name(), r.id(), snippet, r.score()));
         }
 
+        return ToolResult.ok(name(), items);
+    }
+
+    /**
+     * 全文搜索 fallback：遍历所有文档按 title/id/content 做关键词匹配。
+     */
+    private ToolResult fallbackKeywordSearch(String query, int topK) {
+        var allDocs = store.list(null, null);
+        var matched = new ArrayList<Document>();
+        var lowerQ = query.toLowerCase();
+        for (var doc : allDocs) {
+            if (doc.title().toLowerCase().contains(lowerQ)
+                    || doc.id().toLowerCase().contains(lowerQ)
+                    || (doc.content() != null && doc.content().toLowerCase().contains(lowerQ))) {
+                matched.add(doc);
+            }
+        }
+        if (matched.isEmpty()) {
+            return ToolResult.ok(name(), List.of(new ToolResult.Item("无结果", "", "未找到匹配的文档", 0)));
+        }
+        var items = new ArrayList<ToolResult.Item>();
+        int count = 0;
+        for (var doc : matched) {
+            if (count >= topK) break;
+            String typeStr = doc.type().key();
+            String snippet = doc.content() != null && doc.content().length() > 100
+                    ? doc.content().substring(0, 100) + "..."
+                    : (doc.content() != null ? doc.content() : "");
+            items.add(new ToolResult.Item(doc.title(), doc.id(), "score=0.5 | type=" + typeStr + " | " + snippet, 0.5));
+            count++;
+        }
         return ToolResult.ok(name(), items);
     }
 

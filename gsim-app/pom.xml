@@ -25,6 +25,12 @@
             <artifactId>gsimap</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.2</version>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 
     <build>

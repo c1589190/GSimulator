@@ -20,6 +20,7 @@ import org.junit.jupiter.api.*;
  *   <li>Query: returns correct topmost terrain</li>
  * </ol>
  */
+@SuppressWarnings("deprecation")
 public class TerrainCanvasTest {
 
     private static final double S = TerrainGeometry.SIZE;

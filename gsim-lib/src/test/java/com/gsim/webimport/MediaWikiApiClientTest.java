@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
  * MediaWikiApiClient 测试 — 使用 MockWebServer，不访问外网。
  */
 @DisplayName("MediaWikiApiClient")
+@SuppressWarnings("deprecation")
 class MediaWikiApiClientTest {
 
     private MockWebServer server;
