@@ -26,7 +26,6 @@ import java.util.Set;
  * @param pathwayGroups     pathway group definitions (river, road, etc.)
  */
 @JsonDeserialize
-@SuppressWarnings("deprecation")
 public record MapData(
         @JsonProperty("gridSize") int gridSize,
         @JsonProperty("hexOrientation") boolean hexOrientation,
@@ -34,8 +33,9 @@ public record MapData(
         @JsonProperty("terrainBlocks") List<TerrainBlock> terrainBlocks,
         @JsonProperty("provinces") Map<String, Province> provinces,
         @JsonProperty("cities") Map<String, City> cities,
-        @JsonProperty("rivers") @Deprecated List<River> rivers,
-        @JsonProperty("roads") @Deprecated List<Road> roads,
+        // ══ 已废弃：rivers/roads 将在分门别类的地块连通性系统（PathwayGroup）中重建 ══
+        @JsonProperty("rivers") List<River> rivers,
+        @JsonProperty("roads") List<Road> roads,
         @JsonProperty("terrainTypes") Map<String, TerrainType> terrainTypes,
         @JsonProperty("compressedRegions") List<CompressedRegion> compressedRegions,
         @JsonProperty("pathwayGroups") Map<String, PathwayGroup> pathwayGroups) {
@@ -427,7 +427,8 @@ public record MapData(
             @JsonProperty("id") String id,
             @JsonProperty("terrain") String terrain,
             @JsonProperty("color") String color,
-            @JsonProperty("boundary") @Deprecated List<Pt> boundary,
+            // 已废弃：single-ring boundary，请使用 support-hole 的 boundaries (List<List<Pt>>)
+            @JsonProperty("boundary") List<Pt> boundary,
             @JsonProperty("boundaries") List<List<Pt>> boundaries,
             @JsonProperty("isWater") boolean isWater,
             @JsonProperty("hexKeys") Set<String> hexKeys) {

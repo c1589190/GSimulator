@@ -25,7 +25,6 @@ import org.slf4j.LoggerFactory;
  * Core map service — resolves map data from the GSim worlds directory,
  * applies diffs, manages an in-memory LRU cache.
  */
-@SuppressWarnings("deprecation")
 public class MapService {
 
     private static final Logger log = LoggerFactory.getLogger(MapService.class);
@@ -260,8 +259,7 @@ public class MapService {
     /** Write terrain blocks back to MapData and persist (does NOT evict canvas).
      *  Terrain blocks are a world-level concept — saved to the active node and
      *  inherited by child nodes through the diff chain.
-     *  Deprecation suppressed: internal construction passes deprecated rivers/roads. */
-    @SuppressWarnings("deprecation")
+     *  rivers/roads: 已废弃，使用 List.of() 占位，将在 PathwayGroup 连通性系统中重建。 */
     private void persistBlocks(String worldId, TerrainCanvas canvas) {
         List<MapData.TerrainBlock> blocks = canvas.getBlocks();
         String activeNodeId = readActiveNodeId(worldId);
@@ -276,8 +274,8 @@ public class MapService {
                 blocks,
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
@@ -321,8 +319,8 @@ public class MapService {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
                 groups);
@@ -606,8 +604,8 @@ public class MapService {
                 map.terrainBlocks(),
                 updated,
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
@@ -784,8 +782,8 @@ public class MapService {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups());
@@ -841,8 +839,8 @@ public class MapService {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups());
@@ -895,8 +893,8 @@ public class MapService {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups());
@@ -929,8 +927,8 @@ public class MapService {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups());
@@ -1011,9 +1009,7 @@ public class MapService {
     }
 
     /** Rebuild MapData with updated provinces, preserving all other fields.
-     *  Deprecation suppressed: internal construction requires pass-through of
-     *  deprecated rivers/roads fields for backward compat with serialized data. */
-    @SuppressWarnings("deprecation")
+     *  rivers/roads: 已废弃，使用 List.of() 占位，将在 PathwayGroup 连通性系统中重建。 */
     private MapData withProvinces(MapData source, Map<String, MapData.Province> newProvinces) {
         return new MapData(
                 source.gridSize(),
@@ -1022,17 +1018,15 @@ public class MapService {
                 source.terrainBlocks(),
                 newProvinces,
                 source.cities(),
-                source.rivers(),
-                source.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 source.terrainTypes(),
                 source.compressedRegions(),
                 source.pathwayGroups());
     }
 
     /** Rebuild MapData with updated terrain types.
-     *  Deprecation suppressed: internal construction requires pass-through of
-     *  deprecated rivers/roads fields for backward compat with serialized data. */
-    @SuppressWarnings("deprecation")
+     *  rivers/roads: 已废弃，使用 List.of() 占位，将在 PathwayGroup 连通性系统中重建。 */
     private MapData withTerrainTypes(MapData source, Map<String, MapData.TerrainType> newTypes) {
         return new MapData(
                 source.gridSize(),
@@ -1041,8 +1035,8 @@ public class MapService {
                 source.terrainBlocks(),
                 source.provinces(),
                 source.cities(),
-                source.rivers(),
-                source.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 newTypes,
                 source.compressedRegions(),
                 source.pathwayGroups());

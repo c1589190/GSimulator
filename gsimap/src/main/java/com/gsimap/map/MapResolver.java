@@ -198,9 +198,9 @@ public final class MapResolver {
             cities.put(e.getKey(), e.getValue());
         }
 
-        // Rivers & Roads (full replacement from diff if non-empty)
-        List<MapData.River> rivers = diff.riversAdded().isEmpty() ? base.rivers() : diff.riversAdded();
-        List<MapData.Road> roads = diff.roadsAdded().isEmpty() ? base.roads() : diff.roadsAdded();
+        // ══ rivers/roads 已废弃，将由 PathwayGroup 分门别类的地块连通性系统替代 ══
+        List<MapData.River> rivers = List.of();
+        List<MapData.Road> roads = List.of();
 
         // CR merge: child CRs (from its own compress) supersede parent CRs entirely.
         // Start from parent CRs, then let each child's CRs replace them if the child was compressed.

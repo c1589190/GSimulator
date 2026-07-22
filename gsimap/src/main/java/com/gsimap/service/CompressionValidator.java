@@ -228,8 +228,8 @@ public final class CompressionValidator {
                 map.terrainBlocks(),
                 map.provinces(),
                 map.cities(),
-                map.rivers(),
-                map.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 fixed,
                 map.pathwayGroups());

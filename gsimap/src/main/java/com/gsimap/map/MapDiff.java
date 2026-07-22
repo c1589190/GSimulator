@@ -27,8 +27,10 @@ import java.util.Set;
  * @param roadsAdded        road definitions that were added
  * @param compressedRegions compressed region data
  */
-@JsonDeserialize
+// @SuppressWarnings("deprecation"): riversAdded/roadsAdded 使用已废弃的 MapData.River/Road 类型，
+// 保留用于 JSON 向后兼容，将在 PathwayGroup 连通性系统迁移完成后移除。
 @SuppressWarnings("deprecation")
+@JsonDeserialize
 public record MapDiff(
         @JsonProperty("parentNodeId") String parentNodeId,
         @JsonProperty("changed") Map<String, MapData.HexCell> changed,
@@ -136,8 +138,8 @@ public record MapDiff(
                 provRemoved,
                 citiesAdded,
                 citiesRemoved,
-                child.rivers(),
-                child.roads(),
+                List.of(), // rivers: 已废弃，将由 PathwayGroup 连通性系统替代
+                List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 child.compressedRegions());
     }
 }
