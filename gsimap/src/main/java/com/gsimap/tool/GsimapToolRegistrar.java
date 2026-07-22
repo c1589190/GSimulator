@@ -47,6 +47,12 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapRenameRegionTool(mapService));
         registry.register(new GsimapMergeRegionsTool(mapService));
 
+        // ── Edge pathway tools (4) ────────────────────────────
+        registry.register(new GsimapEdgeSetTool(mapService));
+        registry.register(new GsimapEdgeGetTool(mapService));
+        registry.register(new GsimapEdgeRemoveTool(mapService));
+        registry.register(new GsimapEdgeListTool(mapService));
+
         // ── Init tools (2) ──────────────────────────────────
         registry.register(new GsimapGenerateTool(mapService));
         registry.register(new GsimapUpdateTerrainTypeTool(mapService));

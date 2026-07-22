@@ -278,7 +278,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
         // Save to the active node (typically root, but respects current active node).
         // saveMap() already calls evict(), so no need to duplicate here.
         saveMap(worldId, activeNodeId, updated);
@@ -302,6 +303,116 @@ public class MapService {
         evict(worldId, nodeId);
     }
 
+    // ── Edge operations ────────────────────────────────────
+
+    /**
+     * Set a pathway tag on the edge between two hexes.
+     * Creates the edge record if it doesn't exist; merges/overwrites tag properties.
+     * rivers/roads pass-through is suppressed: deprecated, carried for backward compat.
+     */
+    @SuppressWarnings("deprecation")
+    public MapData setEdgeTag(
+            String worldId, String nodeId, int q1, int r1, int q2, int r2, String tag, Map<String, Object> props) {
+        MapData map = resolveActive(worldId);
+        if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
+
+        if (!map.pathwayGroups().containsKey(tag)) {
+            throw new IllegalArgumentException("Unknown pathway group: " + tag + ". Available: "
+                    + map.pathwayGroups().keySet());
+        }
+
+        String key = MapData.edgeKey(q1, r1, q2, r2);
+        Map<String, Map<String, Map<String, Object>>> edges = new LinkedHashMap<>(map.edges());
+        Map<String, Map<String, Object>> edge = edges.computeIfAbsent(key, k -> new LinkedHashMap<>());
+        edge.put(tag, Map.copyOf(props));
+        edges.put(key, Map.copyOf(edge));
+
+        MapData updated = new MapData(
+                map.gridSize(),
+                map.hexOrientation(),
+                map.hexes(),
+                map.terrainBlocks(),
+                map.provinces(),
+                map.cities(),
+                map.rivers(),
+                map.roads(),
+                map.terrainTypes(),
+                map.compressedRegions(),
+                map.pathwayGroups(),
+                Map.copyOf(edges));
+        saveMap(worldId, nodeId, updated);
+        return updated;
+    }
+
+    /**
+     * Remove a pathway tag from the edge between two hexes.
+     * If no tags remain on the edge, the edge record is deleted.
+     * rivers/roads pass-through is suppressed: deprecated, carried for backward compat.
+     */
+    @SuppressWarnings("deprecation")
+    public MapData removeEdgeTag(String worldId, String nodeId, int q1, int r1, int q2, int r2, String tag) {
+        MapData map = resolveActive(worldId);
+        if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
+
+        String key = MapData.edgeKey(q1, r1, q2, r2);
+        Map<String, Map<String, Map<String, Object>>> edges = new LinkedHashMap<>(map.edges());
+
+        Map<String, Map<String, Object>> edge = edges.get(key);
+        if (edge == null) {
+            throw new IllegalArgumentException("Edge not found: " + key);
+        }
+        if (!edge.containsKey(tag)) {
+            throw new IllegalArgumentException("Tag '" + tag + "' not found on edge " + key);
+        }
+
+        Map<String, Map<String, Object>> newEdge = new LinkedHashMap<>(edge);
+        newEdge.remove(tag);
+        if (newEdge.isEmpty()) {
+            edges.remove(key);
+        } else {
+            edges.put(key, Map.copyOf(newEdge));
+        }
+
+        MapData updated = new MapData(
+                map.gridSize(),
+                map.hexOrientation(),
+                map.hexes(),
+                map.terrainBlocks(),
+                map.provinces(),
+                map.cities(),
+                map.rivers(),
+                map.roads(),
+                map.terrainTypes(),
+                map.compressedRegions(),
+                map.pathwayGroups(),
+                Map.copyOf(edges));
+        saveMap(worldId, nodeId, updated);
+        return updated;
+    }
+
+    /**
+     * Merge edge tag values with defaults defined in PathwayGroup.properties.
+     */
+    public static Map<String, Map<String, Object>> resolveEdgeWithDefaults(
+            Map<String, Map<String, Object>> raw, Map<String, MapData.PathwayGroup> groups) {
+        if (raw == null) return null;
+        Map<String, Map<String, Object>> resolved = new LinkedHashMap<>();
+        for (var entry : raw.entrySet()) {
+            String pathwayId = entry.getKey();
+            Map<String, Object> values = new LinkedHashMap<>(entry.getValue());
+            MapData.PathwayGroup group = groups.get(pathwayId);
+            if (group != null) {
+                for (var prop : group.properties().entrySet()) {
+                    if (!values.containsKey(prop.getKey())) {
+                        values.put(prop.getKey(), prop.getValue().defaultValue());
+                    }
+                }
+            }
+            resolved.put(pathwayId, Map.copyOf(values));
+        }
+        return Map.copyOf(resolved);
+    }
+
     /**
      * Update pathway groups for a world — replaces the entire groups map and persists.
      */
@@ -323,7 +434,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
-                groups);
+                groups,
+                map.edges());
         saveMap(worldId, nodeId, updated);
     }
 
@@ -608,7 +720,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
         saveMap(worldId, nodeId, newMap);
 
         // 2. Re-sync map (checkpoint references managed by GSim Core, not gsimap)
@@ -786,7 +899,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 map.compressedRegions(),
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
         saveMap(worldId, nodeId, expanded);
 
         log.info(
@@ -843,7 +957,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
 
         saveMap(worldId, nodeId, updated);
 
@@ -897,7 +1012,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
         saveMap(worldId, nodeId, updated);
         return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size());
     }
@@ -931,7 +1047,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 regions,
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                Map.of());
         saveMap(worldId, nodeId, updated);
         return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size(), "q", q, "r", r);
     }
@@ -1022,7 +1139,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 source.terrainTypes(),
                 source.compressedRegions(),
-                source.pathwayGroups());
+                source.pathwayGroups(),
+                source.edges());
     }
 
     /** Rebuild MapData with updated terrain types.
@@ -1039,7 +1157,8 @@ public class MapService {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 newTypes,
                 source.compressedRegions(),
-                source.pathwayGroups());
+                source.pathwayGroups(),
+                source.edges());
     }
 
     /**

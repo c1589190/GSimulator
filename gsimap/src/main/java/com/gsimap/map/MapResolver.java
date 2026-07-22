@@ -223,6 +223,7 @@ public final class MapResolver {
                 roads,
                 base.terrainTypes(),
                 crs,
-                base.pathwayGroups());
+                base.pathwayGroups(),
+                base.edges());
     }
 }

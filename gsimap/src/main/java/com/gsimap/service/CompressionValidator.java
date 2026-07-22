@@ -232,7 +232,8 @@ public final class CompressionValidator {
                 List.of(), // roads:  已废弃，将由 PathwayGroup 连通性系统替代
                 map.terrainTypes(),
                 fixed,
-                map.pathwayGroups());
+                map.pathwayGroups(),
+                map.edges());
     }
 
     // ── helpers ────────────────────────────────────────────────

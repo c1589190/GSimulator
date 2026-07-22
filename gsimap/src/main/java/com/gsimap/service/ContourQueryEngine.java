@@ -101,7 +101,8 @@ public class ContourQueryEngine {
                 List.of(),
                 MapGenerator.defaultTerrainTypes(),
                 List.of(),
-                new LinkedHashMap<>());
+                new LinkedHashMap<>(),
+                Map.of());
     }
 
     // ═══════════════════════════════════════════════════════

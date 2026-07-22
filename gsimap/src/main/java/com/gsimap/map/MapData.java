@@ -24,6 +24,10 @@ import java.util.Set;
  * @param terrainTypes      terrain type definitions keyed by name
  * @param compressedRegions cached contour hulls for rendering
  * @param pathwayGroups     pathway group definitions (river, road, etc.)
+ * @param edges             sparse edge map: edgeKey → {pathwayId → {prop → value}}.
+ *                          edgeKey format: "minQ_minR|maxQ_maxR" (deterministic).
+ *                          Only edges with pathway tags are stored; default
+ *                          property values from PathwayGroup are omitted.
  */
 @JsonDeserialize
 public record MapData(
@@ -38,7 +42,8 @@ public record MapData(
         @JsonProperty("roads") List<Road> roads,
         @JsonProperty("terrainTypes") Map<String, TerrainType> terrainTypes,
         @JsonProperty("compressedRegions") List<CompressedRegion> compressedRegions,
-        @JsonProperty("pathwayGroups") Map<String, PathwayGroup> pathwayGroups) {
+        @JsonProperty("pathwayGroups") Map<String, PathwayGroup> pathwayGroups,
+        @JsonProperty("edges") Map<String, Map<String, Map<String, Object>>> edges) {
     public MapData {
         if (gridSize < 1 || gridSize > 1000)
             throw new IllegalArgumentException("gridSize must be 1-1000, got: " + gridSize);
@@ -51,6 +56,7 @@ public record MapData(
         if (terrainTypes == null || terrainTypes.isEmpty()) terrainTypes = TerrainType.defaults();
         if (compressedRegions == null) compressedRegions = List.of();
         if (pathwayGroups == null || pathwayGroups.isEmpty()) pathwayGroups = defaultPathwayGroups();
+        if (edges == null) edges = new LinkedHashMap<>();
         // Defensive copy + freeze (SpotBugs EI_EXPOSE_REP)
         hexes = Map.copyOf(hexes);
         terrainBlocks = List.copyOf(terrainBlocks);
@@ -59,6 +65,7 @@ public record MapData(
         terrainTypes = Map.copyOf(terrainTypes);
         compressedRegions = List.copyOf(compressedRegions);
         pathwayGroups = Map.copyOf(pathwayGroups);
+        edges = Map.copyOf(edges);
     }
 
     @SuppressFBWarnings("EI_EXPOSE_REP")
@@ -92,7 +99,8 @@ public record MapData(
                 List.of(),
                 TerrainType.defaults(),
                 List.of(),
-                defaultPathwayGroups());
+                defaultPathwayGroups(),
+                Map.of());
     }
 
     /**
@@ -373,7 +381,54 @@ public record MapData(
         }
     }
 
+    // ── EdgeKey ───────────────────────────────────────────
+
+    /**
+     * Deterministic edge key for two hex coordinates.
+     * Sorts q1_r1 and q2_r2 lexicographically so the key is independent of order.
+     * Format: {@code "minQ_minR|maxQ_maxR"}.
+     */
+    public static String edgeKey(int q1, int r1, int q2, int r2) {
+        String a = q1 + "_" + r1;
+        String b = q2 + "_" + r2;
+        return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
+    }
+
+    /**
+     * Parse an edge key back to its two hex coordinate pairs.
+     *
+     * @return a 4-element array: {@code [q1, r1, q2, r2]}
+     */
+    public static int[] parseEdgeKey(String key) {
+        String[] parts = key.split("\\|");
+        if (parts.length != 2) throw new IllegalArgumentException("Invalid edge key: " + key);
+        String[] a = parts[0].split("_");
+        String[] b = parts[1].split("_");
+        return new int[] {
+            Integer.parseInt(a[0]), Integer.parseInt(a[1]),
+            Integer.parseInt(b[0]), Integer.parseInt(b[1])
+        };
+    }
+
     // ── PathwayGroup ────────────────────────────────────────
+
+    /**
+     * Property definition for a pathway type's edge attributes.
+     *
+     * @param type         value type: "int", "float", "bool", or "string"
+     * @param defaultValue default value when not overridden on an edge
+     * @param description  human-readable description
+     */
+    @JsonDeserialize
+    public record PropertyDef(
+            @JsonProperty("type") String type,
+            @JsonProperty("default") Object defaultValue,
+            @JsonProperty("description") String description) {
+        public PropertyDef {
+            if (type == null) type = "string";
+            if (description == null) description = "";
+        }
+    }
 
     /**
      * A pathway group definition (e.g., river, road).
@@ -383,6 +438,8 @@ public record MapData(
      * @param color       display color
      * @param description optional description
      * @param visible     whether the pathway is visible by default
+     * @param properties  edge attribute schema — defines what attributes
+     *                    edges of this type can carry and their defaults
      */
     @JsonDeserialize
     public record PathwayGroup(
@@ -390,20 +447,29 @@ public record MapData(
             @JsonProperty("name") String name,
             @JsonProperty("color") String color,
             @JsonProperty("description") String description,
-            @JsonProperty("visible") boolean visible) {
+            @JsonProperty("visible") boolean visible,
+            @JsonProperty("properties") Map<String, PropertyDef> properties) {
         public PathwayGroup {
             if (id == null) id = "";
             if (name == null) name = "";
             if (color == null) color = "#808080";
             if (description == null) description = "";
+            if (properties == null) properties = Map.of();
+            else properties = Map.copyOf(properties);
         }
     }
 
     /** Default pathway groups: river and road. */
     public static Map<String, PathwayGroup> defaultPathwayGroups() {
         var g = new LinkedHashMap<String, PathwayGroup>();
-        g.put("river", new PathwayGroup("river", "河流", "#3295D2", "天然水系", true));
-        g.put("road", new PathwayGroup("road", "道路", "#8B7355", "陆路通道", true));
+        g.put(
+                "river",
+                new PathwayGroup(
+                        "river", "河流", "#3295D2", "天然水系", true, Map.of("width", new PropertyDef("int", 2, "河宽"))));
+        g.put(
+                "road",
+                new PathwayGroup(
+                        "road", "道路", "#8B7355", "陆路通道", true, Map.of("width", new PropertyDef("int", 1, "路宽"))));
         return g;
     }
 
