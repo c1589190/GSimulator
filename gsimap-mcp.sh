@@ -23,6 +23,6 @@ exec java -Xmx4g -Xms512m \
     -Dgsimap.worldsDir="$SCRIPT_DIR/worlds" \
     -Dgsimap.importDir="$SCRIPT_DIR/import" \
     -Dlogback.configurationFile="$SCRIPT_DIR/gsimap/logback-mcp.xml" \
-    -cp "gsim-app/target/gsim-app-0.1.0-Alpha1.jar" \
+    -cp "gsim-app/target/gsim-app-0.1.0-Alpha260723.jar" \
     com.gsim.Main \
     --no-cli --no-wizard
