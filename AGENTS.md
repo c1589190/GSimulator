@@ -1,79 +1,139 @@
-# GSimulator — External Agent Access Guide
-
-You are an external LLM agent connecting to a **GSimulator** server. GSimulator is a turn-based narrative simulation engine. It exposes World data (nodes, checkpoints, elements) and Document management through REST APIs.
+# GSimulator — External Agent Access Guide (MCP)
 
 ## Connection
 
-```
-Base URL: http://127.0.0.1:8710
-API Docs:  GET /api/documents/GSimulator-HTTP-API-Guide.md
-Status:    GET /api/status
-```
+GSimulator exposes 70+ tools via **MCP (Model Context Protocol)** over stdio:
 
-**First action**: Read the full API guide to understand available endpoints:
-```
-GET /api/documents/GSimulator-HTTP-API-Guide.md?full=true
-```
+- Start GSimulator with `--no-cli` to run in MCP mode
+- Or use the `gsimap-mcp.sh` shell script
+- The MCP server implements JSON-RPC 2.0, protocol version `"2024-11-05"`
+- Tool names use two namespaces: `gsim_*` (core engine) and `gsimap_*` (hex map)
+- The HTTP API is also available on port 8710 for REST-based access
 
 ## Core Concepts
 
-- **World** — a self-contained narrative scenario. Has nodes, checkpoints, elements.
-- **Node** (节点) — a turn/snapshot in the branch chain. n0000 is always the root.
-- **Checkpoint** (检查点) — a named category container within a node (e.g., `worldview`, `characters`, `factions`).
-- **Element** (元素) — a key-value pair inside a checkpoint. Addressed as `nodeId:checkpointId:key`.
-- **Document** (文档) — imported reference materials (.txt/.md) searchable by keyword.
+| Concept | Description |
+|---------|-------------|
+| **World** | Self-contained narrative scenario. Contains nodes, checkpoints, elements. Managed via `world_list` / `world_create` / `world_switch`. |
+| **Node** | Turn or snapshot in a branch chain. `n0000` is the root node. Managed via `node_list` / `node_status` / `node_create` / `node_switch` / `node_goto_parent`. |
+| **Checkpoint** | Named category container (e.g. `worldview`, `characters`, `factions`, `player.*`). Managed via `query_checkpoint` / `create_checkpoint`. |
+| **Element** | Key-value pair stored in a checkpoint. Addressed as `nodeId:checkpointId:key`. Managed via `query_element` / `write_element` / `query_keyword`. |
+| **Document** | Reference materials (.txt / .md). Managed via `doc_list` / `doc_read` / `doc_create` / `doc_write` / `doc_search`. |
+| **Map** | Hex grid map with terrain, provinces, cities, and edge pathways. Managed via `gsimap_*` tools. |
 
-## Key Endpoints Quick Reference
+## Tool Namespace
 
-| Operation | Method | Path |
-|-----------|--------|------|
-| List worlds | GET | `/api/world-manager` |
-| Create world | POST | `/api/world-manager` |
-| Delete world | DELETE | `/api/world-manager/{worldId}` |
-| List nodes | GET | `/api/world-manager/{worldId}/nodes` |
-| Create node (advance turn) | POST | `/api/world-manager/{worldId}/nodes` |
-| Switch active node | POST | `/api/world-manager/{worldId}/nodes/active` |
-| Write element | POST | `/api/world-manager-data/{worldId}/elements` |
-| Query element by ref | GET | `/api/world-manager-data/{worldId}/elements?ref=...` |
-| Search elements | GET | `/api/world-manager-data/{worldId}/elements/search?keywords=...` |
-| Checkpoint history | GET | `/api/world-manager-data/{worldId}/checkpoints/{cpId}` |
-| List documents | GET | `/api/documents` |
-| Read document | GET | `/api/documents/{docId}` |
-| Search documents | GET | `/api/documents/search?query=...` |
+- `gsim_*` — Core engine tools: WorldInfo, Node, Doc, Cache, Import, Search, Agent management
+- `gsimap_*` — Hex map tools: terrain, province, city, edge pathway, generation
+
+## worldId Requirement
+
+Most tools require a `worldId` parameter to operate on world data. Exceptions: `doc_*`, `import_*`, LLM/agent config tools, `wiki_search`, `mediawiki_search`. The `_context` field in responses shows `{worldId, nodeId, address}`. Default tools (always available): `finish_action`, `activate_tool_groups`, `world_list`, `doc_list`, `doc_read`.
+
+## Pagination
+
+All list/search tools support `_page` (1-based) and `_pageSize` (default 20, max 100). Responses include a `_hasMore` boolean.
+
+## Response Format
+
+```
+Success: {"success": true, "toolName": "...", "items": [...], "itemCount": N, "_page": 1, "_pageSize": 20, "_hasMore": false, "_context": {"worldId": "...", "nodeId": "...", "address": "..."}}
+Error:   {"success": false, "toolName": "...", "error": "..."}
+```
+
+## @ Reference System
+
+| Reference | Meaning | Example |
+|-----------|---------|---------|
+| `@world:nodeId:checkpoint:key` | World element (3-part) | `@world:n0002:characters:曹操` |
+| `@world:checkpoint:key` | World element (2-part, active node) | `@world:characters:曹操` |
+| `@doc:docId` | Document | `@doc:char_guanyu` |
+| `@cache:cacheId` | Cached text | `@cache:text_edit_xxx` |
+| `@import:documentId` | Imported document | `@import:wiki_doc` |
+
+Use `resolve_ref` to resolve any `@` reference. Use `text_edit` for the text editing pipeline (source -> select/delete/insert/replace -> `@cache` -> `write_element`).
+
+## Key Tools by Category
+
+### World & Node
+| Tool | Purpose |
+|------|---------|
+| `gsim_world_list` | List all worlds |
+| `gsim_world_create` | Create new world |
+| `gsim_world_switch` | Switch active world |
+| `gsim_node_status` | Current active node |
+| `gsim_node_list` | List nodes (flat or tree) |
+| `gsim_node_create` | Create child node (advance turn) |
+| `gsim_node_switch` | Switch to another node |
+| `gsim_node_goto_parent` | Return to parent node |
+
+### WorldInfo Elements
+| Tool | Purpose |
+|------|---------|
+| `gsim_query_node` | View all checkpoints/elements in a node |
+| `gsim_query_checkpoint` | Checkpoint history across chain |
+| `gsim_query_keyword` | Full-text keyword search |
+| `gsim_query_element` | Exact element lookup with link resolution |
+| `gsim_write_element` | Write or update element (upsert or append) |
+| `gsim_create_checkpoint` | Explicitly create a checkpoint |
+
+### Documents
+| Tool | Purpose |
+|------|---------|
+| `gsim_doc_list` | List documents |
+| `gsim_doc_read` | Read document content |
+| `gsim_doc_create` | Create a new document |
+| `gsim_doc_write` | Write or update a document |
+| `gsim_doc_search` | Search documents by keyword |
+
+### GSimap Map
+| Tool | Purpose |
+|------|---------|
+| `gsimap_generate` | Generate procedural terrain |
+| `gsimap_get_hex` | Get hex details |
+| `gsimap_query_radius` | Query hexes in a radius |
+| `gsimap_edge_set` | Set a pathway tag on an edge |
+| `gsimap_edge_get` | Get edge pathway tags |
+| `gsimap_edge_list` | List edges by filter |
+| `gsimap_render_text` | ASCII map rendering |
 
 ## General Workflow
 
-### Starting a new scenario
-1. `POST /api/world-manager` to create a world
-2. `POST /api/world-manager-data/{worldId}/elements` to write settings (worldview, characters, factions)
-3. Optionally `POST /api/documents` to upload reference materials
+**Starting a new scenario:**
+1. `gsim_world_create` — create a world
+2. `gsim_write_element` — write worldview, characters, faction settings
+3. Optionally `gsim_doc_create` — upload reference materials
 
-### Running a turn (simulating agent round)
-1. Read current state: `GET /api/world-manager/{worldId}/nodes/active` and relevant checkpoints
-2. Generate narrative/decisions
-3. `POST /api/world-manager/{worldId}/nodes` to advance the turn
-4. `POST /api/world-manager-data/{worldId}/elements` to write turn outcomes
+**Running a turn:**
+1. `gsim_node_status` — check current state
+2. `gsim_query_checkpoint` — read relevant checkpoints
+3. Generate narrative and decisions
+4. `gsim_node_create` — advance turn (requires `worldTime`)
+5. `gsim_write_element` — write turn outcomes
 
-### Researching a topic
-1. `GET /api/world-manager-data/{worldId}/elements/search?keywords=...` for in-world data
-2. `GET /api/documents/search?query=...` for reference materials
+**Researching:**
+1. `gsim_query_keyword` — search in-world data
+2. `gsim_doc_search` — search reference materials
+3. `gsim_import_document_search` — search imported documents
 
-### Reading full API specification
-```
-GET /api/documents/GSimulator-HTTP-API-Guide.md?full=true
-```
+## HTTP API (alternative access)
 
-## Conventions
-
-- All response bodies follow `{"success": bool, "data": {...}, "error": {...}}`
-- Element ref format: `nodeId:checkpointId:key` (3-part) or `checkpointId:key` (2-part, defaults to active node)
-- URL-encode Chinese characters in query parameters
-- The `POST /api/world-manager/{worldId}/nodes` body requires `worldTime` (string, in-world time label)
-- Checkpoints are auto-created when writing elements to non-existent checkpoints
+- Base URL: `http://127.0.0.1:8710`
+- Full API guide: see `GSimulator-HTTP-API-Guide.md`
+- SSE streaming: `POST /api/command/stream`
+- Status: `GET /api/status`
 
 ## Important Notes
 
-- All writes persist to disk immediately — no rollback
-- Node navigation (switch/goto-parent) affects which node `checkpointId:key` refs resolve to
-- Documents support `.txt`, `.md`, `.markdown` extensions only
-- Path traversal attacks are rejected on document operations
+- All writes persist to disk immediately — no rollback.
+- Node navigation affects `@world` reference resolution.
+- Gsimap tools require the gsimap module to be loaded.
+- The gsimap HTTP map editor is available at `http://127.0.0.1:8711`.
+
+## Further Reading
+
+- `docs/TOOL-CONTRACTS.md` — Complete tool interface reference
+- `docs/DATA-MODEL.md` — Data structures
+- `docs/RUNTIME-FLOWS.md` — Runtime sequences
+- `GSimulator-HTTP-API-Guide.md` — HTTP API cookbook
+- `CLAUDE.md` — AI agent development guide

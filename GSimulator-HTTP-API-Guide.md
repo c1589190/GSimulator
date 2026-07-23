@@ -1,5 +1,17 @@
 # GSimulator HTTP API — Agent 引导手册
 
+> ⚠️ **已废弃 (Deprecated)**
+> 
+> 本文档描述的 REST API 端点（`/api/ref`、`/api/search`、`/api/world/...` 等）已不再维护。
+> **所有数据读写操作请统一走 MCP 协议**（JSON-RPC 2.0 over stdio，`gsim_*` / `gsimap_*` 工具）。
+> 
+> 接入方式：启动 GSimulator 时使用 `--no-cli` 参数进入 MCP stdio 模式。
+> 工具参考：`docs/TOOL-CONTRACTS.md`；接入指南：`AGENTS.md`。
+> 
+> 本文档中的 @ 引用系统概念和 text_edit 编辑管道设计仍具有参考价值（resolve_ref / text_edit 已被封装为 MCP 工具），但具体 API 端点路径和请求格式已不再有效。
+> 
+> ---
+
 > 你是一个外部 AI Agent，连接到一个回合制叙事推演引擎。
 > 核心原则：**用 @ 引用替代复制全文，用 text_edit 编辑管道替代来回搬运大段文本。**
 
