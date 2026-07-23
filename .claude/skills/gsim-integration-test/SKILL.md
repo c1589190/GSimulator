@@ -183,6 +183,25 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 6. **测试结束后清理** — 删除测试 doc/region/world
 7. **不要假设当前 active world** — 每个 Agent 先调 world_list 确认
 8. **不要跳过错误测试** — 缺 worldId、无效参数、不存在 ID 也必须覆盖
+9. **重大变更必须同步文档** — 新增/删除 MCP 工具、修改数据模型、变更模块边界、废弃旧 API 时，必须更新 `docs/` 下的对应文档（详见下方文档同步规则）
+
+## 文档同步规则
+
+重大变更后，按影响范围更新对应文档：
+
+| 变更类型 | 需更新的文档 |
+|---------|-------------|
+| 新增/删除 MCP 工具、修改工具签名 | `docs/TOOL-CONTRACTS.md` |
+| 新增/修改数据模型（MapData、WorldInfo 等） | `docs/DATA-MODEL.md` |
+| 修改模块边界、新增/合并 package | `docs/MODULES.md` + `docs/ARCHITECTURE.md` |
+| 修改启动流程、ToolLoop、MCP 协议流程 | `docs/RUNTIME-FLOWS.md` |
+| 修改测试策略、质量门禁规则 | `docs/TESTING.md` |
+| 修改开发环境、构建命令、禁止事项 | `docs/DEVELOPMENT.md` + `CLAUDE.md` |
+| 架构级决策（新技术栈、模块拆分/合并） | `docs/adr/` 新增 ADR |
+| 废弃公开 API（工具/端点/配置项） | 对应工具文档 + `AGENTS.md` + `README.md` |
+| 外部 Agent 接入方式变更 | `AGENTS.md` + `GSimulator-HTTP-API-Guide.md` |
+
+**原则：** 文档与代码同步提交，禁止只改代码不更新文档的 PR 合入。
 
 ## Bug 知识沉淀
 
