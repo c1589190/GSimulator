@@ -1,25 +1,24 @@
 // ── Tool Switcher ──────────────────────────────────────
 function setTool(t) {
-  tool = t;
-  ['btnPen','btnFill','btnEraser','btnRiver','btnProvince','btnPathway','btnMapEdit'].forEach(id => {
+  State.tool = t;
+  ['btnPen','btnFill','btnEraser','btnProvince','btnPathway','btnMapEdit'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', false);
   });
   const activeBtn = document.getElementById(
-    t==='pen'?'btnPen':t==='fill'?'btnFill':t==='eraser'?'btnEraser':t==='river'?'btnRiver':t==='province'?'btnProvince':t==='pathway'?'btnPathway':'btnMapEdit');
+    t==='pen'?'btnPen':t==='fill'?'btnFill':t==='eraser'?'btnEraser':t==='province'?'btnProvince':t==='pathway'?'btnPathway':'btnMapEdit');
   if (activeBtn) activeBtn.classList.add('active');
-  riverStart = null;
-  provinceLasso = [];
-  lassoPts = [];
-  if (t !== 'province') { relassoTarget = null; selectedProvince = null; activeTag = null; }
+  State.provinceLasso = [];
+  State.lassoPts = [];
+  if (t !== 'province') { State.relassoTarget = null; State.selectedProvince = null; State.activeTag = null; }
   if (t === 'pathway') {
     // Show both panels: left = group detail, right = group list
     showPathwayGroupList();
-    if (activePathwayGroup) showPathwayGroupDetail(activePathwayGroup);
+    if (State.activePathwayGroup) showPathwayGroupDetail(State.activePathwayGroup);
     document.getElementById('leftPanel').style.display = 'block';
     document.getElementById('rightPanel').style.display = 'block';
     document.getElementById('mapEditPanel').style.display = 'none';
-    pathwayStart = null;
+    State.pathwayStart = null;
   } else if (t === 'province') {
     showTagList();
     document.getElementById('rightPanel').style.display = 'block';
@@ -30,8 +29,8 @@ function setTool(t) {
     document.getElementById('rightPanel').style.display = 'none';
     document.getElementById('mapEditPanel').style.display = 'none';
     document.getElementById('leftPanel').style.display = 'none';
-    canvas._boundaryHexes = null;
-    canvas.style.cursor = '';
+    State.canvas._boundaryHexes = null;
+    State.canvas.style.cursor = '';
   }
   render();
 }
@@ -41,7 +40,7 @@ function setStatus(msg) { document.getElementById('statusBar').textContent = msg
 // ── Info Panel ──────────────────────────────────────────
 function showHexDetail(q, r) {
   const key = `${q}_${r}`;
-  const cell = (mapData?.hexes || {})[key];
+  const cell = (State.mapData?.hexes || {})[key];
 
   const body = document.getElementById('leftBody');
   const title = document.getElementById('leftTitle');
@@ -52,17 +51,17 @@ function showHexDetail(q, r) {
   }
 
   // Check if this hex belongs to a compressed region
-  const compMeta = mapData._compressedMeta?.get(key);
+  const compMeta = State.mapData._compressedMeta?.get(key);
   const compLabel = compMeta
     ? ` <span style="font-size:10px;color:var(--accent);background:#333;padding:1px 6px;border-radius:3px">压缩区域 · ${compMeta.terrain} ×${compMeta.size}格</span>`
     : '';
 
   let provName = '';
-  for (const [pname, prov] of Object.entries(mapData.provinces || {})) {
+  for (const [pname, prov] of Object.entries(State.mapData.provinces || {})) {
     if (prov.hexes?.includes(key)) { provName = pname; break; }
   }
 
-  const tt = terrainTypes[cell.terrain] || {};
+  const tt = State.terrainTypes[cell.terrain] || {};
   title.innerHTML = `📍 (${q}, ${r})${compLabel}`;
   document.getElementById('leftPanel').style.display = 'block';
 
@@ -88,8 +87,8 @@ function showHexDetail(q, r) {
 
 function updateHexDesc(q, r, val) {
   const key = `${q}_${r}`;
-  if (!mapData.hexes[key]) mapData.hexes[key] = {color:'#808080',terrain:'unknown'};
-  mapData.hexes[key].description = val;
+  if (!State.mapData.hexes[key]) State.mapData.hexes[key] = {color:'#808080',terrain:'unknown'};
+  State.mapData.hexes[key].description = val;
 }
 
 // ── Keyboard Shortcuts ─────────────────────────────────

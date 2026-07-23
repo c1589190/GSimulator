@@ -10,12 +10,9 @@
 //   toolName — tool 类型消息的工具名称（可选）
 //   createdAt — ISO 时间字符串
 //   status   — "pending" | "streaming" | "complete" | "error"
-//   domRef   — DOM 元素引用（ChatRenderer 管理，不持久化）
+//   domRef   — DOM 元素引用（ClientCache 管理，不持久化）
 
-(function() {
-    'use strict';
-
-    var LS_KEY_PREFIX = 'gsim-msgs-';
+var LS_KEY_PREFIX = 'gsim-msgs-';
     var MAX_STORED = 200;  // localStorage 最多保留条数
 
     var messages = [];
@@ -231,8 +228,8 @@
         return 'a' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
     }
 
-    // 导出到全局
-    window.MessageStore = {
+    // 导出
+    export const MessageStore = {
         add: add,
         get: get,
         getAll: getAll,
@@ -248,4 +245,3 @@
     };
 
     console.log('[MessageStore] initialized with localStorage persistence');
-})();

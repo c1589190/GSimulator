@@ -11,10 +11,7 @@
 //   nodeUpdated           — 节点更新 (nodeId, key, value)
 //   nodeStatusChanged     — 状态变更 (nodeId, oldStatus, newStatus)
 
-(function() {
-    'use strict';
-
-    window.SessionWs = function(sessionId) {
+export default function SessionWs(sessionId) {
         this.sessionId = sessionId || 'default';
         this.ws = null;
         this.reconnectDelay = 3000;
@@ -129,6 +126,5 @@
     SessionWs.prototype.onStatusChanged = function(fn) { this._onStatusChanged = fn; };
     SessionWs.prototype.onStreamingState = function(fn) { this._onStreamingState = fn; };
     SessionWs.prototype.onHistory = function(fn) { this._onHistory = fn; };
-    SessionWs.prototype.onConnected = function(fn) { this._onConnected = fn; };
-    SessionWs.prototype.onDisconnected = function(fn) { this._onDisconnected = fn; };
-})();
+SessionWs.prototype.onConnected = function(fn) { this._onConnected = fn; };
+SessionWs.prototype.onDisconnected = function(fn) { this._onDisconnected = fn; };

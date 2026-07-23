@@ -1,77 +1,77 @@
 // ── Event Listeners ────────────────────────────────────
-canvas.addEventListener('mousedown', e => {
+State.canvas.addEventListener('mousedown', e => {
   if (e.button === 2) {
     e.preventDefault();
-    if (tool === 'province') {
-      provinceLasso = [];
+    if (State.tool === 'province') {
+      State.provinceLasso = [];
       const h = getHexAtEvent(e);
       if (h) addProvincePoint(h.q, h.r);
       return;
     }
-    if (tool === 'pathway') {
-      mouseDown = true; mouseButton = 2;
+    if (State.tool === 'pathway') {
+      State.mouseDown = true; State.mouseButton = 2;
       const h = getHexAtEvent(e);
-      if (h) addPathwayWaypoint(h.q, h.r, activePathwayGroup);
+      if (h) addPathwayWaypoint(h.q, h.r, State.activePathwayGroup);
       return;
     }
-    if (tool === 'river') return;
-    mouseDown = true;
-    clickHex = getHexAtEvent(e);
-    if (clickHex) applyTool(clickHex.q, clickHex.r);
+    if (State.tool === 'river') return;
+    State.mouseDown = true;
+    State.clickHex = getHexAtEvent(e);
+    if (State.clickHex) applyTool(State.clickHex.q, State.clickHex.r);
     return;
   }
   if (e.button === 0) {
-    if (tool === 'pathway') {
+    if (State.tool === 'pathway') {
       // Check if clicked on a thick segment to delete
-      const seg = findSegmentAtPixel(e.clientX, e.clientY, activePathwayGroup);
+      const seg = findSegmentAtPixel(e.clientX, e.clientY, State.activePathwayGroup);
       if (seg) {
-        mouseDown = true; mouseButton = 0;
+        State.mouseDown = true; State.mouseButton = 0;
         removePathwaySegment(seg.q, seg.r, seg.edge, seg.tag);
         return;
       }
     }
-    if (tool === 'province' && selectedProvince && canvas._boundaryHexes) {
+    if (State.tool === 'province' && State.selectedProvince && State.canvas._boundaryHexes) {
       const h = getHexAtEvent(e);
       if (h) {
-        for (const bp of canvas._boundaryHexes) {
-          if (bp.q === h.q && bp.r === h.r) { dragPoint = bp; return; }
+        for (const bp of State.canvas._boundaryHexes) {
+          if (bp.q === h.q && bp.r === h.r) { State.dragPoint = bp; return; }
         }
       }
     }
-    panStart = {x: e.clientX, y: e.clientY}; panOff = {x: offX, y: offY};
-    mouseDown = true;
-    clickHex = getHexAtEvent(e);
+    State.panStart = {x: e.clientX, y: e.clientY}; State.panOff = {x: State.offX, y: State.offY};
+    State.mouseDown = true;
+    State.clickHex = getHexAtEvent(e);
   }
 });
 
-canvas.addEventListener('contextmenu', e => e.preventDefault());
+State.canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-canvas.addEventListener('mousemove', e => {
-  if (panStart) {
-    offX = panOff.x + (e.clientX - panStart.x);
-    offY = panOff.y + (e.clientY - panStart.y);
-    if (Math.abs(e.clientX - panStart.x) > 3 || Math.abs(e.clientY - panStart.y) > 3) clickHex = null;
+State.canvas.addEventListener('mousemove', e => {
+  if (State.panStart) {
+    State.offX = State.panOff.x + (e.clientX - State.panStart.x);
+    State.offY = State.panOff.y + (e.clientY - State.panStart.y);
+    if (Math.abs(e.clientX - State.panStart.x) > 3 || Math.abs(e.clientY - State.panStart.y) > 3) State.clickHex = null;
     render(); return;
   }
 
-  if (tool === 'province' && provinceLasso.length > 0) {
+  if (State.tool === 'province' && State.provinceLasso.length > 0) {
     const h = getHexAtEvent(e);
     if (h) addProvincePoint(h.q, h.r);
     return;
   }
 
-  if (dragPoint) {
+  if (State.dragPoint) {
     const h = getHexAtEvent(e);
-    if (h && (h.q !== dragPoint.q || h.r !== dragPoint.r)) {
+    if (h && (h.q !== State.dragPoint.q || h.r !== State.dragPoint.r)) {
       const newKey = `${h.q}_${h.r}`;
-      const oldKey = `${dragPoint.q}_${dragPoint.r}`;
-      const p = mapData.provinces[selectedProvince];
+      const oldKey = `${State.dragPoint.q}_${State.dragPoint.r}`;
+      const p = State.mapData.provinces[State.selectedProvince];
       if (p?.hexes) {
-        if (!p.hexes.includes(newKey) && mapData.hexes[newKey]) p.hexes.push(newKey);
+        if (!p.hexes.includes(newKey) && State.mapData.hexes[newKey]) p.hexes.push(newKey);
         else if (p.hexes.includes(newKey) && newKey !== oldKey) p.hexes = p.hexes.filter(k => k !== oldKey);
-        dragPoint = {q: h.q, r: h.r};
-        canvas._boundaryCache = null;
-        delete canvas['b_' + selectedProvince];
+        State.dragPoint = {q: h.q, r: h.r};
+        State.canvas._boundaryCache = null;
+        delete State.canvas['b_' + State.selectedProvince];
         render();
       }
     }
@@ -80,74 +80,74 @@ canvas.addEventListener('mousemove', e => {
 
   const h = getHexAtEvent(e);
   if (h) {
-    tooltip.style.display = 'block';
-    tooltip.style.left = (e.clientX + 15) + 'px';
-    tooltip.style.top = (e.clientY - 20) + 'px';
+    State.tooltip.style.display = 'block';
+    State.tooltip.style.left = (e.clientX + 15) + 'px';
+    State.tooltip.style.top = (e.clientY - 20) + 'px';
     const key = `${h.q}_${h.r}`;
-    const cell = (mapData?.hexes || {})[key];
+    const cell = (State.mapData?.hexes || {})[key];
     const tn = cell?.terrain || 'empty';
-    const tt = terrainTypes[tn];
-    tooltip.textContent = `(${h.q},${h.r}) ${tn}` + (tt ? ` \u{1F56F}${tt.food} \u{1F4B0}${tt.gold} \u{1FAA8}${tt.stone}` : '');
-    if (mouseDown && (h.q !== clickHex?.q || h.r !== clickHex?.r)) { clickHex = null; }
-    if (mouseDown && tool !== 'river' && tool !== 'province' && tool !== 'pathway') applyTool(h.q, h.r);
-    if (tool === 'province' && !dragPoint && provinceLasso.length === 0) {
-      canvas.style.cursor = findProvinceAt(h.q, h.r) ? 'pointer' : 'crosshair';
+    const tt = State.terrainTypes[tn];
+    State.tooltip.textContent = `(${h.q},${h.r}) ${tn}` + (tt ? ` \u{1F56F}${tt.food} \u{1F4B0}${tt.gold} \u{1FAA8}${tt.stone}` : '');
+    if (State.mouseDown && (h.q !== State.clickHex?.q || h.r !== State.clickHex?.r)) { State.clickHex = null; }
+    if (State.mouseDown && State.tool !== 'river' && State.tool !== 'province' && State.tool !== 'pathway') applyTool(h.q, h.r);
+    if (State.tool === 'province' && !State.dragPoint && State.provinceLasso.length === 0) {
+      State.canvas.style.cursor = findProvinceAt(h.q, h.r) ? 'pointer' : 'crosshair';
     }
-    if (tool === 'pathway') {
-      if (mouseDown && mouseButton === 2) {
+    if (State.tool === 'pathway') {
+      if (State.mouseDown && State.mouseButton === 2) {
         // Right-drag: continuously create pathway segments
-        addPathwayWaypoint(h.q, h.r, activePathwayGroup);
-      } else if (mouseDown && mouseButton === 0) {
+        addPathwayWaypoint(h.q, h.r, State.activePathwayGroup);
+      } else if (State.mouseDown && State.mouseButton === 0) {
         // Left-drag: continuously delete segments under cursor
-        const seg = findSegmentAtPixel(e.clientX, e.clientY, activePathwayGroup);
+        const seg = findSegmentAtPixel(e.clientX, e.clientY, State.activePathwayGroup);
         if (seg) removePathwaySegment(seg.q, seg.r, seg.edge, seg.tag);
       }
-      const seg = findSegmentAtPixel(e.clientX, e.clientY, activePathwayGroup);
-      canvas.style.cursor = seg ? 'pointer' : 'crosshair';
+      const seg = findSegmentAtPixel(e.clientX, e.clientY, State.activePathwayGroup);
+      State.canvas.style.cursor = seg ? 'pointer' : 'crosshair';
     }
-  } else { tooltip.style.display = 'none'; canvas.style.cursor = ''; }
+  } else { State.tooltip.style.display = 'none'; State.canvas.style.cursor = ''; }
 });
 
-canvas.addEventListener('mouseup', e => {
-  if (tool === 'province' && provinceLasso.length > 2) {
+State.canvas.addEventListener('mouseup', e => {
+  if (State.tool === 'province' && State.provinceLasso.length > 2) {
     finishProvinceLasso();
-    provinceLasso = [];
+    State.provinceLasso = [];
     return;
   }
-  provinceLasso = [];
-  if (dragPoint) { dragPoint = null; render(); return; }
-  if (clickHex && tool === 'pathway') {
+  State.provinceLasso = [];
+  if (State.dragPoint) { State.dragPoint = null; render(); return; }
+  if (State.clickHex && State.tool === 'pathway') {
     // In pathway mode, clicking (left) on empty space does nothing special
-  } else if (clickHex && tool === 'province') {
-    const found = findProvinceAt(clickHex.q, clickHex.r);
+  } else if (State.clickHex && State.tool === 'province') {
+    const found = findProvinceAt(State.clickHex.q, State.clickHex.r);
     if (found) { selectProvince(found); }
-  } else if (clickHex && mouseDown) {
-    showHexDetail(clickHex.q, clickHex.r);
-    const key = `${clickHex.q}_${clickHex.r}`;
-    const crMeta = mapData._compressedMeta?.get(key);
-    const prev = selectedCompressedRegion;
-    selectedCompressedRegion = crMeta ? crMeta.regionId : null;
-    if (selectedCompressedRegion !== prev) render();
+  } else if (State.clickHex && State.mouseDown) {
+    showHexDetail(State.clickHex.q, State.clickHex.r);
+    const key = `${State.clickHex.q}_${State.clickHex.r}`;
+    const crMeta = State.mapData._compressedMeta?.get(key);
+    const prev = State.selectedCompressedRegion;
+    State.selectedCompressedRegion = crMeta ? crMeta.regionId : null;
+    if (State.selectedCompressedRegion !== prev) render();
   }
-  mouseDown = false; panStart = null; clickHex = null; mouseButton = 0;
+  State.mouseDown = false; State.panStart = null; State.clickHex = null; State.mouseButton = 0;
 });
 
-canvas.addEventListener('mouseleave', ()=>{mouseDown=false;panStart=null;mouseButton=0;tooltip.style.display='none';});
-canvas.addEventListener('wheel', e => {
+State.canvas.addEventListener('mouseleave', ()=>{State.mouseDown=false;State.panStart=null;State.mouseButton=0;State.tooltip.style.display='none';});
+State.canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const zf = e.deltaY < 0 ? 1.1 : 1/1.1;
-  const nz = Math.max(0.1, Math.min(5, zoom * zf));
-  const r = canvas.getBoundingClientRect();
+  const nz = Math.max(0.1, Math.min(5, State.zoom * zf));
+  const r = State.canvas.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
-  offX = mx - (mx - offX) * nz / zoom;
-  offY = my - (my - offY) * nz / zoom;
-  zoom = nz;
+  State.offX = mx - (mx - State.offX) * nz / State.zoom;
+  State.offY = my - (my - State.offY) * nz / State.zoom;
+  State.zoom = nz;
   render();
 }, {passive: false});
 
 function getHexAtEvent(e) {
-  const r = canvas.getBoundingClientRect();
-  return pixelToHex((e.clientX-r.left-offX)/zoom, (e.clientY-r.top-offY)/zoom);
+  const r = State.canvas.getBoundingClientRect();
+  return pixelToHex((e.clientX-r.left-State.offX)/State.zoom, (e.clientY-r.top-State.offY)/State.zoom);
 }
 
 // ── API & Init ─────────────────────────────────────────
@@ -159,7 +159,7 @@ async function init() {
   window.addEventListener('resize', resizeCanvas);
   try { resizeCanvas(); } catch(e) {}
 
-  mapData = {hexes:{}, terrainBlocks:[], provinces:{}, tags:{}, cities:{}, terrainTypes:{...DEFAULT_TERRAINS}, gridSize:120, hexOrientation:false, rivers:[], roads:[], pathwayGroups:{river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}}};
+  State.mapData = {hexes:{}, terrainBlocks:[], provinces:{}, tags:{}, cities:{}, terrainTypes:{...DEFAULT_TERRAINS}, gridSize:120, hexOrientation:false, rivers:[], roads:[], pathwayGroups:{river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}}};
   initTags();
   setStatus('空画布就绪 — 右键拖动圈地形');
 
@@ -211,7 +211,7 @@ async function loadNodes() {
 function onNodeChange() {
   MapAPI.nodeId = document.getElementById('nodeSelect').value || null;
   localStorage.setItem('goatmosire_nodeId', MapAPI.nodeId || '');
-  mapData = null;
+  State.mapData = null;
   loadMap();
   loadLatestTexts();
 }
@@ -236,42 +236,42 @@ setInterval(pollMapVersion, 3000);
 
 async function loadMap() {
   try {
-    mapData = await MapAPI.load();
+    State.mapData = await MapAPI.load();
     loadTags();
-    if (mapData.terrainTypes && Object.keys(mapData.terrainTypes).length > 0) {
-      buildTerrainButtons(mapData.terrainTypes);
+    if (State.mapData.terrainTypes && Object.keys(State.mapData.terrainTypes).length > 0) {
+      buildTerrainButtons(State.mapData.terrainTypes);
     } else {
-      mapData.terrainTypes = {...DEFAULT_TERRAINS};
+      State.mapData.terrainTypes = {...DEFAULT_TERRAINS};
     }
-    if (!mapData.terrainBlocks) mapData.terrainBlocks = [];
-    if (!mapData.hexes) mapData.hexes = {};
-    if (!mapData.tags) mapData.tags = {};
-    if (!mapData.pathwayGroups || Object.keys(mapData.pathwayGroups).length === 0) {
-      mapData.pathwayGroups = {river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}};
+    if (!State.mapData.terrainBlocks) State.mapData.terrainBlocks = [];
+    if (!State.mapData.hexes) State.mapData.hexes = {};
+    if (!State.mapData.tags) State.mapData.tags = {};
+    if (!State.mapData.pathwayGroups || Object.keys(State.mapData.pathwayGroups).length === 0) {
+      State.mapData.pathwayGroups = {river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}};
     }
 
     // Build compressed region metadata for render optimization + UI
     // hexes() always contains ALL hexes (compression no longer removes them —
     // compressedRegions is a pure rendering cache, rebuilt by re-running compress)
-    mapData._compressedMeta = new Map();
-    mapData._compressedById = new Map();
-    if (mapData.compressedRegions) {
-      for (const cr of mapData.compressedRegions) {
+    State.mapData._compressedMeta = new Map();
+    State.mapData._compressedById = new Map();
+    if (State.mapData.compressedRegions) {
+      for (const cr of State.mapData.compressedRegions) {
         const meta = {regionId: cr.id, terrain: cr.terrain, color: cr.color};
-        mapData._compressedById.set(cr.id, {terrain: cr.terrain, color: cr.color, hexKeys: new Set(cr.hexKeys)});
+        State.mapData._compressedById.set(cr.id, {terrain: cr.terrain, color: cr.color, hexKeys: new Set(cr.hexKeys)});
         if (cr.hexKeys) for (const key of cr.hexKeys) {
-          mapData._compressedMeta.set(key, meta);
+          State.mapData._compressedMeta.set(key, meta);
         }
       }
     }
 
-    for (const b of mapData.terrainBlocks) {
+    for (const b of State.mapData.terrainBlocks) {
       if (b.hexKeys && Array.isArray(b.hexKeys)) b._hexSet = new Set(b.hexKeys);
     }
     syncEdgesToHexTags();
     setStatus(`已加载: ${MapAPI.worldId}`);
   } catch(e) {
-    mapData = {hexes:{}, terrainBlocks:[], provinces:{}, tags:{}, cities:{}, terrainTypes:{...DEFAULT_TERRAINS}, gridSize:120, hexOrientation:false, rivers:[], roads:[], pathwayGroups:{river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}}};
+    State.mapData = {hexes:{}, terrainBlocks:[], provinces:{}, tags:{}, cities:{}, terrainTypes:{...DEFAULT_TERRAINS}, gridSize:120, hexOrientation:false, rivers:[], roads:[], pathwayGroups:{river:{id:'river',name:'河流',color:'#3295D2',description:'天然水系',visible:true},road:{id:'road',name:'道路',color:'#8B7355',description:'陆路通道',visible:true}}};
     loadTags();
     buildTerrainButtons(DEFAULT_TERRAINS);
     setStatus('空画布 — 点 🎲 生成新大陆');
@@ -280,14 +280,14 @@ async function loadMap() {
 }
 
 async function saveMap() {
-  if (!mapData) return;
-  if (!mapData.terrainTypes || Object.keys(mapData.terrainTypes).length === 0) {
-    mapData.terrainTypes = {...DEFAULT_TERRAINS};
+  if (!State.mapData) return;
+  if (!State.mapData.terrainTypes || Object.keys(State.mapData.terrainTypes).length === 0) {
+    State.mapData.terrainTypes = {...DEFAULT_TERRAINS};
   }
   try {
     // Convert pathway edge tags to backend edges format, then strip client-only fields
     syncHexTagsToEdges();
-    const {tags, _compressedMeta, _compressedById, ...clean} = mapData;
+    const {tags, _compressedMeta, _compressedById, ...clean} = State.mapData;
     await MapAPI.save(clean);
     saveTags();
     showToast('已保存');

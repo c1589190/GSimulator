@@ -1,5 +1,9 @@
 // GSimulator WebUI — 前端交互脚本
 
+import SessionWs from './session-ws.js';
+import { ClientCache } from './client-cache.js';
+import { MessageStore } from './message-store.js';
+
 // ---- Mermaid 初始化（CDN 故障不阻塞其他 JS） ----
 try {
     mermaid.initialize({
@@ -74,7 +78,7 @@ function loadMobilePage(name) {
 
 // ===== Phase 4: 基于 SessionWs (WebSocket) 的聊天逻辑 =====
 // @deprecated 旧 SSE 路径保留兼容但不再使用。SessionWs 通过 WebSocket + SessionNode JSON 驱动 UI。
-(function() {
+{
     'use strict';
 
     var sessionWs = null;   // SessionWs 实例
@@ -274,8 +278,8 @@ function loadMobilePage(name) {
         clearUploadTags();
 
         // 立即渲染用户消息卡片 — 不要等后端 Cache 刷新
-        if (window.ClientCache && window.ClientCache.addUserMessage) {
-            window.ClientCache.addUserMessage(msg);
+        if (ClientCache && ClientCache.addUserMessage) {
+            ClientCache.addUserMessage(msg);
         }
 
         // 发送到后端
@@ -372,4 +376,4 @@ function loadMobilePage(name) {
         .catch(function(err) { console.warn('deleteConversation:', err.message); });
     };
 
-})();
+}

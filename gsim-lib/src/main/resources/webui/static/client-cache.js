@@ -14,11 +14,10 @@
 //           │     └── SubAgentCard    — 子代理
 //           └── SystemCard       — 系统通知
 
-(function() {
-    'use strict';
+import { MessageStore } from './message-store.js';
 
-    var MSG_CONTAINER_ID = 'chat-messages';
-    var EMPTY_STATE_ID = 'chat-empty-state';
+var MSG_CONTAINER_ID = 'chat-messages';
+var EMPTY_STATE_ID = 'chat-empty-state';
 
     // ══════════════════════════════════════════
     // 工具函数
@@ -547,7 +546,7 @@
                             var b = pendingAsstCard.blocks[i];
                             if (b instanceof ContentBlock) full += (full ? '\n\n' : '') + b.text;
                         }
-                        window.MessageStore.update(pendingAsstCard.msg.msgId, {content: full});
+                        MessageStore.update(pendingAsstCard.msg.msgId, {content: full});
                     }
                 }
             }
@@ -580,7 +579,7 @@
                         for (var i = 0; i < pendingAsstCard.reasoningBlocks.length; i++) {
                             reasoningText += pendingAsstCard.reasoningBlocks[i].getText();
                         }
-                        window.MessageStore.update(pendingAsstCard.msg.msgId, {reasoning: reasoningText});
+                        MessageStore.update(pendingAsstCard.msg.msgId, {reasoning: reasoningText});
                     }
                 }
             }
@@ -1146,7 +1145,7 @@
     // 导出
     // ══════════════════════════════════════════
 
-    window.ClientCache = {
+    export const ClientCache = {
         addUserMessage: addUserMessage,
         dispatch: dispatch,
         createAssistantCard: createAssistantCard,
@@ -1165,4 +1164,3 @@
     };
 
     console.log('[ClientCache] initialized');
-})();

@@ -3,6 +3,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Kill any existing GSimulator process holding our ports
+for port in 8710 8711 8712; do
+    pid=$(lsof -ti:$port 2>/dev/null) || pid=$(fuser $port/tcp 2>/dev/null | tr -d ' ')
+    if [ -n "$pid" ]; then
+        echo "Killing existing process on port $port (PID $pid)..." >&2
+        kill -9 $pid 2>/dev/null || true
+    fi
+done
+sleep 0.5
+
 # Build all modules (output to stderr to avoid corrupting MCP stdio)
 echo "Building GSimulator..." >&2
 mvn -q package -DskipTests -Dmaven.test.skip=true -pl gsim-lib,gsimap,gsim-app >&2 2>&1

@@ -1,7 +1,7 @@
 // ── Pathway Tool ─────────────────────────────────────────
 // Replaces the legacy river.js — operates on HexCell.edgeTags
 // and MapData.pathwayGroups instead of riverMask.
-// State variables (activePathwayGroup, pathwayStart, pathwayHighlightMode)
+// State variables (State.activePathwayGroup, State.pathwayStart, State.pathwayHighlightMode)
 // are declared in js/state.js.
 
 // ── Data helpers ─────────────────────────────────────────
@@ -58,32 +58,32 @@ function removeEdgeTag(cell, edge, tag) {
 
 /** Get all pathway groups, ensuring defaults. */
 function getPathwayGroups() {
-  if (!mapData) return {};
-  if (!mapData.pathwayGroups || Object.keys(mapData.pathwayGroups).length === 0) {
-    mapData.pathwayGroups = {
+  if (!State.mapData) return {};
+  if (!State.mapData.pathwayGroups || Object.keys(State.mapData.pathwayGroups).length === 0) {
+    State.mapData.pathwayGroups = {
       river: {id:'river', name:'河流', color:'#3295D2', description:'天然水系', visible:true},
       road: {id:'road', name:'道路', color:'#8B7355', description:'陆路通道', visible:true}
     };
   }
-  return mapData.pathwayGroups;
+  return State.mapData.pathwayGroups;
 }
 
 // ── Pathway waypoint editing ─────────────────────────────
 let _lastPathwayTarget = null; // dedup for drag mode
 
 function addPathwayWaypoint(q, r, groupId) {
-  if (!groupId) groupId = activePathwayGroup;
-  if (!pathwayStart) {
-    pathwayStart = {q, r};
+  if (!groupId) groupId = State.activePathwayGroup;
+  if (!State.pathwayStart) {
+    State.pathwayStart = {q, r};
     _lastPathwayTarget = `${q}_${r}`;
     setStatus(`通路起点: (${q},${r}) [${groupId}] — 按住右键拖拽继续，松开结束`);
     render();
     return;
   }
   // Click same hex = cancel
-  if (q === pathwayStart.q && r === pathwayStart.r) {
-    if (!mouseDown) {
-      pathwayStart = null; _lastPathwayTarget = null;
+  if (q === State.pathwayStart.q && r === State.pathwayStart.r) {
+    if (!State.mouseDown) {
+      State.pathwayStart = null; _lastPathwayTarget = null;
       setStatus('通路: 已取消');
       render();
     }
@@ -93,45 +93,45 @@ function addPathwayWaypoint(q, r, groupId) {
   const targetKey = `${q}_${r}`;
   if (targetKey === _lastPathwayTarget) return;
   // Check adjacency
-  const d = direction(pathwayStart.q, pathwayStart.r, q, r);
+  const d = direction(State.pathwayStart.q, State.pathwayStart.r, q, r);
   if (d < 0) {
     // In drag mode, silently skip non-adjacent hexes; in click mode, end pathway
-    if (!mouseDown) {
-      pathwayStart = null; _lastPathwayTarget = null;
+    if (!State.mouseDown) {
+      State.pathwayStart = null; _lastPathwayTarget = null;
       setStatus('通路: 已结束（非相邻格）');
       render();
     }
     return;
   }
   // Ensure both hexes exist
-  const ak = `${pathwayStart.q}_${pathwayStart.r}`, bk = `${q}_${r}`;
-  if (!mapData.hexes[ak]) mapData.hexes[ak] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
-  if (!mapData.hexes[bk]) mapData.hexes[bk] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+  const ak = `${State.pathwayStart.q}_${State.pathwayStart.r}`, bk = `${q}_${r}`;
+  if (!State.mapData.hexes[ak]) State.mapData.hexes[ak] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+  if (!State.mapData.hexes[bk]) State.mapData.hexes[bk] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
   // Set edge tags on both hexes
-  setEdgeTag(mapData.hexes[ak], d, groupId);
-  setEdgeTag(mapData.hexes[bk], OPPOSITE_DIR[d], groupId);
+  setEdgeTag(State.mapData.hexes[ak], d, groupId);
+  setEdgeTag(State.mapData.hexes[bk], OPPOSITE_DIR[d], groupId);
   render();
-  if (!mouseDown) {
+  if (!State.mouseDown) {
     const g = getPathwayGroups()[groupId];
-    showToast(`${g ? g.name : groupId}: (${pathwayStart.q},${pathwayStart.r}) → (${q},${r})`);
+    showToast(`${g ? g.name : groupId}: (${State.pathwayStart.q},${State.pathwayStart.r}) → (${q},${r})`);
   }
-  pathwayStart = {q, r};
+  State.pathwayStart = {q, r};
   _lastPathwayTarget = targetKey;
-  setStatus(mouseDown
+  setStatus(State.mouseDown
     ? `通路 [${groupId}]: 拖拽中… 松开右键结束`
     : `通路 [${groupId}]: 从 (${q},${r}) 继续，右键相邻格；右键非相邻格或起点结束`);
 }
 
 function removePathwaySegment(q, r, edge, groupId) {
   const key = `${q}_${r}`;
-  const cell = mapData.hexes[key];
+  const cell = State.mapData.hexes[key];
   if (!cell) return false;
   const removed = removeEdgeTag(cell, edge, groupId);
   if (removed) {
     // Also remove from adjacent hex's opposite edge
     const [dq, dr] = DIR_VECTORS[edge];
     const adjKey = `${q+dq}_${r+dr}`;
-    const adjCell = mapData.hexes[adjKey];
+    const adjCell = State.mapData.hexes[adjKey];
     if (adjCell) removeEdgeTag(adjCell, OPPOSITE_DIR[edge], groupId);
     render();
     const g = getPathwayGroups()[groupId];
@@ -154,20 +154,20 @@ function pointToSegmentDist(px, py, x1, y1, x2, y2) {
 }
 
 /**
- * Find a pathway segment near the given canvas pixel (in screen coords).
+ * Find a pathway segment near the given State.canvas pixel (in screen coords).
  * Returns {q, r, edge, tag} or null.
  */
 function findSegmentAtPixel(screenX, screenY, groupId) {
-  if (!mapData?.hexes) return null;
+  if (!State.mapData?.hexes) return null;
   const threshold = 12; // pixels in screen space
-  const r = canvas.getBoundingClientRect();
+  const r = State.canvas.getBoundingClientRect();
   // Convert screen coords to world coords
-  const wx = (screenX - r.left - offX) / zoom;
-  const wy = (screenY - r.top - offY) / zoom;
+  const wx = (screenX - r.left - State.offX) / State.zoom;
+  const wy = (screenY - r.top - State.offY) / State.zoom;
 
   let best = null, bestDist = threshold;
 
-  for (const [key, cell] of Object.entries(mapData.hexes)) {
+  for (const [key, cell] of Object.entries(State.mapData.hexes)) {
     const tags = getEdgeTags(cell);
     const [q, r] = key.split('_').map(Number);
     const {x: cx, y: cy} = hexToPixel(q, r);
@@ -194,24 +194,24 @@ function findSegmentAtPixel(screenX, screenY, groupId) {
 
 /** Render all pathway groups (replaces renderRivers). */
 function renderPathways() {
-  if (!mapData?.hexes) return;
+  if (!State.mapData?.hexes) return;
   const groups = getPathwayGroups();
   const groupIds = Object.keys(groups);
 
   // In pathway editing mode, only render the active group
-  const visibleIds = (tool === 'pathway')
-    ? [activePathwayGroup]
+  const visibleIds = (State.tool === 'pathway')
+    ? [State.activePathwayGroup]
     : groupIds.filter(id => groups[id].visible !== false);
 
   if (visibleIds.length === 0) return;
 
-  ctx.save();
-  ctx.translate(offX, offY);
-  ctx.scale(zoom, zoom);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  State.ctx.save();
+  State.ctx.translate(State.offX, State.offY);
+  State.ctx.scale(State.zoom, State.zoom);
+  State.ctx.lineCap = 'round';
+  State.ctx.lineJoin = 'round';
 
-  const isEditing = (tool === 'pathway');
+  const isEditing = (State.tool === 'pathway');
 
   for (const gid of visibleIds) {
     const group = groups[gid];
@@ -219,10 +219,10 @@ function renderPathways() {
     const color = group.color || '#808080';
 
     // Glow layer (white underlay)
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.lineWidth = (isEditing ? 8 : 5) / zoom;
-    ctx.beginPath();
-    for (const [key, cell] of Object.entries(mapData.hexes)) {
+    State.ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    State.ctx.lineWidth = (isEditing ? 8 : 5) / State.zoom;
+    State.ctx.beginPath();
+    for (const [key, cell] of Object.entries(State.mapData.hexes)) {
       const tags = getEdgeTags(cell);
       const [q, r] = key.split('_').map(Number);
       const {x, y} = hexToPixel(q, r);
@@ -233,16 +233,16 @@ function renderPathways() {
         const [dq, dr] = DIR_VECTORS[d];
         const tx = hexToPixel(q+dq, r+dr).x, ty = hexToPixel(q+dq, r+dr).y;
         const nx = x + (tx - x) * 0.5, ny = y + (ty - y) * 0.5;
-        ctx.moveTo(x, y); ctx.lineTo(nx, ny);
+        State.ctx.moveTo(x, y); State.ctx.lineTo(nx, ny);
       }
     }
-    ctx.stroke();
+    State.ctx.stroke();
 
     // Color line
-    ctx.strokeStyle = color;
-    ctx.lineWidth = (isEditing ? 5 : 3) / zoom;
-    ctx.beginPath();
-    for (const [key, cell] of Object.entries(mapData.hexes)) {
+    State.ctx.strokeStyle = color;
+    State.ctx.lineWidth = (isEditing ? 5 : 3) / State.zoom;
+    State.ctx.beginPath();
+    for (const [key, cell] of Object.entries(State.mapData.hexes)) {
       const tags = getEdgeTags(cell);
       const [q, r] = key.split('_').map(Number);
       const {x, y} = hexToPixel(q, r);
@@ -253,24 +253,24 @@ function renderPathways() {
         const [dq, dr] = DIR_VECTORS[d];
         const tx = hexToPixel(q+dq, r+dr).x, ty = hexToPixel(q+dq, r+dr).y;
         const nx = x + (tx - x) * 0.5, ny = y + (ty - y) * 0.5;
-        ctx.moveTo(x, y); ctx.lineTo(nx, ny);
+        State.ctx.moveTo(x, y); State.ctx.lineTo(nx, ny);
       }
     }
-    ctx.stroke();
+    State.ctx.stroke();
 
     // Active waypoint indicator
-    if (isEditing && pathwayStart && gid === activePathwayGroup) {
-      const sp = hexToPixel(pathwayStart.q, pathwayStart.r);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, 5 / zoom, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 / zoom;
-      ctx.stroke();
+    if (isEditing && State.pathwayStart && gid === State.activePathwayGroup) {
+      const sp = hexToPixel(State.pathwayStart.q, State.pathwayStart.r);
+      State.ctx.fillStyle = color;
+      State.ctx.beginPath();
+      State.ctx.arc(sp.x, sp.y, 5 / State.zoom, 0, Math.PI * 2);
+      State.ctx.fill();
+      State.ctx.strokeStyle = '#fff';
+      State.ctx.lineWidth = 2 / State.zoom;
+      State.ctx.stroke();
     }
   }
-  ctx.restore();
+  State.ctx.restore();
 }
 
 // ── Pathway Group UI ─────────────────────────────────────
@@ -288,7 +288,7 @@ function showPathwayGroupList() {
 
   let html = '';
   for (const [id, g] of Object.entries(groups)) {
-    const activeClass = (id === activePathwayGroup) ? ' style="outline:2px solid var(--accent);"' : '';
+    const activeClass = (id === State.activePathwayGroup) ? ' style="outline:2px solid var(--accent);"' : '';
     html += `
     <div class="pathway-group-card"${activeClass} data-group-id="${id}">
       <div class="pgc-header" onclick="selectPathwayGroup('${id}')">
@@ -360,8 +360,8 @@ function showPathwayGroupDetail(groupId) {
 }
 
 function selectPathwayGroup(groupId) {
-  activePathwayGroup = groupId;
-  pathwayStart = null; // reset waypoint
+  State.activePathwayGroup = groupId;
+  State.pathwayStart = null; // reset waypoint
   showPathwayGroupList();
   showPathwayGroupDetail(groupId);
   render();
@@ -379,7 +379,7 @@ async function savePathwayGroups() {
     const r = await fetch(MapAPI._url('/pathway-groups'), {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(mapData.pathwayGroups || {})
+      body: JSON.stringify(State.mapData.pathwayGroups || {})
     });
     if (!r.ok) throw new Error(`Save failed: ${r.status}`);
     showToast('通路组别已保存');
@@ -425,8 +425,8 @@ function deletePathwayGroup(groupId) {
   if (!g) return;
   if (!confirm(`确定删除通路组别 "${g.name || groupId}" 及其所有线段？`)) return;
   // Remove all edgeTags for this group
-  if (mapData?.hexes) {
-    for (const cell of Object.values(mapData.hexes)) {
+  if (State.mapData?.hexes) {
+    for (const cell of Object.values(State.mapData.hexes)) {
       if (!cell.edgeTags) continue;
       for (let d = 0; d < 6; d++) {
         if (cell.edgeTags[d]) {
@@ -437,12 +437,12 @@ function deletePathwayGroup(groupId) {
     }
   }
   delete groups[groupId];
-  if (activePathwayGroup === groupId) {
+  if (State.activePathwayGroup === groupId) {
     const remaining = Object.keys(groups);
-    activePathwayGroup = remaining.length > 0 ? remaining[0] : 'river';
+    State.activePathwayGroup = remaining.length > 0 ? remaining[0] : 'river';
   }
   showPathwayGroupList();
-  if (activePathwayGroup) showPathwayGroupDetail(activePathwayGroup);
+  if (State.activePathwayGroup) showPathwayGroupDetail(State.activePathwayGroup);
   render();
   showToast(`已删除组别: ${g.name || groupId}`);
 }
@@ -460,10 +460,10 @@ function buildEdgeKey(q1, r1, q2, r2) {
 
 /** Convert backend MapData.edges → frontend HexCell.edgeTags (call after load). */
 function syncEdgesToHexTags() {
-  if (!mapData?.edges || Object.keys(mapData.edges).length === 0) return;
-  if (!mapData.hexes) mapData.hexes = {};
+  if (!State.mapData?.edges || Object.keys(State.mapData.edges).length === 0) return;
+  if (!State.mapData.hexes) State.mapData.hexes = {};
 
-  for (const [edgeKey, edgeData] of Object.entries(mapData.edges)) {
+  for (const [edgeKey, edgeData] of Object.entries(State.mapData.edges)) {
     const [a, b] = edgeKey.split('|');
     const [q1, r1] = a.split('_').map(Number);
     const [q2, r2] = b.split('_').map(Number);
@@ -472,18 +472,18 @@ function syncEdgesToHexTags() {
       // set on hex1 → hex2 direction
       const d1 = direction(q1, r1, q2, r2);
       if (d1 >= 0) {
-        if (!mapData.hexes[a]) mapData.hexes[a] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
-        if (!mapData.hexes[a].edgeTags) mapData.hexes[a].edgeTags = {};
-        if (!mapData.hexes[a].edgeTags[d1]) mapData.hexes[a].edgeTags[d1] = [];
-        if (!mapData.hexes[a].edgeTags[d1].includes(pathwayId)) mapData.hexes[a].edgeTags[d1].push(pathwayId);
+        if (!State.mapData.hexes[a]) State.mapData.hexes[a] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+        if (!State.mapData.hexes[a].edgeTags) State.mapData.hexes[a].edgeTags = {};
+        if (!State.mapData.hexes[a].edgeTags[d1]) State.mapData.hexes[a].edgeTags[d1] = [];
+        if (!State.mapData.hexes[a].edgeTags[d1].includes(pathwayId)) State.mapData.hexes[a].edgeTags[d1].push(pathwayId);
       }
       // set on hex2 → hex1 direction
       const d2 = direction(q2, r2, q1, r1);
       if (d2 >= 0) {
-        if (!mapData.hexes[b]) mapData.hexes[b] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
-        if (!mapData.hexes[b].edgeTags) mapData.hexes[b].edgeTags = {};
-        if (!mapData.hexes[b].edgeTags[d2]) mapData.hexes[b].edgeTags[d2] = [];
-        if (!mapData.hexes[b].edgeTags[d2].includes(pathwayId)) mapData.hexes[b].edgeTags[d2].push(pathwayId);
+        if (!State.mapData.hexes[b]) State.mapData.hexes[b] = {color:'#6CC261',terrain:'plains',riverMask:0,edgeTags:{}};
+        if (!State.mapData.hexes[b].edgeTags) State.mapData.hexes[b].edgeTags = {};
+        if (!State.mapData.hexes[b].edgeTags[d2]) State.mapData.hexes[b].edgeTags[d2] = [];
+        if (!State.mapData.hexes[b].edgeTags[d2].includes(pathwayId)) State.mapData.hexes[b].edgeTags[d2].push(pathwayId);
       }
     }
   }
@@ -491,10 +491,10 @@ function syncEdgesToHexTags() {
 
 /** Convert frontend HexCell.edgeTags → backend MapData.edges (call before save). */
 function syncHexTagsToEdges() {
-  if (!mapData?.hexes) { mapData.edges = {}; return; }
+  if (!State.mapData?.hexes) { State.mapData.edges = {}; return; }
   const edges = {};
 
-  for (const [key, cell] of Object.entries(mapData.hexes)) {
+  for (const [key, cell] of Object.entries(State.mapData.hexes)) {
     if (!cell.edgeTags) continue;
     const [q, r] = key.split('_').map(Number);
 
@@ -512,7 +512,7 @@ function syncHexTagsToEdges() {
       }
     }
   }
-  mapData.edges = edges;
+  State.mapData.edges = edges;
 }
 
 // ── Utility ──────────────────────────────────────────────

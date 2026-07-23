@@ -15,32 +15,61 @@ const DEFAULT_TERRAINS = {
   tundra:   {name:"tundra",   color:"#B0C4DE", food:1, gold:0, stone:1, moveCost:2,  description:"冻土"}
 };
 
-// ── Global State ───────────────────────────────────────
-let mapData = null;
-let terrainTypes = DEFAULT_TERRAINS;
-let activeTerrain = 'plains';
-let tool = 'pen';
-let selectedProvince = null;
-let activeTag = null;
-let clickHex = null;
-let selectedCompressedRegion = null;  // region id selected for border highlight
+// ── Application State ──────────────────────────────────
+const State = {
+  // Data
+  mapData: null,
+  terrainTypes: DEFAULT_TERRAINS,
 
-// Pathway state (see js/pathway.js)
-let activePathwayGroup = 'river';
-let pathwayStart = null;
-let pathwayHighlightMode = false;
+  // Tool
+  activeTerrain: 'plains',
+  tool: 'pen',
 
-let provinceLasso = [];
-let relassoTarget = null;
-let zoom = 1;
-let offX = 0, offY = 0;
-let mouseDown = false;
-let panStart = null, panOff = null;
-let mouseButton = 0; // 0=left, 2=right — which button initiated mousedown
-let lastHex = null;
+  // Selection
+  selectedProvince: null,
+  activeTag: null,
+  selectedCompressedRegion: null,
+
+  // Pathway
+  activePathwayGroup: 'river',
+  pathwayStart: null,
+  pathwayHighlightMode: false,
+
+  // Viewport
+  zoom: 1,
+  offX: 0,
+  offY: 0,
+
+  // Interaction
+  mouseDown: false,
+  clickHex: null,
+  panStart: null,
+  panOff: null,
+  mouseButton: 0,
+  lastHex: null,
+
+  // Province lasso
+  provinceLasso: [],
+  relassoTarget: null,
+
+  // Paint lasso (was in paint.js)
+  lassoPts: [],
+
+  // Province drag (was in province.js)
+  dragPoint: null,
+
+  // Map expansion direction (was in expand.js)
+  expandDirection: null,
+
+  // DOM refs (set once by init)
+  canvas: null,
+  ctx: null,
+  wrap: null,
+  tooltip: null,
+};
 
 // ── DOM Refs ───────────────────────────────────────────
-const canvas = document.getElementById('mapCanvas');
-const ctx = canvas.getContext('2d');
-const wrap = document.getElementById('canvasWrap');
-const tooltip = document.getElementById('tooltip');
+State.canvas = document.getElementById('mapCanvas');
+State.ctx = State.canvas.getContext('2d');
+State.wrap = document.getElementById('canvasWrap');
+State.tooltip = document.getElementById('tooltip');

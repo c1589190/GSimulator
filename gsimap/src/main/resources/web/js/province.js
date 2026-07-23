@@ -1,53 +1,51 @@
 // ── Province Tool ──────────────────────────────────────
-let dragPoint = null;
-
 function findProvinceAt(q, r) {
-  if (!mapData?.provinces) return null;
+  if (!State.mapData?.provinces) return null;
   const key = `${q}_${r}`;
-  for (const [name, p] of Object.entries(mapData.provinces)) {
+  for (const [name, p] of Object.entries(State.mapData.provinces)) {
     if (p.hexes?.includes(key)) return name;
   }
   return null;
 }
 
 function createEmptyRegion() {
-  const defTag = activeTag || '';
-  const tagColor = activeTag && mapData.tags[activeTag] ? mapData.tags[activeTag].color : null;
+  const defTag = State.activeTag || '';
+  const tagColor = State.activeTag && State.mapData.tags[State.activeTag] ? State.mapData.tags[State.activeTag].color : null;
   const defColor = tagColor || '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0');
-  const name = prompt('区域名称:', '区域'+(Object.keys(mapData.provinces||{}).length+1));
+  const name = prompt('区域名称:', '区域'+(Object.keys(State.mapData.provinces||{}).length+1));
   if (!name) return;
   const color = prompt('区域颜色:', defColor);
-  if (!mapData.provinces) mapData.provinces = {};
+  if (!State.mapData.provinces) State.mapData.provinces = {};
   const desc = prompt('区域描述 (可选):', '');
-  mapData.provinces[name] = {hexes:[], color:color||'#ff0000', tag:activeTag||'', description:desc||''};
-  selectedProvince = name;
+  State.mapData.provinces[name] = {hexes:[], color:color||'#ff0000', tag:State.activeTag||'', description:desc||''};
+  State.selectedProvince = name;
   showRegionDetail(name); showTagList(); render();
 }
 
 function showRegionList() {
   const body = document.getElementById('rightBody');
   const title = document.getElementById('rightTitle');
-  const provs = mapData?.provinces || {};
+  const provs = State.mapData?.provinces || {};
   const names = Object.keys(provs);
   const tags = [...new Set(names.map(n => provs[n].tag).filter(Boolean))].sort();
 
   let html = `<div style="margin-bottom:6px;font-size:11px">
     标签过滤: <select onchange="filterByTag(this.value)" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;font-size:11px;padding:1px 4px;width:100px">
       <option value="">全部</option>
-      ${tags.map(t => `<option value="${t}" ${activeTag===t?'selected':''}>${t}</option>`).join('')}
+      ${tags.map(t => `<option value="${t}" ${State.activeTag===t?'selected':''}>${t}</option>`).join('')}
     </select>
     <button onclick="createEmptyRegion()" style="float:right;font-size:11px;background:var(--accent);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer">+ 新建</button>
     <a href="#" onclick="showTagList();return false" style="font-size:10px;color:var(--dim);margin-right:6px">标签管理</a>
   </div>`;
 
   title.textContent = `📐 区域 (${names.length})`;
-  const filtered = activeTag ? names.filter(n => provs[n].tag === activeTag) : names;
+  const filtered = State.activeTag ? names.filter(n => provs[n].tag === State.activeTag) : names;
   if (filtered.length === 0) {
     html += '<div style="color:var(--dim);font-size:11px;padding:4px">📐右键拖圈创建区域，或➕新建</div>';
   } else {
     html += filtered.map(name => {
       const p = provs[name];
-      const sel = selectedProvince === name ? 'border:1px solid var(--accent);' : '';
+      const sel = State.selectedProvince === name ? 'border:1px solid var(--accent);' : '';
       const annexed = p.annexedBy && p.annexedBy !== '';
       const style = annexed
         ? 'opacity:0.5;text-decoration:line-through;'
@@ -71,13 +69,13 @@ function showRegionList() {
 function showRegionDetail(name) {
   const body = document.getElementById('leftBody');
   const title = document.getElementById('leftTitle');
-  const p = mapData?.provinces?.[name];
+  const p = State.mapData?.provinces?.[name];
   if (!p) return;
 
   const isAnnexed = p.annexedBy && p.annexedBy !== '';
   const keys = p.hexes || [];
   const hexCount = keys.length;
-  const mapTotal = Object.keys(mapData?.hexes || {}).length;
+  const mapTotal = Object.keys(State.mapData?.hexes || {}).length;
 
   let sq = 0, sr = 0;
   for (const k of keys) { const [q,r] = k.split('_').map(Number); sq += q; sr += r; }
@@ -86,13 +84,13 @@ function showRegionDetail(name) {
 
   const comp = {};
   for (const k of keys) {
-    const cell = mapData.hexes?.[k];
+    const cell = State.mapData.hexes?.[k];
     if (cell) comp[cell.terrain] = (comp[cell.terrain]||0) + 1;
   }
 
   const ownSet = new Set(keys);
   const adj = [];
-  for (const [oname, op] of Object.entries(mapData.provinces || {})) {
+  for (const [oname, op] of Object.entries(State.mapData.provinces || {})) {
     if (oname === name) continue;
     let edges = 0;
     for (const hk of keys) {
@@ -149,30 +147,30 @@ function showRegionDetail(name) {
 }
 
 function filterByTag(tag) {
-  activeTag = tag || null;
-  if (activeTag) selectedProvince = null;
+  State.activeTag = tag || null;
+  if (State.activeTag) State.selectedProvince = null;
   showTagList();
   render();
 }
 
 function selectProvince(name) {
-  activeTag = null;
-  selectedProvince = name;
-  canvas._boundaryCache = null;
+  State.activeTag = null;
+  State.selectedProvince = name;
+  State.canvas._boundaryCache = null;
   setTool('province');
   showRegionDetail(name);
   render();
 }
 
 function relassoProvince(name) {
-  if (!mapData.provinces[name]) return;
-  const p = mapData.provinces[name];
+  if (!State.mapData.provinces[name]) return;
+  const p = State.mapData.provinces[name];
   p.hexes = [];
-  canvas._boundaryCache = null;
-  delete canvas['b_' + name];
-  selectedProvince = name;
-  provinceLasso = [];
-  relassoTarget = name;
+  State.canvas._boundaryCache = null;
+  delete State.canvas['b_' + name];
+  State.selectedProvince = name;
+  State.provinceLasso = [];
+  State.relassoTarget = name;
   setTool('province');
   showRegionDetail(name);
   render();
@@ -181,9 +179,9 @@ function relassoProvince(name) {
 
 function deleteProvince(name) {
   if (confirm(`删除区域「${name}」？`)) {
-    delete mapData.provinces[name];
-    if (selectedProvince === name) selectedProvince = null;
-    relassoTarget = null;
+    delete State.mapData.provinces[name];
+    if (State.selectedProvince === name) State.selectedProvince = null;
+    State.relassoTarget = null;
     showTagList();
     render();
   }
@@ -191,14 +189,14 @@ function deleteProvince(name) {
 
 // ── Province updates ───────────────────────────────────
 function updateProvTag(name, val) {
-  if (mapData.provinces[name]) mapData.provinces[name].tag = val;
+  if (State.mapData.provinces[name]) State.mapData.provinces[name].tag = val;
 }
 function updateProvDesc(name, val) {
-  if (mapData.provinces[name]) mapData.provinces[name].description = val;
+  if (State.mapData.provinces[name]) State.mapData.provinces[name].description = val;
 }
 async function renameProvince(oldName, newName) {
-  if (!newName || newName === oldName || !mapData.provinces[oldName]) return;
-  if (mapData.provinces[newName]) { showToast('名称已存在'); return; }
+  if (!newName || newName === oldName || !State.mapData.provinces[oldName]) return;
+  if (State.mapData.provinces[newName]) { showToast('名称已存在'); return; }
 
   try {
     const r = await fetch(`/api/map/${MapAPI.worldId}/rename-region`, {
@@ -210,7 +208,7 @@ async function renameProvince(oldName, newName) {
     if (data.ok) {
       // Reload map to get updated data from server
       await loadMap();
-      if (selectedProvince === oldName) selectedProvince = newName;
+      if (State.selectedProvince === oldName) State.selectedProvince = newName;
       showRegionDetail(newName);
       showTagList();
       render();
@@ -223,79 +221,79 @@ async function renameProvince(oldName, newName) {
   }
 }
 function updateProvColor(name, val) {
-  if (mapData.provinces[name]) mapData.provinces[name].color = val;
+  if (State.mapData.provinces[name]) State.mapData.provinces[name].color = val;
   render();
 }
 
 // ── Province Lasso ─────────────────────────────────────
 function addProvincePoint(q, r) {
-  if (provinceLasso.length > 0) {
-    const last = provinceLasso[provinceLasso.length - 1];
+  if (State.provinceLasso.length > 0) {
+    const last = State.provinceLasso[State.provinceLasso.length - 1];
     if (last.q === q && last.r === r) return;
     const line = hexLine(last.q, last.r, q, r);
-    for (let i = 1; i < line.length; i++) provinceLasso.push(line[i]);
-  } else { provinceLasso.push({q, r}); }
+    for (let i = 1; i < line.length; i++) State.provinceLasso.push(line[i]);
+  } else { State.provinceLasso.push({q, r}); }
   renderProvincePreview();
 }
 
 function renderProvincePreview() {
-  if (provinceLasso.length < 2) return;
-  ctx.save(); ctx.translate(offX, offY); ctx.scale(zoom, zoom);
-  ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2/zoom;
-  ctx.beginPath();
-  for (const p of provinceLasso) { const {x,y}=hexToPixel(p.q,p.r); ctx.lineTo(x,y); }
-  ctx.closePath(); ctx.stroke(); ctx.restore();
+  if (State.provinceLasso.length < 2) return;
+  State.ctx.save(); State.ctx.translate(State.offX, State.offY); State.ctx.scale(State.zoom, State.zoom);
+  State.ctx.strokeStyle = '#ff00ff'; State.ctx.lineWidth = 2/State.zoom;
+  State.ctx.beginPath();
+  for (const p of State.provinceLasso) { const {x,y}=hexToPixel(p.q,p.r); State.ctx.lineTo(x,y); }
+  State.ctx.closePath(); State.ctx.stroke(); State.ctx.restore();
 }
 
 function finishProvinceLasso() {
-  if (provinceLasso.length < 3) { provinceLasso=[]; render(); return; }
-  const boundSet = new Set(provinceLasso.map(p => p.q+'_'+p.r));
+  if (State.provinceLasso.length < 3) { State.provinceLasso=[]; render(); return; }
+  const boundSet = new Set(State.provinceLasso.map(p => p.q+'_'+p.r));
   let sq=0,sr=0; for (const k of boundSet) { const [q,r]=k.split('_').map(Number); sq+=q; sr+=r; }
   const cq=Math.round(sq/boundSet.size), cr=Math.round(sr/boundSet.size);
   let seed = null;
   for (let rad=0; rad<200 && !seed; rad++) {
-    if (rad===0) { const k=cq+'_'+cr; if(!boundSet.has(k)&&mapData.hexes[k]){seed={q:cq,r:cr};break;} continue; }
+    if (rad===0) { const k=cq+'_'+cr; if(!boundSet.has(k)&&State.mapData.hexes[k]){seed={q:cq,r:cr};break;} continue; }
     let qq=cq+rad*DIR_VECTORS[4][0], rr=cr+rad*DIR_VECTORS[4][1];
     for (let d=0;d<6&&!seed;d++) for (let s=0;s<rad;s++) {
-      const k=qq+'_'+rr; if(!boundSet.has(k)&&mapData.hexes[k]){seed={q:qq,r:rr};break;}
+      const k=qq+'_'+rr; if(!boundSet.has(k)&&State.mapData.hexes[k]){seed={q:qq,r:rr};break;}
       qq+=DIR_VECTORS[d][0]; rr+=DIR_VECTORS[d][1];
     }
   }
-  if (!seed) { provinceLasso=[]; render(); return; }
+  if (!seed) { State.provinceLasso=[]; render(); return; }
   const interior=new Set(), queue=[seed], visited=new Set();
   while (queue.length) {
     const {q,r}=queue.pop(), k=q+'_'+r;
     if(visited.has(k))continue; visited.add(k); interior.add(k);
     for (const [dq,dr] of DIR_VECTORS) {
       const nk=(q+dq)+'_'+(r+dr);
-      if(!boundSet.has(nk)&&!visited.has(nk)&&mapData.hexes[nk]) queue.push({q:q+dq,r:r+dr});
+      if(!boundSet.has(nk)&&!visited.has(nk)&&State.mapData.hexes[nk]) queue.push({q:q+dq,r:r+dr});
     }
   }
 
-  if (relassoTarget) {
-    const targetName = relassoTarget;
-    const p = mapData.provinces[targetName];
+  if (State.relassoTarget) {
+    const targetName = State.relassoTarget;
+    const p = State.mapData.provinces[targetName];
     if (p) { p.hexes = [...interior, ...boundSet]; }
-    canvas._boundaryCache = null;
-    delete canvas['b_' + targetName];
-    provinceLasso = []; relassoTarget = null; selectedProvince = targetName;
+    State.canvas._boundaryCache = null;
+    delete State.canvas['b_' + targetName];
+    State.provinceLasso = []; State.relassoTarget = null; State.selectedProvince = targetName;
     setStatus(`已重圈: ${targetName}`);
     showRegionDetail(targetName); showTagList(); render(); return;
   }
 
-  const name = prompt('区域名称:', '区域'+(Object.keys(mapData.provinces||{}).length+1));
+  const name = prompt('区域名称:', '区域'+(Object.keys(State.mapData.provinces||{}).length+1));
   const color = prompt('区域颜色 (hex):', '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0'));
-  if (!name) { provinceLasso=[]; render(); return; }
-  if (!mapData.provinces) mapData.provinces = {};
+  if (!name) { State.provinceLasso=[]; render(); return; }
+  if (!State.mapData.provinces) State.mapData.provinces = {};
   const desc = prompt('区域描述 (可选):', '');
-  mapData.provinces[name] = {hexes:[...interior,...boundSet], color:color||'#ff0000', tag:activeTag||'',description:desc||''};
-  provinceLasso=[]; selectedProvince=name;
+  State.mapData.provinces[name] = {hexes:[...interior,...boundSet], color:color||'#ff0000', tag:State.activeTag||'',description:desc||''};
+  State.provinceLasso=[]; State.selectedProvince=name;
   showRegionDetail(name); showTagList(); render();
 }
 
 // ── Region Merge ────────────────────────────────────────
 async function mergeIntoRegion(dominantName) {
-  const provs = mapData?.provinces || {};
+  const provs = State.mapData?.provinces || {};
   const targets = Object.keys(provs).filter(n =>
     n !== dominantName && (!provs[n].annexedBy || provs[n].annexedBy === '')
   );
@@ -334,8 +332,8 @@ async function confirmMerge(dominantName, annexedName) {
   document.querySelectorAll('.goat-modal-overlay').forEach(o => o.remove());
 
   // Confirmation dialog
-  const dominant = mapData.provinces[dominantName];
-  const annexed = mapData.provinces[annexedName];
+  const dominant = State.mapData.provinces[dominantName];
+  const annexed = State.mapData.provinces[annexedName];
   const annexedHexCount = (annexed.hexes||[]).length;
 
   const overlay = document.createElement('div');
@@ -376,7 +374,7 @@ async function doMerge(dominantName, annexedName) {
     if (data.ok) {
       // Reload map to get updated data from server
       await loadMap();
-      selectedProvince = dominantName;
+      State.selectedProvince = dominantName;
       showRegionDetail(dominantName);
       showTagList();
       render();

@@ -1,36 +1,36 @@
 // ── Tag Manager ────────────────────────────────────────
 
 function initTags() {
-  if (!mapData.tags) mapData.tags = {};
-  for (const [name, r] of Object.entries(mapData.provinces || {})) {
-    if (r.tag && !mapData.tags[r.tag]) {
-      mapData.tags[r.tag] = {color: r.color || '#888888', description: ''};
+  if (!State.mapData.tags) State.mapData.tags = {};
+  for (const [name, r] of Object.entries(State.mapData.provinces || {})) {
+    if (r.tag && !State.mapData.tags[r.tag]) {
+      State.mapData.tags[r.tag] = {color: r.color || '#888888', description: ''};
     }
   }
 }
 
 function saveTags() {
   try {
-    localStorage.setItem('goatmosire_tags_' + MapAPI.worldId, JSON.stringify(mapData.tags||{}));
+    localStorage.setItem('goatmosire_tags_' + MapAPI.worldId, JSON.stringify(State.mapData.tags||{}));
   } catch(e) {}
 }
 
 function loadTags() {
   try {
     const saved = localStorage.getItem('goatmosire_tags_' + MapAPI.worldId);
-    if (saved) { mapData.tags = JSON.parse(saved); }
-    else { mapData.tags = {}; }
-  } catch(e) { mapData.tags = {}; }
+    if (saved) { State.mapData.tags = JSON.parse(saved); }
+    else { State.mapData.tags = {}; }
+  } catch(e) { State.mapData.tags = {}; }
 }
 
 function createTag() {
   const name = prompt('标签名称 (如: 王国A, 气候带):');
   if (!name) return;
-  if (mapData.tags[name]) { showToast('标签已存在'); return; }
+  if (State.mapData.tags[name]) { showToast('标签已存在'); return; }
   const color = prompt('标签颜色:', '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0'));
-  mapData.tags[name] = {color: color||'#ff0000', description: ''};
-  activeTag = name;
-  selectedProvince = null;
+  State.mapData.tags[name] = {color: color||'#ff0000', description: ''};
+  State.activeTag = name;
+  State.selectedProvince = null;
   showTagList();
   render();
   saveTags();
@@ -39,19 +39,19 @@ function createTag() {
 
 function deleteTag(name) {
   if (!confirm(`删除标签「${name}」？其下区域不会被删除。`)) return;
-  delete mapData.tags[name];
-  for (const [rn, r] of Object.entries(mapData.provinces||{})) {
+  delete State.mapData.tags[name];
+  for (const [rn, r] of Object.entries(State.mapData.provinces||{})) {
     if (r.tag === name) r.tag = '';
   }
-  if (activeTag === name) activeTag = null;
+  if (State.activeTag === name) State.activeTag = null;
   showTagList();
   render();
   saveTags();
 }
 
 function selectTag(name) {
-  activeTag = name;
-  selectedProvince = null;
+  State.activeTag = name;
+  State.selectedProvince = null;
   showTagList();
   render();
 }
@@ -60,8 +60,8 @@ function showTagList() {
   initTags();
   const body = document.getElementById('rightBody');
   const title = document.getElementById('rightTitle');
-  const tags = Object.entries(mapData.tags);
-  const allProvs = Object.entries(mapData.provinces||{});
+  const tags = Object.entries(State.mapData.tags);
+  const allProvs = Object.entries(State.mapData.provinces||{});
 
   let html = '<div style="margin-bottom:6px"><button onclick="createTag()" style="font-size:11px;background:var(--accent);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer">+ 新建标签</button></div>';
 
@@ -79,7 +79,7 @@ function showTagList() {
 
     html += tags.map(([name, t], idx) => {
       const regions = allProvs.filter(([rn,r]) => r.tag === name);
-      const active = activeTag === name ? 'outline: 2px solid var(--accent);' : '';
+      const active = State.activeTag === name ? 'outline: 2px solid var(--accent);' : '';
       const collapsed = isTagCollapsed(name);
       return `<div class="tag-card" style="${active}" draggable="true"
           ondragstart="onTagDragStart(event,'${name}')"
@@ -97,7 +97,7 @@ function showTagList() {
         </div>
         <div class="tag-body${collapsed?' collapsed':''}">
           ${regions.length > 0 ? regions.map(([rn,r]) =>
-            `<div style="margin-top:2px;font-size:10px;cursor:pointer;padding:2px 4px;${selectedProvince===rn?'background:#333;border-radius:2px;':''}" onclick="event.stopPropagation();selectProvince('${rn}')">
+            `<div style="margin-top:2px;font-size:10px;cursor:pointer;padding:2px 4px;${State.selectedProvince===rn?'background:#333;border-radius:2px;':''}" onclick="event.stopPropagation();selectProvince('${rn}')">
               <span style="display:inline-block;width:6px;height:6px;border-radius:1px;background:${r.color||t.color};margin-right:4px"></span>${rn} (${r.hexes.length}格)
             </div>`
           ).join('') : '<div style="font-size:9px;color:var(--dim);padding:2px 4px">右键在地图上圈地创建区域</div>'}
@@ -111,7 +111,7 @@ function showTagList() {
     html += '<div style="margin-top:8px;padding-top:4px;border-top:1px solid var(--border)">';
     html += '<div style="font-size:10px;color:var(--dim);margin-bottom:4px">未分类区域</div>';
     html += untagged.map(([rn,r]) =>
-      `<div style="margin-bottom:3px;padding:4px 6px;background:var(--bg);border-radius:4px;cursor:pointer;${selectedProvince===rn?'border:1px solid var(--accent);':''}" onclick="selectProvince('${rn}')">
+      `<div style="margin-bottom:3px;padding:4px 6px;background:var(--bg);border-radius:4px;cursor:pointer;${State.selectedProvince===rn?'border:1px solid var(--accent);':''}" onclick="selectProvince('${rn}')">
         <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color||'#888'};margin-right:6px"></span>
         <b style="font-size:11px">${rn}</b> <span style="color:var(--dim);font-size:10px">${r.hexes.length}格</span>
       </div>`
@@ -170,7 +170,7 @@ function onTagDrop(e, targetName) {
   e.currentTarget.classList.remove('drag-over');
   if (!tagDragSource || tagDragSource === targetName) return;
   const order = getTagOrder();
-  const tags = Object.keys(mapData.tags);
+  const tags = Object.keys(State.mapData.tags);
   for (const t of tags) { if (!order.includes(t)) order.push(t); }
   const si = order.indexOf(tagDragSource);
   const ti = order.indexOf(targetName);

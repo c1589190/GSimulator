@@ -1,12 +1,12 @@
 // ── Terrain Types & Color Resolver ──────────────────────
 
 function buildTerrainButtons(types) {
-  terrainTypes = types || DEFAULT_TERRAINS;
+  State.terrainTypes = types || DEFAULT_TERRAINS;
   const container = document.getElementById('terrainButtons');
   container.innerHTML = '';
-  Object.entries(terrainTypes).forEach(([name, t]) => {
+  Object.entries(State.terrainTypes).forEach(([name, t]) => {
     const btn = document.createElement('button');
-    btn.className = 'terrain-btn' + (name === activeTerrain ? ' active' : '');
+    btn.className = 'terrain-btn' + (name === State.activeTerrain ? ' active' : '');
     btn.title = `${name}: ${t.description||''}  \u{1F56F}${t.food} \u{1F4B0}${t.gold} \u{1FAA8}${t.stone} \u{1F463}${t.moveCost}`;
     btn.onclick = () => selectTerrain(name);
     btn.innerHTML = `<span class="swatch" style="background:${t.color}"></span><span class="label">${name}</span>`;
@@ -15,7 +15,7 @@ function buildTerrainButtons(types) {
 }
 
 function selectTerrain(name) {
-  activeTerrain = name;
+  State.activeTerrain = name;
   document.querySelectorAll('.terrain-btn').forEach(b => b.classList.remove('active'));
   const btns = document.getElementById('terrainButtons').children;
   for (const b of btns) {
@@ -24,12 +24,12 @@ function selectTerrain(name) {
 }
 
 function getTerrainColor(name) {
-  return terrainTypes[name]?.color || '#808080';
+  return State.terrainTypes[name]?.color || '#808080';
 }
 
 function resolveTerrainColor(q, r, cell) {
   const key = q + '_' + r;
-  const blocks = (mapData.terrainBlocks || []);
+  const blocks = (State.mapData.terrainBlocks || []);
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i];
     if (b._hexSet && b._hexSet.has(key)) {

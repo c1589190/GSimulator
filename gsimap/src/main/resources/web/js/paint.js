@@ -1,29 +1,27 @@
 // ── Paint Tools ─────────────────────────────────────────
-let lassoPts = [];
-
 function applyTool(q, r) {
   const key = q + '_' + r;
-  if (!mapData.hexes) mapData.hexes = {};
+  if (!State.mapData.hexes) State.mapData.hexes = {};
 
-  if (tool === 'eraser') {
-    delete mapData.hexes[key];
-  } else if (tool === 'fill') {
-    floodFill(key, activeTerrain);
+  if (State.tool === 'eraser') {
+    delete State.mapData.hexes[key];
+  } else if (State.tool === 'fill') {
+    floodFill(key, State.activeTerrain);
   } else {
-    const cell = mapData.hexes[key];
+    const cell = State.mapData.hexes[key];
     if (!cell) {
-      mapData.hexes[key] = {color: getTerrainColor(activeTerrain), terrain: activeTerrain, riverMask: 0};
+      State.mapData.hexes[key] = {color: getTerrainColor(State.activeTerrain), terrain: State.activeTerrain, riverMask: 0};
     } else {
-      cell.color = getTerrainColor(activeTerrain);
-      cell.terrain = activeTerrain;
+      cell.color = getTerrainColor(State.activeTerrain);
+      cell.terrain = State.activeTerrain;
     }
   }
   render();
 }
 
 function floodFill(seedKey, terrain) {
-  if (!mapData.hexes[seedKey]) return;
-  const targetTerrain = mapData.hexes[seedKey].terrain;
+  if (!State.mapData.hexes[seedKey]) return;
+  const targetTerrain = State.mapData.hexes[seedKey].terrain;
   if (targetTerrain === terrain) return;
   const color = getTerrainColor(terrain);
   const visited = new Set();
@@ -33,7 +31,7 @@ function floodFill(seedKey, terrain) {
     const key = stack.pop();
     if (visited.has(key)) continue;
     visited.add(key);
-    const cell = mapData.hexes[key];
+    const cell = State.mapData.hexes[key];
     if (!cell || cell.terrain !== targetTerrain) continue;
     cell.color = color;
     cell.terrain = terrain;
@@ -46,26 +44,26 @@ function floodFill(seedKey, terrain) {
 
 // ── Terrain Lasso ──────────────────────────────────────
 function applyTerrainLasso(q, r) {
-  if (lassoPts.length > 2 && q === lassoPts[0].q && r === lassoPts[0].r) {
+  if (State.lassoPts.length > 2 && q === State.lassoPts[0].q && r === State.lassoPts[0].r) {
     finishTerrainLasso();
     return;
   }
-  if (lassoPts.length > 0) {
-    const last = lassoPts[lassoPts.length - 1];
+  if (State.lassoPts.length > 0) {
+    const last = State.lassoPts[State.lassoPts.length - 1];
     const line = hexLine(last.q, last.r, q, r);
-    for (let i = 1; i < line.length; i++) lassoPts.push(line[i]);
+    for (let i = 1; i < line.length; i++) State.lassoPts.push(line[i]);
   } else {
-    lassoPts.push({q, r});
+    State.lassoPts.push({q, r});
   }
-  setStatus(`地形套索: ${lassoPts.length} 点 — 点起点闭合`);
+  setStatus(`地形套索: ${State.lassoPts.length} 点 — 点起点闭合`);
   render();
   renderLassoPreview();
 }
 
 function finishTerrainLasso() {
-  const terrain = activeTerrain;
-  const rawKeys = lassoPts.map(p => `${p.q}_${p.r}`);
-  lassoPts = [];
+  const terrain = State.activeTerrain;
+  const rawKeys = State.lassoPts.map(p => `${p.q}_${p.r}`);
+  State.lassoPts = [];
   fetch(`/api/map/${MapAPI.worldId}/blocks`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -115,20 +113,20 @@ function perpDist(p, a, b) {
 }
 
 function renderLassoPreview() {
-  ctx.save();
-  ctx.translate(offX, offY);
-  ctx.scale(zoom, zoom);
-  ctx.strokeStyle = '#FFD700';
-  ctx.lineWidth = 2 / zoom;
-  ctx.setLineDash([4/zoom, 4/zoom]);
-  ctx.beginPath();
-  for (let i = 0; i < lassoPts.length; i++) {
-    const {x, y} = hexToPixel(lassoPts[i].q, lassoPts[i].r);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  State.ctx.save();
+  State.ctx.translate(State.offX, State.offY);
+  State.ctx.scale(State.zoom, State.zoom);
+  State.ctx.strokeStyle = '#FFD700';
+  State.ctx.lineWidth = 2 / State.zoom;
+  State.ctx.setLineDash([4/State.zoom, 4/State.zoom]);
+  State.ctx.beginPath();
+  for (let i = 0; i < State.lassoPts.length; i++) {
+    const {x, y} = hexToPixel(State.lassoPts[i].q, State.lassoPts[i].r);
+    if (i === 0) State.ctx.moveTo(x, y);
+    else State.ctx.lineTo(x, y);
   }
-  if (lassoPts.length > 2) ctx.closePath();
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
+  if (State.lassoPts.length > 2) State.ctx.closePath();
+  State.ctx.stroke();
+  State.ctx.setLineDash([]);
+  State.ctx.restore();
 }

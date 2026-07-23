@@ -1,5 +1,4 @@
 // ── Map Expansion Panel ──────────────────────────────────
-let expandDirection = null;
 const EXPAND_DIRS = [
   {key:'NW', label:'↖ 西北', q:-1, r:0},
   {key:'NE', label:'↗ 东北', q:0, r:-1},
@@ -10,7 +9,7 @@ const EXPAND_DIRS = [
 ];
 
 function selectExpandDir(key) {
-  expandDirection = key;
+  State.expandDirection = key;
   document.querySelectorAll('.expand-dir-btn').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`.expand-dir-btn[data-dir="${key}"]`);
   if (btn) btn.classList.add('active');
@@ -19,7 +18,7 @@ function selectExpandDir(key) {
 }
 
 async function doExpand() {
-  if (!expandDirection) {
+  if (!State.expandDirection) {
     showToast('请先选择一个扩充方向');
     return;
   }
@@ -31,7 +30,7 @@ async function doExpand() {
   btn.disabled = true;
 
   try {
-    const url = `/api/map/${MapAPI.worldId}/expand?direction=${expandDirection}&radius=${radius}${nodeParam}`;
+    const url = `/api/map/${MapAPI.worldId}/expand?direction=${State.expandDirection}&radius=${radius}${nodeParam}`;
     const r = await fetch(url, {method:'POST'});
     const data = await r.json();
     if (data.ok) {

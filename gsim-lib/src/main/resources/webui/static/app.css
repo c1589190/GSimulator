@@ -1,0 +1,238 @@
+/* GSimulator Web UI — 统一样式表 */
+
+/* === 基础布局 === */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+body {
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: #111827;
+    color: #e5e7eb;
+}
+
+/* === 面板 === */
+.panel {
+    background-color: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 0.5rem;
+}
+
+/* === 终端绿 === */
+.terminal-green { color: #34d399; }
+.bg-terminal { background-color: #34d399; }
+
+/* === 输入区 === */
+.input-area {
+    background-color: #111827;
+    border: 1px solid #4b5563;
+}
+.input-area:focus {
+    border-color: #34d399;
+    outline: none;
+}
+
+/* === 消息卡片 === */
+.msg-user { background-color: #1e3a5f; }
+.msg-assistant { background-color: #1f2937; }
+
+/* === 工具卡片 === */
+.tool-card {
+    background-color: #1a1a2e;
+    border-left: 3px solid #f59e0b;
+    margin-bottom: 6px;
+}
+.tool-card.success { border-left-color: #34d399; }
+.tool-card.error { border-left-color: #ef4444; }
+
+/* === 内容块间距 === */
+.content-block { margin-bottom: 4px; }
+.blocks > * + * { margin-top: 4px; }
+
+/* === 推理链 === */
+.reasoning-block { margin-bottom: 8px; }
+.reasoning-header {
+    user-select: none;
+}
+.reasoning-header:hover { color: #9ca3af; }
+.reasoning-body {
+    max-height: 8rem;
+    overflow-y: auto;
+}
+
+/* === SubAgent 卡片 === */
+.sub-agent-card {
+    background: #0f1724;
+    border: 1px solid #1e293b;
+    border-left: 3px solid #6366f1;
+}
+.sub-agent-card[data-agent-type="sim"] {
+    border-left-color: #a78bfa;
+}
+.sub-agent-card[data-agent-type="search"] {
+    border-left-color: #22d3ee;
+}
+.sub-agent-header { user-select: none; }
+.sub-agent-header:hover { color: #e2e8f0; }
+.sub-agent-label { color: #cbd5e1; }
+.sub-agent-id { font-family: monospace; }
+.sub-agent-body { padding-left: 0.5rem; }
+.sub-reasoning {
+    max-height: 6rem;
+    overflow-y: auto;
+}
+.sub-content-block {
+    color: #e2e8f0;
+    line-height: 1.5;
+}
+.sub-tool-card {
+    background: #0a0e17;
+    border-left: 3px solid #6366f1;
+    padding: 2px 6px;
+}
+.sub-tool-card.success { border-left-color: #34d399; }
+.sub-tool-card.error { border-left-color: #ef4444; }
+
+/* === 推文卡片 === */
+.tweet-card {
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background-color: #1a2332;
+    border: 1px solid #34d399;
+    border-left: 3px solid #34d399;
+    border-radius: 0.5rem;
+}
+.tweet-header {
+    font-weight: bold;
+    color: #34d399;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+.tweet-body {
+    width: 100%;
+    min-height: 4rem;
+    max-height: 16rem;
+    overflow-y: auto;
+    background-color: #0f1724;
+    color: #e5e7eb;
+    border: 1px solid #374151;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-overflow-scrolling: touch;
+}
+.tweet-body:focus { border-color: #34d399; }
+.tweet-copy-btn {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background-color: #065f46;
+    color: #d1fae5;
+    border: 1px solid #34d399;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.tweet-copy-btn:hover { background-color: #047857; }
+
+/* === 上传文件标签 === */
+.upload-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    background: #065f46;
+    color: #d1fae5;
+    border-radius: 0.25rem;
+}
+.upload-tag button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    color: #6ee7b7;
+}
+.upload-tag button:hover { color: #f87171; }
+
+/* === 侧栏 === */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 40;
+}
+.sidebar {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 16rem; height: 100%;
+    background: #1f2937;
+    z-index: 50;
+    padding: 1rem;
+}
+
+/* === 导航激活态 === */
+.nav-item.active {
+    background-color: rgba(52, 211, 153, 0.12);
+    color: #34d399;
+    border-left: 3px solid #34d399;
+}
+
+/* === 时间线 === */
+.timeline-selected {
+    background-color: rgba(52, 211, 153, 0.12);
+}
+
+/* === 文件标签页 === */
+.file-tab.active {
+    background-color: #065f46;
+    color: #d1fae5;
+}
+
+/* === 设置面板 === */
+.settings-tab.active {
+    background-color: #065f46;
+    color: #d1fae5;
+}
+.settings-edit-row {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    margin-top: 0.25rem;
+}
+.settings-edit-row input,
+.settings-edit-row select {
+    padding: 0.125rem 0.25rem;
+    font-size: 0.7rem;
+    background: #1f2937;
+    border: 1px solid #4b5563;
+    border-radius: 0.25rem;
+    color: #e5e7eb;
+}
+
+/* === 响应式 === */
+@media (min-width: 768px) {
+    .mobile-only { display: none !important; }
+    .sidebar-overlay, .sidebar { display: none !important; }
+}
+@media (max-width: 767px) {
+    #chat-messages {
+        -webkit-overflow-scrolling: touch !important;
+    }
+}
