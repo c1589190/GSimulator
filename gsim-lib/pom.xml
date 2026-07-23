@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.gsim</groupId>
         <artifactId>GSimulator</artifactId>
-        <version>0.1.0-Alpha1</version>
+        <version>0.1.0-Alpha260723</version>
     </parent>
 
     <artifactId>gsim-lib</artifactId>
