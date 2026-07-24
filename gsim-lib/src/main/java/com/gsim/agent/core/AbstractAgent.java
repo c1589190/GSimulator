@@ -427,7 +427,7 @@ public class AbstractAgent {
     }
 
     /** Add a message to the list and write-through to cache saver if configured. */
-    private void addMessage(List<LlmMessage> messages, LlmMessage msg) {
+    protected void addMessage(List<LlmMessage> messages, LlmMessage msg) {
         messages.add(msg);
         if (messageSaver != null) {
             messageSaver.accept(msg);

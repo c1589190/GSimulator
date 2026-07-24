@@ -132,9 +132,14 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             throw new UnknownToolException(name);
         }
 
-        // ── Validate mcpExposed (guard against direct name construction) ──
-        if (!tool.mcpExposed()) {
-            throw new UnknownToolException(name);
+        // ── Unified execution guard (MCP surface) ──
+        com.gsim.agent.ToolExecutionGuard.GuardResult guard =
+                com.gsim.agent.ToolExecutionGuard.checkMcp(registry, new ToolCall(registryName, Map.of()));
+        if (!guard.allowed()) {
+            if ("MCP_TOOL_NOT_EXPOSED".equals(guard.errorCode())) {
+                throw new UnknownToolException(name);
+            }
+            throw new IllegalArgumentException(guard.errorMessage());
         }
 
         // ── Validate worldId (only for tools that declare they need it) ──

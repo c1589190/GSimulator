@@ -1011,6 +1011,19 @@ public class OrchestratorAgent extends AbstractAgent {
                     }
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
+
+                    // Unified execution guard (Agent surface)
+                    com.gsim.agent.ToolExecutionGuard.GuardResult guard =
+                            com.gsim.agent.ToolExecutionGuard.checkAgent(
+                                    toolRegistry, call, groupManager.activeGroupKeys(), null);
+                    if (!guard.allowed()) {
+                        var guardFail = ToolResult.fail(call.toolName(),
+                                "[" + guard.errorCode() + "] " + guard.errorMessage());
+                        toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), guardFail));
+                        addMessage(messages, LlmMessage.tool(buildToolFeedback(parsed.tool(), guardFail)));
+                        continue;
+                    }
+
                     ToolResult result = toolRegistry.call(call);
                     toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
@@ -1427,6 +1440,19 @@ public class OrchestratorAgent extends AbstractAgent {
                     }
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
+
+                    // Unified execution guard (Agent surface)
+                    com.gsim.agent.ToolExecutionGuard.GuardResult guard =
+                            com.gsim.agent.ToolExecutionGuard.checkAgent(
+                                    toolRegistry, call, groupManager.activeGroupKeys(), null);
+                    if (!guard.allowed()) {
+                        var guardFail = ToolResult.fail(call.toolName(),
+                                "[" + guard.errorCode() + "] " + guard.errorMessage());
+                        toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), guardFail));
+                        addMessage(messages, LlmMessage.tool(buildToolFeedback(parsed.tool(), guardFail)));
+                        continue;
+                    }
+
                     ToolResult result = toolRegistry.call(call);
                     toolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
