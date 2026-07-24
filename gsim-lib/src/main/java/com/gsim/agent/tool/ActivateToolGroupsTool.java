@@ -206,4 +206,9 @@ public class ActivateToolGroupsTool implements AgentTool {
     public Permission permission() {
         return Permission.SELF;
     }
+
+    @Override
+    public boolean mcpExposed() {
+        return false;
+    }
 }

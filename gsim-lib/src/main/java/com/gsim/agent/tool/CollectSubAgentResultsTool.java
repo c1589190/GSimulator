@@ -147,4 +147,9 @@ public class CollectSubAgentResultsTool implements AgentTool {
     public Permission permission() {
         return Permission.SYSTEM;
     }
+
+    @Override
+    public boolean mcpExposed() {
+        return false;
+    }
 }

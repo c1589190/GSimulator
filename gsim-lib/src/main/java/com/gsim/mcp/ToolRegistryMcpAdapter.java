@@ -114,6 +114,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     @Override
     public List<ToolDef> all() {
         return registry.all().values().stream()
+                .filter(AgentTool::mcpExposed)
                 .map(tool -> new ToolDef(mcpName(tool.name()), descriptionOrEmpty(tool), schemaForTool(tool)))
                 .toList();
     }
@@ -128,6 +129,11 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             tool = registry.get(name);
         }
         if (tool == null) {
+            throw new UnknownToolException(name);
+        }
+
+        // ── Validate mcpExposed (guard against direct name construction) ──
+        if (!tool.mcpExposed()) {
             throw new UnknownToolException(name);
         }
 

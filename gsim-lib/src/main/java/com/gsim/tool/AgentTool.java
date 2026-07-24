@@ -84,4 +84,22 @@ public interface AgentTool {
     default boolean requiresWorldId() {
         return false;
     }
+
+    /**
+     * 此工具是否通过 MCP 公共接口暴露。
+     *
+     * <p>返回 {@code false} 时，工具只在 Agent 内部 ToolLoop 中可用：
+     * <ul>
+     *   <li>不会出现在 MCP {@code tools/list} 中</li>
+     *   <li>不能通过 MCP {@code tools/call} 调用（返回 UnknownTool）</li>
+     * </ul>
+     *
+     * <p>此属性仅表示工具是否属于 MCP 公共接口，与运行时权限
+     *（READ/WRITE/SYSTEM）无关。默认返回 {@code true}，存量工具无需逐个声明。
+     *
+     * @return true 允许 MCP 暴露，false 仅内部可用
+     */
+    default boolean mcpExposed() {
+        return true;
+    }
 }
