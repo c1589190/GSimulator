@@ -620,11 +620,28 @@ public class OrchestratorAgent extends AbstractAgent {
         return defs;
     }
 
+    /** 构建已知工具名集合 — 包含所有声明了 alwaysAvailable、toolGroups 或存在于旧静态映射中的工具。 */
+    private java.util.Set<String> buildKnownTools() {
+        java.util.Set<String> known = new java.util.HashSet<>();
+        for (var entry : toolRegistry.all().entrySet()) {
+            var tool = entry.getValue();
+            String name = entry.getKey();
+            if (tool.alwaysAvailable() || !tool.toolGroups().isEmpty()) {
+                known.add(name);
+            }
+        }
+        // Legacy: include tools from old static DEFAULT_TOOLS and TOOL_TO_GROUP
+        // These will be removed once all tools migrate to self-declaration
+        known.addAll(com.gsim.agent.ToolGroupManager.legacyKnownToolNames());
+        return known;
+    }
+
     /** 按允许集过滤 ToolDef 列表，保留 finish_action 兜底。未归组工具（如测试自定义工具）始终包含。 */
-    private static List<ToolDef> filterToolDefs(List<ToolDef> allDefs, java.util.Set<String> allowed) {
+    private static List<ToolDef> filterToolDefs(
+            List<ToolDef> allDefs, java.util.Set<String> allowed, java.util.Set<String> knownTools) {
         List<ToolDef> filtered = new ArrayList<>();
         for (ToolDef def : allDefs) {
-            if (allowed.contains(def.name()) || !ToolGroup.isKnownTool(def.name())) {
+            if (allowed.contains(def.name()) || !knownTools.contains(def.name())) {
                 filtered.add(def);
             }
         }
@@ -786,6 +803,7 @@ public class OrchestratorAgent extends AbstractAgent {
         int consecutiveInvalidToolIntent = 0;
         boolean allowAllMutations = false;
         List<ToolDef> allToolDefs = buildToolDefs();
+        java.util.Set<String> knownTools = buildKnownTools();
 
         while (toolRound <= maxToolRounds) {
             // ESC 取消检查
@@ -795,8 +813,8 @@ public class OrchestratorAgent extends AbstractAgent {
             }
 
             // 每轮动态计算当前允许的工具集（基于激活的工具组）
-            java.util.Set<String> currentAllowedTools = groupManager.computeAllowedTools();
-            List<ToolDef> roundToolDefs = filterToolDefs(allToolDefs, currentAllowedTools);
+            java.util.Set<String> currentAllowedTools = groupManager.computeAllowedTools(allTools);
+            List<ToolDef> roundToolDefs = filterToolDefs(allToolDefs, currentAllowedTools, knownTools);
             Object roundToolChoice = "auto";
 
             // context load debug
@@ -939,7 +957,7 @@ public class OrchestratorAgent extends AbstractAgent {
 
                     // === 执行前门禁：路由 + 分类 + 确认 ===
                     ToolExecutionDecision execDecision = executionPolicy.validateBeforeExecute(
-                            parsed.tool(), parsed.args(), routeDecision, allowAllMutations);
+                            parsed.tool(), parsed.args(), routeDecision, allowAllMutations, knownTools);
                     ToolLoopDebug.logToolExecutionPolicy(log, "runToolLoop", toolRound, parsed.tool(), execDecision);
 
                     if (execDecision.decision() == ToolExecutionDecisionType.REJECT) {
@@ -1229,6 +1247,7 @@ public class OrchestratorAgent extends AbstractAgent {
         int consecutiveNoToolRounds = 0;
         int consecutiveInvalidToolIntent = 0;
         List<ToolDef> toolDefs = buildToolDefs();
+        java.util.Set<String> knownTools = buildKnownTools();
 
         while (toolRound <= maxToolRounds) {
             // ESC 取消检查
@@ -1393,7 +1412,8 @@ public class OrchestratorAgent extends AbstractAgent {
                             parsed.args(),
                             ToolRouteDecision.wildcard(java.util.Collections.emptySet(), "SIM_MODE", "Sim 模式 — 所有工具可用"),
                             false,
-                            toolPerm);
+                            toolPerm,
+                            knownTools);
 
                     if (execDecision.decision() == ToolExecutionDecisionType.REJECT
                             || execDecision.decision() == ToolExecutionDecisionType.NEED_CONFIRMATION) {

@@ -141,9 +141,7 @@ public class ActivateToolGroupsTool implements AgentTool {
             resultText.append("。");
         }
 
-        // 列出当前所有可用工具
-        var allowed = groupManager.computeAllowedTools();
-        resultText.append(" 当前可用工具数: ").append(allowed.size()).append("。");
+        // 工具组激活完成（可用工具数在下一轮 ToolLoop 中动态计算）
 
         var items = new ArrayList<ToolResult.Item>();
         items.add(new ToolResult.Item(
@@ -210,5 +208,10 @@ public class ActivateToolGroupsTool implements AgentTool {
     @Override
     public boolean mcpExposed() {
         return false;
+    }
+
+    @Override
+    public boolean alwaysAvailable() {
+        return true;
     }
 }

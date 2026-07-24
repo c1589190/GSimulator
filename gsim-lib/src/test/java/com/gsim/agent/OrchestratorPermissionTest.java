@@ -28,28 +28,28 @@ class OrchestratorPermissionTest {
     @Test
     @DisplayName("READ_ONLY 工具永远允许执行")
     void readOnlyToolAlwaysAllowed() {
-        ToolExecutionDecision d = policy.validateBeforeExecute("query_keyword", java.util.Map.of(), openRoute, false);
+        ToolExecutionDecision d = policy.validateBeforeExecute("query_keyword", java.util.Map.of(), openRoute, false, java.util.Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, d.decision());
     }
 
     @Test
     @DisplayName("MUTATING 工具在未授权时需要确认")
     void mutatingToolNeedsConfirmation() {
-        ToolExecutionDecision d = policy.validateBeforeExecute("write_element", java.util.Map.of(), openRoute, false);
+        ToolExecutionDecision d = policy.validateBeforeExecute("write_element", java.util.Map.of(), openRoute, false, java.util.Set.of());
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, d.decision());
     }
 
     @Test
     @DisplayName("MUTATING 工具在 allowAllMutations=true 时允许")
     void mutatingToolAllowedWhenAllAllowed() {
-        ToolExecutionDecision d = policy.validateBeforeExecute("write_element", java.util.Map.of(), openRoute, true);
+        ToolExecutionDecision d = policy.validateBeforeExecute("write_element", java.util.Map.of(), openRoute, true, java.util.Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, d.decision());
     }
 
     @Test
     @DisplayName("CONTROL 工具永远允许（finish_action）")
     void controlToolAlwaysAllowed() {
-        ToolExecutionDecision d = policy.validateBeforeExecute("finish_action", java.util.Map.of(), openRoute, false);
+        ToolExecutionDecision d = policy.validateBeforeExecute("finish_action", java.util.Map.of(), openRoute, false, java.util.Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, d.decision());
     }
 
@@ -60,7 +60,8 @@ class OrchestratorPermissionTest {
                 java.util.Collections.unmodifiableSet(java.util.Set.of("query_keyword")),
                 "RESTRICTED",
                 "Only read-only");
-        ToolExecutionDecision d = policy.validateBeforeExecute("write_element", java.util.Map.of(), restricted, false);
+        ToolExecutionDecision d = policy.validateBeforeExecute(
+                "write_element", java.util.Map.of(), restricted, false, java.util.Set.of("write_element"));
         assertEquals(ToolExecutionDecisionType.REJECT, d.decision());
     }
 

@@ -1,7 +1,6 @@
 package com.gsim.agent;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -86,51 +85,11 @@ public record ToolGroup(String key, String displayName, String description, Set<
 
     public static final List<ToolGroup> ALL_GROUPS = List.of(WORLD_INFO, NODE_MGMT, IMPORT_DOC, SEARCH, DOCS);
 
-    // ===== 默认工具（无需激活，始终可用） =====
-
-    public static final Set<String> DEFAULT_TOOLS = Set.of(
-            "finish_action",
-            "activate_tool_groups",
-            "dispatch_sub_agent",
-            "collect_sub_agent_results",
-            "list_sub_agent_caches",
-            "view_sub_agent_cache",
-            "view_sub_agent_output",
-            "world_list",
-            "world_create",
-            "compact_cache",
-            "world_switch",
-            "doc_list",
-            "doc_read",
-            "doc_create",
-            "doc_write",
-            "doc_search",
-            "doc_index");
-
-    // ===== 工具名 → 所属组 key 查找表 =====
-
-    public static final Map<String, String> TOOL_TO_GROUP;
-
-    static {
-        var map = new java.util.LinkedHashMap<String, String>();
-        for (var g : ALL_GROUPS) {
-            for (var tool : g.memberTools()) {
-                map.put(tool, g.key());
-            }
-        }
-        TOOL_TO_GROUP = java.util.Collections.unmodifiableMap(map);
-    }
-
     /** 按 key 查找工具组。未找到返回 null。 */
     public static ToolGroup findByKey(String key) {
         for (var g : ALL_GROUPS) {
             if (g.key().equals(key)) return g;
         }
         return null;
-    }
-
-    /** 工具是否在任何工具组或默认工具集中（已知工具）。未知工具（如测试自定义工具）始终可用。 */
-    public static boolean isKnownTool(String toolName) {
-        return TOOL_TO_GROUP.containsKey(toolName) || DEFAULT_TOOLS.contains(toolName);
     }
 }

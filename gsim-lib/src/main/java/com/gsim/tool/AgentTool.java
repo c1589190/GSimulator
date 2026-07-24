@@ -102,4 +102,35 @@ public interface AgentTool {
     default boolean mcpExposed() {
         return true;
     }
+
+    /**
+     * 此工具所属的工具组 key 集合。
+     *
+     * <p>一个工具可以同时属于多个工具组（如同时归属搜索和文档域）。
+     * 工具组的激活状态决定该工具在 Agent ToolLoop 中是否可见。
+     *
+     * <p>返回空集合表示该工具不属于任何工具组 — 它要么是
+     * {@link #alwaysAvailable()} 的内部控制工具，要么是未分类的独立工具。
+     *
+     * @return 工具组 key 的不可变集合，默认空
+     */
+    default java.util.Set<String> toolGroups() {
+        return java.util.Set.of();
+    }
+
+    /**
+     * 是否始终可用，无需工具组激活。
+     *
+     * <p>适用于 Agent 内部始终需要的基础工具（如 {@code finish_action}、
+     * {@code activate_tool_groups}），这些工具不属于任何工具组，
+     * 在所有 Agent ToolLoop 轮次中都可见。
+     *
+     * <p>注意：{@code alwaysAvailable() == true} 的工具不应同时声明
+     * {@link #toolGroups()} — 它们不需要组激活。
+     *
+     * @return true 始终可用，false 需要工具组激活
+     */
+    default boolean alwaysAvailable() {
+        return false;
+    }
 }

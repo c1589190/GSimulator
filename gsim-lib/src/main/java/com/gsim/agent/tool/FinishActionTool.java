@@ -109,4 +109,9 @@ public class FinishActionTool implements AgentTool {
     public boolean mcpExposed() {
         return false;
     }
+
+    @Override
+    public boolean alwaysAvailable() {
+        return true;
+    }
 }

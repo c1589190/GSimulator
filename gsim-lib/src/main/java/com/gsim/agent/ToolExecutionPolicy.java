@@ -45,13 +45,14 @@ public class ToolExecutionPolicy {
             java.util.Map<String, String> args,
             ToolRouteDecision routeDecision,
             boolean allowAllMutations,
-            AgentTool.Permission permission) {
+            AgentTool.Permission permission,
+            java.util.Set<String> knownTools) {
 
         // Rule 1: 工具不在 allowedTools（通配路由跳过此检查）
         // 不在任何工具组中的未知工具始终允许
         boolean inAllowed = routeDecision.allToolsAllowed()
                 || routeDecision.allowedTools().contains(toolName)
-                || !ToolGroup.isKnownTool(toolName);
+                || !knownTools.contains(toolName);
         if (!inAllowed) {
             ToolCategory category = mapToCategory(permission);
             return ToolExecutionDecision.reject(
@@ -101,9 +102,10 @@ public class ToolExecutionPolicy {
             String toolName,
             java.util.Map<String, String> args,
             ToolRouteDecision routeDecision,
-            boolean allowAllMutations) {
+            boolean allowAllMutations,
+            java.util.Set<String> knownTools) {
         AgentTool.Permission permission = resolvePermission(toolName);
-        return validateBeforeExecute(toolName, args, routeDecision, allowAllMutations, permission);
+        return validateBeforeExecute(toolName, args, routeDecision, allowAllMutations, permission, knownTools);
     }
 
     /**

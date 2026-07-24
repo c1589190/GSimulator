@@ -27,7 +27,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("READ_ONLY 工具直接放行")
     void readOnlyToolAllowed() {
         var route = new ToolRouteDecision(Set.of("query_element", "finish_action"), "GROUP_BASED", "test");
-        var dec = policy.validateBeforeExecute("query_element", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("query_element", Map.of(), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
         assertTrue(dec.allowedByRoute());
     }
@@ -36,7 +36,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("node_list (READ_ONLY) 直接放行")
     void nodeListAllowed() {
         var route = new ToolRouteDecision(Set.of("node_list", "finish_action"), "NODE_MGMT_QUERY", "test");
-        var dec = policy.validateBeforeExecute("node_list", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("node_list", Map.of(), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -46,7 +46,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("MUTATING 工具需要确认（allowAllMutations=false）")
     void mutatingToolNeedsConfirmation() {
         var route = new ToolRouteDecision(Set.of("write_element", "finish_action"), "KNOWLEDGE_WRITE", "test");
-        var dec = policy.validateBeforeExecute("write_element", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("write_element", Map.of(), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
         assertEquals(ToolCategory.MUTATING, dec.category());
     }
@@ -55,7 +55,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("MUTATING 工具 allowAllMutations=true 时放行")
     void mutatingToolAllowedWhenAllowAll() {
         var route = new ToolRouteDecision(Set.of("write_element", "finish_action"), "KNOWLEDGE_WRITE", "test");
-        var dec = policy.validateBeforeExecute("write_element", Map.of(), route, true);
+        var dec = policy.validateBeforeExecute("write_element", Map.of(), route, true, Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -66,7 +66,7 @@ class ToolExecutionPolicyTest {
     void destructiveAlwaysNeedsConfirmation() {
         // create_checkpoint 是已知 MUTATING 工具（在 WORLD_INFO ToolGroup 中）
         var route = new ToolRouteDecision(Set.of("create_checkpoint", "finish_action"), "GENERAL", "test");
-        var dec = policy.validateBeforeExecute("create_checkpoint", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("create_checkpoint", Map.of(), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
         assertEquals(ToolCategory.MUTATING, dec.category());
     }
@@ -77,7 +77,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("finish_action 直接放行")
     void finishActionAllowed() {
         var route = new ToolRouteDecision(Set.of("finish_action"), "GROUP_BASED", "test");
-        var dec = policy.validateBeforeExecute("finish_action", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("finish_action", Map.of(), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -86,7 +86,7 @@ class ToolExecutionPolicyTest {
     void activateToolGroupsAllowed() {
         var route = new ToolRouteDecision(Set.of("activate_tool_groups", "finish_action"), "GROUP_BASED", "test");
         var dec = policy.validateBeforeExecute(
-                "activate_tool_groups", Map.of("groups", "[\"world_info\"]"), route, false);
+                "activate_tool_groups", Map.of("groups", "[\"world_info\"]"), route, false, Set.of());
         assertEquals(ToolExecutionDecisionType.ALLOW, dec.decision());
     }
 
@@ -97,7 +97,9 @@ class ToolExecutionPolicyTest {
     void toolNotInRouteRejected() {
         var route = new ToolRouteDecision(Set.of("node_list", "finish_action"), "NODE_MGMT_QUERY", "test");
         // create_checkpoint 在 WORLD_INFO ToolGroup 中，不在 NODE_MGMT_QUERY 路由允许列表
-        var dec = policy.validateBeforeExecute("create_checkpoint", Map.of(), route, false);
+        // 必须将其标记为 known，否则 "未知工具" 始终放行
+        var dec = policy.validateBeforeExecute(
+                "create_checkpoint", Map.of(), route, false, Set.of("create_checkpoint"));
         assertEquals(ToolExecutionDecisionType.REJECT, dec.decision());
         assertFalse(dec.allowedByRoute());
     }
@@ -108,7 +110,7 @@ class ToolExecutionPolicyTest {
     @DisplayName("通配路由允许任意工具（含未注册工具）")
     void wildcardRouteAllowsAnyTool() {
         var route = ToolRouteDecision.wildcard(Set.of("finish_action"), "GENERAL", "通配路由");
-        var dec = policy.validateBeforeExecute("unknown_tool", Map.of(), route, false);
+        var dec = policy.validateBeforeExecute("unknown_tool", Map.of(), route, false, Set.of());
         // 未知工具默认 MUTATING → NEED_CONFIRMATION
         assertEquals(ToolExecutionDecisionType.NEED_CONFIRMATION, dec.decision());
     }
