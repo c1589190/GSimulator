@@ -64,7 +64,7 @@ public final class CreateCheckpointTool implements AgentTool {
         WorldInformation wi = worldInfo.get();
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
-            nodeId = wi.activeNodeId();
+            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
         }
 
         // Lazily load node from disk if not in the in-memory chain

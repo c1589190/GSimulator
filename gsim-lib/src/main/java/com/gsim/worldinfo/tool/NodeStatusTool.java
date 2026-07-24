@@ -41,7 +41,14 @@ public final class NodeStatusTool implements AgentTool {
     @Override
     public ToolResult execute(ToolCall call) {
         WorldInformation wi = worldInfo.get();
-        NodeSnapshot active = wi.activeNode();
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+        }
+        NodeSnapshot active = wi.nodeById(nodeId);
+        if (active == null) {
+            return ToolResult.fail(name(), "[NODE_NOT_FOUND] node not found: " + nodeId);
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("nodeId: ").append(active.nodeId()).append("\n");

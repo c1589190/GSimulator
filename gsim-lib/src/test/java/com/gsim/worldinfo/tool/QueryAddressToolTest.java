@@ -95,12 +95,13 @@ class QueryAddressToolTest {
     }
 
     @Test
-    @DisplayName("checkpointId:key 格式默认当前节点")
-    void routesShortRefToCurrentNode() {
+    @DisplayName("checkpointId:key 格式需显式 nodeId")
+    void routesShortRefWithExplicitNodeId() {
         var tool = new QueryAddressTool(wiSupplier, toolRegistry);
-        ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "characters:曹操")));
+        ToolResult result = tool.execute(new ToolCall("query_address",
+                Map.of("address", "characters:曹操", "nodeId", "n0000")));
 
-        assertTrue(result.success(), "Should resolve short ref");
+        assertTrue(result.success(), "Should resolve short ref with explicit nodeId");
         assertTrue(result.items().get(0).snippet().contains("魏武帝"));
     }
 

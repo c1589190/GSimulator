@@ -73,8 +73,14 @@ public final class QueryAddressTool implements AgentTool {
 
         // Route 2: contains colons → look up as elem ref (nodeId:checkpointId:key or checkpointId:key)
         if (address.contains(":")) {
-            // Delegate to query_element
-            ToolCall elemCall = new ToolCall("query_element", Map.of("ref", address));
+            // Delegate to query_element, threading nodeId if provided
+            java.util.Map<String, String> elemArgs = new java.util.LinkedHashMap<>();
+            elemArgs.put("ref", address);
+            String nodeId = call.param("nodeId");
+            if (nodeId != null && !nodeId.isBlank()) {
+                elemArgs.put("nodeId", nodeId);
+            }
+            ToolCall elemCall = new ToolCall("query_element", elemArgs);
             return toolRegistry.call(elemCall);
         }
 

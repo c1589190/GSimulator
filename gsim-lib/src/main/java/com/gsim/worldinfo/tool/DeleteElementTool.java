@@ -87,7 +87,7 @@ public final class DeleteElementTool implements AgentTool {
 
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
-            nodeId = (wi != null && wi.activeNodeId() != null) ? wi.activeNodeId() : "n0000";
+            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
         }
 
         String checkpointName = call.param("checkpoint");

@@ -48,8 +48,9 @@ public final class NodeListTool implements AgentTool {
     @Override
     public ToolResult execute(ToolCall call) {
         String mode = call.param("mode");
+        String referenceNodeId = call.param("nodeId");
         WorldInformation wi = worldInfo.get();
-        String activeId = wi.activeNodeId();
+        String activeId = referenceNodeId != null ? referenceNodeId : "";
 
         List<ToolResult.Item> items = new ArrayList<>();
         List<NodeSnapshot> chain = wi.branchChain();

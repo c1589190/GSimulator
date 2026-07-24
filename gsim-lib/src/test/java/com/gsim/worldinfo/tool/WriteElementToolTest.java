@@ -94,13 +94,14 @@ class WriteElementToolTest {
     }
 
     @Test
-    void writeElementShortRefDefaultsToActiveNode() {
+    void writeElementShortRefWithExplicitNodeId() {
         var tool = new WriteElementTool(() -> wi, tmpDir, null);
-        // Use short ref: checkpointId:key — should default to current active node (n0000)
+        // Use short ref with explicit nodeId
         ToolResult r = tool.execute(new ToolCall(
                 "write_element",
                 Map.of(
                         "ref", "worldview:默认世界",
+                        "nodeId", "n0000",
                         "value", "架空奇幻大陆")));
 
         assertTrue(r.success());

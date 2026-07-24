@@ -72,6 +72,7 @@ class AttachmentToolTest {
                 "attachment_write",
                 Map.of(
                         "worldId", "testworld",
+                        "nodeId", "n0000",
                         "key", "test_data",
                         "data", "{\"hello\": \"world\"}"));
 
@@ -102,6 +103,7 @@ class AttachmentToolTest {
                 "attachment_write",
                 Map.of(
                         "worldId", "testworld",
+                        "nodeId", "n0000",
                         "key", "read_test",
                         "data", "\"some value\"")));
 
@@ -111,6 +113,7 @@ class AttachmentToolTest {
                 "attachment_read",
                 Map.of(
                         "worldId", "testworld",
+                        "nodeId", "n0000",
                         "key", "read_test")));
 
         assertTrue(result.success(), "Should succeed: " + result.error());

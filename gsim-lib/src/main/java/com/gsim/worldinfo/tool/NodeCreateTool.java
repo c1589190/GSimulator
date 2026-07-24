@@ -58,8 +58,9 @@ public final class NodeCreateTool implements AgentTool {
         return "Create a new child node (next turn) on the current active node. "
                 + "This advances the timeline. The new node starts with no checkpoints — "
                 + "use write_element or create_checkpoint to populate it. "
-                + "Automatically switches to the new node. "
-                + "Parameters: worldTime (required, e.g. '泰拉纪年1096年冬'), "
+                + "Returns new node ID. "
+                + "Parameters: worldId (required), parentNodeId (required), "
+                + "worldTime (required, e.g. '泰拉纪年1096年冬'), "
                 + "title (optional node name), note (optional remark).";
     }
 
@@ -71,9 +72,17 @@ public final class NodeCreateTool implements AgentTool {
         }
 
         WorldInformation wi = worldInfo.get();
-        String parentId = wi.activeNodeId();
-        int nextTurn = wi.activeNode().turn() + 1;
-        String worldId = wi.worldId();
+        String worldId = call.param("worldId");
+        if (worldId == null || worldId.isBlank()) {
+            return ToolResult.fail("node_create", "[WORLD_ID_REQUIRED] worldId is required");
+        }
+        String parentId = call.param("parentNodeId");
+        if (parentId == null || parentId.isBlank()) {
+            return ToolResult.fail("node_create", "[NODE_ID_REQUIRED] parentNodeId is required");
+        }
+        // Resolve parent's turn from the chain
+        NodeSnapshot parentNode = wi.nodeById(parentId);
+        int nextTurn = (parentNode != null ? parentNode.turn() : 0) + 1;
 
         // Seed counter from existing nodes before generating new ID
         seedNodeCounterFromDisk(worldId);
