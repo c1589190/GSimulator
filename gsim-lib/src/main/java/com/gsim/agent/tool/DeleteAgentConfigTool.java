@@ -19,7 +19,7 @@ import java.util.Map;
  */
 public class DeleteAgentConfigTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_config_delete";
+    public static final String NAME = "agent_config_delete";
 
     private final AgentConfigStore agentConfigStore;
     private final Path agentsDir;

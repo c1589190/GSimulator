@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public class AgentCancelTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_cancel";
+    public static final String NAME = "agent_cancel";
 
     private final AgentsManager agentsManager;
 

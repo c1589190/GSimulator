@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public class ListAgentConfigTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_config_list";
+    public static final String NAME = "agent_config_list";
 
     private final AgentConfigStore agentConfigStore;
 

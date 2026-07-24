@@ -17,7 +17,7 @@ import java.util.Map;
  */
 public class AgentOutputTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_output";
+    public static final String NAME = "agent_output";
 
     private final AgentsManager agentsManager;
 

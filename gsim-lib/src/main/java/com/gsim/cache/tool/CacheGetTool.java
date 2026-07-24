@@ -19,7 +19,7 @@ import java.util.Map;
  */
 public class CacheGetTool implements AgentTool {
 
-    public static final String NAME = "gsim_cache_get";
+    public static final String NAME = "cache_get";
 
     private final Path docsDir;
 

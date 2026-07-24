@@ -69,7 +69,7 @@ class AttachmentToolTest {
     void writeToolCreatesIndependentFile() {
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
         ToolCall call = new ToolCall(
-                "gsim_attachment_write",
+                "attachment_write",
                 Map.of(
                         "worldId", "testworld",
                         "key", "test_data",
@@ -99,7 +99,7 @@ class AttachmentToolTest {
         // Write first
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
         writeTool.execute(new ToolCall(
-                "gsim_attachment_write",
+                "attachment_write",
                 Map.of(
                         "worldId", "testworld",
                         "key", "read_test",
@@ -108,7 +108,7 @@ class AttachmentToolTest {
         // Read back
         var readTool = new AttachmentReadTool(worldsDir, wiSupplier);
         ToolResult result = readTool.execute(new ToolCall(
-                "gsim_attachment_read",
+                "attachment_read",
                 Map.of(
                         "worldId", "testworld",
                         "key", "read_test")));
@@ -131,7 +131,7 @@ class AttachmentToolTest {
     void failsWithoutWorldId() {
         var writeTool = new AttachmentWriteTool(worldsDir, wiSupplier);
         ToolResult result = writeTool.execute(new ToolCall(
-                "gsim_attachment_write",
+                "attachment_write",
                 Map.of(
                         "key", "x",
                         "data", "{}")));

@@ -31,7 +31,7 @@ public final class AttachmentReadTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_attachment_read";
+        return "attachment_read";
     }
 
     @Override

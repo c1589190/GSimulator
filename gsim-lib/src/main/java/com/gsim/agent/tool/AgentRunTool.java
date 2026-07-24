@@ -18,7 +18,7 @@ import java.util.Map;
  */
 public class AgentRunTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_run";
+    public static final String NAME = "agent_run";
 
     private final AgentsManager agentsManager;
 

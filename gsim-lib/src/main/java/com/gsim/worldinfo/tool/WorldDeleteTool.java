@@ -27,7 +27,7 @@ public final class WorldDeleteTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_delete_world";
+        return "delete_world";
     }
 
     @Override

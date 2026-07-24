@@ -26,7 +26,7 @@ public final class ListCheckpointsTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_list_checkpoints";
+        return "list_checkpoints";
     }
 
     @Override

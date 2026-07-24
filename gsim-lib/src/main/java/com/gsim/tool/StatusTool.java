@@ -35,7 +35,7 @@ public final class StatusTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_get_status";
+        return "get_status";
     }
 
     @Override

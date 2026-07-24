@@ -32,7 +32,7 @@ public final class DeleteElementTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_delete_checkpoint_element";
+        return "delete_checkpoint_element";
     }
 
     @Override

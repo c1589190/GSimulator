@@ -32,7 +32,7 @@ public final class AttachmentWriteTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_attachment_write";
+        return "attachment_write";
     }
 
     @Override

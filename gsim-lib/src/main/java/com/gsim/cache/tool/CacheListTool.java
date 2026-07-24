@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  */
 public class CacheListTool implements AgentTool {
 
-    public static final String NAME = "gsim_cache_list";
+    public static final String NAME = "cache_list";
 
     private final Path docsDir;
 

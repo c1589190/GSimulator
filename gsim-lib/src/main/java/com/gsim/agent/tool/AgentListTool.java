@@ -20,7 +20,7 @@ import java.util.Map;
  */
 public class AgentListTool implements AgentTool {
 
-    public static final String NAME = "gsim_agent_list";
+    public static final String NAME = "agent_list";
 
     private final AgentsManager agentsManager;
 

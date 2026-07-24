@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public class LlmGetTool implements AgentTool {
 
-    public static final String NAME = "gsim_llm_get";
+    public static final String NAME = "llm_get";
 
     private final LlmConfigManager llmConfigManager;
 

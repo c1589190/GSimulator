@@ -16,7 +16,7 @@ import java.util.Map;
  */
 public class LlmDeleteTool implements AgentTool {
 
-    public static final String NAME = "gsim_llm_delete";
+    public static final String NAME = "llm_delete";
 
     private final LlmConfigManager llmConfigManager;
 
