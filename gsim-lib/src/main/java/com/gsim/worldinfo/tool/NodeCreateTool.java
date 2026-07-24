@@ -79,9 +79,20 @@ public final class NodeCreateTool implements AgentTool {
         if (parentId == null || parentId.isBlank()) {
             return ToolResult.fail("node_create", "[NODE_ID_REQUIRED] parentNodeId is required");
         }
-        // Resolve parent's turn from the chain
-        NodeSnapshot parentNode = wi.nodeById(parentId);
-        int nextTurn = (parentNode != null ? parentNode.turn() : 0) + 1;
+        // 从磁盘加载父节点（而非依赖内存 WorldInformation，后者可能属于错误的 world）
+        Path parentFile = NodeLoader.nodeFile(worldsDir, worldId, parentId);
+        if (!Files.exists(parentFile)) {
+            return ToolResult.fail("node_create", "[PARENT_NOT_FOUND] parent node not found: " + parentId
+                    + " (file: " + parentFile + ")");
+        }
+        NodeSnapshot parentNode;
+        try {
+            parentNode = NodeLoader.load(parentFile);
+        } catch (RuntimeException e) {
+            return ToolResult.fail("node_create",
+                    "[PARENT_LOAD_FAILED] failed to load parent node " + parentId + ": " + e.getMessage());
+        }
+        int nextTurn = parentNode.turn() + 1;
 
         // Seed counter from existing nodes before generating new ID
         seedNodeCounterFromDisk(worldId);

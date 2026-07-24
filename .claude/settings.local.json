@@ -218,7 +218,9 @@
       "mcp__gsimap__gsim_doc_crop",
       "Bash(xxd /home/cna/DevMosire/GSimulator/gsimap-mcp.sh)",
       "Bash(namei -l /home/cna/DevMosire/GSimulator/gsimap-mcp.sh)",
-      "Bash(getfacl /home/cna/DevMosire/GSimulator/gsimap-mcp.sh)"
+      "Bash(getfacl /home/cna/DevMosire/GSimulator/gsimap-mcp.sh)",
+      "Bash(kill 1303)",
+      "Bash(curl -s http://127.0.0.1:8720/health)"
     ]
   },
   "enabledMcpjsonServers": [
