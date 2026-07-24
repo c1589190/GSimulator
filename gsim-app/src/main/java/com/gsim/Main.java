@@ -140,8 +140,8 @@ public class Main {
 
             if (noCli) {
                 // MCP HTTP mode: start Streamable HTTP MCP server (port 8720)
-                int mcpPort = Integer.parseInt(System.getProperty(
-                        "mcp.http.port", System.getenv().getOrDefault("MCP_HTTP_PORT", "8720")));
+                int mcpPort = Integer.parseInt(
+                        System.getProperty("mcp.http.port", System.getenv().getOrDefault("MCP_HTTP_PORT", "8720")));
                 McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort, worldsDir);
                 mcpHttpServer.start();
 

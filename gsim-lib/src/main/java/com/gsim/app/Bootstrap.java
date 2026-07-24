@@ -76,7 +76,7 @@ public final class Bootstrap {
         if (active == null) {
             activeNodeId = "n0000";
         } else {
-            activeNodeId = active.nodeId();
+            activeNodeId = "n0000";
         }
 
         // 4. Build WorldInformation

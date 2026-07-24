@@ -172,7 +172,7 @@ public class TimelineApiHandler implements HttpHandler {
 
         ActiveStateManager.ActiveState current = ActiveStateManager.load(worldsDir, wid);
         Map<String, String> sessions = current != null ? current.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.ActiveState updated = new ActiveStateManager.ActiveState(nodeId, sessions);
+        ActiveStateManager.ActiveState updated = new ActiveStateManager.ActiveState(sessions);
         ActiveStateManager.save(worldsDir, wid, updated);
 
         Map<String, Object> resp = new LinkedHashMap<>();
@@ -214,7 +214,7 @@ public class TimelineApiHandler implements HttpHandler {
 
         ActiveStateManager.ActiveState current = ActiveStateManager.load(worldsDir, wid);
         Map<String, String> sessions = current != null ? current.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.ActiveState updated = new ActiveStateManager.ActiveState(newNodeId, sessions);
+        ActiveStateManager.ActiveState updated = new ActiveStateManager.ActiveState(sessions);
         ActiveStateManager.save(worldsDir, wid, updated);
 
         Map<String, Object> resp = new LinkedHashMap<>();

@@ -74,7 +74,7 @@ public final class NodeSwitchTool implements AgentTool {
         String worldId = wi.worldId();
         ActiveStateManager.ActiveState currentState = ActiveStateManager.load(worldsDir, worldId);
         Map<String, String> sessions = currentState != null ? currentState.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(nodeId, sessions));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(sessions));
 
         if (onNodeChanged != null) onNodeChanged.run();
 

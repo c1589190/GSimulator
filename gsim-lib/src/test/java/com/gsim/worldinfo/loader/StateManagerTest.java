@@ -14,14 +14,13 @@ class StateManagerTest {
 
     @Test
     void saveAndLoadActiveState() {
-        ActiveStateManager.ActiveState state = new ActiveStateManager.ActiveState(
-                "n0003", Map.of("Orchestrator", "Orchestrator_2026-06-26T100000.json"));
+        ActiveStateManager.ActiveState state =
+                new ActiveStateManager.ActiveState(Map.of("Orchestrator", "Orchestrator_2026-06-26T100000.json"));
 
         ActiveStateManager.save(tmpDir, "test-world", state);
 
         ActiveStateManager.ActiveState loaded = ActiveStateManager.load(tmpDir, "test-world");
         assertNotNull(loaded);
-        assertEquals("n0003", loaded.nodeId());
         assertEquals("Orchestrator_2026-06-26T100000.json", loaded.sessions().get("Orchestrator"));
     }
 
@@ -41,15 +40,14 @@ class StateManagerTest {
         // n0000.json exists
         assertNotNull(NodeLoader.load(NodeLoader.nodeFile(tmpDir, "my-world", "n0000")));
 
-        // _index.json contains entry
+        // world is listed via directory scan
         var entries = WorldIndexManager.listWorlds(tmpDir);
         assertEquals(1, entries.size());
         assertEquals("my-world", entries.get(0).id());
 
-        // active.json exists
+        // active.json exists (sessions only)
         var active = ActiveStateManager.load(tmpDir, "my-world");
         assertNotNull(active);
-        assertEquals("n0000", active.nodeId());
     }
 
     @Test

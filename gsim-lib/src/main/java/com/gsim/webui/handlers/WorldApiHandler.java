@@ -147,13 +147,6 @@ public class WorldApiHandler implements HttpHandler {
         }
         try {
             deleteRecursive(worldPath);
-            // 重建 _index.json（移除对应条目）
-            List<WorldIndexManager.WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
-            List<WorldIndexManager.WorldEntry> filtered = new ArrayList<>();
-            for (var e : entries) {
-                if (!e.id().equals(id)) filtered.add(e);
-            }
-            Files.writeString(WorldIndexManager.indexFile(worldsDir), JsonUtils.toJson(filtered));
         } catch (IOException e) {
             HandlerUtils.sendJson(exchange, 500, Map.of("error", "Failed to delete: " + e.getMessage()));
             return;

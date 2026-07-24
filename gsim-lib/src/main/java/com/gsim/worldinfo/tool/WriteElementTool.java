@@ -80,7 +80,9 @@ public final class WriteElementTool implements AgentTool {
         String nodeId, checkpointId, key;
 
         if (parts.length == 2) {
-            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+            nodeId = call.param("nodeId");
+            if (nodeId == null || nodeId.isBlank())
+                return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
             checkpointId = parts[0].trim();
             key = parts[1].trim();
         } else if (parts.length == 3) {

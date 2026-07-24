@@ -137,12 +137,6 @@ public class WorldManagerApiHandler implements HttpHandler {
         }
         try {
             deleteRecursive(worldPath);
-            List<WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
-            List<WorldEntry> filtered = new ArrayList<>();
-            for (var e : entries) {
-                if (!e.id().equals(worldId)) filtered.add(e);
-            }
-            Files.writeString(WorldIndexManager.indexFile(worldsDir), JsonUtils.toJson(filtered));
         } catch (IOException e) {
             BaseApiHandler.sendError(exchange, 500, "Failed to delete world: " + e.getMessage());
             return;
@@ -210,7 +204,7 @@ public class WorldManagerApiHandler implements HttpHandler {
             BaseApiHandler.sendError(exchange, 404, "World has no active state: " + worldId);
             return;
         }
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, activeState.nodeId());
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
         if (wi == null) {
             BaseApiHandler.sendError(exchange, 404, "Cannot load world information for: " + worldId);
             return;
@@ -228,7 +222,7 @@ public class WorldManagerApiHandler implements HttpHandler {
             n.put("worldTime", node.worldTime());
             n.put("status", node.status());
             n.put("createdAt", node.createdAt());
-            n.put("isActive", node.nodeId().equals(activeState.nodeId()));
+            n.put("isActive", node.nodeId().equals("n0000"));
             if (tree) {
                 n.put("checkpointCount", node.checkpoints().size());
                 n.put("checkpoints", node.checkpoints().keySet());
@@ -238,7 +232,7 @@ public class WorldManagerApiHandler implements HttpHandler {
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("worldId", worldId);
-        data.put("activeNodeId", activeState.nodeId());
+        data.put("activeNodeId", "n0000");
         data.put("mode", tree ? "tree" : "flat");
         data.put("count", nodes.size());
         data.put("nodes", nodes);
@@ -251,9 +245,9 @@ public class WorldManagerApiHandler implements HttpHandler {
             BaseApiHandler.sendError(exchange, 404, "World has no active state: " + worldId);
             return;
         }
-        Path nodeFile = NodeLoader.nodeFile(worldsDir, worldId, activeState.nodeId());
+        Path nodeFile = NodeLoader.nodeFile(worldsDir, worldId, "n0000");
         if (!Files.exists(nodeFile)) {
-            BaseApiHandler.sendError(exchange, 404, "Active node file missing: " + activeState.nodeId());
+            BaseApiHandler.sendError(exchange, 404, "Active node file missing: " + "n0000");
             return;
         }
         NodeSnapshot node = NodeLoader.load(nodeFile);
@@ -267,7 +261,7 @@ public class WorldManagerApiHandler implements HttpHandler {
         data.put("isRoot", node.isRoot());
         data.put("checkpointCount", node.checkpoints().size());
         data.put("checkpoints", node.checkpoints().keySet());
-        BaseApiHandler.sendOk(exchange, "Active node: " + activeState.nodeId(), data);
+        BaseApiHandler.sendOk(exchange, "Active node: " + "n0000", data);
     }
 
     private void handleGetNode(HttpExchange exchange, String worldId, String nodeId) throws IOException {
@@ -306,7 +300,7 @@ public class WorldManagerApiHandler implements HttpHandler {
             return;
         }
 
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, activeState.nodeId());
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
         if (wi == null) {
             BaseApiHandler.sendError(exchange, 500, "Failed to load world: " + worldId);
             return;
@@ -333,7 +327,7 @@ public class WorldManagerApiHandler implements HttpHandler {
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, worldId, newNodeId), child);
 
         Map<String, String> sessions = activeState.sessions();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(newNodeId, sessions));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(sessions));
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("nodeId", newNodeId);
@@ -387,11 +381,10 @@ public class WorldManagerApiHandler implements HttpHandler {
             }
         }
 
-        ActiveStateManager.save(
-                worldsDir, worldId, new ActiveStateManager.ActiveState(targetNodeId, current.sessions()));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(current.sessions()));
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("previousNodeId", current.nodeId());
+        data.put("previousNodeId", "n0000");
         data.put("activeNodeId", targetNodeId);
         OperationLog.get()
                 .record(
@@ -399,8 +392,8 @@ public class WorldManagerApiHandler implements HttpHandler {
                         "node.switch",
                         "POST",
                         "/api/world-manager/" + worldId + "/nodes/active",
-                        "switched node: " + current.nodeId() + " → " + targetNodeId,
-                        Map.of("from", current.nodeId(), "to", targetNodeId),
+                        "switched node: " + "n0000" + " → " + targetNodeId,
+                        Map.of("from", "n0000", "to", targetNodeId),
                         true);
         BaseApiHandler.sendOk(exchange, "Switched to node: " + targetNodeId, data);
     }
@@ -431,7 +424,7 @@ public class WorldManagerApiHandler implements HttpHandler {
             return;
         }
 
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(parentId, current.sessions()));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(current.sessions()));
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("previousNodeId", nodeId);

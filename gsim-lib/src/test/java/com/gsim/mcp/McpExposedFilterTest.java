@@ -9,7 +9,6 @@ import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -44,8 +43,7 @@ class McpExposedFilterTest {
 
         @Override
         public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("exposed_tool",
-                    List.of(new ToolResult.Item("result", "exposed_tool", "ok", 1.0)));
+            return ToolResult.ok("exposed_tool", List.of(new ToolResult.Item("result", "exposed_tool", "ok", 1.0)));
         }
     }
 
@@ -63,8 +61,7 @@ class McpExposedFilterTest {
 
         @Override
         public ToolResult execute(ToolCall call) {
-            return ToolResult.ok("hidden_tool",
-                    List.of(new ToolResult.Item("result", "hidden_tool", "ok", 1.0)));
+            return ToolResult.ok("hidden_tool", List.of(new ToolResult.Item("result", "hidden_tool", "ok", 1.0)));
         }
 
         @Override
@@ -126,8 +123,7 @@ class McpExposedFilterTest {
             ObjectNode args = MAPPER.createObjectNode();
             String result = adapter.execute("gsim_exposed_tool", args);
 
-            assertTrue(result.contains("\"success\":true"),
-                    "exposed_tool should execute successfully");
+            assertTrue(result.contains("\"success\":true"), "exposed_tool should execute successfully");
         }
 
         @Test
@@ -135,9 +131,12 @@ class McpExposedFilterTest {
         void hiddenToolThrowsUnknownTool() {
             ObjectNode args = MAPPER.createObjectNode();
 
-            assertThrows(UnknownToolException.class, () -> {
-                adapter.execute("gsim_hidden_tool", args);
-            }, "Calling hidden tool should throw UnknownToolException");
+            assertThrows(
+                    UnknownToolException.class,
+                    () -> {
+                        adapter.execute("gsim_hidden_tool", args);
+                    },
+                    "Calling hidden tool should throw UnknownToolException");
         }
 
         @Test
@@ -145,9 +144,12 @@ class McpExposedFilterTest {
         void hiddenToolWithRegistryNameThrowsUnknownTool() {
             ObjectNode args = MAPPER.createObjectNode();
 
-            assertThrows(UnknownToolException.class, () -> {
-                adapter.execute("hidden_tool", args);
-            }, "Calling hidden tool with raw registry name should also fail");
+            assertThrows(
+                    UnknownToolException.class,
+                    () -> {
+                        adapter.execute("hidden_tool", args);
+                    },
+                    "Calling hidden tool with raw registry name should also fail");
         }
 
         @Test
@@ -155,9 +157,12 @@ class McpExposedFilterTest {
         void unknownToolThrowsSameAsHidden() {
             ObjectNode args = MAPPER.createObjectNode();
 
-            assertThrows(UnknownToolException.class, () -> {
-                adapter.execute("gsim_nonexistent_tool", args);
-            }, "Unknown tool should throw UnknownToolException");
+            assertThrows(
+                    UnknownToolException.class,
+                    () -> {
+                        adapter.execute("gsim_nonexistent_tool", args);
+                    },
+                    "Unknown tool should throw UnknownToolException");
         }
     }
 
@@ -169,16 +174,14 @@ class McpExposedFilterTest {
         @DisplayName("不覆盖 mcpExposed 的工具默认为 true（暴露）")
         void defaultIsExposed() {
             AgentTool tool = new ExposedTool();
-            assertTrue(tool.mcpExposed(),
-                    "Default mcpExposed() should return true for backward compatibility");
+            assertTrue(tool.mcpExposed(), "Default mcpExposed() should return true for backward compatibility");
         }
 
         @Test
         @DisplayName("显式设置为 false 的工具不暴露")
         void explicitFalseIsHidden() {
             AgentTool tool = new HiddenTool();
-            assertFalse(tool.mcpExposed(),
-                    "Explicitly returning false should hide the tool");
+            assertFalse(tool.mcpExposed(), "Explicitly returning false should hide the tool");
         }
     }
 }

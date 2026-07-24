@@ -66,7 +66,9 @@ public final class QueryElementTool implements AgentTool {
 
         if (parts.length == 2) {
             // checkpointId:key — default to current active node
-            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+            nodeId = call.param("nodeId");
+            if (nodeId == null || nodeId.isBlank())
+                return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
             checkpointId = parts[0].trim();
             key = parts[1].trim();
         } else if (parts.length == 3) {

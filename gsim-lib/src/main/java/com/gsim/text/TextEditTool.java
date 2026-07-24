@@ -267,8 +267,8 @@ public final class TextEditTool implements AgentTool {
         var active = ActiveStateManager.load(worldsDir, worldId);
         if (active == null) throw new IllegalStateException("World 无活跃状态: " + worldId);
 
-        String resolveNodeId = nodeId != null ? nodeId : active.nodeId();
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, active.nodeId());
+        String resolveNodeId = nodeId != null ? nodeId : "n0000";
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
         if (wi == null) throw new IllegalStateException("无法加载 World: " + worldId);
 
         NodeSnapshot node = wi.nodeById(resolveNodeId);

@@ -70,7 +70,9 @@ public final class AttachmentWriteTool implements AgentTool {
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
             WorldInformation wi = worldInfo.get();
-            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+            nodeId = call.param("nodeId");
+            if (nodeId == null || nodeId.isBlank())
+                return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
         }
 
         // Parse data as JSON to validate and normalize

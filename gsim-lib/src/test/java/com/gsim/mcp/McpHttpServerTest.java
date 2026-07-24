@@ -3,7 +3,6 @@ package com.gsim.mcp;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolRegistry;
@@ -30,19 +29,43 @@ class McpHttpServerTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     static class EchoTool implements AgentTool {
-        @Override public String name() { return "echo"; }
-        @Override public String description() { return "Echo tool"; }
-        @Override public ToolResult execute(ToolCall call) {
+        @Override
+        public String name() {
+            return "echo";
+        }
+
+        @Override
+        public String description() {
+            return "Echo tool";
+        }
+
+        @Override
+        public ToolResult execute(ToolCall call) {
             String msg = call.param("message", "hello");
             return ToolResult.ok("echo", List.of(new ToolResult.Item("echo", "echo", msg, 1.0)));
         }
     }
 
     static class HiddenTool implements AgentTool {
-        @Override public String name() { return "internal"; }
-        @Override public String description() { return "Internal tool"; }
-        @Override public ToolResult execute(ToolCall call) { return ToolResult.ok("internal", List.of()); }
-        @Override public boolean mcpExposed() { return false; }
+        @Override
+        public String name() {
+            return "internal";
+        }
+
+        @Override
+        public String description() {
+            return "Internal tool";
+        }
+
+        @Override
+        public ToolResult execute(ToolCall call) {
+            return ToolResult.ok("internal", List.of());
+        }
+
+        @Override
+        public boolean mcpExposed() {
+            return false;
+        }
     }
 
     private McpHttpServer server;
@@ -133,7 +156,8 @@ class McpHttpServerTest {
     @Test
     @DisplayName("tools/call 执行 exposed 工具成功")
     void toolsCallExposedTool() throws Exception {
-        String body = """
+        String body =
+                """
                 {"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"gsim_echo","arguments":{"message":"hello-world"}}}""";
         var resp = postMcp(body);
         assertEquals(200, resp.statusCode());
@@ -144,7 +168,8 @@ class McpHttpServerTest {
     @Test
     @DisplayName("tools/call hidden 工具返回错误")
     void toolsCallHiddenToolFails() throws Exception {
-        String body = """
+        String body =
+                """
                 {"jsonrpc":"2.0","id":"4","method":"tools/call","params":{"name":"gsim_internal","arguments":{}}}""";
         var resp = postMcp(body);
         assertEquals(200, resp.statusCode());
@@ -176,7 +201,8 @@ class McpHttpServerTest {
     @Test
     @DisplayName("ID 被正确回显")
     void idIsRoundTripped() throws Exception {
-        String body = """
+        String body =
+                """
                 {"jsonrpc":"2.0","id":"my-custom-id-123","method":"initialize","params":{}}""";
         var resp = postMcp(body);
         assertTrue(resp.body().contains("\"my-custom-id-123\""));

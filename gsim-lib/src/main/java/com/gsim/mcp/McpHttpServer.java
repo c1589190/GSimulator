@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,28 +169,30 @@ public final class McpHttpServer {
                         content.add(textPart);
                         result.set("content", content);
 
-                        log.info("[MCP-HTTP-TOOL-RESULT] name={}, status=success, size={}bytes, duration={}ms",
-                                toolName, rawResult.length(), durationMs);
+                        log.info(
+                                "[MCP-HTTP-TOOL-RESULT] name={}, status=success, size={}bytes, duration={}ms",
+                                toolName,
+                                rawResult.length(),
+                                durationMs);
                         response = jsonRpc(id, result);
                     } catch (UnknownToolException e) {
                         log.warn("[MCP-HTTP-TOOL-RESULT] name={}, error=unknown_tool", toolName);
-                        response = jsonRpcError(id, ERR_INVALID_PARAMS,
-                                "Unknown tool: " + e.getMessage());
+                        response = jsonRpcError(id, ERR_INVALID_PARAMS, "Unknown tool: " + e.getMessage());
                     } catch (IllegalArgumentException e) {
-                        log.warn("[MCP-HTTP-TOOL-RESULT] name={}, error=invalid_args, message={}",
-                                toolName, e.getMessage());
-                        response = jsonRpcError(id, ERR_INVALID_PARAMS,
-                                "Invalid arguments: " + e.getMessage());
+                        log.warn(
+                                "[MCP-HTTP-TOOL-RESULT] name={}, error=invalid_args, message={}",
+                                toolName,
+                                e.getMessage());
+                        response = jsonRpcError(id, ERR_INVALID_PARAMS, "Invalid arguments: " + e.getMessage());
                     } catch (Exception e) {
                         log.error("[MCP-HTTP-TOOL-RESULT] name={}, error=execution_error", toolName, e);
-                        response = jsonRpcError(id, ERR_TOOL_EXECUTION,
-                                "Tool '" + toolName + "' failed: " + e.getMessage());
+                        response = jsonRpcError(
+                                id, ERR_TOOL_EXECUTION, "Tool '" + toolName + "' failed: " + e.getMessage());
                     }
                 }
                 default -> {
                     log.warn("[MCP-HTTP] unknown method '{}'", method);
-                    response = jsonRpcError(id, ERR_METHOD_NOT_FOUND,
-                            "Method not found: " + method);
+                    response = jsonRpcError(id, ERR_METHOD_NOT_FOUND, "Method not found: " + method);
                 }
             }
 
@@ -199,8 +200,10 @@ public final class McpHttpServer {
 
         } catch (IOException e) {
             log.error("[MCP-HTTP] parse error: {}", e.getMessage());
-            sendJson(exchange, 400, MAPPER.readTree(
-                    jsonRpcError(id, ERR_PARSE_ERROR, "Parse error: " + e.getMessage())));
+            sendJson(
+                    exchange,
+                    400,
+                    MAPPER.readTree(jsonRpcError(id, ERR_PARSE_ERROR, "Parse error: " + e.getMessage())));
         }
     }
 

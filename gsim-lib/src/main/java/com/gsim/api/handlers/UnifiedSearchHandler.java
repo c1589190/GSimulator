@@ -99,7 +99,7 @@ public class UnifiedSearchHandler implements HttpHandler {
             ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
             if (active == null) return results;
 
-            WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, active.nodeId());
+            WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
             if (wi == null) return results;
 
             SearchResult sr = wi.keywordIndex().search(query, limit, 0);

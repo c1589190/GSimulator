@@ -25,31 +25,85 @@ class ToolGroupManagerTest {
     /** A tool that declares itself as always available. */
     static class AlwaysAvailableTool implements AgentTool {
         private final String name;
-        AlwaysAvailableTool(String name) { this.name = name; }
-        @Override public String name() { return name; }
-        @Override public String description() { return name; }
-        @Override public ToolResult execute(ToolCall call) { return ToolResult.ok(name, List.of()); }
-        @Override public boolean alwaysAvailable() { return true; }
+
+        AlwaysAvailableTool(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public String description() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name, List.of());
+        }
+
+        @Override
+        public boolean alwaysAvailable() {
+            return true;
+        }
     }
 
     /** A tool that belongs to a specific group. */
     static class GroupedTool implements AgentTool {
         private final String name;
         private final Set<String> groups;
-        GroupedTool(String name, String group) { this.name = name; this.groups = Set.of(group); }
-        @Override public String name() { return name; }
-        @Override public String description() { return name; }
-        @Override public ToolResult execute(ToolCall call) { return ToolResult.ok(name, List.of()); }
-        @Override public Set<String> toolGroups() { return groups; }
+
+        GroupedTool(String name, String group) {
+            this.name = name;
+            this.groups = Set.of(group);
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public String description() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name, List.of());
+        }
+
+        @Override
+        public Set<String> toolGroups() {
+            return groups;
+        }
     }
 
     /** A tool with no group declaration (legacy fallback). */
     static class PlainTool implements AgentTool {
         private final String name;
-        PlainTool(String name) { this.name = name; }
-        @Override public String name() { return name; }
-        @Override public String description() { return name; }
-        @Override public ToolResult execute(ToolCall call) { return ToolResult.ok(name, List.of()); }
+
+        PlainTool(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public String description() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolCall call) {
+            return ToolResult.ok(name, List.of());
+        }
     }
 
     @BeforeEach

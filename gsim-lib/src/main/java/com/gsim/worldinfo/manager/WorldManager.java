@@ -10,7 +10,6 @@ import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.NodeLoader;
 import com.gsim.worldinfo.loader.WorldIndexManager;
-import com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry;
 import com.gsim.worldinfo.loader.WorldIndexManager.WorldMeta;
 import com.gsim.worldinfo.loader.WorldInfoBuilder;
 import java.io.IOException;
@@ -99,13 +98,13 @@ public class WorldManager {
     public Map<String, Object> getWorld(String worldId) {
         WorldMeta meta = requireWorld(worldId);
         ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
-        WorldInformation wi = active != null ? WorldInfoBuilder.build(worldsDir, worldId, active.nodeId()) : null;
+        WorldInformation wi = active != null ? WorldInfoBuilder.build(worldsDir, worldId, "n0000") : null;
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("worldId", meta.id());
         result.put("name", meta.name());
         result.put("createdAt", meta.createdAt());
-        result.put("activeNodeId", active != null ? active.nodeId() : meta.currentNodeId());
+        result.put("activeNodeId", active != null ? "n0000" : meta.currentNodeId());
 
         if (wi != null) {
             List<Map<String, Object>> nodes = new ArrayList<>();
@@ -116,7 +115,7 @@ public class WorldManager {
                 n.put("turn", node.turn());
                 n.put("worldTime", node.worldTime());
                 n.put("status", node.status());
-                n.put("isActive", node.nodeId().equals(active.nodeId()));
+                n.put("isActive", node.nodeId().equals("n0000"));
                 n.put("checkpointCount", node.checkpoints().size());
                 nodes.add(n);
             }
@@ -300,9 +299,6 @@ public class WorldManager {
         Path worldPath = worldsDir.resolve(worldId);
         try {
             deleteRecursive(worldPath);
-            List<WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
-            entries = entries.stream().filter(e -> !e.id().equals(worldId)).toList();
-            Files.writeString(WorldIndexManager.indexFile(worldsDir), com.gsim.util.JsonUtils.toJson(entries));
         } catch (IOException e) {
             throw new RuntimeException("Failed to delete world: " + worldId, e);
         }
@@ -349,7 +345,7 @@ public class WorldManager {
 
         ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
         Map<String, String> sessions = active != null ? active.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(newNodeId, sessions));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(sessions));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodeId", newNodeId);
@@ -476,7 +472,7 @@ public class WorldManager {
 
         // Build WorldInformation so upsertElement/appendElement work
         ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
-        WorldInformation wi = active != null ? WorldInfoBuilder.build(worldsDir, worldId, active.nodeId()) : null;
+        WorldInformation wi = active != null ? WorldInfoBuilder.build(worldsDir, worldId, "n0000") : null;
         if (wi == null) throw new IllegalStateException("Cannot build world info for: " + worldId);
 
         String now = Instant.now().toString();

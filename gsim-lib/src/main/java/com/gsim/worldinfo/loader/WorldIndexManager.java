@@ -15,11 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 世界索引管理器 -- 管理 _index.json 和 world.json 文件。
+ * 世界索引管理器 -- 管理 world.json 文件。
  *
- * <p>_index.json 维护所有世界的列表（{@link WorldEntry}），位于 worlds 根目录。
- * world.json 存储单个世界的元数据（{@link WorldMeta}），位于每个 world 目录内。
- * 创建新世界时同时写入 _index.json 和 world.json，并初始化根节点 n0000 和 active.json。
+ * <p>world.json 存储单个世界的元数据（{@link WorldMeta}），位于每个 world 目录内。
+ * 世界列表通过扫描 {@code worlds/} 目录下的子目录获取，不再使用全局索引文件。
+ * 创建新世界时写入 world.json、初始化根节点 n0000 和 active.json。
  *
  * <p>此类为纯静态工具类，不可实例化。
  */
@@ -37,27 +37,6 @@ public final class WorldIndexManager {
      * @param createdAt 创建时间（ISO-8601 字符串）
      */
     public record WorldEntry(String id, String name, String createdAt) {}
-
-    // ---- _index.json ----
-
-    /**
-     * 获取 _index.json 文件路径。
-     *
-     * @param worldsDir worlds 根目录
-     * @return _index.json 的完整路径
-     */
-    public static Path indexFile(Path worldsDir) {
-        return worldsDir.resolve("_index.json");
-    }
-
-    private static void saveIndex(Path worldsDir, List<WorldEntry> entries) {
-        try {
-            Files.createDirectories(worldsDir);
-            Files.writeString(indexFile(worldsDir), JsonUtils.toJson(entries));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to write _index.json", e);
-        }
-    }
 
     // ---- world.json ----
 
@@ -115,35 +94,29 @@ public final class WorldIndexManager {
     }
 
     /**
-     * 列出所有世界，结合 _index.json 和文件系统扫描。
+     * 列出所有世界，通过扫描 worlds 目录下的子目录获取。
      *
-     * <p>首先从 _index.json 读取，然后扫描 worlds 目录找出未被索引的世界目录
-     * （例如手动复制而未调用 world_create 创建的目录），读取其 world.json 并追加。
+     * <p>扫描 worlds 目录找出所有包含 world.json 的子目录，
+     * 读取其 world.json 并汇总为世界列表。
      * 不存在 world.json 的目录会被跳过并记录警告。
      *
      * @param worldsDir worlds 根目录
      * @return 完整的世界条目列表
      */
     public static List<WorldEntry> listWorlds(Path worldsDir) {
-        List<WorldEntry> entries = loadIndexEntries(worldsDir);
+        List<WorldEntry> entries = new ArrayList<>();
 
-        // 扫描文件系统，发现 _index.json 中未记录的世界目录
         java.io.File[] dirs = worldsDir.toFile().listFiles(java.io.File::isDirectory);
         if (dirs != null) {
             for (java.io.File d : dirs) {
                 String dirName = d.getName();
                 if (dirName.startsWith(".")) continue;
 
-                boolean inIndex = entries.stream().anyMatch(e -> e.id().equals(dirName));
-                if (!inIndex) {
-                    // 尝试从 world.json 加载
-                    WorldMeta meta = loadWorldMeta(worldsDir, dirName);
-                    if (meta != null) {
-                        log.info("Discovered unindexed world '{}' ({}) — adding to listing", dirName, meta.name());
-                        entries.add(new WorldEntry(meta.id(), meta.name(), meta.createdAt()));
-                    } else {
-                        log.warn("Directory '{}' exists under worlds/ but has no world.json — skipping", dirName);
-                    }
+                WorldMeta meta = loadWorldMeta(worldsDir, dirName);
+                if (meta != null) {
+                    entries.add(new WorldEntry(meta.id(), meta.name(), meta.createdAt()));
+                } else {
+                    log.warn("Directory '{}' exists under worlds/ but has no world.json — skipping", dirName);
                 }
             }
         }
@@ -151,22 +124,11 @@ public final class WorldIndexManager {
         return entries;
     }
 
-    /** Load entries from _index.json only. */
-    private static List<WorldEntry> loadIndexEntries(Path worldsDir) {
-        Path file = indexFile(worldsDir);
-        if (!Files.exists(file)) return new ArrayList<>();
-        try {
-            WorldEntry[] arr = JsonUtils.fromJson(Files.readString(file), WorldEntry[].class);
-            return arr != null ? new ArrayList<>(List.of(arr)) : new ArrayList<>();
-        } catch (IOException e) {
-            return new ArrayList<>();
-        }
-    }
-
     // ---- creation ----
 
     /**
      * Create a new world. Generates n0000 root node with empty checkpoints.
+     * Only writes to the world's own subdirectory — no global shared files.
      * Returns the world meta.
      */
     public static WorldMeta createWorld(Path worldsDir, String worldId, String name) {
@@ -195,13 +157,8 @@ public final class WorldIndexManager {
                 new LinkedHashMap<>());
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, worldId, "n0000"), root);
 
-        // _index.json (use loadIndexEntries to avoid double-counting partially-created dirs)
-        List<WorldEntry> entries = new ArrayList<>(loadIndexEntries(worldsDir));
-        entries.add(new WorldEntry(worldId, name, now));
-        saveIndex(worldsDir, entries);
-
-        // active.json
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState("n0000", Map.of()));
+        // active.json (sessions only, no active node tracking)
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(Map.of()));
 
         return meta;
     }

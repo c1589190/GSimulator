@@ -123,10 +123,10 @@ public class ActivateToolGroupsTool implements AgentTool {
             groupManager.activate(trimmed);
             activated.add(trimmed);
 
-        // 写入结构化事件到 AgentCache
-        if (eventSink != null && !activated.isEmpty()) {
-            eventSink.accept(ToolGroupEvent.activated(Set.copyOf(activated)));
-        }
+            // 写入结构化事件到 AgentCache
+            if (eventSink != null && !activated.isEmpty()) {
+                eventSink.accept(ToolGroupEvent.activated(Set.copyOf(activated)));
+            }
         }
 
         // 构建结果摘要

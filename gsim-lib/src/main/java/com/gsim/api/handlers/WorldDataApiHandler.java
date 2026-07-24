@@ -153,7 +153,7 @@ public class WorldDataApiHandler implements HttpHandler {
             return;
         }
 
-        String nodeId = req != null ? (String) req.getOrDefault("nodeId", activeState.nodeId()) : activeState.nodeId();
+        String nodeId = req != null ? (String) req.getOrDefault("nodeId", "n0000") : "n0000";
         Path nodeFile = NodeLoader.nodeFile(worldsDir, worldId, nodeId);
         if (!Files.exists(nodeFile)) {
             BaseApiHandler.sendError(exchange, 404, "Node not found: " + nodeId);
@@ -444,7 +444,7 @@ public class WorldDataApiHandler implements HttpHandler {
             BaseApiHandler.sendError(exchange, 400, "World has no active state: " + worldId);
             return null;
         }
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, activeState.nodeId());
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
         if (wi == null) {
             BaseApiHandler.sendError(exchange, 404, "Cannot load world information for: " + worldId);
             return null;

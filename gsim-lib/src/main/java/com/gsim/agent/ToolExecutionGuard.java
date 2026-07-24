@@ -64,8 +64,7 @@ public final class ToolExecutionGuard {
             return GuardResult.deny("UNKNOWN_TOOL", "Tool not found: " + call.toolName());
         }
         if (!tool.mcpExposed()) {
-            return GuardResult.deny("MCP_TOOL_NOT_EXPOSED",
-                    "Tool '" + call.toolName() + "' is not available via MCP");
+            return GuardResult.deny("MCP_TOOL_NOT_EXPOSED", "Tool '" + call.toolName() + "' is not available via MCP");
         }
         return GuardResult.allow();
     }
@@ -104,7 +103,8 @@ public final class ToolExecutionGuard {
                 requiredGroup = g; // remember for error message
             }
             if (!anyGroupActive) {
-                return GuardResult.deny("TOOL_GROUP_NOT_ACTIVE",
+                return GuardResult.deny(
+                        "TOOL_GROUP_NOT_ACTIVE",
                         "Tool '" + call.toolName() + "' requires group '"
                                 + (requiredGroup != null ? requiredGroup : "unknown")
                                 + "' to be activated. Use activate_tool_groups first.");
@@ -120,7 +120,8 @@ public final class ToolExecutionGuard {
                     }
                 }
                 if (!authorized) {
-                    return GuardResult.deny("TOOL_GROUP_NOT_ALLOWED",
+                    return GuardResult.deny(
+                            "TOOL_GROUP_NOT_ALLOWED",
                             "Tool '" + call.toolName() + "' requires group(s) "
                                     + toolGroups + " which are not in AgentConfig.allowedToolGroups: "
                                     + allowedGroups);

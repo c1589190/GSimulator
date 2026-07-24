@@ -40,8 +40,7 @@ class AgentRuntimeStateTest {
     @Test
     @DisplayName("replay 单个 activated 事件恢复激活组")
     void replaySingleActivated() {
-        List<ToolGroupEvent> events = List.of(
-                ToolGroupEvent.activated(Set.of("world_info")));
+        List<ToolGroupEvent> events = List.of(ToolGroupEvent.activated(Set.of("world_info")));
         AgentRuntimeState state = AgentRuntimeState.replay(events);
         assertEquals(Set.of("world_info"), state.activeToolGroups());
     }
@@ -82,8 +81,7 @@ class AgentRuntimeStateTest {
     @Test
     @DisplayName("withDeactivatedGroups 返回新实例（不可变）")
     void withDeactivatedGroupsReturnsNewInstance() {
-        AgentRuntimeState original = AgentRuntimeState.empty()
-                .withActivatedGroups(Set.of("world_info", "node_mgmt"));
+        AgentRuntimeState original = AgentRuntimeState.empty().withActivatedGroups(Set.of("world_info", "node_mgmt"));
         AgentRuntimeState updated = original.withDeactivatedGroups(Set.of("node_mgmt"));
 
         assertEquals(Set.of("world_info", "node_mgmt"), original.activeToolGroups());
@@ -93,10 +91,8 @@ class AgentRuntimeStateTest {
     @Test
     @DisplayName("不同 Agent 的状态完全隔离")
     void statesAreIsolatedBetweenAgents() {
-        AgentRuntimeState agentA = AgentRuntimeState.empty()
-                .withActivatedGroups(Set.of("world_info"));
-        AgentRuntimeState agentB = AgentRuntimeState.empty()
-                .withActivatedGroups(Set.of("search"));
+        AgentRuntimeState agentA = AgentRuntimeState.empty().withActivatedGroups(Set.of("world_info"));
+        AgentRuntimeState agentB = AgentRuntimeState.empty().withActivatedGroups(Set.of("search"));
 
         assertEquals(Set.of("world_info"), agentA.activeToolGroups());
         assertEquals(Set.of("search"), agentB.activeToolGroups());

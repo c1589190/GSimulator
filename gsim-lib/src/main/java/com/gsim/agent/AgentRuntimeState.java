@@ -14,10 +14,7 @@ import java.util.Set;
  * @param boundWorldId     Agent 当前绑定的 world（可为 null，SubAgent 沿用父 Agent 上下文）
  * @param boundNodeId      Agent 当前绑定的 node（可为 null）
  */
-public record AgentRuntimeState(
-        Set<String> activeToolGroups,
-        String boundWorldId,
-        String boundNodeId) {
+public record AgentRuntimeState(Set<String> activeToolGroups, String boundWorldId, String boundNodeId) {
 
     public static AgentRuntimeState empty() {
         return new AgentRuntimeState(Set.of(), null, null);
@@ -39,7 +36,9 @@ public record AgentRuntimeState(
             switch (e.type()) {
                 case "activated" -> active.addAll(e.groups());
                 case "deactivated" -> active.removeAll(e.groups());
-                default -> { /* unknown event type, skip */ }
+                default -> {
+                    /* unknown event type, skip */
+                }
             }
         }
         return new AgentRuntimeState(Set.copyOf(active), null, null);

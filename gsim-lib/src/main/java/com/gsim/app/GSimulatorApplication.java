@@ -12,10 +12,8 @@ import com.gsim.tool.ToolRegistry;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.tool.CreateCheckpointTool;
 import com.gsim.worldinfo.tool.NodeCreateTool;
-import com.gsim.worldinfo.tool.NodeGotoParentTool;
 import com.gsim.worldinfo.tool.NodeListTool;
 import com.gsim.worldinfo.tool.NodeStatusTool;
-import com.gsim.worldinfo.tool.NodeSwitchTool;
 import com.gsim.worldinfo.tool.QueryCheckpointTool;
 import com.gsim.worldinfo.tool.QueryElementTool;
 import com.gsim.worldinfo.tool.QueryKeywordTool;
@@ -114,7 +112,7 @@ public class GSimulatorApplication {
             try {
                 String wid = worldInfo.worldId();
                 var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, wid);
-                String activeNodeId = active != null ? active.nodeId() : worldInfo.activeNodeId();
+                String activeNodeId = active != null ? "n0000" : worldInfo.activeNodeId();
                 var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
                 this.worldInfo = newWi;
                 log.info("WorldInformation rebuilt after node change: world={} activeNode={}", wid, activeNodeId);
@@ -415,7 +413,7 @@ public class GSimulatorApplication {
 
             // 2. 加载目标 world 的 active state
             var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, worldId);
-            String activeNodeId = active != null ? active.nodeId() : "n0000";
+            String activeNodeId = active != null ? "n0000" : "n0000";
 
             // 3. Build WorldInformation（不经过 Bootstrap，避免触碰缓存）
             var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);

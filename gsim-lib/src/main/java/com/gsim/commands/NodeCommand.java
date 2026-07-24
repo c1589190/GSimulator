@@ -63,7 +63,7 @@ public final class NodeCommand {
             Checkpoints: %s
             """
                 .formatted(
-                        active.nodeId(),
+                        "n0000",
                         active.turn(),
                         active.worldTime(),
                         active.status(),
@@ -91,7 +91,7 @@ public final class NodeCommand {
         }
         // update active
         String worldId = wi.worldId();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(nodeId, Map.of()));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(Map.of()));
         onNodeChanged.run();
         return "Switched to node: " + nodeId + ". Reloading...";
     }
@@ -120,7 +120,7 @@ public final class NodeCommand {
 
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, wi.worldId(), newNodeId), child);
 
-        ActiveStateManager.save(worldsDir, wi.worldId(), new ActiveStateManager.ActiveState(newNodeId, Map.of()));
+        ActiveStateManager.save(worldsDir, wi.worldId(), new ActiveStateManager.ActiveState(Map.of()));
         onNodeChanged.run();
         return "Created child node: " + newNodeId + " (turn " + nextTurn + ")";
     }

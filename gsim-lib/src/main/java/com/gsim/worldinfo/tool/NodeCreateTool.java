@@ -7,7 +7,6 @@ import com.gsim.tool.ToolResult;
 import com.gsim.util.IdGenerator;
 import com.gsim.worldinfo.NodeSnapshot;
 import com.gsim.worldinfo.WorldInformation;
-import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.NodeLoader;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -104,11 +103,6 @@ public final class NodeCreateTool implements AgentTool {
 
         Path nodeFile = NodeLoader.nodeFile(worldsDir, worldId, newNodeId);
         NodeLoader.save(nodeFile, child);
-
-        // Update active state
-        ActiveStateManager.ActiveState currentState = ActiveStateManager.load(worldsDir, worldId);
-        Map<String, String> sessions = currentState != null ? currentState.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(newNodeId, sessions));
 
         if (onNodeChanged != null) onNodeChanged.run();
 

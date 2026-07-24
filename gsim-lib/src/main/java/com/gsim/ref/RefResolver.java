@@ -117,8 +117,8 @@ public final class RefResolver {
             throw new IllegalStateException("World has no active state: " + activeWorldId);
         }
 
-        String resolveNodeId = nodeId != null ? nodeId : active.nodeId();
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, activeWorldId, active.nodeId());
+        String resolveNodeId = nodeId != null ? nodeId : "n0000";
+        WorldInformation wi = WorldInfoBuilder.build(worldsDir, activeWorldId, "n0000");
         if (wi == null) {
             throw new IllegalStateException("Cannot load world: " + activeWorldId);
         }

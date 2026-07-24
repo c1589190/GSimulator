@@ -4,7 +4,6 @@ import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
-import com.gsim.worldinfo.loader.WorldIndexManager;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,8 +32,8 @@ public final class WorldDeleteTool implements AgentTool {
     @Override
     public String description() {
         return """
-            Delete a GSim world. Recursively removes the world directory
-            and updates _index.json. Cannot be undone.
+            Delete a GSim world. Recursively removes the world directory.
+            Cannot be undone.
             Parameters: worldId (required) -- the world to delete.
             """;
     }
@@ -61,11 +60,6 @@ public final class WorldDeleteTool implements AgentTool {
 
         try {
             deleteRecursive(worldDir);
-
-            List<WorldIndexManager.WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
-            entries = entries.stream().filter(e -> !e.id().equals(worldId)).toList();
-            Files.writeString(WorldIndexManager.indexFile(worldsDir), com.gsim.util.JsonUtils.toJson(entries));
-
             return ToolResult.ok(
                     name(), List.of(new ToolResult.Item(worldId, worldId, "World deleted: " + worldId, 1.0)));
         } catch (IOException e) {

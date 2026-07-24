@@ -167,11 +167,13 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 
 ## 测试数据命名
 
-- World: `mcp_test_{{YYYYMMDD}}`
-- Doc: `mcp_test_{{a/b/c}}`
-- Checkpoint: `test_chars`
-- Region: `测试国A` / `测试国B`
-- Agent: `mcp_tester`
+各 Phase 使用独立前缀避免并行执行时的数据竞争：
+
+- World: `mcp_test_{{YYYYMMDD}}_p{{N}}`（如 `mcp_test_20260724_p3`，每 Phase 独立 world）
+- Doc: `mcp_test_p{{N}}_{{a/b/c}}`（如 `mcp_test_p6_a`，每 Phase 独立 doc）
+- Checkpoint: `test_p{{N}}_cp`（如 `test_p5_cp`）
+- Region: `P{{N}}测试区`（如 `P4测试区`）
+- Agent: `mcp_tester_p{{N}}`（如 `mcp_tester_p7`）
 
 ## 关键约束
 
@@ -180,10 +182,12 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 3. **Doc/Import/Agent配置/Search 不需要 worldId**
 4. **GSimap/WorldInfo/Node/SubAgent缓存 需要 worldId**
 5. **成功响应必须含 `_context: {worldId, address, nodeId}`**
-6. **测试结束后清理** — 删除测试 doc/region/world
+6. **测试结束后清理** — 删除测试 doc/region/world/agent config
 7. **不要假设当前 active world** — 每个 Agent 先调 world_list 确认
 8. **不要跳过错误测试** — 缺 worldId、无效参数、不存在 ID 也必须覆盖
-9. **重大变更必须同步文档** — 新增/删除 MCP 工具、修改数据模型、变更模块边界、废弃旧 API 时，必须更新 `docs/` 下的对应文档（详见下方文档同步规则）
+9. **各 Phase 互不干涉** — 每个 Phase 使用独立 worldId/docId/region/agent config，禁止两个 Phase 共享可写资源。并行执行时共享资源会导致竞态条件和不确定的测试结果
+10. **编译不过先写报告** — mvn verify 编译失败不阻断功能测试。测试 Agent 遇编译错误时记录具体错误信息，由后续统一修复。功能测试独立于代码门禁运行
+11. **重大变更必须同步文档** — 新增/删除 MCP 工具、修改数据模型、变更模块边界、废弃旧 API 时，必须更新 `docs/` 下的对应文档（详见下方文档同步规则）
 
 ## 文档同步规则
 

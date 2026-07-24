@@ -45,7 +45,19 @@ public record AgentConfig(
 
     /** 默认主 Agent 配置 */
     public static AgentConfig defaultOrchestrator() {
-        return new AgentConfig("orchestrator", "base", "", "", "", ToolFilterConfig.ALL, 32, 0.3, 2048, null, null, java.util.List.of());
+        return new AgentConfig(
+                "orchestrator",
+                "base",
+                "",
+                "",
+                "",
+                ToolFilterConfig.ALL,
+                32,
+                0.3,
+                2048,
+                null,
+                null,
+                java.util.List.of());
     }
 
     // ---- 兼容工厂方法 ----

@@ -12,10 +12,7 @@ import java.util.Set;
  * @param groups    变更的组 key 集合
  * @param timestamp epoch millis
  */
-public record ToolGroupEvent(
-        String type,
-        Set<String> groups,
-        long timestamp) {
+public record ToolGroupEvent(String type, Set<String> groups, long timestamp) {
 
     public static ToolGroupEvent activated(Set<String> groups) {
         return new ToolGroupEvent("activated", Set.copyOf(groups), System.currentTimeMillis());

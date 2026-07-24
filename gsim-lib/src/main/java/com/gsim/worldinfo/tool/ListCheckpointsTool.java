@@ -77,7 +77,9 @@ public final class ListCheckpointsTool implements AgentTool {
 
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
-            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+            nodeId = call.param("nodeId");
+            if (nodeId == null || nodeId.isBlank())
+                return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
         }
 
         var node = wi.nodeById(nodeId);

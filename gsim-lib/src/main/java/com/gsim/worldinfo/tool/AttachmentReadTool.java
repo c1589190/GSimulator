@@ -63,7 +63,9 @@ public final class AttachmentReadTool implements AgentTool {
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
             WorldInformation wi = worldInfo.get();
-            nodeId = call.param("nodeId"); if (nodeId == null || nodeId.isBlank()) return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
+            nodeId = call.param("nodeId");
+            if (nodeId == null || nodeId.isBlank())
+                return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
         }
 
         // Load as generic Object — we don't know the shape

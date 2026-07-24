@@ -51,7 +51,7 @@ public final class NodeStatusTool implements AgentTool {
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("nodeId: ").append(active.nodeId()).append("\n");
+        sb.append("nodeId: ").append("n0000").append("\n");
         sb.append("turn: ").append(active.turn()).append("\n");
         sb.append("worldTime: ").append(active.worldTime()).append("\n");
         sb.append("status: ").append(active.status()).append("\n");
@@ -81,8 +81,8 @@ public final class NodeStatusTool implements AgentTool {
             }
         }
 
-        List<ToolResult.Item> items = List.of(new ToolResult.Item(
-                active.nodeId(), active.nodeId(), sb.toString().strip(), 1.0));
+        List<ToolResult.Item> items =
+                List.of(new ToolResult.Item("n0000", "n0000", sb.toString().strip(), 1.0));
         return ToolResult.ok("node_status", items);
     }
 

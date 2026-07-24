@@ -17,35 +17,100 @@ import org.junit.jupiter.api.Test;
 class ToolExecutionGuardTest {
 
     static class AlwaysAvailTool implements AgentTool {
-        @Override public String name() { return "always_tool"; }
-        @Override public String description() { return "always"; }
-        @Override public ToolResult execute(ToolCall c) { return ToolResult.ok("always_tool", List.of()); }
-        @Override public boolean alwaysAvailable() { return true; }
+        @Override
+        public String name() {
+            return "always_tool";
+        }
+
+        @Override
+        public String description() {
+            return "always";
+        }
+
+        @Override
+        public ToolResult execute(ToolCall c) {
+            return ToolResult.ok("always_tool", List.of());
+        }
+
+        @Override
+        public boolean alwaysAvailable() {
+            return true;
+        }
     }
 
     static class GroupedTool implements AgentTool {
         private final String name;
         private final Set<String> groups;
-        GroupedTool(String name, Set<String> groups) { this.name = name; this.groups = groups; }
-        @Override public String name() { return name; }
-        @Override public String description() { return name; }
-        @Override public ToolResult execute(ToolCall c) { return ToolResult.ok(name, List.of()); }
-        @Override public Set<String> toolGroups() { return groups; }
+
+        GroupedTool(String name, Set<String> groups) {
+            this.name = name;
+            this.groups = groups;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public String description() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolCall c) {
+            return ToolResult.ok(name, List.of());
+        }
+
+        @Override
+        public Set<String> toolGroups() {
+            return groups;
+        }
     }
 
     static class HiddenTool implements AgentTool {
-        @Override public String name() { return "hidden_tool"; }
-        @Override public String description() { return "hidden"; }
-        @Override public ToolResult execute(ToolCall c) { return ToolResult.ok("hidden_tool", List.of()); }
-        @Override public boolean mcpExposed() { return false; }
+        @Override
+        public String name() {
+            return "hidden_tool";
+        }
+
+        @Override
+        public String description() {
+            return "hidden";
+        }
+
+        @Override
+        public ToolResult execute(ToolCall c) {
+            return ToolResult.ok("hidden_tool", List.of());
+        }
+
+        @Override
+        public boolean mcpExposed() {
+            return false;
+        }
     }
 
     static class PlainTool implements AgentTool {
         private final String name;
-        PlainTool(String name) { this.name = name; }
-        @Override public String name() { return name; }
-        @Override public String description() { return name; }
-        @Override public ToolResult execute(ToolCall c) { return ToolResult.ok(name, List.of()); }
+
+        PlainTool(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public String description() {
+            return name;
+        }
+
+        @Override
+        public ToolResult execute(ToolCall c) {
+            return ToolResult.ok(name, List.of());
+        }
     }
 
     private ToolRegistry registry;
@@ -130,8 +195,10 @@ class ToolExecutionGuardTest {
         void allowedGroupsRestriction() {
             // 激活了 world_info，但 AgentConfig 只允许 import_doc
             var r = ToolExecutionGuard.checkAgent(
-                    registry, new ToolCall("world_tool", java.util.Map.of()),
-                    Set.of("world_info"), Set.of("import_doc"));
+                    registry,
+                    new ToolCall("world_tool", java.util.Map.of()),
+                    Set.of("world_info"),
+                    Set.of("import_doc"));
             assertFalse(r.allowed());
             assertEquals("TOOL_GROUP_NOT_ALLOWED", r.errorCode());
         }

@@ -98,8 +98,8 @@ class ToolExecutionPolicyTest {
         var route = new ToolRouteDecision(Set.of("node_list", "finish_action"), "NODE_MGMT_QUERY", "test");
         // create_checkpoint 在 WORLD_INFO ToolGroup 中，不在 NODE_MGMT_QUERY 路由允许列表
         // 必须将其标记为 known，否则 "未知工具" 始终放行
-        var dec = policy.validateBeforeExecute(
-                "create_checkpoint", Map.of(), route, false, Set.of("create_checkpoint"));
+        var dec =
+                policy.validateBeforeExecute("create_checkpoint", Map.of(), route, false, Set.of("create_checkpoint"));
         assertEquals(ToolExecutionDecisionType.REJECT, dec.decision());
         assertFalse(dec.allowedByRoute());
     }

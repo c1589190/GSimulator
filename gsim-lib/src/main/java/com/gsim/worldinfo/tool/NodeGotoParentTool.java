@@ -51,8 +51,7 @@ public final class NodeGotoParentTool implements AgentTool {
         NodeSnapshot active = wi.activeNode();
 
         if (active.isRoot()) {
-            return ToolResult.fail(
-                    "node_goto_parent", "Already at root node " + active.nodeId() + " — no parent to go to.");
+            return ToolResult.fail("node_goto_parent", "Already at root node " + "n0000" + " — no parent to go to.");
         }
 
         String parentId = active.parentId();
@@ -67,7 +66,7 @@ public final class NodeGotoParentTool implements AgentTool {
         String worldId = wi.worldId();
         ActiveStateManager.ActiveState currentState = ActiveStateManager.load(worldsDir, worldId);
         Map<String, String> sessions = currentState != null ? currentState.sessions() : new LinkedHashMap<>();
-        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(parentId, sessions));
+        ActiveStateManager.save(worldsDir, worldId, new ActiveStateManager.ActiveState(sessions));
 
         if (onNodeChanged != null) onNodeChanged.run();
 

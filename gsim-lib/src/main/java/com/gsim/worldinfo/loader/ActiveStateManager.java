@@ -10,10 +10,8 @@ import java.util.Map;
 /**
  * 活跃状态管理器 -- 读写 world 目录下的 active.json 文件。
  *
- * <p>active.json 记录当前世界中活跃的节点 ID 以及各 Agent 的会话文件名映射。
- * 该文件由 {@link WorldIndexManager#createWorld} 在创建世界时自动初始化，
- * 并在节点切换（{@code node_switch} / {@code node_create} / {@code node_goto_parent}）
- * 时由对应的工具更新。
+ * <p>active.json 记录各 Agent 的会话文件名映射（如 Orchestrator 缓存文件），
+ * 用于跨重启恢复 Agent 会话。不再追踪活跃节点 ID（该状态由 SessionPool 在内存中管理）。
  *
  * <p>此类为纯静态工具类，不可实例化。
  */
@@ -22,12 +20,11 @@ public final class ActiveStateManager {
     private ActiveStateManager() {}
 
     /**
-     * 活跃状态记录 -- 保存当前节点 ID 和 Agent 会话文件映射。
+     * 活跃状态记录 -- 保存 Agent 会话文件映射。
      *
-     * @param nodeId   当前活跃节点 ID
      * @param sessions Agent 名称到会话文件名的映射（如 "Orchestrator" → "orch-xxx.json"）
      */
-    public record ActiveState(String nodeId, Map<String, String> sessions // agentName → sessionFileName
+    public record ActiveState(Map<String, String> sessions // agentName → sessionFileName
             ) {
         public ActiveState {
             if (sessions == null) sessions = new LinkedHashMap<>();
