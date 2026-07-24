@@ -492,10 +492,8 @@ public class MapService {
                         java.nio.file.Path fn = f.getFileName();
                         if (fn == null) return false;
                         String name = fn.toString();
-                        return name.startsWith("n")
-                                && name.endsWith(".json")
-                                && !name.contains("_map")
-                                && !name.contains("_compressed");
+                        // 只匹配精确的 nXXXX.json 节点文件，排除 map/attachment/contour 等
+                        return name.matches("n\\d{4}\\.json");
                     })
                     .sorted()
                     .forEach(f -> {
