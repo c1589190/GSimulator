@@ -1,6 +1,7 @@
 package com.gsim.agent.tool;
 
 import com.gsim.agent.ToolGroup;
+import com.gsim.agent.ToolGroupEvent;
 import com.gsim.agent.ToolGroupManager;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
@@ -8,6 +9,7 @@ import com.gsim.tool.ToolCall;
 import com.gsim.tool.ToolResult;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * activate_tool_groups — 控制流工具，激活指定的工具组以便后续调用组内工具。
@@ -26,9 +28,20 @@ public class ActivateToolGroupsTool implements AgentTool {
     public static final String NAME = "activate_tool_groups";
 
     private final ToolGroupManager groupManager;
+    private final java.util.function.Consumer<ToolGroupEvent> eventSink;
 
     public ActivateToolGroupsTool(ToolGroupManager groupManager) {
+        this(groupManager, null);
+    }
+
+    /**
+     * @param groupManager 工具组管理器（更新内存投影）
+     * @param eventSink    可选的结构化事件回调（写入 AgentCache）
+     */
+    public ActivateToolGroupsTool(
+            ToolGroupManager groupManager, java.util.function.Consumer<ToolGroupEvent> eventSink) {
         this.groupManager = groupManager;
+        this.eventSink = eventSink;
     }
 
     @Override
@@ -109,6 +122,11 @@ public class ActivateToolGroupsTool implements AgentTool {
 
             groupManager.activate(trimmed);
             activated.add(trimmed);
+
+        // 写入结构化事件到 AgentCache
+        if (eventSink != null && !activated.isEmpty()) {
+            eventSink.accept(ToolGroupEvent.activated(Set.copyOf(activated)));
+        }
         }
 
         // 构建结果摘要
