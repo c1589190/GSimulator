@@ -577,10 +577,6 @@ public class MapWebUIHandler implements HttpHandler {
         }
         String worldId = sub.substring(1, sub.indexOf("/merge-regions"));
         String nodeId = mapService.readActiveNodeId(worldId);
-        if (nodeId == null) {
-            sendError(exchange, 404, "No active node for world: " + worldId);
-            return;
-        }
         var body = MAPPER.readTree(exchange.getRequestBody());
         String dominantName = body.get("dominantName").asText();
         String annexedName = body.get("annexedName").asText();
@@ -602,10 +598,6 @@ public class MapWebUIHandler implements HttpHandler {
         }
         String worldId = sub.substring(1, sub.indexOf("/rename-region"));
         String nodeId = mapService.readActiveNodeId(worldId);
-        if (nodeId == null) {
-            sendError(exchange, 404, "No active node for world: " + worldId);
-            return;
-        }
         var body = MAPPER.readTree(exchange.getRequestBody());
         String oldName = body.get("oldName").asText();
         String newName = body.get("newName").asText();

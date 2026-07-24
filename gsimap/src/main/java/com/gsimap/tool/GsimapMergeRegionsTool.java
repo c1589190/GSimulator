@@ -44,9 +44,6 @@ public final class GsimapMergeRegionsTool extends AbstractGsimapTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = mapService.readActiveNodeId(worldId);
         }
-        if (nodeId == null) {
-            return ToolResult.fail(name(), "No active node for world: " + worldId);
-        }
         String dominantName = call.param("dominantName");
         if (dominantName == null || dominantName.isBlank()) {
             return ToolResult.fail(name(), "dominantName is required (the region that absorbs the other)");

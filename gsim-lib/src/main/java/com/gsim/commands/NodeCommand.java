@@ -120,6 +120,9 @@ public final class NodeCommand {
 
         NodeLoader.save(NodeLoader.nodeFile(worldsDir, wi.worldId(), newNodeId), child);
 
+        // 将新节点加入内存 WorldInformation，使其立即可被查询
+        wi.ensureNode(child);
+
         ActiveStateManager.save(worldsDir, wi.worldId(), new ActiveStateManager.ActiveState(Map.of()));
         onNodeChanged.run();
         return "Created child node: " + newNodeId + " (turn " + nextTurn + ")";

@@ -42,9 +42,6 @@ public final class GsimapRenameRegionTool extends AbstractGsimapTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = mapService.readActiveNodeId(worldId);
         }
-        if (nodeId == null) {
-            return ToolResult.fail(name(), "No active node for world: " + worldId);
-        }
         String oldName = call.param("oldName");
         if (oldName == null || oldName.isBlank()) {
             return ToolResult.fail(name(), "oldName is required");

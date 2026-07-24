@@ -124,7 +124,6 @@ public class MapService {
      */
     public MapData resolveActive(String worldId) {
         String nodeId = readActiveNodeId(worldId);
-        if (nodeId == null) return MapData.empty();
         return resolve(worldId, nodeId);
     }
 
@@ -418,7 +417,6 @@ public class MapService {
      */
     public void updatePathwayGroups(String worldId, Map<String, MapData.PathwayGroup> groups) {
         String nodeId = readActiveNodeId(worldId);
-        if (nodeId == null) nodeId = "n0000";
         MapData map = resolveActive(worldId);
         if (map == null || map.hexes().isEmpty()) {
             map = MapData.empty();
@@ -1544,15 +1542,16 @@ public class MapService {
 
     // ── Helpers ───────────────────────────────────────────
 
+    /**
+     * Returns the active node ID for a world.
+     * Active node tracking has moved to in-memory SessionPool; this method
+     * returns the root node by default. Callers that need a specific node
+     * should pass {@code nodeId} explicitly via tool parameters.
+     *
+     * @param worldId the world identifier (unused, kept for API compatibility)
+     * @return always {@code "n0000"} (the root node)
+     */
     public String readActiveNodeId(String worldId) {
-        try {
-            var state = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, worldId);
-            if (state != null && state.nodeId() != null && !state.nodeId().isBlank()) {
-                return state.nodeId();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read active state for world {}: {}", worldId, e.getMessage());
-        }
         return "n0000";
     }
 

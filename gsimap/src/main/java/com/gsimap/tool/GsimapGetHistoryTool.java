@@ -44,9 +44,6 @@ public final class GsimapGetHistoryTool extends AbstractGsimapTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = mapService.readActiveNodeId(worldId);
         }
-        if (nodeId == null) {
-            return ToolResult.fail(name(), "No active node for world: " + worldId);
-        }
 
         List<MapResolver.HistoryEntry> history = mapService.history(worldId, nodeId);
         List<Map<String, Object>> entries = new ArrayList<>();

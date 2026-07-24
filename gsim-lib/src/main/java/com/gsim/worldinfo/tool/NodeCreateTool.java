@@ -104,6 +104,9 @@ public final class NodeCreateTool implements AgentTool {
         Path nodeFile = NodeLoader.nodeFile(worldsDir, worldId, newNodeId);
         NodeLoader.save(nodeFile, child);
 
+        // 将新节点加入内存 WorldInformation，使其立即可被 nodeById / branchChain 查询
+        wi.ensureNode(child);
+
         if (onNodeChanged != null) onNodeChanged.run();
 
         String summary = "Created node " + newNodeId + " (turn " + nextTurn + ", parent=" + parentId + ", worldTime="

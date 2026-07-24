@@ -48,9 +48,6 @@ public final class GsimapInitNationTool extends AbstractGsimapTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = mapService.readActiveNodeId(worldId);
         }
-        if (nodeId == null) {
-            return ToolResult.fail(name(), "No active node for world: " + worldId);
-        }
         String name = call.param("name");
         if (name == null || name.isBlank()) {
             return ToolResult.fail(name(), "name is required");

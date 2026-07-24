@@ -111,8 +111,8 @@ public class GSimulatorApplication {
             if (worldInfo == null) return;
             try {
                 String wid = worldInfo.worldId();
-                var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, wid);
-                String activeNodeId = active != null ? "n0000" : worldInfo.activeNodeId();
+                // ActiveState 不再追踪 nodeId，使用当前 WorldInformation 的 activeNodeId
+                String activeNodeId = worldInfo.activeNodeId();
                 var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
                 this.worldInfo = newWi;
                 log.info("WorldInformation rebuilt after node change: world={} activeNode={}", wid, activeNodeId);
@@ -412,8 +412,8 @@ public class GSimulatorApplication {
             if (meta == null) return "World 不存在: " + worldId;
 
             // 2. 加载目标 world 的 active state
-            var active = com.gsim.worldinfo.loader.ActiveStateManager.load(worldsDir, worldId);
-            String activeNodeId = active != null ? "n0000" : "n0000";
+            // ActiveState 不再追踪 nodeId，切换 world 时从根节点开始
+            String activeNodeId = "n0000";
 
             // 3. Build WorldInformation（不经过 Bootstrap，避免触碰缓存）
             var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);

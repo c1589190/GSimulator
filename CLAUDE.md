@@ -81,23 +81,29 @@ com.gsim
 ## 运行命令
 
 ```bash
-# 构建
-mvn package -DskipTests
+# 构建（始终 clean 避免增量编译陷阱）
+mvn clean package -DskipTests
 
 # 运行（默认 CLI 模式）
-java -jar target/GSimulator.jar
+java -jar gsim-app/target/gsim-app-*.jar
+
+# 运行 MCP 模式（常驻 MCP HTTP 服务）
+java -jar gsim-app/target/gsim-app-*.jar --no-cli
 
 # 仅 HTTP API
-java -jar target/GSimulator.jar --http
+java -jar gsim-app/target/gsim-app-*.jar --http
 
 # CLI + HTTP API
-java -jar target/GSimulator.jar --cli --http
+java -jar gsim-app/target/gsim-app-*.jar --cli --http
 
-# 测试
-mvn test
+# 测试（始终 clean 避免增量编译陷阱）
+mvn clean test
+
+# 完整质量门（始终 clean 避免增量编译陷阱）
+mvn clean verify --batch-mode
 
 # 首次启动前清理 data/ 以验证自动初始化
-rm -rf data/ && java -jar target/GSimulator.jar
+rm -rf data/ && java -jar gsim-app/target/gsim-app-*.jar
 ```
 
 ## 配置系统

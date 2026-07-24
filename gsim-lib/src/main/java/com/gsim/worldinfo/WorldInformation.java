@@ -44,7 +44,8 @@ public final class WorldInformation {
     }
 
     public String activeNodeId() {
-        return activeNodeId;
+        // 动态从链尾派生，确保 ensureNode 后保持正确
+        return branchChain.isEmpty() ? null : branchChain.get(branchChain.size() - 1).nodeId();
     }
 
     public List<NodeSnapshot> branchChain() {
