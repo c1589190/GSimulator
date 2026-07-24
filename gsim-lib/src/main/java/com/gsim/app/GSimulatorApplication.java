@@ -374,7 +374,16 @@ public class GSimulatorApplication {
             log.warn("WorldInformation not available, skipping world info tool registration");
             return;
         }
-        Supplier<WorldInformation> wiSupplier = () -> this.worldInfo;
+        // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染
+        java.util.Map<String, WorldInformation> wiCache = new java.util.concurrent.ConcurrentHashMap<>();
+        Supplier<WorldInformation> wiSupplier = () -> {
+            String reqWorldId = com.gsim.mcp.GsimRequestContext.worldId();
+            if (reqWorldId != null && !reqWorldId.equals(this.worldInfo.worldId())) {
+                return wiCache.computeIfAbsent(reqWorldId,
+                        wid -> com.gsim.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
+            }
+            return this.worldInfo;
+        };
 
         // Query tools
         toolRegistry.register(new QueryCheckpointTool(wiSupplier));

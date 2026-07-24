@@ -82,14 +82,16 @@ public final class NodeCreateTool implements AgentTool {
         // 从磁盘加载父节点（而非依赖内存 WorldInformation，后者可能属于错误的 world）
         Path parentFile = NodeLoader.nodeFile(worldsDir, worldId, parentId);
         if (!Files.exists(parentFile)) {
-            return ToolResult.fail("node_create", "[PARENT_NOT_FOUND] parent node not found: " + parentId
-                    + " (file: " + parentFile + ")");
+            return ToolResult.fail(
+                    "node_create",
+                    "[PARENT_NOT_FOUND] parent node not found: " + parentId + " (file: " + parentFile + ")");
         }
         NodeSnapshot parentNode;
         try {
             parentNode = NodeLoader.load(parentFile);
         } catch (RuntimeException e) {
-            return ToolResult.fail("node_create",
+            return ToolResult.fail(
+                    "node_create",
                     "[PARENT_LOAD_FAILED] failed to load parent node " + parentId + ": " + e.getMessage());
         }
         int nextTurn = parentNode.turn() + 1;
