@@ -24,8 +24,9 @@ import java.util.Map;
  * @param maxToolRounds       最大工具调用轮数
  * @param temperature         LLM 温度参数
  * @param maxTokens           LLM 最大输出 token 数
- * @param maxPermission       SubAgent 最大权限等级（null = 不限制，默认 READ）
- * @param allowList           SubAgent 白名单工具，始终放行（null/empty = 无白名单）
+ * @param maxPermission             SubAgent 最大权限等级（null = 不限制，默认 READ）
+ * @param allowList                 SubAgent 白名单工具，始终放行（null/empty = 无白名单）
+ * @param defaultActiveToolGroups   创建时默认激活的工具组 key 列表
  */
 public record AgentConfig(
         String agentId,
@@ -38,12 +39,13 @@ public record AgentConfig(
         double temperature,
         int maxTokens,
         AgentTool.Permission maxPermission,
-        java.util.List<String> allowList) {
+        java.util.List<String> allowList,
+        java.util.List<String> defaultActiveToolGroups) {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** 默认主 Agent 配置 */
     public static AgentConfig defaultOrchestrator() {
-        return new AgentConfig("orchestrator", "base", "", "", "", ToolFilterConfig.ALL, 32, 0.3, 2048, null, null);
+        return new AgentConfig("orchestrator", "base", "", "", "", ToolFilterConfig.ALL, 32, 0.3, 2048, null, null, java.util.List.of());
     }
 
     // ---- 兼容工厂方法 ----
@@ -68,7 +70,8 @@ public record AgentConfig(
                 temperature,
                 maxTokens,
                 null,
-                null);
+                null,
+                java.util.List.of());
     }
 
     // ---- 加载方法 ----
@@ -142,6 +145,16 @@ public record AgentConfig(
                 }
                 : java.util.List.<String>of();
 
+        // defaultActiveToolGroups
+        var dgNode = node.path("defaultActiveToolGroups");
+        java.util.List<String> defaultActiveToolGroups = dgNode.isArray()
+                ? new java.util.ArrayList<String>() {
+                    {
+                        for (var n : dgNode) add(n.asText());
+                    }
+                }
+                : java.util.List.<String>of();
+
         return new AgentConfig(
                 agentId,
                 llmProvider,
@@ -153,7 +166,8 @@ public record AgentConfig(
                 temp,
                 maxTok,
                 maxPerm,
-                allowList);
+                allowList,
+                defaultActiveToolGroups);
     }
 
     // ---- 工具方法 ----

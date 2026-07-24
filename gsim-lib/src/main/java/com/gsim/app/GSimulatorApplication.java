@@ -369,7 +369,8 @@ public class GSimulatorApplication {
         // World management tools — don't depend on WorldInformation being loaded
         toolRegistry.register(new com.gsim.worldinfo.tool.WorldListTool(worldsDir, activeWorldId::get));
         toolRegistry.register(new com.gsim.worldinfo.tool.WorldCreateTool(worldsDir));
-        toolRegistry.register(new com.gsim.worldinfo.tool.WorldSwitchTool(worldsDir, this::switchToWorld));
+        // DEPRECATED: world_switch — 不再注册（Step 7）
+        // toolRegistry.register(new com.gsim.worldinfo.tool.WorldSwitchTool(worldsDir, this::switchToWorld));
 
         if (worldInfo == null) {
             log.warn("WorldInformation not available, skipping world info tool registration");
@@ -395,8 +396,9 @@ public class GSimulatorApplication {
         toolRegistry.register(new NodeListTool(wiSupplier));
         toolRegistry.register(new NodeStatusTool(wiSupplier));
         toolRegistry.register(new NodeCreateTool(wiSupplier, worldsDir, onNodeChanged));
-        toolRegistry.register(new NodeSwitchTool(wiSupplier, worldsDir, onNodeChanged));
-        toolRegistry.register(new NodeGotoParentTool(wiSupplier, worldsDir, onNodeChanged));
+        // DEPRECATED: node_switch / node_goto_parent — 不再注册（Step 7）
+        // toolRegistry.register(new NodeSwitchTool(wiSupplier, worldsDir, onNodeChanged));
+        // toolRegistry.register(new NodeGotoParentTool(wiSupplier, worldsDir, onNodeChanged));
 
         log.info("Registered 14 world info + node + world mgmt tools");
     }
