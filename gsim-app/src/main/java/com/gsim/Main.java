@@ -9,14 +9,11 @@ import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigWizard;
-import com.gsim.mcp.GsimMcpServer;
-import com.gsim.mcp.McpTransport;
-import com.gsim.mcp.StdioMcpTransport;
+import com.gsim.mcp.McpHttpServer;
 import com.gsim.tool.ToolRegistry;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.service.MapService;
 import com.gsimap.tool.GsimapToolRegistrar;
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
@@ -43,23 +40,12 @@ public class Main {
      * 程序入口点。
      */
     public static void main(String[] args) {
-        // Save original stdout BEFORE any redirection.
-        // In --no-cli mode, System.out is redirected to stderr for the entire
-        // JVM lifetime. MCP transport uses this saved reference for clean JSON-RPC.
-        final PrintStream originalStdout = System.out;
-
         try {
             // ── Phase 1: 配置加载 ─────────────────────────────
 
             ConfigLoader loader = new ConfigLoader(args);
             ConfigLoader.CliArgs cliArgs = loader.getCliArgs();
             boolean noCli = cliArgs.noCli();
-
-            // --no-cli: permanently redirect System.out → System.err
-            // Any accidental System.out.println() will not corrupt the MCP protocol.
-            if (noCli) {
-                System.setOut(System.err);
-            }
 
             // --help
             if (cliArgs.help()) {
@@ -153,22 +139,27 @@ public class Main {
             // ── Phase 3: 传输启动 ─────────────────────────────
 
             if (noCli) {
-                // MCP mode: use SAVED original stdout for clean JSON-RPC
-                McpTransport transport = new StdioMcpTransport(System.in, originalStdout);
-                GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, app.getActiveWorldIdSupplier(), transport);
+                // MCP HTTP mode: start Streamable HTTP MCP server (port 8720)
+                int mcpPort = Integer.parseInt(System.getProperty(
+                        "mcp.http.port", System.getenv().getOrDefault("MCP_HTTP_PORT", "8720")));
+                McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort, worldsDir);
+                mcpHttpServer.start();
 
-                // Shutdown hook: clean up HTTP servers when MCP loop exits
                 Runtime.getRuntime()
                         .addShutdownHook(new Thread(
                                 () -> {
                                     System.err.println("[MCP] Shutting down...");
+                                    mcpHttpServer.stop();
                                     gsimapServer.stop();
                                     app.stop();
                                 },
                                 "mcp-shutdown"));
 
-                System.err.println("[MCP] READY — listening on stdio");
-                mcpServer.start(); // blocks on stdin
+                System.err.println("[MCP-HTTP] READY — http://127.0.0.1:" + mcpPort + "/mcp");
+                System.err.println("[MCP-HTTP] Health: http://127.0.0.1:" + mcpPort + "/health");
+
+                // Block until shutdown (wait for server socket to close)
+                Thread.currentThread().join();
             } else {
                 // CLI mode: start interactive REPL (blocks until exit)
                 app.startCliRepl();
