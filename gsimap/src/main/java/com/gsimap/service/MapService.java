@@ -1543,15 +1543,56 @@ public class MapService {
     // ── Helpers ───────────────────────────────────────────
 
     /**
-     * Returns the active node ID for a world.
-     * Active node tracking has moved to in-memory SessionPool; this method
-     * returns the root node by default. Callers that need a specific node
-     * should pass {@code nodeId} explicitly via tool parameters.
+     * Returns the active (leaf) node ID for a world by scanning the nodes directory.
+     * Finds the node that is not referenced as a parent by any other node
+     * (the leaf of the chain), falling back to {@code "n0000"}.
      *
-     * @param worldId the world identifier (unused, kept for API compatibility)
-     * @return always {@code "n0000"} (the root node)
+     * @param worldId the world identifier
+     * @return the leaf node ID, or {@code "n0000"} if discovery fails
      */
     public String readActiveNodeId(String worldId) {
+        try {
+            java.nio.file.Path nodesDir = com.gsim.worldinfo.loader.NodeLoader.nodesDir(worldsDir, worldId);
+            if (!java.nio.file.Files.isDirectory(nodesDir)) return "n0000";
+
+            // Load all nodes
+            java.util.Map<String, com.gsim.worldinfo.NodeSnapshot> allNodes = new java.util.LinkedHashMap<>();
+            java.util.regex.Pattern nodePattern = java.util.regex.Pattern.compile("n\\d{4}\\.json");
+            try (var files = java.nio.file.Files.list(nodesDir)) {
+                files.filter(f -> nodePattern.matcher(f.getFileName().toString()).matches())
+                        .forEach(f -> {
+                            try {
+                                var n = com.gsim.worldinfo.loader.NodeLoader.load(f);
+                                allNodes.put(n.nodeId(), n);
+                            } catch (RuntimeException ignored) {
+                            }
+                        });
+            }
+
+            if (allNodes.isEmpty()) return "n0000";
+
+            // Find nodeIds referenced as parents
+            java.util.Set<String> parents = new java.util.HashSet<>();
+            for (var n : allNodes.values()) {
+                if (n.parentId() != null && !n.isRoot()) {
+                    parents.add(n.parentId());
+                }
+            }
+
+            // Leaf: node NOT referenced as parent, highest turn wins
+            com.gsim.worldinfo.NodeSnapshot leaf = null;
+            for (var n : allNodes.values()) {
+                if (!parents.contains(n.nodeId())) {
+                    if (leaf == null || n.turn() > leaf.turn()) {
+                        leaf = n;
+                    }
+                }
+            }
+
+            if (leaf != null) return leaf.nodeId();
+        } catch (Exception e) {
+            log.warn("Failed to discover active node for world {}: {}", worldId, e.getMessage());
+        }
         return "n0000";
     }
 

@@ -225,7 +225,14 @@
       "Bash(git rm *)",
       "Bash(rm -f .claude/settings.local.json.tmp.1557.77700ec2fe2e)",
       "Bash(mvn spotless:apply -q)",
-      "Bash(git commit -m 'fix: WorldInformation 按请求 worldId 解析，消除跨 world 数据污染 *)"
+      "Bash(git commit -m 'fix: WorldInformation 按请求 worldId 解析，消除跨 world 数据污染 *)",
+      "mcp__gsimap__gsimap_get_diff",
+      "Bash(curl -sv \"http://127.0.0.1:8711/api/map/logdemo/regions\")",
+      "Bash(curl -s \"http://127.0.0.1:8711/api/map/logdemo/list-regions\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -sv \"http://127.0.0.1:8711/api/map/logdemo/list-regions\")",
+      "Bash(curl -sv -X POST http://127.0.0.1:8711/api/map/logdemo/merge-regions -H 'Content-Type: application/json' -d '{\"dominantName\":\"石冠诸部\",\"annexedName\":\"区域1464352524\"}')",
+      "Bash(curl -s http://127.0.0.1:8711/css/editor.css)"
     ]
   },
   "enabledMcpjsonServers": [
