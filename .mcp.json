@@ -1,9 +1,8 @@
 {
   "mcpServers": {
     "gsimap": {
-      "type": "streamableHttp",
-      "url": "http://127.0.0.1:8720/mcp",
-      "description": "GSimulator MCP — world/node/checkpoint/map/doc/agent management tools"
+      "command": "./gsimap-mcp.sh",
+      "description": "GSimulator MCP — 66 tools: world/node/checkpoint/map/doc/agent management (HTTP bridge)"
     }
   }
 }

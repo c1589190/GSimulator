@@ -143,7 +143,8 @@ public final class McpHttpServer {
                 }
                 case "notifications/initialized" -> {
                     log.debug("[MCP-HTTP] notification: initialized");
-                    sendJson(exchange, 202, MAPPER.createObjectNode());
+                    // MCP notifications have no response — return 204 No Content
+                    exchange.sendResponseHeaders(204, -1);
                     return;
                 }
                 case "tools/list" -> {
