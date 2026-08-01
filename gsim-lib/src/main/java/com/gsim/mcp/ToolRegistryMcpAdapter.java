@@ -535,8 +535,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      */
     private static String extractNodeIdFromPath(String path) {
         if (path == null || path.isBlank()) return null;
-        // Pattern 1: "nDDDD:..." — nodeId is the first segment
-        if (path.matches("^n\\d{4}:.*")) {
+        // Pattern 1: "nDDDD" or "nDDDD:..." — nodeId is the first segment
+        if (path.matches("^n\\d{4}(:|$).*")) {
             return path.substring(0, 5); // e.g. "n0003"
         }
         // Pattern 2: "worldId:nDDDD:..." — nodeId is the second segment

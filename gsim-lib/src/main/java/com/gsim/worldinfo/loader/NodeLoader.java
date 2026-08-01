@@ -174,7 +174,10 @@ public final class NodeLoader {
     @SuppressWarnings("unchecked")
     public static <T> T loadAttachmentFile(Path worldsDir, String worldId, String nodeId, String key, Class<T> type) {
         Path nodeFile = nodeFile(worldsDir, worldId, nodeId);
-        if (!Files.exists(nodeFile)) return null;
+        if (!Files.exists(nodeFile)) {
+            // Map may be generated for a world with no GSim node yet — read the standalone attachment file.
+            return loadStandaloneAttachment(worldsDir, worldId, nodeId, key, type);
+        }
 
         NodeSnapshot node = load(nodeFile);
         Object raw = node.attachments().get(key);
@@ -184,19 +187,7 @@ public final class NodeLoader {
         // Also falls back from "map_diff" → "map" key for legacy data
         // where diffs were stored as nXXXX_map.json alongside full maps.
         if (raw == null) {
-            Path legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, key);
-            if (!Files.exists(legacyFile) && "map_diff".equals(key)) {
-                legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, "map");
-            }
-            if (Files.exists(legacyFile)) {
-                try {
-                    String json = Files.readString(legacyFile);
-                    return JsonUtils.fromJson(json, type);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to load legacy attachment file: " + legacyFile, e);
-                }
-            }
-            return null;
+            return loadStandaloneAttachment(worldsDir, worldId, nodeId, key, type);
         }
 
         // Check if it's an external file reference
@@ -218,6 +209,24 @@ public final class NodeLoader {
 
         // Backward compat: inline data
         return JsonUtils.MAPPER.convertValue(raw, type);
+    }
+
+    /** Read an attachment via the {@code nXXXX_<key>.json} naming convention (legacy/standalone). */
+    private static <T> T loadStandaloneAttachment(
+            Path worldsDir, String worldId, String nodeId, String key, Class<T> type) {
+        Path legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, key);
+        if (!Files.exists(legacyFile) && "map_diff".equals(key)) {
+            legacyFile = attachmentFilePath(worldsDir, worldId, nodeId, "map");
+        }
+        if (Files.exists(legacyFile)) {
+            try {
+                String json = Files.readString(legacyFile);
+                return JsonUtils.fromJson(json, type);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to load legacy attachment file: " + legacyFile, e);
+            }
+        }
+        return null;
     }
 
     /**

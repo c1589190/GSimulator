@@ -379,8 +379,8 @@ public class GSimulatorApplication {
         Supplier<WorldInformation> wiSupplier = () -> {
             String reqWorldId = com.gsim.mcp.GsimRequestContext.worldId();
             if (reqWorldId != null && !reqWorldId.equals(this.worldInfo.worldId())) {
-                return wiCache.computeIfAbsent(reqWorldId,
-                        wid -> com.gsim.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
+                return wiCache.computeIfAbsent(
+                        reqWorldId, wid -> com.gsim.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
             }
             return this.worldInfo;
         };

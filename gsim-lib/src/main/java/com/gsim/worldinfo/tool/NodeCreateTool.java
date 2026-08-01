@@ -141,6 +141,12 @@ public final class NodeCreateTool implements AgentTool {
                                                 "string",
                                                 "description",
                                                 "In-world time for the new turn, e.g. '泰拉纪年1096年冬'"),
+                                "parentNodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Parent node ID the new node is created from (e.g. 'n0000'). Required."),
                                 "title",
                                         Map.of(
                                                 "type",
@@ -153,7 +159,7 @@ public final class NodeCreateTool implements AgentTool {
                                                 "string",
                                                 "description",
                                                 "Optional remark or context for this node")),
-                "required", List.of("worldTime"));
+                "required", List.of("worldTime", "parentNodeId"));
     }
 
     /** Scan nodes/ directory, find max nXXXX, set counter to max+1. */

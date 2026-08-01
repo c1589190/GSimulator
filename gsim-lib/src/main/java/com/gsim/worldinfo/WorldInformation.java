@@ -274,15 +274,18 @@ public final class WorldInformation {
     }
 
     private void removeRefFromIndexes(ElementRef ref) {
-        // byCheckpoint
+        // byCheckpoint — only remove refs from the SAME node; equal keys in other
+        // nodes are separate history entries and must be preserved.
         List<ElementRef> cpList = byCheckpoint.get(ref.checkpointId());
         if (cpList != null)
-            cpList.removeIf(r -> r.element().key().equals(ref.element().key()));
+            cpList.removeIf(r -> r.nodeId().equals(ref.nodeId())
+                    && r.element().key().equals(ref.element().key()));
         // byTag
         for (String t : ref.element().tags()) {
             List<ElementRef> tagList = byTag.get(t);
             if (tagList != null)
-                tagList.removeIf(r -> r.element().key().equals(ref.element().key()));
+                tagList.removeIf(r -> r.nodeId().equals(ref.nodeId())
+                        && r.element().key().equals(ref.element().key()));
         }
         // keywordIndex — no removal API yet; old ref becomes stale but won't be returned
         // since we rebuild the index on load; for live sessions the old ref lingers

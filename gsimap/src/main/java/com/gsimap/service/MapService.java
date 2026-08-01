@@ -278,7 +278,7 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
         // Save to the active node (typically root, but respects current active node).
         // saveMap() already calls evict(), so no need to duplicate here.
         saveMap(worldId, activeNodeId, updated);
@@ -312,7 +312,9 @@ public class MapService {
     @SuppressWarnings("deprecation")
     public MapData setEdgeTag(
             String worldId, String nodeId, int q1, int r1, int q2, int r2, String tag, Map<String, Object> props) {
-        MapData map = resolveActive(worldId);
+        // Read from the same node that will be written (active-node reads here would pollute the target node).
+        String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
+        MapData map = resolve(worldId, targetNode);
         if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
 
         if (!map.pathwayGroups().containsKey(tag)) {
@@ -339,7 +341,7 @@ public class MapService {
                 map.compressedRegions(),
                 map.pathwayGroups(),
                 Map.copyOf(edges));
-        saveMap(worldId, nodeId, updated);
+        saveMap(worldId, targetNode, updated);
         return updated;
     }
 
@@ -350,7 +352,9 @@ public class MapService {
      */
     @SuppressWarnings("deprecation")
     public MapData removeEdgeTag(String worldId, String nodeId, int q1, int r1, int q2, int r2, String tag) {
-        MapData map = resolveActive(worldId);
+        // Read from the same node that will be written (active-node reads here would pollute the target node).
+        String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
+        MapData map = resolve(worldId, targetNode);
         if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
 
         String key = MapData.edgeKey(q1, r1, q2, r2);
@@ -385,7 +389,7 @@ public class MapService {
                 map.compressedRegions(),
                 map.pathwayGroups(),
                 Map.copyOf(edges));
-        saveMap(worldId, nodeId, updated);
+        saveMap(worldId, targetNode, updated);
         return updated;
     }
 
@@ -663,9 +667,11 @@ public class MapService {
     public ContourQueryEngine.TerrainSample queryTerrain(String worldId, int q, int r) {
         ContinentContour contour = loadContour(worldId);
         if (contour == null) {
-            // Fallback: resolve full map and query traditionally
-            MapData map = resolve(worldId, null);
-            MapData.HexCell cell = map.hexes().get(q + "_" + r);
+            // Fallback: resolve the active node's map and query traditionally.
+            // (resolve with a null nodeId would look up a bogus "null.json" file and NPE below.)
+            MapData map = resolveActive(worldId);
+            if (map == null) return new ContourQueryEngine.TerrainSample(0, "water", "#3295D2");
+            MapData.HexCell cell = map.hexes().get(MapData.hexKey(q, r));
             if (cell == null) return new ContourQueryEngine.TerrainSample(0, "water", "#3295D2");
             return new ContourQueryEngine.TerrainSample(0.5, cell.terrain(), cell.color());
         }
@@ -717,7 +723,7 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
         saveMap(worldId, nodeId, newMap);
 
         // 2. Re-sync map (checkpoint references managed by GSim Core, not gsimap)
@@ -896,7 +902,7 @@ public class MapService {
                 map.terrainTypes(),
                 map.compressedRegions(),
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
         saveMap(worldId, nodeId, expanded);
 
         log.info(
@@ -954,7 +960,7 @@ public class MapService {
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
 
         saveMap(worldId, nodeId, updated);
 
@@ -1009,7 +1015,7 @@ public class MapService {
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
         saveMap(worldId, nodeId, updated);
         return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size());
     }
@@ -1044,7 +1050,7 @@ public class MapService {
                 map.terrainTypes(),
                 regions,
                 map.pathwayGroups(),
-                Map.of());
+                map.edges());
         saveMap(worldId, nodeId, updated);
         return resultMap("ok", true, "restored", restored, "regionsRemaining", regions.size(), "q", q, "r", r);
     }
@@ -1557,7 +1563,8 @@ public class MapService {
             java.util.Map<String, com.gsim.worldinfo.NodeSnapshot> allNodes = new java.util.LinkedHashMap<>();
             java.util.regex.Pattern nodePattern = java.util.regex.Pattern.compile("n\\d{4}\\.json");
             try (var files = java.nio.file.Files.list(nodesDir)) {
-                files.filter(f -> nodePattern.matcher(f.getFileName().toString()).matches())
+                files.filter(f ->
+                                nodePattern.matcher(f.getFileName().toString()).matches())
                         .forEach(f -> {
                             try {
                                 var n = com.gsim.worldinfo.loader.NodeLoader.load(f);
