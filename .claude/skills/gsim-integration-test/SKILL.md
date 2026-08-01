@@ -109,11 +109,16 @@ cp gsim-lib/target/spotbugsXml.xml config/spotbugs/gsim-lib-baseline.xml
 
 ### Phase 3: World & Node CRUD
 
-测试 world_create → world_switch → node_create → node_switch → node_list(tree) → node_goto_parent(根节点应报错) → world_switch(default)。
+测试 world_create → node_status(根节点) → node_create(parentNodeId 必填) → node_list(tree) → 缺 worldId 校验 → 清理。
+
+> 注意：MCP 工具集不含 `world_switch` / `node_switch` / `node_goto_parent` / `world_delete`。
+> world/node 导航通过在每个调用中显式传 `worldId` / `nodeId` 参数实现；测试 world 清理需手动删除 `worlds/<worldId>/` 目录。
 
 ### Phase 4: GSimap 地图
 
 测试 generate → create_region → list_regions → get_hex → query_radius → get_neighbors → add/remove hex → render_text → get_distance → query_by_address → merge_regions → rename_region → 缺 worldId 校验。
+
+> 注意：对全新 world（无 GSim node）直接 `gsimap_generate` 后即可查询地图数据（2026-08-01 修复，之前需先建 node）。
 
 ### Phase 4b: GSimap Edge Pathway（边连通系统）
 
@@ -129,11 +134,17 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 
 ### Phase 7: SubAgent & 权限
 
-测试 list_llm_providers → agent_config_list → create_sub_agent_config → dispatch_sub_agent → list_sub_agent_caches → activate_tool_groups → update/delete agent config → 验证工具组激活。
+测试 list_llm_providers → agent_config_list → create_sub_agent_config → dispatch_sub_agent → list_sub_agent_caches → update_sub_agent_config → agent_config_delete → 缺参校验。
+
+> 注意：`activate_tool_groups` 工具已不存在于 MCP 工具集（工具组激活改为 AgentConfig 配置管理）。
+> 工具映射：`update_agent_config` → `update_sub_agent_config`（参数 `agent_id`）；`delete_agent_config` → `agent_config_delete`（参数 `configId`）。
 
 ### Phase 8: 错误处理 & 边界
 
 测试缺 worldId 校验(×5) → 无效参数(×5) → 边界值(×5) → 不存在 world → 不需要 worldId 的工具验证(×4) → _context 字段检查(×3)。
+
+> _context 规范：含 worldId/address/nodeId 三键（nodeId 可为 null）。`world_list` 等无世界上下文
+> 的列表工具只含 `address` 属预期行为；`node_status` 等节点工具必须含 `nodeId`（2026-08-01 修复）。
 
 每个子 Agent 独立汇报 PASS/FAIL 列表。
 
