@@ -294,5 +294,13 @@ async function saveMap() {
     saveTags();
     showToast('已保存');
     setStatus('已保存');
-  } catch(e) { showToast('保存失败: '+e.message); }
+  } catch(e) {
+    if (e.status === 409) {
+      showToast('⚠ 地图已被其他会话修改，已强制刷新最新数据');
+      setStatus('冲突：已强制刷新');
+      await loadMap();
+      return;
+    }
+    showToast('保存失败: '+e.message);
+  }
 }

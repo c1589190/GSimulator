@@ -5,6 +5,7 @@ const MapAPI = {
   /** Current world/node context, set from URL params or editor init */
   worldId: null,
   nodeId: null,
+  baseRevision: null,
 
   /** Initialize from URL: ?world=kirk&node=n0002 */
   init() {
@@ -26,6 +27,7 @@ const MapAPI = {
   async load() {
     const r = await fetch(this._url());
     if (!r.ok) throw new Error(`Load failed: ${r.status}`);
+    this.baseRevision = r.headers.get('X-Map-Revision') || '';
     return r.json();
   },
 
@@ -33,10 +35,18 @@ const MapAPI = {
   async save(data) {
     const r = await fetch(this._url(), {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Map-Base-Revision': this.baseRevision || '' },
       body: JSON.stringify(data)
     });
-    if (!r.ok) throw new Error(`Save failed: ${r.status}`);
+    if (!r.ok) {
+      const err = new Error(`Save failed: ${r.status}`);
+      err.status = r.status;
+      if (r.status === 409) {
+        try { const j = await r.json(); err.detail = j.error || ''; } catch (e) {}
+      }
+      throw err;
+    }
+    this.baseRevision = r.headers.get('X-Map-Revision') || this.baseRevision;
     return r.json();
   },
 
