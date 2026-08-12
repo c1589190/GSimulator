@@ -6,6 +6,7 @@ import com.gsim.tool.ToolResult;
 import com.gsim.util.JsonUtils;
 import com.gsimap.service.MapService;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,7 +39,10 @@ public final class GsimapUpdateRegionTool extends AbstractGsimapTool {
                 return ToolResult.fail(name(), "worldId is required");
             }
         }
-        String nodeId = call.param("nodeId", "n0000");
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            nodeId = mapService.readActiveNodeId(worldId);
+        }
         String name = call.param("name");
         if (name == null || name.isBlank()) {
             return ToolResult.fail(name(), "name is required");
@@ -58,7 +62,8 @@ public final class GsimapUpdateRegionTool extends AbstractGsimapTool {
             }
         }
 
-        Map<String, Object> result = mapService.updateRegion(worldId, nodeId, name, tag, description, color, hexes);
+        Map<String, Object> result =
+                new LinkedHashMap<>(mapService.updateRegion(worldId, nodeId, name, tag, description, color, hexes));
         result.put("address", "gsimap:region:" + name);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(name, "gsimap_update_region", JsonUtils.toJson(result), 1.0)));
