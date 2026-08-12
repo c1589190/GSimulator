@@ -34,6 +34,7 @@ function showRegionList() {
       <option value="">全部</option>
       ${tags.map(t => `<option value="${t}" ${State.activeTag===t?'selected':''}>${t}</option>`).join('')}
     </select>
+    ${regionNamesToggleHtml()}
     <button onclick="createEmptyRegion()" style="float:right;font-size:11px;background:var(--accent);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer">+ 新建</button>
     <a href="#" onclick="showTagList();return false" style="font-size:10px;color:var(--dim);margin-right:6px">标签管理</a>
   </div>`;
@@ -388,4 +389,22 @@ async function doMerge(dominantName, annexedName) {
   } catch(e) {
     showToast('吞并失败: ' + e.message);
   }
+}
+
+// ── Region name label toggle ──────────────────────────
+function regionNamesToggleHtml() {
+  return `<label class="rn-vis-toggle" title="一键显示/隐藏地图上所有区域名称">
+    <input type="checkbox" ${State.showRegionNames ? 'checked' : ''} onchange="toggleRegionNames(this.checked)"> 区域名
+  </label>`;
+}
+function toggleRegionNames(on) {
+  State.showRegionNames = !!on;
+  try { localStorage.setItem('goatmosire_showRegionNames_' + MapAPI.worldId, on ? '1' : '0'); } catch(e) {}
+  render();
+}
+function loadRegionNamesPref() {
+  try {
+    const v = localStorage.getItem('goatmosire_showRegionNames_' + MapAPI.worldId);
+    if (v !== null) State.showRegionNames = v === '1';
+  } catch(e) {}
 }

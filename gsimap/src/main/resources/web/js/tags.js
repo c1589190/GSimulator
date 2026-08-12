@@ -63,7 +63,11 @@ function showTagList() {
   const tags = Object.entries(State.mapData.tags);
   const allProvs = Object.entries(State.mapData.provinces||{});
 
-  let html = '<div style="margin-bottom:6px"><button onclick="createTag()" style="font-size:11px;background:var(--accent);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer">+ 新建标签</button></div>';
+  let html = `<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px">
+    <button onclick="createTag()" style="font-size:11px;background:var(--accent);border:none;color:#fff;border-radius:4px;padding:2px 8px;cursor:pointer">+ 新建标签</button>
+    <span style="flex:1"></span>
+    ${regionNamesToggleHtml()}
+  </div>`;
 
   if (tags.length === 0) {
     html += '<div style="color:var(--dim);font-size:11px;padding:4px">暂无标签，点击上方新建</div>';
