@@ -325,7 +325,7 @@ function renderProvinceHighlight() {
     State.ctx.globalAlpha = 1;
 
     // ── Region name label ──
-    if (phexes.length > 0) {
+    if (State.showRegionNames && phexes.length > 0) {
       let sq = 0, sr = 0;
       for (const k of phexes) { const [q,r] = k.split('_').map(Number); sq += q; sr += r; }
       const cx = sq / phexes.length, cy = sr / phexes.length;

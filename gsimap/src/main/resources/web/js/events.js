@@ -175,6 +175,7 @@ async function init() {
         sel.innerHTML = worlds.map(w => '<option value="'+w+'">'+w+'</option>').join('');
         sel.value = worlds.includes(MapAPI.worldId) ? MapAPI.worldId : worlds[0];
         MapAPI.worldId = sel.value;
+        loadRegionNamesPref();
       }
     }
     await loadNodes();
@@ -187,6 +188,7 @@ async function init() {
 
 async function onWorldChange() {
   MapAPI.worldId = document.getElementById('worldSelect').value;
+  loadRegionNamesPref();
   MapAPI.nodeId = null;
   await loadNodes();
   await loadMap();

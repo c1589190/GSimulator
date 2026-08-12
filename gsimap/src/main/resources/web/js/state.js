@@ -28,6 +28,7 @@ const State = {
   // Selection
   selectedProvince: null,
   activeTag: null,
+  showRegionNames: true,
   selectedCompressedRegion: null,
 
   // Pathway
