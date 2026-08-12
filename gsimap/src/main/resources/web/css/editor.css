@@ -273,6 +273,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
   color: var(--dim); font-size: 10px;
 }
 .pgc-vis-toggle input { margin: 0; }
+.rn-vis-toggle {
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  color: var(--dim); font-size: 10px; white-space: nowrap;
+}
+.rn-vis-toggle input { margin: 0; }
 .pgc-del-btn {
   margin-left: auto; background: none; border: none;
   color: var(--dim); cursor: pointer; font-size: 12px; padding: 2px 4px;
