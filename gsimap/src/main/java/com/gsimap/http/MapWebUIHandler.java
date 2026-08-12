@@ -19,6 +19,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -145,6 +146,24 @@ public class MapWebUIHandler implements HttpHandler {
 
     // ── GET /api/map/{worldId} ────────────────────────────
 
+    /** Map revision = last write time of the node's map file (full or diff). */
+    private long mapRevision(String worldId, String nodeId) {
+        try {
+            Path nodesDir = mapService.getWorldsDir().resolve(worldId).resolve("nodes");
+            Path full = nodesDir.resolve(nodeId + "_map.json");
+            Path diff = nodesDir.resolve(nodeId + "_map_diff.json");
+            long mFull = java.nio.file.Files.exists(full)
+                    ? java.nio.file.Files.getLastModifiedTime(full).toMillis()
+                    : 0;
+            long mDiff = java.nio.file.Files.exists(diff)
+                    ? java.nio.file.Files.getLastModifiedTime(diff).toMillis()
+                    : 0;
+            return Math.max(mFull, mDiff);
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
     private void handleGet(HttpExchange exchange, String worldId, Map<String, String> params) throws IOException {
         String nodeId = params.getOrDefault("node", mapService.readActiveNodeId(worldId));
         if (nodeId == null) {
@@ -168,6 +187,7 @@ public class MapWebUIHandler implements HttpHandler {
         }
 
         MapData map = mapService.resolve(worldId, nodeId);
+        exchange.getResponseHeaders().set("X-Map-Revision", String.valueOf(mapRevision(worldId, nodeId)));
         sendJson(exchange, 200, map);
     }
 
@@ -269,12 +289,7 @@ public class MapWebUIHandler implements HttpHandler {
             return;
         }
         try {
-            var mapFile =
-                    mapService.getWorldsDir().resolve(worldId).resolve("nodes").resolve(nodeId + "_map.json");
-            long lastMod = java.nio.file.Files.exists(mapFile)
-                    ? java.nio.file.Files.getLastModifiedTime(mapFile).toMillis()
-                    : 0;
-            sendJson(exchange, 200, Map.of("worldId", worldId, "nodeId", nodeId, "version", lastMod));
+            sendJson(exchange, 200, Map.of("worldId", worldId, "nodeId", nodeId, "version", mapRevision(worldId, nodeId)));
         } catch (Exception e) {
             sendError(exchange, 500, e.getMessage());
         }
@@ -655,6 +670,22 @@ public class MapWebUIHandler implements HttpHandler {
             sendError(exchange, 404, "No active node for world: " + worldId);
             return;
         }
+
+        // Optimistic concurrency: reject stale writes (e.g. web GUI overwriting MCP changes)
+        String baseRev = exchange.getRequestHeaders().getFirst("X-Map-Base-Revision");
+        long currentRev = mapRevision(worldId, nodeId);
+        if (baseRev != null && !baseRev.isBlank()) {
+            try {
+                long base = Long.parseLong(baseRev);
+                if (base != currentRev) {
+                    sendJson(exchange, 409, Map.of("ok", false, "error", "地图已被其他会话修改 (revision mismatch)", "currentRevision", currentRev));
+                    return;
+                }
+            } catch (NumberFormatException ignored) {
+                // malformed base revision — ignore and proceed
+            }
+        }
+
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
 
         try {
@@ -677,6 +708,7 @@ public class MapWebUIHandler implements HttpHandler {
                         nodeId,
                         data.compressedRegions().size());
             }
+            exchange.getResponseHeaders().set("X-Map-Revision", String.valueOf(mapRevision(worldId, nodeId)));
             sendJson(exchange, 200, Map.of("ok", true, "worldId", worldId, "nodeId", nodeId));
         } catch (IOException | RuntimeException e) {
             sendError(exchange, 400, "Invalid map data: " + e.getMessage());
