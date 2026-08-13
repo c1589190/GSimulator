@@ -2,6 +2,7 @@ package com.gsim.agent;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.gsim.event.AgentProgressEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;

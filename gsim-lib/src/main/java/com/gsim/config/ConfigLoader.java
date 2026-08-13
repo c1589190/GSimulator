@@ -42,6 +42,7 @@ public class ConfigLoader {
         boolean noWizard = false;
         boolean help = false;
         boolean noCli = false;
+        boolean agent = false;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -63,15 +64,24 @@ public class ConfigLoader {
                 case "--no-cli":
                     noCli = true;
                     break;
+                case "--agent":
+                    agent = true;
+                    break;
                     // ignore unknown args
             }
         }
 
-        return new CliArgs(configPath, initConfig, doctor, noWizard, help, noCli);
+        return new CliArgs(configPath, initConfig, doctor, noWizard, help, noCli, agent);
     }
 
     public record CliArgs(
-            String configPath, boolean initConfig, boolean doctor, boolean noWizard, boolean help, boolean noCli) {}
+            String configPath,
+            boolean initConfig,
+            boolean doctor,
+            boolean noWizard,
+            boolean help,
+            boolean noCli,
+            boolean agent) {}
 
     public CliArgs getCliArgs() {
         return cliArgs;

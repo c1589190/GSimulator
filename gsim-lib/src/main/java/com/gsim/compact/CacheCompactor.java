@@ -1,8 +1,8 @@
 package com.gsim.compact;
 
-import com.gsim.agent.AgentProgressEvent;
-import com.gsim.agent.AgentProgressSink;
 import com.gsim.cache.CacheSession;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;

@@ -1,6 +1,5 @@
 package com.gsim.event;
 
-import com.gsim.api.SseWriter;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.function.Consumer;

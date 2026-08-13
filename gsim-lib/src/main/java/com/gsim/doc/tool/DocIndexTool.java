@@ -2,7 +2,7 @@ package com.gsim.doc.tool;
 
 import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
-import com.gsim.llm.EmbeddingClient;
+import com.gsim.embedding.EmbeddingClient;
 import com.gsim.skill.SkillIndex;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;

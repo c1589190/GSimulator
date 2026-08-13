@@ -1,8 +1,5 @@
 package com.gsim.app;
 
-import com.gsim.api.ApiConfig;
-import com.gsim.api.ApiManager;
-import com.gsim.api.SessionManager;
 import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.commands.AgentCommand;
@@ -46,7 +43,6 @@ public class ApplicationContext {
     private final EventBus eventBus;
     private final ConsoleEventSink consoleEventSink;
     private final SessionPool sessionPool;
-    private final ApiManager apiManager;
 
     // Root 就绪回调（bootstrap 完成后触发 memory tools 重注册等）
     private Runnable onRootReadyCallback;
@@ -104,23 +100,6 @@ public class ApplicationContext {
 
         // 会话节点池（统一交互通道，逐步替代 EventBus）
         this.sessionPool = new SessionPool();
-
-        // HTTP API
-        ApiConfig apiConfig = new ApiConfig(config.getApiHost(), config.getApiPort(), config.isApiEnabled());
-        this.apiManager = new ApiManager(
-                apiConfig,
-                this,
-                eventBus,
-                config.worldsDir(),
-                config.getImportDir(),
-                () -> activeRootId != null ? activeRootId : "default",
-                this::getDocStore,
-                new com.gsim.llm.LlmConfigManager(config.getLlmsPath()),
-                llmProviderRegistry,
-                null,
-                null,
-                null,
-                null); // Agent managers injected later
     }
 
     /**
@@ -178,10 +157,6 @@ public class ApplicationContext {
         return sessionPool;
     }
 
-    public ApiManager getApiManager() {
-        return apiManager;
-    }
-
     public String getActiveRootId() {
         return activeRootId;
     }
@@ -200,10 +175,6 @@ public class ApplicationContext {
         if (onRootReadyCallback != null) {
             onRootReadyCallback.run();
         }
-    }
-
-    public SessionManager getSessionManager() {
-        return apiManager != null ? apiManager.getSessionManager() : null;
     }
 
     // ---- Command accessors (for WebUI handlers) ----
@@ -258,14 +229,14 @@ public class ApplicationContext {
 
     // ── Embedding & Skill ──
 
-    private com.gsim.llm.EmbeddingClient embeddingClient;
+    private com.gsim.embedding.EmbeddingClient embeddingClient;
     private com.gsim.skill.SkillIndex skillIndex;
     private com.gsim.doc.DocStore docStore;
 
     /** 获取或懒创建 EmbeddingClient（若配置了 EMBEDDING_* 环境变量）。 */
-    public com.gsim.llm.EmbeddingClient getEmbeddingClient() {
+    public com.gsim.embedding.EmbeddingClient getEmbeddingClient() {
         if (embeddingClient == null && config.isEmbeddingConfigured()) {
-            embeddingClient = new com.gsim.llm.EmbeddingClient(
+            embeddingClient = new com.gsim.embedding.EmbeddingClient(
                     config.getEmbeddingBaseUrl(),
                     config.getEmbeddingApiKey(),
                     config.getEmbeddingModel() != null ? config.getEmbeddingModel() : "BAAI/bge-large-zh-v1.5");
@@ -316,6 +287,5 @@ public class ApplicationContext {
             llmProviderRegistry.closeAll();
         }
         eventBus.shutdown();
-        apiManager.stop();
     }
 }

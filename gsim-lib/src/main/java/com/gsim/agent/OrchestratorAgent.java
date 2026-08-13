@@ -7,6 +7,8 @@ import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.tool.CollectSubAgentResultsTool;
 import com.gsim.agent.tool.DispatchSubAgentTool;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
@@ -1013,7 +1015,7 @@ public class OrchestratorAgent extends AbstractAgent {
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
 
                     // Unified execution guard (Agent surface)
-                    com.gsim.agent.ToolExecutionGuard.GuardResult guard = com.gsim.agent.ToolExecutionGuard.checkAgent(
+                    com.gsim.tool.ToolExecutionGuard.GuardResult guard = com.gsim.tool.ToolExecutionGuard.checkAgent(
                             toolRegistry, call, groupManager.activeGroupKeys(), null);
                     if (!guard.allowed()) {
                         var guardFail =
@@ -1441,7 +1443,7 @@ public class OrchestratorAgent extends AbstractAgent {
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
 
                     // Unified execution guard (Agent surface)
-                    com.gsim.agent.ToolExecutionGuard.GuardResult guard = com.gsim.agent.ToolExecutionGuard.checkAgent(
+                    com.gsim.tool.ToolExecutionGuard.GuardResult guard = com.gsim.tool.ToolExecutionGuard.checkAgent(
                             toolRegistry, call, groupManager.activeGroupKeys(), null);
                     if (!guard.allowed()) {
                         var guardFail =

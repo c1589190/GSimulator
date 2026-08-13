@@ -133,8 +133,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
         }
 
         // ── Unified execution guard (MCP surface) ──
-        com.gsim.agent.ToolExecutionGuard.GuardResult guard =
-                com.gsim.agent.ToolExecutionGuard.checkMcp(registry, new ToolCall(registryName, Map.of()));
+        com.gsim.tool.ToolExecutionGuard.GuardResult guard =
+                com.gsim.tool.ToolExecutionGuard.checkMcp(registry, new ToolCall(registryName, Map.of()));
         if (!guard.allowed()) {
             if ("MCP_TOOL_NOT_EXPOSED".equals(guard.errorCode())) {
                 throw new UnknownToolException(name);

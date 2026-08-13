@@ -18,7 +18,7 @@ public final class DocCreateTool implements AgentTool {
 
     private final DocStore store;
     private final com.gsim.doc.DocCacheManager cacheManager;
-    private final com.gsim.agent.AgentProgressSink progressSink;
+    private final com.gsim.event.AgentProgressSink progressSink;
 
     /**
      * 创建文档创建工具实例。
@@ -28,7 +28,7 @@ public final class DocCreateTool implements AgentTool {
      * @param progressSink  进度推送，用于 board 类型文档自动推送公开消息
      */
     public DocCreateTool(
-            DocStore store, com.gsim.doc.DocCacheManager cacheManager, com.gsim.agent.AgentProgressSink progressSink) {
+            DocStore store, com.gsim.doc.DocCacheManager cacheManager, com.gsim.event.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
         this.progressSink = progressSink;
@@ -98,7 +98,7 @@ public final class DocCreateTool implements AgentTool {
             // board 类型 → 自动推送公开消息
             if (type == com.gsim.doc.DocType.BOARD && !content.isEmpty()) {
                 progressSink.onProgress(
-                        com.gsim.agent.AgentProgressEvent.publicMessage("\n📋 " + title + "\n" + content));
+                        com.gsim.event.AgentProgressEvent.publicMessage("\n📋 " + title + "\n" + content));
             }
 
             return ToolResult.ok(

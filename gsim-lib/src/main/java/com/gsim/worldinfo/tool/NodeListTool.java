@@ -22,8 +22,6 @@ import java.util.function.Supplier;
  *
  * <p>每个节点条目包含节点 ID、回合号、世界内时间、状态和检查点数量。
  * 当前活跃节点标记为 "&#8592; active"。
- *
- * <p>配合 {@link NodeSwitchTool} 使用可以切换到链中的任意节点。
  */
 public final class NodeListTool implements AgentTool {
 

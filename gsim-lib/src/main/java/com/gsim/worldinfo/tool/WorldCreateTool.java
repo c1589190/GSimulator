@@ -21,7 +21,6 @@ import java.util.Map;
  *   <li>注册到 _index.json</li>
  * </ul>
  *
- * <p>创建后需要使用 {@link WorldSwitchTool} 切换到新 World。
  * worldId 只允许字母、数字、连字符和下划线。
  */
 public final class WorldCreateTool implements AgentTool {

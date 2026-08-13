@@ -1,11 +1,11 @@
 package com.gsim.commands;
 
-import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
 import com.gsim.compact.CacheCompactor;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmMessage;
 import java.nio.file.Path;
 import java.util.List;
@@ -74,14 +74,14 @@ public final class CompactCommand {
             return "Cache 未找到: " + cacheId + " (world=" + wid + ")";
         }
 
-        progressSink.onProgress(com.gsim.agent.AgentProgressEvent.publicMessage(
+        progressSink.onProgress(com.gsim.event.AgentProgressEvent.publicMessage(
                 "📦 加载 Cache: " + cacheId + " (" + session.messageCount() + " 条消息)"));
 
         // 2. 压缩
         String compacted = compactor.compact(session, progressSink);
 
         progressSink.onProgress(
-                com.gsim.agent.AgentProgressEvent.publicMessage("\n━━━ 压缩结果 ━━━\n" + compacted + "\n━━━━━━━━━━━━━━"));
+                com.gsim.event.AgentProgressEvent.publicMessage("\n━━━ 压缩结果 ━━━\n" + compacted + "\n━━━━━━━━━━━━━━"));
 
         // 3. 创建新 session
         CacheSession newSession = CacheStore.createNew(worldsDir, wid, session.agentName(), session.nodeId());
@@ -90,12 +90,12 @@ public final class CompactCommand {
                 + " messages → " + compacted.length() + " chars)");
         CacheStore.save(worldsDir, newSession);
 
-        progressSink.onProgress(com.gsim.agent.AgentProgressEvent.publicMessage("📝 新会话: " + newSession.sessionId()));
+        progressSink.onProgress(com.gsim.event.AgentProgressEvent.publicMessage("📝 新会话: " + newSession.sessionId()));
 
         // 4. 注入压缩文本并开始对话
         List<LlmMessage> priorMessages = List.of(LlmMessage.user("以下是之前对话历史的压缩摘要，请基于此继续：\n\n" + compacted));
 
-        progressSink.onProgress(com.gsim.agent.AgentProgressEvent.publicMessage("\n🤖 正在基于压缩摘要开始新对话…\n"));
+        progressSink.onProgress(com.gsim.event.AgentProgressEvent.publicMessage("\n🤖 正在基于压缩摘要开始新对话…\n"));
 
         AgentResult result = agentRunner.apply("（上下文已压缩）请基于以上对话历史摘要，给出你的理解和分析。", priorMessages);
 

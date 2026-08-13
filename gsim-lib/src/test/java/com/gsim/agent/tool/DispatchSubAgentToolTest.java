@@ -3,9 +3,9 @@ package com.gsim.agent.tool;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
-import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.tool.ToolCall;

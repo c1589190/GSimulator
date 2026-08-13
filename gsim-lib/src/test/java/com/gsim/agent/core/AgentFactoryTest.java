@@ -3,8 +3,8 @@ package com.gsim.agent.core;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
-import com.gsim.agent.AgentProgressEvent;
-import com.gsim.agent.AgentProgressSink;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.tool.ToolRegistry;

@@ -1,11 +1,11 @@
 package com.gsim.agent.tool;
 
-import com.gsim.agent.AgentProgressEvent;
-import com.gsim.agent.AgentProgressSink;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
 import com.gsim.compact.CacheCompactor;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.AgentTool.Permission;
 import com.gsim.tool.ToolCall;

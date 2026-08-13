@@ -1,5 +1,7 @@
 package com.gsim.agent;
 
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import java.io.PrintStream;
 
 /**

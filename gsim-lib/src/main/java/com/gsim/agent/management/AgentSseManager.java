@@ -1,9 +1,9 @@
 package com.gsim.agent.management;
 
-import com.gsim.api.SseWriter;
 import com.gsim.event.EventBus;
 import com.gsim.event.FilteredEventSink;
 import com.gsim.event.GSimEvent;
+import com.gsim.event.SseWriter;
 import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.util.Map;

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.tool.AgentTool;
 import com.gsim.tool.ToolCall;
+import com.gsim.tool.ToolExecutionGuard;
 import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.ToolResult;
 import java.util.List;

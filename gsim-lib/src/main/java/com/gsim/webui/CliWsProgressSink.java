@@ -1,7 +1,7 @@
 package com.gsim.webui;
 
-import com.gsim.agent.AgentProgressEvent;
-import com.gsim.agent.AgentProgressSink;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;

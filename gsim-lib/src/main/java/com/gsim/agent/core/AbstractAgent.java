@@ -1,12 +1,12 @@
 package com.gsim.agent.core;
 
 import com.gsim.agent.AgentConfig;
-import com.gsim.agent.AgentProgressEvent;
-import com.gsim.agent.AgentProgressSink;
 import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
 import com.gsim.agent.ParsedToolCall;
 import com.gsim.agent.ToolCallExtractor;
 import com.gsim.agent.ToolFilterEvaluator;
+import com.gsim.event.AgentProgressEvent;
+import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmCall;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
