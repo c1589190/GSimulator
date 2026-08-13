@@ -1,13 +1,13 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.ToolResult;
-import com.gsim.util.JsonUtils;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentlib.util.JsonUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -133,8 +133,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
         }
 
         // ── Unified execution guard (MCP surface) ──
-        com.gsim.tool.ToolExecutionGuard.GuardResult guard =
-                com.gsim.tool.ToolExecutionGuard.checkMcp(registry, new ToolCall(registryName, Map.of()));
+        com.gsim.agentlib.tool.ToolExecutionGuard.GuardResult guard =
+                com.gsim.agentlib.tool.ToolExecutionGuard.checkMcp(registry, new ToolCall(registryName, Map.of()));
         if (!guard.allowed()) {
             if ("MCP_TOOL_NOT_EXPOSED".equals(guard.errorCode())) {
                 throw new UnknownToolException(name);

@@ -1,18 +1,17 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,10 +78,7 @@ class McpHttpServerTest {
         registry.register(new HiddenTool());
 
         // Use port 0 for OS-assigned port
-        Path tmpDir = Path.of(System.getProperty("java.io.tmpdir"), "gsim-test-" + System.currentTimeMillis());
-        tmpDir.toFile().mkdirs();
-
-        server = new McpHttpServer(registry, 0, tmpDir);
+        server = new McpHttpServer(registry, 0);
         server.start();
         port = server.getPort();
 

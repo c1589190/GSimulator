@@ -1,6 +1,10 @@
 package com.gsim.tool;
 
-import com.gsim.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;

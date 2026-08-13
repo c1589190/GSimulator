@@ -1,4 +1,4 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 /**
  * MCP 工具定义的不可变值对象。

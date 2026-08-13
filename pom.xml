@@ -11,6 +11,7 @@
     <description>A multi-agent simulation engine for alternate history and player-action wargaming — parent POM</description>
 
     <modules>
+        <module>gsim-agentlib</module>
         <module>gsim-lib</module>
         <module>gsim-app</module>
         <module>gsimap</module>

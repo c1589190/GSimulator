@@ -1,6 +1,7 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.cache.CacheSession;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
@@ -8,7 +9,6 @@ import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.interaction.ConsoleInteractionAdapter;
-import com.gsim.tool.ToolRegistry;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.tool.CreateCheckpointTool;
 import com.gsim.worldinfo.tool.NodeCreateTool;
@@ -420,7 +420,7 @@ public class GSimulatorApplication {
         // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染
         java.util.Map<String, WorldInformation> wiCache = new java.util.concurrent.ConcurrentHashMap<>();
         Supplier<WorldInformation> wiSupplier = () -> {
-            String reqWorldId = com.gsim.mcp.GsimRequestContext.worldId();
+            String reqWorldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
             if (reqWorldId != null && !reqWorldId.equals(this.worldInfo.worldId())) {
                 return wiCache.computeIfAbsent(
                         reqWorldId, wid -> com.gsim.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));

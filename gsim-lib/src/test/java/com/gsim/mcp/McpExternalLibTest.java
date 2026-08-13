@@ -4,7 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.tool.ToolRegistry;
+import com.gsim.agentlib.mcp.AbstractMcpServer;
+import com.gsim.agentlib.mcp.CompositeMcpToolRegistry;
+import com.gsim.agentlib.mcp.McpToolRegistry;
+import com.gsim.agentlib.mcp.ToolDef;
+import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentlib.mcp.UnknownToolException;
+import com.gsim.agentlib.tool.ToolRegistry;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -107,7 +113,7 @@ class McpExternalLibTest {
         }
 
         @Override
-        protected String executeTool(String name, JsonNode args) throws Exception {
+        public String executeTool(String name, JsonNode args) throws Exception {
             return composite.execute(name, args);
         }
 

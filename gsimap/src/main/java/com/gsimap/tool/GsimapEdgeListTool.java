@@ -1,7 +1,7 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsimap.map.MapData;
 import com.gsimap.service.MapService;
 import java.util.ArrayList;

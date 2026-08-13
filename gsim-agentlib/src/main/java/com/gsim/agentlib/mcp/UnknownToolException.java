@@ -1,4 +1,4 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 /**
  * 表示 MCP 工具注册表中不存在指定工具名称的异常。

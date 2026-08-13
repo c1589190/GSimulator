@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolRegistry;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolRegistry;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

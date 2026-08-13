@@ -1,10 +1,10 @@
 package com.gsim.importing.tool;
 
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.importing.ImportDocumentService;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

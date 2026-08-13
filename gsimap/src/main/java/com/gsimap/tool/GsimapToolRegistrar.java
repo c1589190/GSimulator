@@ -1,6 +1,6 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsimap.service.MapService;
 
 /**

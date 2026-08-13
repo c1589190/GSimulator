@@ -1,10 +1,10 @@
 package com.gsim.doc.tool;
 
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;

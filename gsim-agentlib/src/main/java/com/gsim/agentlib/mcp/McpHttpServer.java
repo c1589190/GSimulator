@@ -1,11 +1,11 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.util.JsonUtils;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -22,13 +22,13 @@ import org.slf4j.LoggerFactory;
  * <p>Independent from the old HTTP API — runs on its own port (default 8720).
  * Provides two endpoints:
  * <ul>
- *   <li>{@code GET /health} — health check (status, version, world count)</li>
+ *   <li>{@code GET /health} — health check (status, version, tool count)</li>
  *   <li>{@code POST /mcp} — JSON-RPC 2.0 endpoint (initialize, tools/list, tools/call)</li>
  * </ul>
  *
  * <h3>Usage</h3>
  * <pre>{@code
- *   McpHttpServer server = new McpHttpServer(toolRegistry, 8720, worldsDir);
+ *   McpHttpServer server = new McpHttpServer(toolRegistry, 8720);
  *   server.start();
  *   // ... server runs in background ...
  *   server.stop();
@@ -51,19 +51,16 @@ public final class McpHttpServer {
 
     private final ToolRegistryMcpAdapter adapter;
     private final int port;
-    private final java.nio.file.Path worldsDir;
     private HttpServer server;
     private int actualPort;
 
     /**
      * @param toolRegistry the tool registry to expose via MCP
      * @param port         HTTP listen port (default 8720)
-     * @param worldsDir    worlds directory (for health check world count)
      */
-    public McpHttpServer(ToolRegistry toolRegistry, int port, java.nio.file.Path worldsDir) {
+    public McpHttpServer(ToolRegistry toolRegistry, int port) {
         this.adapter = new ToolRegistryMcpAdapter(toolRegistry);
         this.port = port;
-        this.worldsDir = worldsDir;
     }
 
     // ── Lifecycle ──────────────────────────────────────────────
@@ -99,17 +96,9 @@ public final class McpHttpServer {
             sendJson(exchange, 405, errorMap("Method not allowed"));
             return;
         }
-        int worldCount;
-        try {
-            var worlds = com.gsim.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
-            worldCount = worlds.size();
-        } catch (Exception e) {
-            worldCount = -1;
-        }
         var body = MAPPER.createObjectNode();
         body.put("status", "UP");
         body.put("version", "0.1.0");
-        body.put("worlds", worldCount);
         body.put("tools", adapter.all().size());
         sendJson(exchange, 200, body);
     }

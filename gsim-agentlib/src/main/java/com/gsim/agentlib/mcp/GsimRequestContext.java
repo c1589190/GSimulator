@@ -1,4 +1,4 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 /**
  * Per-request shared context for MCP tool execution.

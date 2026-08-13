@@ -1,12 +1,12 @@
 package com.gsim.agent.tool;
 
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.llm.LlmProvider;
 import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.llm.ProviderConfig;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
 import java.util.List;
 import java.util.Map;
 

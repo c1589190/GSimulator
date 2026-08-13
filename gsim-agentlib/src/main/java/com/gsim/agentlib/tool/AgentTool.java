@@ -1,4 +1,4 @@
-package com.gsim.tool;
+package com.gsim.agentlib.tool;
 
 /**
  * Agent 可调用工具的抽象接口。

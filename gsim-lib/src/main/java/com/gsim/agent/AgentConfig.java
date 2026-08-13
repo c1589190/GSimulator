@@ -1,7 +1,7 @@
 package com.gsim.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;

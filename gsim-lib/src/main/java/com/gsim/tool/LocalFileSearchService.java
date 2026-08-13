@@ -1,5 +1,6 @@
 package com.gsim.tool;
 
+import com.gsim.agentlib.tool.ToolResult;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

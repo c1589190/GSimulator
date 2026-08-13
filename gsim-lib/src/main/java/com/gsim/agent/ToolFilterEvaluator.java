@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool;
 
 /**
  * 工具过滤评估器 — 根据 {@link ToolFilterConfig} 和 {@link AgentTool#permission()} 判断指定工具是否允许使用。

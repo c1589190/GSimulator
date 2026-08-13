@@ -1,8 +1,8 @@
 package com.gsimap.tool;
 
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.util.JsonUtils;
 import com.gsimap.service.MapService;
 import java.util.List;
@@ -33,7 +33,7 @@ public final class GsimapGenerateTool extends AbstractGsimapTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+        String worldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
         if (worldId == null) {
             worldId = call.param("worldId");
         }

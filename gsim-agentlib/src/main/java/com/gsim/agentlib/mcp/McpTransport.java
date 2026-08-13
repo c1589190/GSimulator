@@ -1,4 +1,4 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import java.io.Closeable;
 import java.io.IOException;

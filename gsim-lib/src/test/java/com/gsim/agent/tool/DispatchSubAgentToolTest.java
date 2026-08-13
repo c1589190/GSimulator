@@ -1,16 +1,15 @@
 package com.gsim.agent.tool;
 
-import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.ToolResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("DispatchSubAgentTool 动态 agent type 校验")
 class DispatchSubAgentToolTest {

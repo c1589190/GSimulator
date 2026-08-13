@@ -1,5 +1,6 @@
 package com.gsim.app;
 
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.commands.AgentCommand;
@@ -17,7 +18,6 @@ import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.llm.LlmsConfigLoader;
 import com.gsim.session.SessionPool;
 import com.gsim.tool.LocalFileSearchService;
-import com.gsim.tool.ToolRegistry;
 import com.gsim.tool.WikiSearchTool;
 import com.gsim.util.TimeProvider;
 import java.nio.file.Path;

@@ -1,7 +1,12 @@
 package com.gsim.mcp;
 
+import com.gsim.agentlib.mcp.AbstractMcpServer;
+import com.gsim.agentlib.mcp.McpTransport;
+import com.gsim.agentlib.mcp.StdioMcpTransport;
+import com.gsim.agentlib.mcp.ToolDef;
+import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.ApplicationContext;
-import com.gsim.tool.ToolRegistry;
 import java.nio.file.Path;
 
 /**
@@ -9,7 +14,7 @@ import java.nio.file.Path;
  *
  * <p>Extends {@link AbstractMcpServer} and uses {@link ToolRegistry} as the
  * single source of truth for all tool definitions. Tools are exposed via the
- * {@link ToolRegistryMcpAdapter} which maps {@link com.gsim.tool.AgentTool}
+ * {@link ToolRegistryMcpAdapter} which maps {@link com.gsim.agentlib.tool.AgentTool}
  * instances to MCP {@link ToolDef} entries automatically.
  *
  * <h3>Usage</h3>

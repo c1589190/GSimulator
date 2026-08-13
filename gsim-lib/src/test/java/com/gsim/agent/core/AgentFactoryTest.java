@@ -1,13 +1,12 @@
 package com.gsim.agent.core;
 
-import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.event.AgentProgressEvent;
 import com.gsim.event.AgentProgressSink;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;
-import com.gsim.tool.ToolRegistry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("AgentFactory 子代理派发与编号")
 class AgentFactoryTest {

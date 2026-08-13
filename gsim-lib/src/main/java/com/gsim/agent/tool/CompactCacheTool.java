@@ -1,15 +1,15 @@
 package com.gsim.agent.tool;
 
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
 import com.gsim.cache.CachesManager;
 import com.gsim.compact.CacheCompactor;
 import com.gsim.event.AgentProgressEvent;
 import com.gsim.event.AgentProgressSink;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;

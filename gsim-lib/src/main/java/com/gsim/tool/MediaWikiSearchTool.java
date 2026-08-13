@@ -1,6 +1,9 @@
 package com.gsim.tool;
 
-import com.gsim.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.webimport.MediaWikiApiClient;
 import java.util.ArrayList;
 import java.util.List;

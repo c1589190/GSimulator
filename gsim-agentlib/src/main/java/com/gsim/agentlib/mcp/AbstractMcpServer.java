@@ -1,10 +1,10 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.gsim.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolRegistry;
 import java.io.IOException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -237,13 +237,16 @@ public abstract class AbstractMcpServer implements Runnable {
      * <p>默认实现按顺序遍历所有注册表，将调用委托给第一个能处理该名称的注册表。
      * 子类可覆盖此方法以实现自定义路由（如前缀匹配）。
      *
+     * <p>该方法是 JSON-RPC {@code tools/call} 的执行核心，作为框架公共入口供外部嵌入方
+     * 直接以编程方式调用工具（HTTP/stdio 传输内部同样走此方法）。
+     *
      * @param name 工具名称
      * @param args 工具参数的 JSON 树
      * @return JSON 编码的结果字符串
      * @throws IllegalArgumentException 如果所有注册表都不认识该工具
      * @throws Exception                如果工具执行失败
      */
-    protected String executeTool(String name, JsonNode args) throws Exception {
+    public String executeTool(String name, JsonNode args) throws Exception {
         for (McpToolRegistry r : registries) {
             try {
                 return r.execute(name, args);
@@ -422,10 +425,12 @@ public abstract class AbstractMcpServer implements Runnable {
      * <p>返回 protocolVersion、capabilities 和 serverInfo。
      * 子类可覆盖以添加额外的能力声明（如 prompts、resources）。
      *
+     * <p>框架公共请求处理入口，供外部嵌入方以编程方式直接调用。
+     *
      * @param req 原始 JSON-RPC 请求
      * @return initialize 结果节点
      */
-    protected JsonNode handleInitialize(JsonNode req) {
+    public JsonNode handleInitialize(JsonNode req) {
         ObjectNode result = MAPPER.createObjectNode();
         result.put("protocolVersion", "2024-11-05");
 
@@ -446,9 +451,11 @@ public abstract class AbstractMcpServer implements Runnable {
      *
      * <p>遍历 {@link #getAllTools()} 并构建包含 name、description 和 inputSchema 的 JSON 数组。
      *
+     * <p>框架公共请求处理入口，供外部嵌入方以编程方式直接调用。
+     *
      * @return tools/list 结果节点
      */
-    protected JsonNode handleToolsList() {
+    public JsonNode handleToolsList() {
         ObjectNode result = MAPPER.createObjectNode();
         ArrayNode tools = MAPPER.createArrayNode();
 
@@ -474,11 +481,13 @@ public abstract class AbstractMcpServer implements Runnable {
      * <p>从 params 提取工具名称和参数，调用 {@link #executeTool(String, JsonNode)}，
      * 并将结果包装为 MCP content 格式。
      *
+     * <p>框架公共请求处理入口，供外部嵌入方以编程方式直接调用。
+     *
      * @param req 原始 JSON-RPC 请求
      * @return tools/call 结果节点
      * @throws Exception 如果参数缺失或工具执行失败
      */
-    protected JsonNode handleToolCall(JsonNode req) throws Exception {
+    public JsonNode handleToolCall(JsonNode req) throws Exception {
         JsonNode params = req.get("params");
         if (params == null) {
             throw new IllegalArgumentException("Missing params in tools/call");

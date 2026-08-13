@@ -1,8 +1,8 @@
 package com.gsim.interaction;
 
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.llm.LlmManager;
-import com.gsim.tool.ToolRegistry;
 
 /**
  * 交互会话 — 持有所有服务引用和交互上下文。

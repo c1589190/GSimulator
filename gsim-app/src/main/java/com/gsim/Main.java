@@ -1,5 +1,7 @@
 package com.gsim;
 
+import com.gsim.agentlib.mcp.McpHttpServer;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
@@ -9,8 +11,6 @@ import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigLoader;
 import com.gsim.config.ConfigWizard;
-import com.gsim.mcp.McpHttpServer;
-import com.gsim.tool.ToolRegistry;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.service.MapService;
 import com.gsimap.tool.GsimapToolRegistrar;
@@ -142,7 +142,7 @@ public class Main {
                 // MCP HTTP mode: start Streamable HTTP MCP server (port 8720)
                 int mcpPort = Integer.parseInt(
                         System.getProperty("mcp.http.port", System.getenv().getOrDefault("MCP_HTTP_PORT", "8720")));
-                McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort, worldsDir);
+                McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort);
                 mcpHttpServer.start();
 
                 Runtime.getRuntime()

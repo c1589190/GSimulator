@@ -1,4 +1,4 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -99,7 +99,7 @@ class McpProtocolTest {
         }
 
         @Override
-        protected String executeTool(String name, JsonNode args) throws Exception {
+        public String executeTool(String name, JsonNode args) throws Exception {
             return registry.execute(name, args);
         }
     }

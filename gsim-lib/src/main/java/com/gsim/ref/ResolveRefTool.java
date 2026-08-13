@@ -1,12 +1,12 @@
 package com.gsim.ref;
 
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.doc.DocCacheManager;
 import com.gsim.doc.DocStore;
 import com.gsim.ref.RefResolver.ResolvedRef;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;

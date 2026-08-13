@@ -16,6 +16,13 @@
     to embed GSimulator (Agent, WorldInfo, MCP, HTTP API, WebUI) in your own application.</description>
 
     <dependencies>
+        <!-- GSim AgentLib (AgentTool 协议 + MCP 框架) — 临时依赖，T4 随 agent 提取拆除 -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-agentlib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Jackson -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

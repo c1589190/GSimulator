@@ -1,13 +1,13 @@
-package com.gsim.mcp;
+package com.gsim.agentlib.mcp;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

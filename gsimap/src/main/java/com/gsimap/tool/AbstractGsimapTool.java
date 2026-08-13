@@ -1,8 +1,8 @@
 package com.gsimap.tool;
 
-import com.gsim.mcp.GsimRequestContext;
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.ToolCall;
+import com.gsim.agentlib.mcp.GsimRequestContext;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.ToolCall;
 import com.gsimap.service.MapService;
 
 /**

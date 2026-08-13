@@ -1,10 +1,10 @@
 package com.gsim.worldinfo.tool;
 
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolRegistry;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.worldinfo.ElementRef;
 import com.gsim.worldinfo.WorldInformation;
 import java.util.List;
@@ -59,7 +59,7 @@ public final class QueryAddressTool implements AgentTool {
 
         // Route 1: gsimap:* → delegate to gsimap_query_by_address
         if (address.startsWith("gsimap:")) {
-            String worldId = com.gsim.mcp.GsimRequestContext.worldId();
+            String worldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
             if (worldId == null) {
                 worldId = call.param("worldId");
             }

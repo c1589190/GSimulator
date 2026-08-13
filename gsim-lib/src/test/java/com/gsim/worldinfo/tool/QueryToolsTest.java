@@ -2,8 +2,8 @@ package com.gsim.worldinfo.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.worldinfo.*;
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -2,6 +2,9 @@ package com.gsim.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentlib.tool.ToolResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;

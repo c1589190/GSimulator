@@ -1,9 +1,9 @@
 package com.gsim.worldinfo.tool;
 
-import com.gsim.tool.AgentTool;
-import com.gsim.tool.AgentTool.Permission;
-import com.gsim.tool.ToolCall;
-import com.gsim.tool.ToolResult;
+import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentlib.tool.AgentTool.Permission;
+import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.worldinfo.NodeSnapshot;
 import com.gsim.worldinfo.WorldInformation;
 import java.util.ArrayList;
