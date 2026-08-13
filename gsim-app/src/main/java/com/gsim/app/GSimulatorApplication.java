@@ -1,15 +1,9 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
-import com.gsim.agent.tools.worldinfo.CreateCheckpointTool;
-import com.gsim.agent.tools.worldinfo.NodeCreateTool;
-import com.gsim.agent.tools.worldinfo.NodeListTool;
-import com.gsim.agent.tools.worldinfo.NodeStatusTool;
-import com.gsim.agent.tools.worldinfo.QueryCheckpointTool;
-import com.gsim.agent.tools.worldinfo.QueryElementTool;
-import com.gsim.agent.tools.worldinfo.QueryKeywordTool;
-import com.gsim.agent.tools.worldinfo.QueryNodeTool;
-import com.gsim.agent.tools.worldinfo.WriteElementTool;
+import com.gsim.agent.bridge.AgentBridge;
+import com.gsim.agent.bridge.CoreToolContext;
+import com.gsim.agent.bridge.WorldInfoToolContext;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
@@ -144,8 +138,68 @@ public class GSimulatorApplication {
             this.compositeSink = new com.gsim.core.event.CompositeAgentProgressSink(sessionPoolBridge);
         }
 
-        // 注册核心工具（World/Doc/Import，始终注册）
-        registerCoreTools(toolRegistry, docsDir);
+        // ── 核心业务对象构造（原 registerCoreTools 内，整体上移）──
+
+        // Import doc tools
+        var importDocService = new com.gsim.core.importing.ImportDocumentService(config.getImportDir());
+
+        // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
+        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
+        try {
+            this.docCacheManager.init();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
+        }
+
+        // ── 统一文档管理工具（docs 工具组）──
+        var docStore = ctx.getDocStore(docsDir);
+        try {
+            docStore.init();
+            // 迁移旧 skills/ 目录（如有）
+            Path oldSkillsDir = worldsDir.resolveSibling("skills");
+            if (java.nio.file.Files.isDirectory(oldSkillsDir)) {
+                int migrated = docStore.migrateFromSkills(oldSkillsDir);
+                if (migrated > 0) {
+                    log.info("Migrated {} skills from {} to docs/", migrated, oldSkillsDir);
+                }
+            }
+            // 确保 agent-api-guide 存在（首次启动自动创建）
+            if (docStore.get("agent-api-guide") == null) {
+                var guideResource = getClass().getClassLoader().getResourceAsStream("gsim/agent-api-guide.md");
+                if (guideResource != null) {
+                    String guideContent =
+                            new String(guideResource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    docStore.create(
+                            "agent-api-guide",
+                            com.gsim.core.doc.DocType.OTHER,
+                            "Agent API 引导手册",
+                            guideContent,
+                            java.util.List.of("guide", "api", "agent"));
+                    log.info("Auto-created agent-api-guide doc");
+                }
+            }
+        } catch (java.io.IOException e) {
+            log.warn("Failed to init DocStore: {}", e.getMessage());
+        }
+        var embeddingClient = ctx.getEmbeddingClient();
+        var docIndex = ctx.getSkillIndex(docsDir); // SkillIndex reused for docs embdb
+        try {
+            docIndex.ensureDir();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to create embdb dir: {}", e.getMessage());
+        }
+
+        // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
+        AgentBridge.registerCoreTools(toolRegistry, new CoreToolContext(
+                worldsDir,
+                config.getImportDir(),
+                importDocService,
+                docStore,
+                docCacheManager,
+                docIndex,
+                embeddingClient,
+                activeWorldId::get,
+                compositeSink));
 
         // 注册 Agent 工具（仅 agent 模式）
         if (agentEnabled) {
@@ -167,8 +221,10 @@ public class GSimulatorApplication {
             }
         };
 
-        // 注册 world info + node 管理工具
-        registerWorldInfoTools(toolRegistry, onNodeChanged);
+        // 注册 world info + node 管理工具 —— 经 gsim-agent 桥接层
+        // worldInfo 为可变字段，以 () -> worldInfo 惰性供应，节点创建/世界切换重建后对工具可见（与迁移前 this.worldInfo 动态读语义等价）
+        AgentBridge.registerWorldInfoTools(toolRegistry, new WorldInfoToolContext(
+                worldsDir, () -> worldInfo, activeWorldId::get, docCacheManager, onNodeChanged));
 
         if (agentEnabled) {
             // 创建命令并注入到 adapter
@@ -329,123 +385,6 @@ public class GSimulatorApplication {
                 compositeSink,
                 worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default"));
-    }
-
-    /** 注册核心工具（Import/Doc/Ref/TextEdit），始终注册，不依赖 agent 模式。 */
-    private void registerCoreTools(ToolRegistry toolRegistry, Path docsDir) {
-        // Import doc tools
-        var importDocService = new com.gsim.core.importing.ImportDocumentService(config.getImportDir());
-        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentListTool(importDocService));
-        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentReadTool(importDocService));
-        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentSearchTool(importDocService));
-
-        // DocCacheManager 需在 doc 工具注册前创建
-        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
-        try {
-            this.docCacheManager.init();
-        } catch (java.io.IOException e) {
-            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
-        }
-
-        // ── 统一文档管理工具（docs 工具组）──
-        var docStore = ctx.getDocStore(docsDir);
-        try {
-            docStore.init();
-            // 迁移旧 skills/ 目录（如有）
-            Path oldSkillsDir = worldsDir.resolveSibling("skills");
-            if (java.nio.file.Files.isDirectory(oldSkillsDir)) {
-                int migrated = docStore.migrateFromSkills(oldSkillsDir);
-                if (migrated > 0) {
-                    log.info("Migrated {} skills from {} to docs/", migrated, oldSkillsDir);
-                }
-            }
-            // 确保 agent-api-guide 存在（首次启动自动创建）
-            if (docStore.get("agent-api-guide") == null) {
-                var guideResource = getClass().getClassLoader().getResourceAsStream("gsim/agent-api-guide.md");
-                if (guideResource != null) {
-                    String guideContent =
-                            new String(guideResource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                    docStore.create(
-                            "agent-api-guide",
-                            com.gsim.core.doc.DocType.OTHER,
-                            "Agent API 引导手册",
-                            guideContent,
-                            java.util.List.of("guide", "api", "agent"));
-                    log.info("Auto-created agent-api-guide doc");
-                }
-            }
-        } catch (java.io.IOException e) {
-            log.warn("Failed to init DocStore: {}", e.getMessage());
-        }
-        var embeddingClient = ctx.getEmbeddingClient();
-        var docIndex = ctx.getSkillIndex(docsDir); // SkillIndex reused for docs embdb
-        try {
-            docIndex.ensureDir();
-        } catch (java.io.IOException e) {
-            log.warn("Failed to create embdb dir: {}", e.getMessage());
-        }
-
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocListTool(docStore));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocReadTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocCreateTool(docStore, docCacheManager, compositeSink));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocWriteTool(docStore, docCacheManager, compositeSink));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocSearchTool(docStore, docIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocIndexTool(docStore, docIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocCropTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocTemplateTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.agent.tools.doc.DocDeleteTool(docStore));
-
-        // 统一 @ 引用解析
-        toolRegistry.register(new com.gsim.agent.tools.ref.ResolveRefTool(
-                worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
-
-        // 通用文本编辑工具（@cache: ← text_edit → @cache:）
-        toolRegistry.register(new com.gsim.agent.tools.text.TextEditTool(
-                worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
-
-        log.info("Registered import + 9 docs + ref + text_edit core tools (docsDir={})", docsDir);
-    }
-
-    private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
-        // World management tools — don't depend on WorldInformation being loaded
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.WorldListTool(worldsDir, activeWorldId::get));
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.WorldCreateTool(worldsDir));
-
-        if (worldInfo == null) {
-            log.warn("WorldInformation not available, skipping world info tool registration");
-            return;
-        }
-        // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染
-        java.util.Map<String, WorldInformation> wiCache = new java.util.concurrent.ConcurrentHashMap<>();
-        Supplier<WorldInformation> wiSupplier = () -> {
-            String reqWorldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
-            if (reqWorldId != null && !reqWorldId.equals(this.worldInfo.worldId())) {
-                return wiCache.computeIfAbsent(
-                        reqWorldId, wid -> com.gsim.core.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
-            }
-            return this.worldInfo;
-        };
-
-        // Query tools
-        toolRegistry.register(new QueryCheckpointTool(wiSupplier));
-        toolRegistry.register(new QueryKeywordTool(wiSupplier));
-        toolRegistry.register(new QueryNodeTool(wiSupplier));
-        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.QueryByTagTool(wiSupplier));
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.QueryAddressTool(wiSupplier, toolRegistry));
-
-        // Write tools
-        toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir, docCacheManager));
-        toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.AttachmentWriteTool(worldsDir, wiSupplier));
-        toolRegistry.register(new com.gsim.agent.tools.worldinfo.AttachmentReadTool(worldsDir, wiSupplier));
-
-        // Node management tools
-        toolRegistry.register(new NodeListTool(wiSupplier));
-        toolRegistry.register(new NodeStatusTool(wiSupplier));
-        toolRegistry.register(new NodeCreateTool(wiSupplier, worldsDir, onNodeChanged));
-
-        log.info("Registered 14 world info + node + world mgmt tools");
     }
 
     /**

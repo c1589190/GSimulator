@@ -1,5 +1,6 @@
 package com.gsim;
 
+import com.gsim.agent.bridge.AgentBridge;
 import com.gsim.agentlib.mcp.McpHttpServer;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
@@ -14,7 +15,6 @@ import com.gsim.core.config.ConfigSnapshot;
 import com.gsim.core.config.ConfigWizard;
 import com.gsim.map.http.GsimapHttpServer;
 import com.gsim.map.service.MapService;
-import com.gsim.agent.tools.map.GsimapToolRegistrar;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
@@ -135,7 +135,7 @@ public class Main {
             // 地图服务 + 工具注册
             MapService mapService = new MapService(config.worldsDir());
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
-            GsimapToolRegistrar.registerAll(toolRegistry, mapService);
+            AgentBridge.registerMapTools(toolRegistry, mapService);
 
             // Map HTTP 服务器 (port 8711) — 始终启动
             int gsimapPort = Integer.parseInt(
