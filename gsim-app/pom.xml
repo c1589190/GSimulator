@@ -27,7 +27,7 @@
         </dependency>
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsimap</artifactId>
+            <artifactId>gsim-map</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

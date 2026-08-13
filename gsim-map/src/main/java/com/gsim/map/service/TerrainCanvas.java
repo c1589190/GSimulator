@@ -1,0 +1,389 @@
+package com.gsim.map.service;
+
+import com.gsim.map.map.MapData;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+/**
+ * Manages a collection of terrain blocks for a single world.
+ *
+ * <h3>Overlap rules</h3>
+ * <b>Same terrain:</b>
+ * <ul>
+ *   <li>Big fully contains small → small deleted</li>
+ *   <li>Overlap or adjacent → merged (geometry union)</li>
+ * </ul>
+ * <b>Different terrain:</b>
+ * <ul>
+ *   <li>Small inside big → big hollowed (difference) to make room</li>
+ *   <li>Big over small → maximum retention: small kept, big gets inner boundary hole</li>
+ *   <li>To truly override: draw a same-terrain block fully encircling the target</li>
+ * </ul>
+ *
+ * <p>Query order: for any hex, the <em>last</em> (topmost) block that contains
+ * it determines the terrain. Returns {@code null} for empty canvas.
+ */
+@SuppressWarnings("deprecation")
+public class TerrainCanvas {
+
+    private static final int DEFAULT_MAP_RADIUS = 80;
+
+    /** Managed block with mutable cache. */
+    static class Block {
+        private final String id;
+        private final String terrain;
+        private volatile List<MapData.Pt> boundary; // polygon in pixel coords
+        private final String seedKey;
+        private volatile Set<String> hexSet;
+
+        String getId() {
+            return id;
+        }
+
+        String getTerrain() {
+            return terrain;
+        }
+
+        List<MapData.Pt> getBoundary() {
+            return boundary;
+        }
+
+        String getSeedKey() {
+            return seedKey;
+        }
+
+        Block(String id, String terrain, List<MapData.Pt> boundary, String seedKey) {
+            this.id = id;
+            this.terrain = terrain;
+            this.boundary = new ArrayList<>(boundary);
+            this.seedKey = seedKey;
+        }
+
+        Set<String> hexSet(int mapRadius) {
+            Set<String> hs = hexSet;
+            if (hs == null) {
+                synchronized (this) {
+                    hs = hexSet;
+                    if (hs == null) {
+                        hs = TerrainGeometry.hexSetFromPolygon(boundary, mapRadius, seedKey);
+                        hexSet = hs;
+                    }
+                }
+            }
+            return hs;
+        }
+
+        void invalidateCache() {
+            hexSet = null;
+        }
+
+        MapData.TerrainBlock toGsimBlock(int mapRadius) {
+            Set<String> hs = hexSet(mapRadius);
+            // Only compute boundary if hexSet is small; otherwise skip (use empty boundary)
+            List<MapData.Pt> bnd = hs.size() <= 500 ? List.copyOf(boundary) : List.of();
+            return new MapData.TerrainBlock(terrain, bnd, seedKey, hs);
+        }
+    }
+
+    // ── State ──────────────────────────────────────────────────
+
+    private final List<Block> blocks = new ArrayList<>();
+    private final int mapRadius;
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+
+    /** Create a canvas with the default map radius. */
+    public TerrainCanvas() {
+        this(DEFAULT_MAP_RADIUS);
+    }
+
+    /**
+     * Create a canvas with a specific map radius.
+     * @param mapRadius hex coordinate bound for flood fill operations
+     */
+    public TerrainCanvas(int mapRadius) {
+        this.mapRadius = mapRadius;
+    }
+
+    // ── Query ──────────────────────────────────────────────────
+
+    /**
+     * Return the terrain attribute for a hex, or {@code null} for empty.
+     * Topmost (last) block that contains the hex wins.
+     * @param q hex axial q coordinate
+     * @param r hex axial r coordinate
+     * @return terrain type string, or null if no block covers this hex
+     */
+    public String queryHex(int q, int r) {
+        double[] px = TerrainGeometry.hexToPixel(q, r);
+        return queryPoint(px[0], px[1]);
+    }
+
+    /**
+     * Return the terrain attribute for a pixel point, or {@code null} for empty.
+     * @param px pixel x coordinate
+     * @param py pixel y coordinate
+     * @return terrain type string, or null if no block covers this point
+     */
+    public String queryPixel(double px, double py) {
+        return queryPoint(px, py);
+    }
+
+    private String queryPoint(double px, double py) {
+        lock.readLock().lock();
+        try {
+            for (int i = blocks.size() - 1; i >= 0; i--) {
+                Block b = blocks.get(i);
+                if (b.hexSet(mapRadius).contains(keyForPoint(px, py, b))) {
+                    return b.terrain;
+                }
+            }
+            return null; // empty
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /** Try hexKey from point, but prefer to check hexSet membership directly. */
+    private String keyForPoint(double px, double py, Block b) {
+        int[] h = TerrainGeometry.pixelToHex(px, py);
+        return TerrainGeometry.hexKey(h[0], h[1]);
+    }
+
+    // ── Mutation ───────────────────────────────────────────────
+
+    /**
+     * Add a block with full overlap processing.
+     *
+     * @param terrain  terrain attribute (e.g. "mountain", "plains")
+     * @param boundary polygon boundary in pixel coordinates
+     * @param seedKey  preferred seed hex (or empty)
+     * @return the new block id, or null if the block was empty after overlap processing
+     */
+    public String addBlock(String terrain, List<MapData.Pt> boundary, String seedKey) {
+        if (terrain == null || boundary == null || boundary.size() < 3) return null;
+        Set<String> newSet = TerrainGeometry.hexSetFromPolygon(boundary, mapRadius, seedKey);
+        if (newSet.isEmpty()) return null;
+        return addBlockInternal(terrain, newSet, seedKey);
+    }
+
+    /**
+     * Add a block from pre-computed hex set (client-side flood fill).
+     * @param terrain terrain attribute (e.g. "mountain", "plains")
+     * @param hexSet pre-computed set of hex keys
+     * @param seedKey preferred seed hex (or empty)
+     * @return the new block id, or null if the block was empty after overlap processing
+     */
+    public String addBlockFromHexSet(String terrain, Set<String> hexSet, String seedKey) {
+        if (terrain == null || hexSet == null || hexSet.isEmpty()) return null;
+        return addBlockInternal(terrain, hexSet, seedKey);
+    }
+
+    private String addBlockInternal(String terrain, Set<String> newSet, String seedKey) {
+        boolean didMerge = false;
+        List<Block> toRemove = new ArrayList<>();
+
+        lock.writeLock().lock();
+        try {
+            // ── Phase A: same-terrain merge ──
+            for (Block existing : new ArrayList<>(blocks)) {
+                if (!existing.getTerrain().equals(terrain)) continue;
+                Set<String> es = existing.hexSet(mapRadius);
+
+                if (newSet.containsAll(es)) {
+                    // Fully contained → remove small
+                    toRemove.add(existing);
+                } else if (TerrainGeometry.overlapsOrAdjacent(newSet, es)) {
+                    // Merge: union hex sets
+                    newSet.addAll(es);
+                    toRemove.add(existing);
+                    didMerge = true;
+                }
+            }
+            blocks.removeAll(toRemove);
+            toRemove.clear();
+
+            // ── Phase B: different-terrain → new block wins, carve old ──
+            List<Block> newFragments = new ArrayList<>();
+            Set<String> protectedHexes = new HashSet<>(); // max-retention carve-out
+            for (Block existing : new ArrayList<>(blocks)) {
+                if (existing.getTerrain().equals(terrain)) continue;
+                Set<String> es = existing.hexSet(mapRadius);
+
+                Set<String> overlap = new HashSet<>(es);
+                overlap.retainAll(newSet);
+                if (overlap.isEmpty()) continue;
+
+                if (newSet.containsAll(es)) {
+                    // Existing is entirely covered by the new block
+                    if (didMerge) {
+                        // Override: same-terrain merge encircles different-terrain block → delete it
+                        toRemove.add(existing);
+                    } else {
+                        // Max retention: new block fully covers existing → keep existing, carve from new
+                        protectedHexes.addAll(es);
+                    }
+                    continue;
+                }
+
+                // Partial overlap: carve overlay out of existing, keep remainder as fragments
+                es.removeAll(overlap);
+                toRemove.add(existing);
+
+                if (!es.isEmpty()) {
+                    // Split remaining hexes into connected components
+                    List<Set<String>> components = splitComponents(es);
+                    for (Set<String> comp : components) {
+                        List<MapData.Pt> bnd = comp.size() <= 500 ? TerrainGeometry.hexSetToBoundary(comp) : List.of();
+                        Block frag = new Block(
+                                UUID.randomUUID().toString(), existing.getTerrain(), bnd, existing.getSeedKey());
+                        frag.hexSet = comp;
+                        newFragments.add(frag);
+                    }
+                }
+            }
+            blocks.removeAll(toRemove);
+            blocks.addAll(newFragments);
+            toRemove.clear();
+
+            // Apply max retention: remove protected hexes from new block
+            newSet.removeAll(protectedHexes);
+
+            // ── Phase D: add the new block ──
+            if (newSet.isEmpty()) return null;
+
+            String id = UUID.randomUUID().toString();
+            // Only compute boundary for small sets; large sets skip polygon
+            List<MapData.Pt> newBoundary = newSet.size() <= 500 ? TerrainGeometry.hexSetToBoundary(newSet) : List.of();
+            if (newSet.size() <= 500 && newBoundary.size() < 3) return null;
+
+            Block newBlock = new Block(id, terrain, newBoundary, seedKey);
+            newBlock.hexSet = newSet; // pre-warm cache
+            blocks.add(newBlock);
+            return id;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Remove a block by id.
+     * @param id the block identifier to remove
+     * @return true if a block was removed
+     */
+    public boolean removeBlock(String id) {
+        lock.writeLock().lock();
+        try {
+            return blocks.removeIf(b -> b.getId().equals(id));
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    // ── Serialization bridge ───────────────────────────────────
+
+    /**
+     * Export all blocks as gsim-core TerrainBlock records for persistence.
+     * @return list of TerrainBlock records
+     */
+    public List<MapData.TerrainBlock> getBlocks() {
+        lock.readLock().lock();
+        try {
+            List<MapData.TerrainBlock> result = new ArrayList<>();
+            for (Block b : blocks) {
+                result.add(b.toGsimBlock(mapRadius));
+            }
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /** Split a hex set into connected components (by hex adjacency). */
+    private static List<Set<String>> splitComponents(Set<String> hexSet) {
+        List<Set<String>> result = new ArrayList<>();
+        Set<String> remaining = new HashSet<>(hexSet);
+        while (!remaining.isEmpty()) {
+            String seed = remaining.iterator().next();
+            remaining.remove(seed);
+            Set<String> comp = new HashSet<>();
+            Deque<String> stack = new ArrayDeque<>();
+            stack.push(seed);
+            while (!stack.isEmpty()) {
+                String key = stack.pop();
+                comp.add(key);
+                int[] h = MapData.parseHexKey(key);
+                for (int[] d : TerrainGeometry.DIRS) {
+                    String nk = MapData.hexKey(h[0] + d[0], h[1] + d[1]);
+                    if (remaining.remove(nk)) stack.push(nk);
+                }
+            }
+            result.add(comp);
+        }
+        return result;
+    }
+
+    /**
+     * Load blocks from gsim-core records (replaces canvas state).
+     * @param gsimBlocks list of TerrainBlock records to load
+     */
+    public void setBlocks(List<MapData.TerrainBlock> gsimBlocks) {
+        lock.writeLock().lock();
+        try {
+            blocks.clear();
+            if (gsimBlocks == null) return;
+            for (int i = 0; i < gsimBlocks.size(); i++) {
+                MapData.TerrainBlock gb = gsimBlocks.get(i);
+                String id = "b" + i + "_" + UUID.randomUUID().toString().substring(0, 8);
+                String seedKey = gb.seedKey() != null ? gb.seedKey() : "";
+                Block b = new Block(id, gb.terrain(), gb.boundary(), seedKey);
+                // Pre-warm hexSet from loaded hexKeys (skip boundary polygon)
+                if (!gb.hexKeys().isEmpty()) {
+                    b.hexSet = new HashSet<>(gb.hexKeys());
+                }
+                blocks.add(b);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Returns whether this canvas has no terrain blocks.
+     * @return true if this canvas has no terrain blocks
+     */
+    public boolean isEmpty() {
+        lock.readLock().lock();
+        try {
+            return blocks.isEmpty();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns the number of terrain blocks in this canvas.
+     * @return the number of terrain blocks in this canvas
+     */
+    public int size() {
+        lock.readLock().lock();
+        try {
+            return blocks.size();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns the map radius used for hex operations.
+     * @return the map radius used for hex operations
+     */
+    public int getMapRadius() {
+        return mapRadius;
+    }
+}
