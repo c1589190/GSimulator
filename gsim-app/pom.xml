@@ -12,12 +12,12 @@
     <packaging>jar</packaging>
 
     <name>GSimulator App</name>
-    <description>GSimulator CLI entry point — thin wrapper around gsim-lib</description>
+    <description>GSimulator 程序入口 + 应用组装 + 交互壳（CLI/WebUI）</description>
 
     <dependencies>
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsim-lib</artifactId>
+            <artifactId>gsim-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -8,12 +8,11 @@
         <version>0.1.0-Alpha260723</version>
     </parent>
 
-    <artifactId>gsim-lib</artifactId>
+    <artifactId>gsim-core</artifactId>
     <packaging>jar</packaging>
 
-    <name>GSim Library</name>
-    <description>GSimulator library — all application code without CLI entry point. Include this
-    to embed GSimulator (Agent, WorldInfo, MCP, HTTP API, WebUI) in your own application.</description>
+    <name>GSim Core</name>
+    <description>GSimulator 核心库 — 世界管理（WorldInfo）、文档管理（Doc）、LLM、缓存、会话、事件、配置等业务层。不含 Agent 运行时与工具实现（见 gsim-agent）。</description>
 
     <dependencies>
         <!-- GSim AgentLib (AgentTool 协议 + MCP 框架) — 临时依赖，T4 随 agent 提取拆除 -->

@@ -15,10 +15,10 @@
     <description>Hex map editor and MCP bridge for GSim — map data, terrain editing, HTTP API, MCP tools</description>
 
     <dependencies>
-        <!-- GSimulator library (Agent, WorldInfo, MCP base, HTTP API, WebUI) -->
+        <!-- GSimulator core (WorldInfo, Doc, LLM, Cache) -->
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsim-lib</artifactId>
+            <artifactId>gsim-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -29,7 +29,7 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- JSON serialization (direct dependency — also transitively from gsim-lib) -->
+        <!-- JSON serialization (direct dependency — also transitively from gsim-core) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

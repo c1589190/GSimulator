@@ -12,7 +12,7 @@
 
     <modules>
         <module>gsim-agentlib</module>
-        <module>gsim-lib</module>
+        <module>gsim-core</module>
         <module>gsim-app</module>
         <module>gsimap</module>
     </modules>
@@ -259,7 +259,7 @@
             </plugin>
             <!-- SpotBugs: activated per-module (different failOnError per module).
                  gsimap + gsim-app: failOnError=true  (zero tolerance)
-                 gsim-lib:         failOnError=false (ratchet: baseline comparison) -->
+                 gsim-core:        failOnError=false (ratchet: baseline comparison) -->
         </plugins>
     </build>
 </project>
