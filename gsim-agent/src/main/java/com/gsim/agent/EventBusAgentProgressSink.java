@@ -1,9 +1,9 @@
 package com.gsim.agent;
 
-import com.gsim.event.AgentProgressEvent;
-import com.gsim.event.AgentProgressSink;
-import com.gsim.event.EventBus;
-import com.gsim.event.GSimEvent;
+import com.gsim.core.event.AgentProgressEvent;
+import com.gsim.core.event.AgentProgressSink;
+import com.gsim.core.event.EventBus;
+import com.gsim.core.event.GSimEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 

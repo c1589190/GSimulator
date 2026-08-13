@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.event.AgentProgressEvent;
-import com.gsim.event.AgentProgressSink;
-import com.gsim.llm.LlmManager;
-import com.gsim.llm.LlmProviderRegistry;
+import com.gsim.core.event.AgentProgressEvent;
+import com.gsim.core.event.AgentProgressSink;
+import com.gsim.core.llm.LlmManager;
+import com.gsim.core.llm.LlmProviderRegistry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,7 +66,7 @@ class AgentFactoryTest {
         capturingSink = capturedEvents::add;
 
         // Set up LLM provider registry with a test provider
-        var provConfig = com.gsim.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+        var provConfig = com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", new LlmManager(provConfig));
 

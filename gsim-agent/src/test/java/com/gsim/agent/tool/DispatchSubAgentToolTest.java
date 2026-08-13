@@ -8,9 +8,9 @@ import com.gsim.agent.core.AgentResult;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.event.AgentProgressSink;
-import com.gsim.llm.LlmManager;
-import com.gsim.llm.LlmProviderRegistry;
+import com.gsim.core.event.AgentProgressSink;
+import com.gsim.core.llm.LlmManager;
+import com.gsim.core.llm.LlmProviderRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -72,7 +72,7 @@ class DispatchSubAgentToolTest {
         runningSubAgents = new ConcurrentHashMap<>();
         subAgentCounter = new AtomicInteger(0);
 
-        var provConfig = com.gsim.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+        var provConfig = com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmManager llm = new LlmManager(provConfig);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", llm);

@@ -1,6 +1,6 @@
 package com.gsim.session;
 
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

@@ -1,6 +1,6 @@
 package com.gsimap.http;
 
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import com.gsimap.map.MapData;
 import com.gsimap.map.MapDiff;
 import com.gsimap.map.MapResolver;

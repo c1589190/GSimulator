@@ -1,4 +1,4 @@
-package com.gsim.event;
+package com.gsim.core.event;
 
 /**
  * AgentProgressSink -- Agent 进度输出侧通道。

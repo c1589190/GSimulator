@@ -1,4 +1,4 @@
-package com.gsim.util;
+package com.gsim.core.util;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;

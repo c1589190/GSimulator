@@ -1,6 +1,6 @@
 package com.gsim.cache;
 
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

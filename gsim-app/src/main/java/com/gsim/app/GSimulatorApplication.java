@@ -37,7 +37,7 @@ public class GSimulatorApplication {
     private final boolean agentEnabled;
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
-    private com.gsim.event.CompositeAgentProgressSink compositeSink;
+    private com.gsim.core.event.CompositeAgentProgressSink compositeSink;
     private com.gsim.agent.core.AgentFactory agentFactory;
 
     // -- Bootstrap result wiring --
@@ -138,10 +138,10 @@ public class GSimulatorApplication {
                     ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
                     : new com.gsim.agent.CliAgentProgressSink(System.out, true);
             var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
-            this.compositeSink = new com.gsim.event.CompositeAgentProgressSink(
+            this.compositeSink = new com.gsim.core.event.CompositeAgentProgressSink(
                     cliProgressSink, eventBusSink, sessionPoolBridge);
         } else {
-            this.compositeSink = new com.gsim.event.CompositeAgentProgressSink(sessionPoolBridge);
+            this.compositeSink = new com.gsim.core.event.CompositeAgentProgressSink(sessionPoolBridge);
         }
 
         // 注册核心工具（World/Doc/Import，始终注册）
@@ -208,7 +208,7 @@ public class GSimulatorApplication {
 
             // LlmApiHandler + AgentApiHandler — 配置管理
             var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
-                    new com.gsim.llm.LlmConfigManager(config.getLlmsPath()), ctx.getLlmProviderRegistry());
+                    new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath()), ctx.getLlmProviderRegistry());
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
             var agentApiHandler = new com.gsim.webui.handlers.AgentApiHandler(
@@ -233,7 +233,7 @@ public class GSimulatorApplication {
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
         var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(ctx.getSessionPool(), "default");
         this.compositeSink =
-                new com.gsim.event.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
+                new com.gsim.core.event.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
 
         // Tool group manager
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
@@ -314,7 +314,7 @@ public class GSimulatorApplication {
 
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
-        var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;
+        var compactLlm = (compactProvider instanceof com.gsim.core.llm.LlmManager m) ? m : null;
         if (compactLlm != null) {
             log.info("Using compact LLM provider: id={}", compactLlm.providerId());
         } else {
@@ -553,7 +553,7 @@ public class GSimulatorApplication {
         ctx.setNodeCommand(nc);
 
         // LLM + Agent config management commands
-        var llmConfigManager = new com.gsim.llm.LlmConfigManager(config.getLlmsPath());
+        var llmConfigManager = new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath());
         var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);

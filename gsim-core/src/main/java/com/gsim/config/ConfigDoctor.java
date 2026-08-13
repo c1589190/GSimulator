@@ -1,10 +1,10 @@
-package com.gsim.config;
+package com.gsim.core.config;
 
-import com.gsim.llm.LlmManager;
-import com.gsim.llm.LlmMessage;
-import com.gsim.llm.LlmRequest;
-import com.gsim.llm.LlmResult;
-import com.gsim.llm.ProviderConfig;
+import com.gsim.core.llm.LlmManager;
+import com.gsim.core.llm.LlmMessage;
+import com.gsim.core.llm.LlmRequest;
+import com.gsim.core.llm.LlmResult;
+import com.gsim.core.llm.ProviderConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

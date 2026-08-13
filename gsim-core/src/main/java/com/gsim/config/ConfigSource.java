@@ -1,4 +1,4 @@
-package com.gsim.config;
+package com.gsim.core.config;
 
 /**
  * 配置来源枚举。

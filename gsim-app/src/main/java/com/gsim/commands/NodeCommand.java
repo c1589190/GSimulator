@@ -1,6 +1,6 @@
 package com.gsim.commands;
 
-import com.gsim.util.IdGenerator;
+import com.gsim.core.util.IdGenerator;
 import com.gsim.worldinfo.*;
 import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.NodeLoader;

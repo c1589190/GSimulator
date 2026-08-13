@@ -4,7 +4,7 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.util.IdGenerator;
+import com.gsim.core.util.IdGenerator;
 import com.gsim.worldinfo.NodeSnapshot;
 import com.gsim.worldinfo.WorldInformation;
 import com.gsim.worldinfo.loader.NodeLoader;
@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * node_create -- 创建新的子节点（下一回合）并自动切换到该节点。
  *
  * <p>此工具是推进时间线的核心手段。新节点从当前活跃节点派生，回合号自动加 1，
- * 节点 ID 由 {@link com.gsim.util.IdGenerator} 自动生成（格式 nXXXX）。
+ * 节点 ID 由 {@link com.gsim.core.util.IdGenerator} 自动生成（格式 nXXXX）。
  * 创建后自动更新 active.json 将新节点设为活跃节点。
  *
  * <p>新节点初始没有检查点和元素，需要使用

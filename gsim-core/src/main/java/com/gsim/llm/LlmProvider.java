@@ -1,4 +1,4 @@
-package com.gsim.llm;
+package com.gsim.core.llm;
 
 /**
  * LLM Provider 接口 — Agent 与 LLM 之间的抽象入口。

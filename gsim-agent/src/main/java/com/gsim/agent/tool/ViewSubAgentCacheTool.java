@@ -7,7 +7,7 @@ import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CachesManager;
-import com.gsim.llm.ToolDef;
+import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;

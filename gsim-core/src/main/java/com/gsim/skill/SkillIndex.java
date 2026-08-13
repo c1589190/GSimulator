@@ -1,7 +1,7 @@
-package com.gsim.skill;
+package com.gsim.core.skill;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.embedding.EmbeddingClient;
+import com.gsim.core.embedding.EmbeddingClient;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

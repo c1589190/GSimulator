@@ -5,8 +5,8 @@ import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.doc.DocStore;
 import com.gsim.doc.Document;
-import com.gsim.embedding.EmbeddingClient;
-import com.gsim.skill.SkillIndex;
+import com.gsim.core.embedding.EmbeddingClient;
+import com.gsim.core.skill.SkillIndex;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,7 +98,7 @@ public final class DocSearchTool implements AgentTool {
             return ToolResult.ok(name(), items);
         }
 
-        List<com.gsim.skill.SkillIndex.SearchResult> results;
+        List<com.gsim.core.skill.SkillIndex.SearchResult> results;
         if (embeddingClient != null && embeddingClient.isConfigured()) {
             try {
                 float[] queryVec = embeddingClient.embed(query);

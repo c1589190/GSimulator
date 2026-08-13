@@ -1,4 +1,4 @@
-package com.gsim.event;
+package com.gsim.core.event;
 
 import java.time.Instant;
 import java.util.Collections;

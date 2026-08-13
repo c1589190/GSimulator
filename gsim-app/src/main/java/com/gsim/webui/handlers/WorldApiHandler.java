@@ -1,6 +1,6 @@
 package com.gsim.webui.handlers;
 
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import com.gsim.worldinfo.loader.ActiveStateManager;
 import com.gsim.worldinfo.loader.WorldIndexManager;
 import com.sun.net.httpserver.HttpExchange;

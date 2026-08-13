@@ -1,14 +1,14 @@
 package com.gsim.compact;
 
 import com.gsim.cache.CacheSession;
-import com.gsim.event.AgentProgressEvent;
-import com.gsim.event.AgentProgressSink;
-import com.gsim.llm.LlmCall;
-import com.gsim.llm.LlmManager;
-import com.gsim.llm.LlmMessage;
-import com.gsim.llm.LlmRequest;
-import com.gsim.llm.LlmResult;
-import com.gsim.llm.StreamPool;
+import com.gsim.core.event.AgentProgressEvent;
+import com.gsim.core.event.AgentProgressSink;
+import com.gsim.core.llm.LlmCall;
+import com.gsim.core.llm.LlmManager;
+import com.gsim.core.llm.LlmMessage;
+import com.gsim.core.llm.LlmRequest;
+import com.gsim.core.llm.LlmResult;
+import com.gsim.core.llm.StreamPool;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

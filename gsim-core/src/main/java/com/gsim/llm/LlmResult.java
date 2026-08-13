@@ -1,4 +1,4 @@
-package com.gsim.llm;
+package com.gsim.core.llm;
 
 import java.util.List;
 

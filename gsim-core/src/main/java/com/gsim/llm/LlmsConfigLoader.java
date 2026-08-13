@@ -1,4 +1,4 @@
-package com.gsim.llm;
+package com.gsim.core.llm;
 
 import java.io.IOException;
 import java.nio.file.Files;

@@ -3,7 +3,7 @@ package com.gsim.agent;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.tool.FinishActionTool;
-import com.gsim.llm.ToolDef;
+import com.gsim.core.llm.ToolDef;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

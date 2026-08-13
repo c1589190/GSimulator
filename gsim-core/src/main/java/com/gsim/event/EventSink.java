@@ -1,4 +1,4 @@
-package com.gsim.event;
+package com.gsim.core.event;
 
 /**
  * 事件消费者 (sink)。CLI ConsoleEventSink 和 HTTP SseEventSink 都实现此接口。

@@ -1,4 +1,4 @@
-package com.gsim.config;
+package com.gsim.core.config;
 
 import java.nio.file.Path;
 

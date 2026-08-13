@@ -76,7 +76,7 @@ public class ActivateToolGroupsTool implements AgentTool {
                         "description",
                         "要激活的工具组 key 列表，JSON 字符串数组格式，如 \"[\\\"player_action\\\","
                                 + "\\\"knowledge\\\"]\"。不要传入不存在的组 key。"));
-        return com.gsim.llm.ToolDef.strictSchema(props, java.util.List.of("groups"));
+        return com.gsim.core.llm.ToolDef.strictSchema(props, java.util.List.of("groups"));
     }
 
     @Override

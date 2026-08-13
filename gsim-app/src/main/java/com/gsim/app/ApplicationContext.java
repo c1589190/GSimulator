@@ -8,18 +8,18 @@ import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.event.ConsoleEventSink;
-import com.gsim.event.EventBus;
+import com.gsim.core.event.ConsoleEventSink;
+import com.gsim.core.event.EventBus;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.InteractionSession;
-import com.gsim.llm.LlmManager;
-import com.gsim.llm.LlmProviderRegistry;
-import com.gsim.llm.LlmsConfigLoader;
+import com.gsim.core.llm.LlmManager;
+import com.gsim.core.llm.LlmProviderRegistry;
+import com.gsim.core.llm.LlmsConfigLoader;
 import com.gsim.session.SessionPool;
 import com.gsim.agent.tools.search.LocalFileSearchService;
 import com.gsim.agent.tools.search.WikiSearchTool;
-import com.gsim.util.TimeProvider;
+import com.gsim.core.util.TimeProvider;
 import java.nio.file.Path;
 
 /**
@@ -229,14 +229,14 @@ public class ApplicationContext {
 
     // ── Embedding & Skill ──
 
-    private com.gsim.embedding.EmbeddingClient embeddingClient;
-    private com.gsim.skill.SkillIndex skillIndex;
+    private com.gsim.core.embedding.EmbeddingClient embeddingClient;
+    private com.gsim.core.skill.SkillIndex skillIndex;
     private com.gsim.doc.DocStore docStore;
 
     /** 获取或懒创建 EmbeddingClient（若配置了 EMBEDDING_* 环境变量）。 */
-    public com.gsim.embedding.EmbeddingClient getEmbeddingClient() {
+    public com.gsim.core.embedding.EmbeddingClient getEmbeddingClient() {
         if (embeddingClient == null && config.isEmbeddingConfigured()) {
-            embeddingClient = new com.gsim.embedding.EmbeddingClient(
+            embeddingClient = new com.gsim.core.embedding.EmbeddingClient(
                     config.getEmbeddingBaseUrl(),
                     config.getEmbeddingApiKey(),
                     config.getEmbeddingModel() != null ? config.getEmbeddingModel() : "BAAI/bge-large-zh-v1.5");
@@ -245,9 +245,9 @@ public class ApplicationContext {
     }
 
     /** 获取或懒创建 SkillIndex（复用为 doc 索引引擎）。 */
-    public com.gsim.skill.SkillIndex getSkillIndex(Path docsDir) {
+    public com.gsim.core.skill.SkillIndex getSkillIndex(Path docsDir) {
         if (skillIndex == null) {
-            skillIndex = new com.gsim.skill.SkillIndex(docsDir);
+            skillIndex = new com.gsim.core.skill.SkillIndex(docsDir);
         }
         return skillIndex;
     }

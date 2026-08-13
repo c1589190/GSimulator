@@ -1,7 +1,7 @@
 package com.gsim.webui.handlers;
 
 import com.gsim.agent.config.AgentConfigManager;
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;

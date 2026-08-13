@@ -1,6 +1,6 @@
-package com.gsim.event;
+package com.gsim.core.event;
 
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;

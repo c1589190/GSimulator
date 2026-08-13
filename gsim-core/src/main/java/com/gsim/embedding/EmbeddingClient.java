@@ -1,4 +1,4 @@
-package com.gsim.embedding;
+package com.gsim.core.embedding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;

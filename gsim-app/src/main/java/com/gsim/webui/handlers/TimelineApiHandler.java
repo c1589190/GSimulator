@@ -1,7 +1,7 @@
 package com.gsim.webui.handlers;
 
-import com.gsim.util.IdGenerator;
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.IdGenerator;
+import com.gsim.core.util.JsonUtils;
 import com.gsim.webui.MermaidGraphBuilder;
 import com.gsim.webui.TemplateRenderer;
 import com.gsim.worldinfo.NodeSnapshot;

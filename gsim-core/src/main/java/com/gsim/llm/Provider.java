@@ -1,4 +1,4 @@
-package com.gsim.llm;
+package com.gsim.core.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,7 +1,7 @@
 package com.gsim.agent.core;
 
 import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
-import com.gsim.llm.LlmMessage;
+import com.gsim.core.llm.LlmMessage;
 import java.util.List;
 
 /**

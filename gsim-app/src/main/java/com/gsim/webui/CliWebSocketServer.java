@@ -4,7 +4,7 @@ import com.gsim.app.ApplicationContext;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.event.CompositeAgentProgressSink;
+import com.gsim.core.event.CompositeAgentProgressSink;
 import com.gsim.session.CliNodeRenderer;
 import com.gsim.session.NodeStatus;
 import com.gsim.session.NodeType;

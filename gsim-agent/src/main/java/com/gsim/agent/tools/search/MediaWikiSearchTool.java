@@ -4,7 +4,7 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.webimport.MediaWikiApiClient;
+import com.gsim.core.webimport.MediaWikiApiClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

@@ -3,7 +3,7 @@ package com.gsimap.tool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import com.gsimap.map.MapDiff;
 import com.gsimap.map.MapStore;
 import com.gsimap.service.MapService;

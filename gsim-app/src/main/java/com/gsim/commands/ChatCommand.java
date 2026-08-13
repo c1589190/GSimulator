@@ -3,7 +3,7 @@ package com.gsim.commands;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.cache.CacheSession;
 import com.gsim.cache.CacheStore;
-import com.gsim.llm.LlmMessage;
+import com.gsim.core.llm.LlmMessage;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;

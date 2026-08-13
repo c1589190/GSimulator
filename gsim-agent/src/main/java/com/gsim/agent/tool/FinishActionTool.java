@@ -72,7 +72,7 @@ public class FinishActionTool implements AgentTool {
                 "summary",
                 java.util.Map.of(
                         "type", "string", "description", "本轮操作的简短摘要（可选，但强烈建议提供）。" + "一句话总结你做了什么，用蓝色高亮显示在终端上供用户快速浏览。"));
-        return com.gsim.llm.ToolDef.strictSchema(props, java.util.List.of("status", "message"));
+        return com.gsim.core.llm.ToolDef.strictSchema(props, java.util.List.of("status", "message"));
     }
 
     @Override

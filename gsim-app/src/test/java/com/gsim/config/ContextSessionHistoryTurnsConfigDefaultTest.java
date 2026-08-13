@@ -1,4 +1,4 @@
-package com.gsim.config;
+package com.gsim.core.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 

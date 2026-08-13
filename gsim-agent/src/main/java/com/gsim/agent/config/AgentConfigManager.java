@@ -2,7 +2,7 @@ package com.gsim.agent.config;
 
 import com.gsim.agent.AgentConfig;
 import com.gsim.agent.AgentConfigStore;
-import com.gsim.util.JsonUtils;
+import com.gsim.core.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -1,6 +1,6 @@
-package com.gsim.llm;
+package com.gsim.core.llm;
 
-import com.gsim.util.LogSanitizer;
+import com.gsim.core.util.LogSanitizer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

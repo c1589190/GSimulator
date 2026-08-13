@@ -1,4 +1,4 @@
-package com.gsim.webimport;
+package com.gsim.core.webimport;
 
 import static org.junit.jupiter.api.Assertions.*;
 

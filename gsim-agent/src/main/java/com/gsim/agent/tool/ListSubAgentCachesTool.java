@@ -6,7 +6,7 @@ import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.cache.CacheInfo;
 import com.gsim.cache.CachesManager;
-import com.gsim.llm.ToolDef;
+import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;

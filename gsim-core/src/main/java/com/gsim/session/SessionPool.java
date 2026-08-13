@@ -1,6 +1,6 @@
 package com.gsim.session;
 
-import com.gsim.util.IdGenerator;
+import com.gsim.core.util.IdGenerator;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
