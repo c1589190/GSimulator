@@ -140,7 +140,7 @@ public abstract class AbstractMcpServer implements Runnable {
      *
      * <p>内部将 {@link ToolRegistry} 通过 {@link ToolRegistryMcpAdapter} 包装为
      * {@link McpToolRegistry}。所有注册在 {@link ToolRegistry} 中的
-     * {@link com.gsim.tool.AgentTool} 将自动暴露为 MCP 工具。
+     * {@link com.gsim.agentlib.tool.AgentTool} 将自动暴露为 MCP 工具。
      * 默认使用 {@link StdioMcpTransport}。
      *
      * @param toolRegistry 工具注册表（不可为 null）

@@ -5,7 +5,7 @@ package com.gsim.agentlib.mcp;
  *
  * <p>Holds the {@code worldId} extracted from the current MCP request, making it
  * available to any tool via {@link #worldId()} without requiring each tool to
- * extract and validate it from {@link com.gsim.tool.ToolCall} parameters.
+ * extract and validate it from {@link com.gsim.agentlib.tool.ToolCall} parameters.
  *
  * <p>The adapter sets the context before tool execution and clears it afterward.
  * Tools called outside the MCP path (CLI, agent-internal) see {@code null} and

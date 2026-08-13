@@ -1,5 +1,6 @@
 package com.gsim.agent.tool;
 
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agent.core.AgentFactory;
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("DispatchSubAgentTool 动态 agent type 校验")
 class DispatchSubAgentToolTest {
