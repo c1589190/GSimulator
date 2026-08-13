@@ -14,7 +14,6 @@ import com.gsim.core.cache.CacheSession;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import java.nio.file.Path;
-import java.util.function.Supplier;
 
 /**
  * GSimulator 应用启动器。
@@ -190,16 +189,18 @@ public class GSimulatorApplication {
         }
 
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
-        AgentBridge.registerCoreTools(toolRegistry, new CoreToolContext(
-                worldsDir,
-                config.getImportDir(),
-                importDocService,
-                docStore,
-                docCacheManager,
-                docIndex,
-                embeddingClient,
-                activeWorldId::get,
-                compositeSink));
+        AgentBridge.registerCoreTools(
+                toolRegistry,
+                new CoreToolContext(
+                        worldsDir,
+                        config.getImportDir(),
+                        importDocService,
+                        docStore,
+                        docCacheManager,
+                        docIndex,
+                        embeddingClient,
+                        activeWorldId::get,
+                        compositeSink));
 
         // 注册 Agent 工具（仅 agent 模式）
         if (agentEnabled) {
@@ -223,8 +224,10 @@ public class GSimulatorApplication {
 
         // 注册 world info + node 管理工具 —— 经 gsim-agent 桥接层
         // worldInfo 为可变字段，以 () -> worldInfo 惰性供应，节点创建/世界切换重建后对工具可见（与迁移前 this.worldInfo 动态读语义等价）
-        AgentBridge.registerWorldInfoTools(toolRegistry, new WorldInfoToolContext(
-                worldsDir, () -> worldInfo, activeWorldId::get, docCacheManager, onNodeChanged));
+        AgentBridge.registerWorldInfoTools(
+                toolRegistry,
+                new WorldInfoToolContext(
+                        worldsDir, () -> worldInfo, activeWorldId::get, docCacheManager, onNodeChanged));
 
         if (agentEnabled) {
             // 创建命令并注入到 adapter

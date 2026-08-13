@@ -125,8 +125,7 @@ public final class AgentBridge {
             String reqWorldId = GsimRequestContext.worldId();
             WorldInformation current = ctx.worldInfoSupplier().get();
             if (reqWorldId != null && !reqWorldId.equals(current.worldId())) {
-                return wiCache.computeIfAbsent(
-                        reqWorldId, wid -> WorldInfoBuilder.discover(ctx.worldsDir(), wid));
+                return wiCache.computeIfAbsent(reqWorldId, wid -> WorldInfoBuilder.discover(ctx.worldsDir(), wid));
             }
             return current;
         };
