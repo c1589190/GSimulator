@@ -27,7 +27,9 @@ public final class DocWriteTool implements AgentTool {
      * @param progressSink  进度推送，用于 board 类型文档自动推送公开消息
      */
     public DocWriteTool(
-            DocStore store, com.gsim.doc.DocCacheManager cacheManager, com.gsim.core.event.AgentProgressSink progressSink) {
+            DocStore store,
+            com.gsim.doc.DocCacheManager cacheManager,
+            com.gsim.core.event.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
         this.progressSink = progressSink;

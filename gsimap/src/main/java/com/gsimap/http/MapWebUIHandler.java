@@ -289,7 +289,10 @@ public class MapWebUIHandler implements HttpHandler {
             return;
         }
         try {
-            sendJson(exchange, 200, Map.of("worldId", worldId, "nodeId", nodeId, "version", mapRevision(worldId, nodeId)));
+            sendJson(
+                    exchange,
+                    200,
+                    Map.of("worldId", worldId, "nodeId", nodeId, "version", mapRevision(worldId, nodeId)));
         } catch (Exception e) {
             sendError(exchange, 500, e.getMessage());
         }
@@ -678,7 +681,16 @@ public class MapWebUIHandler implements HttpHandler {
             try {
                 long base = Long.parseLong(baseRev);
                 if (base != currentRev) {
-                    sendJson(exchange, 409, Map.of("ok", false, "error", "地图已被其他会话修改 (revision mismatch)", "currentRevision", currentRev));
+                    sendJson(
+                            exchange,
+                            409,
+                            Map.of(
+                                    "ok",
+                                    false,
+                                    "error",
+                                    "地图已被其他会话修改 (revision mismatch)",
+                                    "currentRevision",
+                                    currentRev));
                     return;
                 }
             } catch (NumberFormatException ignored) {

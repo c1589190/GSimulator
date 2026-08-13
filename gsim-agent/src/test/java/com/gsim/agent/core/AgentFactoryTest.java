@@ -66,7 +66,8 @@ class AgentFactoryTest {
         capturingSink = capturedEvents::add;
 
         // Set up LLM provider registry with a test provider
-        var provConfig = com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+        var provConfig =
+                com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", new LlmManager(provConfig));
 

@@ -52,8 +52,7 @@ public final class GsimapRenameRegionTool extends AbstractGsimapTool {
             return ToolResult.fail(name(), "newName is required");
         }
 
-        Map<String, Object> result =
-                new LinkedHashMap<>(mapService.renameRegion(worldId, nodeId, oldName, newName));
+        Map<String, Object> result = new LinkedHashMap<>(mapService.renameRegion(worldId, nodeId, oldName, newName));
         result.put("address", "gsimap:region:" + newName);
         return ToolResult.ok(
                 name(), List.of(new ToolResult.Item(newName, "gsimap_rename_region", JsonUtils.toJson(result), 1.0)));

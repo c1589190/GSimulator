@@ -1,15 +1,6 @@
 package com.gsim.app;
 
 import com.gsim.agent.OrchestratorAgent;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.cache.CacheSession;
-import com.gsim.commands.AgentCommand;
-import com.gsim.commands.ChatCommand;
-import com.gsim.commands.LlmCommand;
-import com.gsim.commands.NodeCommand;
-import com.gsim.commands.WorldCommand;
-import com.gsim.interaction.ConsoleInteractionAdapter;
-import com.gsim.worldinfo.WorldInformation;
 import com.gsim.agent.tools.worldinfo.CreateCheckpointTool;
 import com.gsim.agent.tools.worldinfo.NodeCreateTool;
 import com.gsim.agent.tools.worldinfo.NodeListTool;
@@ -19,6 +10,15 @@ import com.gsim.agent.tools.worldinfo.QueryElementTool;
 import com.gsim.agent.tools.worldinfo.QueryKeywordTool;
 import com.gsim.agent.tools.worldinfo.QueryNodeTool;
 import com.gsim.agent.tools.worldinfo.WriteElementTool;
+import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.cache.CacheSession;
+import com.gsim.commands.AgentCommand;
+import com.gsim.commands.ChatCommand;
+import com.gsim.commands.LlmCommand;
+import com.gsim.commands.NodeCommand;
+import com.gsim.commands.WorldCommand;
+import com.gsim.interaction.ConsoleInteractionAdapter;
+import com.gsim.worldinfo.WorldInformation;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 
@@ -179,9 +179,8 @@ public class GSimulatorApplication {
         }
 
         // 创建 WebUiServer（仅 agent 模式）
-        this.webUiServer = agentEnabled
-                ? new com.gsim.webui.WebUiServer(com.gsim.webui.WebUiConfig.from(config), ctx)
-                : null;
+        this.webUiServer =
+                agentEnabled ? new com.gsim.webui.WebUiServer(com.gsim.webui.WebUiConfig.from(config), ctx) : null;
 
         // 注册 ChatApiHandler（在 WebUiServer start 之前）
         if (agentEnabled && chatCommand != null) {
@@ -330,7 +329,6 @@ public class GSimulatorApplication {
                 compositeSink,
                 worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default"));
-
     }
 
     /** 注册核心工具（Import/Doc/Ref/TextEdit），始终注册，不依赖 agent 模式。 */

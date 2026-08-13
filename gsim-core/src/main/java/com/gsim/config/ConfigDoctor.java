@@ -59,10 +59,7 @@ public class ConfigDoctor {
             return "❌ LLM 未配置，无法测试。";
         }
         return testLlmConnectivity(
-                config.llmBaseUrl(),
-                config.llmApiKey(),
-                config.llmModel(),
-                config.llmTimeoutSeconds());
+                config.llmBaseUrl(), config.llmApiKey(), config.llmModel(), config.llmTimeoutSeconds());
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.gsim.app;
 
+import com.gsim.agent.tools.search.LocalFileSearchService;
+import com.gsim.agent.tools.search.WikiSearchTool;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
@@ -10,16 +12,14 @@ import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.core.event.ConsoleEventSink;
 import com.gsim.core.event.EventBus;
-import com.gsim.interaction.InteractionContext;
-import com.gsim.interaction.InteractionManager;
-import com.gsim.interaction.InteractionSession;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
 import com.gsim.core.llm.LlmsConfigLoader;
-import com.gsim.session.SessionPool;
-import com.gsim.agent.tools.search.LocalFileSearchService;
-import com.gsim.agent.tools.search.WikiSearchTool;
 import com.gsim.core.util.TimeProvider;
+import com.gsim.interaction.InteractionContext;
+import com.gsim.interaction.InteractionManager;
+import com.gsim.interaction.InteractionSession;
+import com.gsim.session.SessionPool;
 import java.nio.file.Path;
 
 /**

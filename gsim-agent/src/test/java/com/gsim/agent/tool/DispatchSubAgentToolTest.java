@@ -72,7 +72,8 @@ class DispatchSubAgentToolTest {
         runningSubAgents = new ConcurrentHashMap<>();
         subAgentCounter = new AtomicInteger(0);
 
-        var provConfig = com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+        var provConfig =
+                com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmManager llm = new LlmManager(provConfig);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", llm);

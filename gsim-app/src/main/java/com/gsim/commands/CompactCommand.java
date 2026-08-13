@@ -80,8 +80,8 @@ public final class CompactCommand {
         // 2. 压缩
         String compacted = compactor.compact(session, progressSink);
 
-        progressSink.onProgress(
-                com.gsim.core.event.AgentProgressEvent.publicMessage("\n━━━ 压缩结果 ━━━\n" + compacted + "\n━━━━━━━━━━━━━━"));
+        progressSink.onProgress(com.gsim.core.event.AgentProgressEvent.publicMessage(
+                "\n━━━ 压缩结果 ━━━\n" + compacted + "\n━━━━━━━━━━━━━━"));
 
         // 3. 创建新 session
         CacheSession newSession = CacheStore.createNew(worldsDir, wid, session.agentName(), session.nodeId());
@@ -90,7 +90,8 @@ public final class CompactCommand {
                 + " messages → " + compacted.length() + " chars)");
         CacheStore.save(worldsDir, newSession);
 
-        progressSink.onProgress(com.gsim.core.event.AgentProgressEvent.publicMessage("📝 新会话: " + newSession.sessionId()));
+        progressSink.onProgress(
+                com.gsim.core.event.AgentProgressEvent.publicMessage("📝 新会话: " + newSession.sessionId()));
 
         // 4. 注入压缩文本并开始对话
         List<LlmMessage> priorMessages = List.of(LlmMessage.user("以下是之前对话历史的压缩摘要，请基于此继续：\n\n" + compacted));
