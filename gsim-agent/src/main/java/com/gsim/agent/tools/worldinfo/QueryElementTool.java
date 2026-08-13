@@ -95,7 +95,7 @@ public final class QueryElementTool implements AgentTool {
                     "query_element",
                     "Node '" + nodeId + "' not found in current branch chain. " + "Available nodes: "
                             + available + ". " + "Use node_list to see all nodes. "
-                            + "Use node_create to create a new child node, or node_switch to switch to an existing one.");
+                            + "Use node_create to create a new child node.");
         }
 
         // Find the checkpoint

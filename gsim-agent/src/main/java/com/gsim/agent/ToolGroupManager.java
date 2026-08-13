@@ -78,7 +78,6 @@ public class ToolGroupManager {
             "world_list",
             "world_create",
             "compact_cache",
-            "world_switch",
             "doc_list",
             "doc_read",
             "doc_create",

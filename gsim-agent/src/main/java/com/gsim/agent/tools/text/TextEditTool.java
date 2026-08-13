@@ -130,7 +130,7 @@ public final class TextEditTool implements AgentTool {
         String source = call.param("source", "").trim();
         if (source.isEmpty()) return ToolResult.fail(NAME, "source 不能为空");
 
-        // 从 ToolCall 参数获取 worldId，支持 world_switch 后的动态切换
+        // 从 ToolCall 参数获取 worldId，支持活跃 World 动态切换后的解析
         String worldId = call.param("worldId", activeWorldId);
 
         // Resolve source text

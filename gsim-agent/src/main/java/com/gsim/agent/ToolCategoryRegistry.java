@@ -47,8 +47,6 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("create_checkpoint", ToolCategory.MUTATING);
         // Node: mutating
         CATEGORIES.put("node_create", ToolCategory.MUTATING);
-        CATEGORIES.put("node_switch", ToolCategory.MUTATING);
-        CATEGORIES.put("node_goto_parent", ToolCategory.MUTATING);
         // Dynamic agent config
         CATEGORIES.put("create_sub_agent_config", ToolCategory.MUTATING);
         CATEGORIES.put("update_sub_agent_config", ToolCategory.MUTATING);
@@ -57,7 +55,6 @@ public class ToolCategoryRegistry {
         CATEGORIES.put("compact_cache", ToolCategory.MUTATING);
         // World: mutating
         CATEGORIES.put("world_create", ToolCategory.MUTATING);
-        CATEGORIES.put("world_switch", ToolCategory.MUTATING);
         // Docs: mutating
         CATEGORIES.put("doc_create", ToolCategory.MUTATING);
         CATEGORIES.put("doc_write", ToolCategory.MUTATING);

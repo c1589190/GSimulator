@@ -28,7 +28,7 @@
 ### 当前不在根节点时的限制（activeBranch != n0000）
 
 - 不得修改根节点 n0000 的内容。如需记录增量设定，写入当前节点的对应检查点。
-- 用户要求修改根世界观时，应提示返回根节点（node_switch nodeId=n0000）或记录为当前节点增量。
+- 用户要求修改根世界观时，应说明根节点 n0000 不可修改，建议记录为当前节点增量（当前仅支持 node_create 创建子节点）。
 
 ### 任意节点的权限
 
@@ -270,8 +270,6 @@ characters:刘备              — 省略 nodeId，默认当前活跃节点
 | node_list | READ | 列出当前链上所有节点（flat 平铺 / tree 树形缩进） |
 | node_status | READ | 查看当前活跃节点的详细信息（turn、worldTime、检查点列表） |
 | node_create | MUTATING | 创建子节点（下一回合）并自动切换。必填 worldTime |
-| node_switch | MUTATING | 切换到链内已有节点 |
-| node_goto_parent | MUTATING | 返回父节点 |
 
 ### 创建新节点（下一回合）
 
@@ -281,17 +279,10 @@ characters:刘备              — 省略 nodeId，默认当前活跃节点
 - 新节点初始无检查点，需要用 write_element 或 create_checkpoint 填充内容
 - 创建后自动切换，返回 newNodeId
 
-### 切换节点
+### 切换与返回限制
 
-用户说"回到 n0001"、"切换到..."、"去节点..."时：
-- 先用 node_list 确认目标节点在链内
-- 调用 node_switch nodeId=...
-
-### 返回父节点
-
-用户说"回到上一节点"、"返回父节点"、"上一回合"时：
-- 调用 node_goto_parent
-- 根节点调用此工具会报错
+- 当前仅支持通过 node_create 创建新子节点（创建后自动切换）。
+- 不支持切换到链内已有节点或返回父节点；用户要求回到旧节点时，先用 node_list / node_status 说明当前链状态，再说明该限制。
 
 ### 节点切换后
 

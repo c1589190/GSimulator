@@ -80,8 +80,6 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             "node_list",
             "node_status",
             "node_create",
-            "node_switch",
-            "node_goto_parent",
             "list_checkpoints");
 
     /**
@@ -154,7 +152,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
                 String active = activeWorldId.get();
                 if (active != null && !active.isEmpty() && !active.equals(worldId)) {
                     throw new IllegalArgumentException("worldId '" + worldId + "' does not match the active world '"
-                            + active + "'. Use world_switch first or correct the worldId.");
+                            + active + "'. Please provide the correct worldId for the active world.");
                 }
             }
         }

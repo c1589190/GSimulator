@@ -85,7 +85,7 @@ public final class ResolveRefTool implements AgentTool {
         }
 
         try {
-            // 从 ToolCall 参数获取 worldId，支持 world_switch 后的动态切换
+            // 从 ToolCall 参数获取 worldId，支持活跃 World 动态切换后的解析
             String worldId = call.param("worldId", activeWorldId);
             Path cacheDir = worldsDir.resolveSibling("docs").resolve(".cache");
             ResolvedRef resolved = RefResolver.resolve(ref, worldsDir, worldId, importDir, docStore, cacheDir);

@@ -30,7 +30,7 @@ ${n.text}
 | 工具组 | 包含工具 | 说明 |
 |--------|---------|------|
 | world_info | query_node, query_checkpoint, query_keyword, query_element, write_element, create_checkpoint | WorldInfo 结构化元素读写 |
-| node_mgmt | node_list, node_status, node_create, node_switch, node_goto_parent | 节点管理 |
+| node_mgmt | node_list, node_status, node_create | 节点管理 |
 | import_doc | import_document_list, import_document_read, import_document_search | 导入文档浏览 |
 | search | wiki_search, mediawiki_search | 本地/外部搜索 |
 

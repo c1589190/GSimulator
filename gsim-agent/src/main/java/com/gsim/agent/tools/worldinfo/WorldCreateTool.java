@@ -77,7 +77,7 @@ public final class WorldCreateTool implements AgentTool {
                     + "root node: n0000\n"
                     + "创建时间: " + meta.createdAt() + "\n"
                     + "路径: " + worldsDir.resolve(worldId) + "\n\n"
-                    + "使用 world_switch 切换到新 World。";
+                    + "切换活跃 World 后即可使用该 World 的其他工具。";
             return ToolResult.ok(name(), List.of(new ToolResult.Item(name, worldId, snippet, 1.0)));
         } catch (Exception e) {
             return ToolResult.fail(name(), "创建失败: " + e.getMessage());

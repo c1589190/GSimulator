@@ -118,6 +118,6 @@ class OrchestratorPromptNoLegacySimRunRulesTest {
     @DisplayName("应包含节点管理工具说明")
     void hasNodeManagementTools() {
         assertTrue(promptContent.contains("node_create"), "应包含 node_create 工具说明");
-        assertTrue(promptContent.contains("node_switch"), "应包含 node_switch 工具说明");
+        assertTrue(promptContent.contains("node_status"), "应包含 node_status 工具说明");
     }
 }
