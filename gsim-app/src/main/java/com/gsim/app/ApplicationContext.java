@@ -3,23 +3,23 @@ package com.gsim.app;
 import com.gsim.agent.tools.search.LocalFileSearchService;
 import com.gsim.agent.tools.search.WikiSearchTool;
 import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.cache.CachesManager;
-import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.cache.FileSystemCachesManager;
 import com.gsim.core.event.ConsoleEventSink;
 import com.gsim.core.event.EventBus;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
 import com.gsim.core.llm.LlmsConfigLoader;
+import com.gsim.core.session.SessionPool;
 import com.gsim.core.util.TimeProvider;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;
 import com.gsim.interaction.InteractionSession;
-import com.gsim.session.SessionPool;
 import java.nio.file.Path;
 
 /**
@@ -231,7 +231,7 @@ public class ApplicationContext {
 
     private com.gsim.core.embedding.EmbeddingClient embeddingClient;
     private com.gsim.core.skill.SkillIndex skillIndex;
-    private com.gsim.doc.DocStore docStore;
+    private com.gsim.core.doc.DocStore docStore;
 
     /** 获取或懒创建 EmbeddingClient（若配置了 EMBEDDING_* 环境变量）。 */
     public com.gsim.core.embedding.EmbeddingClient getEmbeddingClient() {
@@ -253,18 +253,18 @@ public class ApplicationContext {
     }
 
     /** 获取或懒创建 DocStore。 */
-    public com.gsim.doc.DocStore getDocStore(Path docsDir) {
+    public com.gsim.core.doc.DocStore getDocStore(Path docsDir) {
         if (docStore == null) {
-            docStore = new com.gsim.doc.DocStore(docsDir);
+            docStore = new com.gsim.core.doc.DocStore(docsDir);
         }
         return docStore;
     }
 
     /** 获取当前的 DocStore（懒初始化，无参）。 */
-    public com.gsim.doc.DocStore getDocStore() {
+    public com.gsim.core.doc.DocStore getDocStore() {
         if (docStore == null) {
             Path docsDir = config.worldsDir().resolveSibling("docs");
-            docStore = new com.gsim.doc.DocStore(docsDir);
+            docStore = new com.gsim.core.doc.DocStore(docsDir);
             try {
                 docStore.init();
             } catch (java.io.IOException e) {
@@ -275,7 +275,7 @@ public class ApplicationContext {
     }
 
     /** 设置 DocStore（由 GSimulatorApplication 在初始化后调用，覆盖懒初始化结果）。 */
-    public void setDocStore(com.gsim.doc.DocStore ds) {
+    public void setDocStore(com.gsim.core.doc.DocStore ds) {
         this.docStore = ds;
     }
 

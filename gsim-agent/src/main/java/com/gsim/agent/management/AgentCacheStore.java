@@ -1,8 +1,8 @@
 package com.gsim.agent.management;
 
 import com.gsim.agent.AgentConfigStore;
-import com.gsim.cache.CacheInfo;
-import com.gsim.cache.CacheSession;
+import com.gsim.core.cache.CacheInfo;
+import com.gsim.core.cache.CacheSession;
 import com.gsim.core.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,7 +38,7 @@ public class AgentCacheStore {
     /**
      * 扫描 {@code cachesDir} 目录，为所有 JSON 缓存文件构建轻量元信息索引。
      *
-     * <p>索引仅包含 {@link com.gsim.cache.CacheInfo} 元信息（不含 messages 全文），
+     * <p>索引仅包含 {@link com.gsim.core.cache.CacheInfo} 元信息（不含 messages 全文），
      * 提供快速的列表和过滤能力。已初始化时直接返回，不会重复扫描。
      */
     public void init() {

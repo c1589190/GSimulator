@@ -4,8 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.doc.DocStore;
-import com.gsim.doc.Document;
+import com.gsim.core.doc.DocStore;
+import com.gsim.core.doc.Document;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +16,7 @@ import java.util.Map;
 public final class DocWriteTool implements AgentTool {
 
     private final DocStore store;
-    private final com.gsim.doc.DocCacheManager cacheManager;
+    private final com.gsim.core.doc.DocCacheManager cacheManager;
     private final com.gsim.core.event.AgentProgressSink progressSink;
 
     /**
@@ -28,7 +28,7 @@ public final class DocWriteTool implements AgentTool {
      */
     public DocWriteTool(
             DocStore store,
-            com.gsim.doc.DocCacheManager cacheManager,
+            com.gsim.core.doc.DocCacheManager cacheManager,
             com.gsim.core.event.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
@@ -96,7 +96,7 @@ public final class DocWriteTool implements AgentTool {
         if (old == null) return ToolResult.fail(name(), "文档不存在: " + docId);
 
         // board 类型文档 → 自动推送公开消息给用户
-        boolean isBoard = old != null && old.type() == com.gsim.doc.DocType.BOARD;
+        boolean isBoard = old != null && old.type() == com.gsim.core.doc.DocType.BOARD;
 
         try {
             String newContent =

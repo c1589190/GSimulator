@@ -102,14 +102,14 @@ public class MapService {
     }
 
     public boolean isRootNode(String worldId, String nodeId) {
-        Path nodeFile = com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId);
+        Path nodeFile = com.gsim.core.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId);
         if (!Files.exists(nodeFile)) {
             // File truly absent (first access, node not yet created) → treat as root
             return true;
         }
         // File exists — try to parse it
         try {
-            return com.gsim.worldinfo.loader.NodeLoader.load(nodeFile).isRoot();
+            return com.gsim.core.worldinfo.loader.NodeLoader.load(nodeFile).isRoot();
         } catch (RuntimeException e) {
             // Corrupt node file (e.g. 0 bytes from failed write) — log and treat as non-root
             log.warn("Cannot determine if {} is root node (file may be corrupt): {}", nodeId, e.getMessage());
@@ -502,7 +502,7 @@ public class MapService {
                     .sorted()
                     .forEach(f -> {
                         try {
-                            var node = com.gsim.worldinfo.loader.NodeLoader.load(f);
+                            var node = com.gsim.core.worldinfo.loader.NodeLoader.load(f);
                             Map<String, Object> info = new LinkedHashMap<>();
                             java.nio.file.Path fn = f.getFileName();
                             if (fn == null) return;
@@ -512,7 +512,7 @@ public class MapService {
                             info.put("worldTime", node.worldTime());
                             info.put(
                                     "hasMap",
-                                    Files.exists(com.gsim.worldinfo.loader.NodeLoader.attachmentFilePath(
+                                    Files.exists(com.gsim.core.worldinfo.loader.NodeLoader.attachmentFilePath(
                                             worldsDir, worldId, nid, "map")));
                             result.add(info);
                         } catch (IllegalArgumentException ignored) {
@@ -643,7 +643,7 @@ public class MapService {
      * @param contour the continent contour to save
      */
     public void saveContour(String worldId, ContinentContour contour) {
-        com.gsim.worldinfo.loader.NodeLoader.saveAttachmentFile(worldsDir, worldId, "n0000", "contour", contour);
+        com.gsim.core.worldinfo.loader.NodeLoader.saveAttachmentFile(worldsDir, worldId, "n0000", "contour", contour);
         evict(worldId, "n0000");
     }
 
@@ -653,7 +653,7 @@ public class MapService {
      * @return the loaded continent contour, or null if not found
      */
     public ContinentContour loadContour(String worldId) {
-        return com.gsim.worldinfo.loader.NodeLoader.loadAttachmentFile(
+        return com.gsim.core.worldinfo.loader.NodeLoader.loadAttachmentFile(
                 worldsDir, worldId, "n0000", "contour", ContinentContour.class);
     }
 
@@ -1556,18 +1556,18 @@ public class MapService {
      */
     public String readActiveNodeId(String worldId) {
         try {
-            java.nio.file.Path nodesDir = com.gsim.worldinfo.loader.NodeLoader.nodesDir(worldsDir, worldId);
+            java.nio.file.Path nodesDir = com.gsim.core.worldinfo.loader.NodeLoader.nodesDir(worldsDir, worldId);
             if (!java.nio.file.Files.isDirectory(nodesDir)) return "n0000";
 
             // Load all nodes
-            java.util.Map<String, com.gsim.worldinfo.NodeSnapshot> allNodes = new java.util.LinkedHashMap<>();
+            java.util.Map<String, com.gsim.core.worldinfo.NodeSnapshot> allNodes = new java.util.LinkedHashMap<>();
             java.util.regex.Pattern nodePattern = java.util.regex.Pattern.compile("n\\d{4}\\.json");
             try (var files = java.nio.file.Files.list(nodesDir)) {
                 files.filter(f ->
                                 nodePattern.matcher(f.getFileName().toString()).matches())
                         .forEach(f -> {
                             try {
-                                var n = com.gsim.worldinfo.loader.NodeLoader.load(f);
+                                var n = com.gsim.core.worldinfo.loader.NodeLoader.load(f);
                                 allNodes.put(n.nodeId(), n);
                             } catch (RuntimeException ignored) {
                             }
@@ -1585,7 +1585,7 @@ public class MapService {
             }
 
             // Leaf: node NOT referenced as parent, highest turn wins
-            com.gsim.worldinfo.NodeSnapshot leaf = null;
+            com.gsim.core.worldinfo.NodeSnapshot leaf = null;
             for (var n : allNodes.values()) {
                 if (!parents.contains(n.nodeId())) {
                     if (leaf == null || n.turn() > leaf.turn()) {
@@ -1603,8 +1603,8 @@ public class MapService {
 
     public String readParentId(String worldId, String nodeId) {
         try {
-            var node = com.gsim.worldinfo.loader.NodeLoader.load(
-                    com.gsim.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId));
+            var node = com.gsim.core.worldinfo.loader.NodeLoader.load(
+                    com.gsim.core.worldinfo.loader.NodeLoader.nodeFile(worldsDir, worldId, nodeId));
             String pid = node.parentId();
             return (pid != null && !pid.isBlank()) ? pid : "n0000";
         } catch (RuntimeException e) {

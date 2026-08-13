@@ -152,7 +152,7 @@ public final class MapResolver {
 
     private static String readParentId(Path worldsDir, String worldId, String nodeId, Path nodesDir) {
         try {
-            var node = com.gsim.worldinfo.loader.NodeLoader.load(nodesDir.resolve(nodeId + ".json"));
+            var node = com.gsim.core.worldinfo.loader.NodeLoader.load(nodesDir.resolve(nodeId + ".json"));
             String pid = node.parentId();
             return (pid != null && !pid.isBlank()) ? pid : null;
         } catch (RuntimeException e) {

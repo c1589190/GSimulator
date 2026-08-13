@@ -2,12 +2,12 @@ package com.gsim.webui.handlers;
 
 import com.gsim.core.util.IdGenerator;
 import com.gsim.core.util.JsonUtils;
+import com.gsim.core.worldinfo.NodeSnapshot;
+import com.gsim.core.worldinfo.WorldInformation;
+import com.gsim.core.worldinfo.loader.ActiveStateManager;
+import com.gsim.core.worldinfo.loader.NodeLoader;
 import com.gsim.webui.MermaidGraphBuilder;
 import com.gsim.webui.TemplateRenderer;
-import com.gsim.worldinfo.NodeSnapshot;
-import com.gsim.worldinfo.WorldInformation;
-import com.gsim.worldinfo.loader.ActiveStateManager;
-import com.gsim.worldinfo.loader.NodeLoader;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;

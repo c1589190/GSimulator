@@ -5,9 +5,9 @@ import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
-import com.gsim.cache.CacheInfo;
-import com.gsim.cache.CachesManager;
-import com.gsim.cache.FileSystemCachesManager;
+import com.gsim.core.cache.CacheInfo;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.cache.FileSystemCachesManager;
 import com.gsim.core.config.ConfigDoctor;
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.config.ConfigSnapshot;
@@ -192,8 +192,8 @@ public class Main {
         List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
         if (caches.isEmpty()) return new CacheSelection(null, null);
 
-        List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
-                com.gsim.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
+        List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
+                com.gsim.core.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
 
         System.out.println();
         System.out.println("══════════════════════════════════════════");
@@ -237,7 +237,7 @@ public class Main {
 
     /** 选择 world（用于新建会话时）。 */
     private static String selectWorldForNewSession(
-            Scanner scanner, List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
+            Scanner scanner, List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
         if (worlds.isEmpty()) return "default";
         if (worlds.size() == 1) return worlds.get(0).id();
 

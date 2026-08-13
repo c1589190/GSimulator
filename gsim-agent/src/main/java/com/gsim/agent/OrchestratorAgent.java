@@ -74,7 +74,7 @@ public class OrchestratorAgent extends AbstractAgent {
      * @param docCacheManager 文档缓存管理器
      */
     public void registerSubAgentTools(
-            ToolRegistry registry, AgentFactory agentFactory, com.gsim.doc.DocCacheManager docCacheManager) {
+            ToolRegistry registry, AgentFactory agentFactory, com.gsim.core.doc.DocCacheManager docCacheManager) {
         this.agentFactory = agentFactory;
         registry.register(new DispatchSubAgentTool(
                 llmManager,

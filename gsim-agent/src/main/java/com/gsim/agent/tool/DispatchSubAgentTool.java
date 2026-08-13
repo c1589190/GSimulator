@@ -53,7 +53,7 @@ public class DispatchSubAgentTool implements AgentTool {
     private final AtomicInteger subAgentCounter;
     private final AgentFactory agentFactory;
     private final AgentConfigStore configStore;
-    private final com.gsim.doc.DocCacheManager docCacheManager;
+    private final com.gsim.core.doc.DocCacheManager docCacheManager;
     private volatile com.gsim.agent.management.AgentsManager agentsManager;
 
     public DispatchSubAgentTool(
@@ -65,7 +65,7 @@ public class DispatchSubAgentTool implements AgentTool {
             AtomicInteger subAgentCounter,
             AgentFactory agentFactory,
             AgentConfigStore configStore,
-            com.gsim.doc.DocCacheManager docCacheManager) {
+            com.gsim.core.doc.DocCacheManager docCacheManager) {
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;

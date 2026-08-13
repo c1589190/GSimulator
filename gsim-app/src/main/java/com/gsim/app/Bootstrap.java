@@ -1,12 +1,12 @@
 package com.gsim.app;
 
-import com.gsim.cache.CacheSession;
-import com.gsim.cache.CacheStore;
-import com.gsim.cache.CachesManager;
-import com.gsim.worldinfo.WorldInformation;
-import com.gsim.worldinfo.loader.ActiveStateManager;
-import com.gsim.worldinfo.loader.WorldIndexManager;
-import com.gsim.worldinfo.loader.WorldInfoBuilder;
+import com.gsim.core.cache.CacheSession;
+import com.gsim.core.cache.CacheStore;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.worldinfo.WorldInformation;
+import com.gsim.core.worldinfo.loader.ActiveStateManager;
+import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
 import java.nio.file.Path;
 import java.util.List;
 

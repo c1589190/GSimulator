@@ -1,10 +1,10 @@
 package com.gsim.commands;
 
 import com.gsim.agent.core.AgentResult;
-import com.gsim.cache.CacheSession;
-import com.gsim.cache.CacheStore;
-import com.gsim.cache.CachesManager;
-import com.gsim.compact.CacheCompactor;
+import com.gsim.core.cache.CacheSession;
+import com.gsim.core.cache.CacheStore;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.compact.CacheCompactor;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmMessage;
 import java.nio.file.Path;

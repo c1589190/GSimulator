@@ -1,6 +1,6 @@
 package com.gsim.commands;
 
-import com.gsim.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Function;

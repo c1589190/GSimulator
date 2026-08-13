@@ -1,9 +1,9 @@
 package com.gsim.commands;
 
 import com.gsim.core.util.IdGenerator;
-import com.gsim.worldinfo.*;
-import com.gsim.worldinfo.loader.ActiveStateManager;
-import com.gsim.worldinfo.loader.NodeLoader;
+import com.gsim.core.worldinfo.*;
+import com.gsim.core.worldinfo.loader.ActiveStateManager;
+import com.gsim.core.worldinfo.loader.NodeLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;

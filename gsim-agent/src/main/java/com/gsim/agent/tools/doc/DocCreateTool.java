@@ -4,9 +4,9 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.doc.DocStore;
-import com.gsim.doc.DocType;
-import com.gsim.doc.Document;
+import com.gsim.core.doc.DocStore;
+import com.gsim.core.doc.DocType;
+import com.gsim.core.doc.Document;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,7 @@ import java.util.Map;
 public final class DocCreateTool implements AgentTool {
 
     private final DocStore store;
-    private final com.gsim.doc.DocCacheManager cacheManager;
+    private final com.gsim.core.doc.DocCacheManager cacheManager;
     private final com.gsim.core.event.AgentProgressSink progressSink;
 
     /**
@@ -29,7 +29,7 @@ public final class DocCreateTool implements AgentTool {
      */
     public DocCreateTool(
             DocStore store,
-            com.gsim.doc.DocCacheManager cacheManager,
+            com.gsim.core.doc.DocCacheManager cacheManager,
             com.gsim.core.event.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
@@ -98,7 +98,7 @@ public final class DocCreateTool implements AgentTool {
             }
 
             // board 类型 → 自动推送公开消息
-            if (type == com.gsim.doc.DocType.BOARD && !content.isEmpty()) {
+            if (type == com.gsim.core.doc.DocType.BOARD && !content.isEmpty()) {
                 progressSink.onProgress(
                         com.gsim.core.event.AgentProgressEvent.publicMessage("\n📋 " + title + "\n" + content));
             }

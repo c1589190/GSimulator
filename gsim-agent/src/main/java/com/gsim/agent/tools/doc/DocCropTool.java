@@ -4,8 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.doc.DocStore;
-import com.gsim.doc.Document;
+import com.gsim.core.doc.DocStore;
+import com.gsim.core.doc.Document;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,7 +29,7 @@ import java.util.Set;
 public final class DocCropTool implements AgentTool {
 
     private final DocStore store;
-    private final com.gsim.doc.DocCacheManager cacheManager;
+    private final com.gsim.core.doc.DocCacheManager cacheManager;
 
     /**
      * 创建文档裁剪工具实例。
@@ -37,7 +37,7 @@ public final class DocCropTool implements AgentTool {
      * @param store        文档存储
      * @param cacheManager 缓存管理器，用于解析 @cache: 虚拟文档引用
      */
-    public DocCropTool(DocStore store, com.gsim.doc.DocCacheManager cacheManager) {
+    public DocCropTool(DocStore store, com.gsim.core.doc.DocCacheManager cacheManager) {
         this.store = store;
         this.cacheManager = cacheManager;
     }

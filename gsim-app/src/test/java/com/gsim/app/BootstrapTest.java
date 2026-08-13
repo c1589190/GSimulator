@@ -2,9 +2,9 @@ package com.gsim.app;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.cache.CachesManager;
-import com.gsim.cache.FileSystemCachesManager;
-import com.gsim.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.cache.FileSystemCachesManager;
+import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;

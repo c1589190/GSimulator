@@ -4,7 +4,7 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;

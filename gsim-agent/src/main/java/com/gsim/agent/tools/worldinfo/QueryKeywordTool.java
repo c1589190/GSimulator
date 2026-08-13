@@ -4,8 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.worldinfo.KeywordIndex;
-import com.gsim.worldinfo.WorldInformation;
+import com.gsim.core.worldinfo.KeywordIndex;
+import com.gsim.core.worldinfo.WorldInformation;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 /**
  * query_keyword -- 在世界所有元素中执行全文关键词搜索。
  *
- * <p>使用 {@link com.gsim.worldinfo.KeywordIndex} 进行全文检索，
+ * <p>使用 {@link com.gsim.core.worldinfo.KeywordIndex} 进行全文检索，
  * 返回匹配的元素摘要及来源信息（节点 ID、检查点 ID、回合号）。
  * 支持分页（limit/offset）和按检查点过滤（checkpointId 精确匹配）。
  *

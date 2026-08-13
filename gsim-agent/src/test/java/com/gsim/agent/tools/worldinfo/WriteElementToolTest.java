@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.worldinfo.*;
+import com.gsim.core.worldinfo.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

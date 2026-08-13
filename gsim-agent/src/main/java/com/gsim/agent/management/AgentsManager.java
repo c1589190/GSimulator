@@ -8,7 +8,7 @@ import com.gsim.agent.EventBusAgentProgressSink;
 import com.gsim.agent.core.AbstractAgent;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.cache.CacheSession;
+import com.gsim.core.cache.CacheSession;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.event.EventBus;
 import com.gsim.core.event.GSimEvent;

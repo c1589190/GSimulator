@@ -1,6 +1,6 @@
 package com.gsim.webui;
 
-import com.gsim.worldinfo.NodeSnapshot;
+import com.gsim.core.worldinfo.NodeSnapshot;
 import java.util.List;
 
 /**

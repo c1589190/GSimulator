@@ -11,14 +11,14 @@ import com.gsim.agent.tools.worldinfo.QueryKeywordTool;
 import com.gsim.agent.tools.worldinfo.QueryNodeTool;
 import com.gsim.agent.tools.worldinfo.WriteElementTool;
 import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.cache.CacheSession;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
+import com.gsim.core.cache.CacheSession;
+import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.interaction.ConsoleInteractionAdapter;
-import com.gsim.worldinfo.WorldInformation;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 
@@ -48,9 +48,9 @@ public class GSimulatorApplication {
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
-    private com.gsim.compact.CacheCompactor cacheCompactor;
+    private com.gsim.core.compact.CacheCompactor cacheCompactor;
     private com.gsim.commands.CompactCommand compactCommand;
-    private com.gsim.doc.DocCacheManager docCacheManager;
+    private com.gsim.core.doc.DocCacheManager docCacheManager;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
@@ -102,7 +102,7 @@ public class GSimulatorApplication {
 
         // 初始化 Cache 根目录（peer to worldsDir）
         Path cachesRoot = worldsDir.resolveSibling("caches");
-        com.gsim.cache.CacheStore.setCachesRoot(cachesRoot);
+        com.gsim.core.cache.CacheStore.setCachesRoot(cachesRoot);
         // 迁移旧缓存（如有）
         Path oldCachesDir = worldsDir.resolve("default").resolve("caches");
         Path newCachesDir = cachesRoot.resolve("default");
@@ -123,7 +123,7 @@ public class GSimulatorApplication {
 
         // DocCacheManager（doc 工具与 worldinfo 工具共用，需提前创建）
         Path docsDir = worldsDir.resolveSibling("docs");
-        this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
         try {
             this.docCacheManager.init();
         } catch (java.io.IOException e) {
@@ -131,7 +131,7 @@ public class GSimulatorApplication {
         }
 
         // 组合进度 sink：agent 模式追加 CLI + EventBus sink，MCP 模式仅 SessionPool
-        var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(ctx.getSessionPool(), "default");
+        var sessionPoolBridge = new com.gsim.core.session.SessionPoolBridge(ctx.getSessionPool(), "default");
         if (agentEnabled) {
             var jlineTerminal = adapter.getJlineTerminal();
             var cliProgressSink = jlineTerminal != null
@@ -159,7 +159,7 @@ public class GSimulatorApplication {
                 String wid = worldInfo.worldId();
                 // ActiveState 不再追踪 nodeId，使用当前 WorldInformation 的 activeNodeId
                 String activeNodeId = worldInfo.activeNodeId();
-                var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
+                var newWi = com.gsim.core.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
                 this.worldInfo = newWi;
                 log.info("WorldInformation rebuilt after node change: world={} activeNode={}", wid, activeNodeId);
             } catch (Exception e) {
@@ -230,7 +230,7 @@ public class GSimulatorApplication {
                 ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
                 : new com.gsim.agent.CliAgentProgressSink(System.out, true);
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
-        var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(ctx.getSessionPool(), "default");
+        var sessionPoolBridge = new com.gsim.core.session.SessionPoolBridge(ctx.getSessionPool(), "default");
         this.compositeSink =
                 new com.gsim.core.event.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
 
@@ -320,7 +320,7 @@ public class GSimulatorApplication {
             compactLlm = ctx.getLlmManager();
             log.info("No 'compact' provider in llms.json, using default LLM for compaction");
         }
-        this.cacheCompactor = new com.gsim.compact.CacheCompactor(compactLlm, 4096);
+        this.cacheCompactor = new com.gsim.core.compact.CacheCompactor(compactLlm, 4096);
 
         // Compact Cache 工具（Agent 可调用）
         toolRegistry.register(new com.gsim.agent.tool.CompactCacheTool(
@@ -334,13 +334,13 @@ public class GSimulatorApplication {
     /** 注册核心工具（Import/Doc/Ref/TextEdit），始终注册，不依赖 agent 模式。 */
     private void registerCoreTools(ToolRegistry toolRegistry, Path docsDir) {
         // Import doc tools
-        var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
+        var importDocService = new com.gsim.core.importing.ImportDocumentService(config.getImportDir());
         toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentListTool(importDocService));
         toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentReadTool(importDocService));
         toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentSearchTool(importDocService));
 
         // DocCacheManager 需在 doc 工具注册前创建
-        this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
         try {
             this.docCacheManager.init();
         } catch (java.io.IOException e) {
@@ -367,7 +367,7 @@ public class GSimulatorApplication {
                             new String(guideResource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     docStore.create(
                             "agent-api-guide",
-                            com.gsim.doc.DocType.OTHER,
+                            com.gsim.core.doc.DocType.OTHER,
                             "Agent API 引导手册",
                             guideContent,
                             java.util.List.of("guide", "api", "agent"));
@@ -421,7 +421,7 @@ public class GSimulatorApplication {
             String reqWorldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
             if (reqWorldId != null && !reqWorldId.equals(this.worldInfo.worldId())) {
                 return wiCache.computeIfAbsent(
-                        reqWorldId, wid -> com.gsim.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
+                        reqWorldId, wid -> com.gsim.core.worldinfo.loader.WorldInfoBuilder.discover(worldsDir, wid));
             }
             return this.worldInfo;
         };
@@ -455,7 +455,7 @@ public class GSimulatorApplication {
     private String switchToWorld(String worldId) {
         try {
             // 1. 验证 world 存在
-            var meta = com.gsim.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
+            var meta = com.gsim.core.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
             if (meta == null) return "World 不存在: " + worldId;
 
             // 2. 加载目标 world 的 active state
@@ -463,7 +463,7 @@ public class GSimulatorApplication {
             String activeNodeId = "n0000";
 
             // 3. Build WorldInformation（不经过 Bootstrap，避免触碰缓存）
-            var newWi = com.gsim.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);
+            var newWi = com.gsim.core.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);
             if (newWi == null) {
                 return "Failed to load world: " + worldId;
             }
@@ -476,7 +476,7 @@ public class GSimulatorApplication {
             // 5. 更新缓存中的 nodeId（信息性字段，不影响对话内容）
             if (this.activeCache != null) {
                 this.activeCache.setNodeId(activeNodeId);
-                com.gsim.cache.CacheStore.save(worldsDir, this.activeCache);
+                com.gsim.core.cache.CacheStore.save(worldsDir, this.activeCache);
             }
 
             log.info(
@@ -499,7 +499,7 @@ public class GSimulatorApplication {
         orchestrator.setMessageSaver(msg -> {
             CacheSession s = activeCache;
             if (s != null) {
-                com.gsim.cache.CacheStore.appendAndSave(worldsDir, s, msg.toCacheMap());
+                com.gsim.core.cache.CacheStore.appendAndSave(worldsDir, s, msg.toCacheMap());
             }
         });
     }
@@ -577,7 +577,7 @@ public class GSimulatorApplication {
         if (sp == null || sp.isBlank()) return;
 
         activeCache.addMessage(java.util.Map.of("role", "system", "content", sp));
-        com.gsim.cache.CacheStore.save(worldsDir, activeCache);
+        com.gsim.core.cache.CacheStore.save(worldsDir, activeCache);
         log.info("Prepended static system prompt to cache {} ({} chars)", activeCache.sessionId(), sp.length());
     }
 
