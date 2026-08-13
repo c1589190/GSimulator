@@ -34,9 +34,10 @@ public class GSimulatorApplication {
     private final ConsoleInteractionAdapter adapter;
     private final AppConfig config;
     private final boolean interactive;
+    private final boolean agentEnabled;
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
-    private com.gsim.agent.CompositeAgentProgressSink compositeSink;
+    private com.gsim.event.CompositeAgentProgressSink compositeSink;
     private com.gsim.agent.core.AgentFactory agentFactory;
 
     // -- Bootstrap result wiring --
@@ -61,15 +62,30 @@ public class GSimulatorApplication {
     }
 
     /**
-     * Creates the application assembly.
+     * Creates the application assembly with the agent runtime enabled (backward-compat).
      *
      * @param config      application configuration
      * @param bootResult  bootstrap result (world info, active cache); may be null for tests
      * @param interactive true for CLI mode (permission gate asks user), false for MCP/headless
      */
     public GSimulatorApplication(AppConfig config, Bootstrap.BootstrapResult bootResult, boolean interactive) {
+        this(config, bootResult, interactive, true);
+    }
+
+    /**
+     * Creates the application assembly.
+     *
+     * @param config       application configuration
+     * @param bootResult   bootstrap result (world info, active cache); may be null for tests
+     * @param interactive  true for CLI mode (permission gate asks user), false for MCP/headless
+     * @param agentEnabled true to wire the agent runtime (orchestrator, agent tools, CLI, WebUI);
+     *                     false for MCP-only mode (World/Doc/Gsimap management without agent)
+     */
+    public GSimulatorApplication(
+            AppConfig config, Bootstrap.BootstrapResult bootResult, boolean interactive, boolean agentEnabled) {
         this.config = config;
         this.interactive = interactive;
+        this.agentEnabled = agentEnabled;
         this.ctx = new ApplicationContext(config);
         this.worldsDir = config.worldsDir();
 
@@ -100,11 +116,41 @@ public class GSimulatorApplication {
             }
         }
 
-        // 创建 CLI 适配器（命令稍后注入）
-        this.adapter = new ConsoleInteractionAdapter(null, ctx.getInteractionSession(), config.getDataDir());
+        // 创建 CLI 适配器（命令稍后注入）—— 仅 agent 模式
+        this.adapter = agentEnabled
+                ? new ConsoleInteractionAdapter(null, ctx.getInteractionSession(), config.getDataDir())
+                : null;
 
-        // 注册 Agent 工具
-        registerAgentTools(toolRegistry);
+        // DocCacheManager（doc 工具与 worldinfo 工具共用，需提前创建）
+        Path docsDir = worldsDir.resolveSibling("docs");
+        this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
+        try {
+            this.docCacheManager.init();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
+        }
+
+        // 组合进度 sink：agent 模式追加 CLI + EventBus sink，MCP 模式仅 SessionPool
+        var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(ctx.getSessionPool(), "default");
+        if (agentEnabled) {
+            var jlineTerminal = adapter.getJlineTerminal();
+            var cliProgressSink = jlineTerminal != null
+                    ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
+                    : new com.gsim.agent.CliAgentProgressSink(System.out, true);
+            var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
+            this.compositeSink = new com.gsim.event.CompositeAgentProgressSink(
+                    cliProgressSink, eventBusSink, sessionPoolBridge);
+        } else {
+            this.compositeSink = new com.gsim.event.CompositeAgentProgressSink(sessionPoolBridge);
+        }
+
+        // 注册核心工具（World/Doc/Import，始终注册）
+        registerCoreTools(toolRegistry, docsDir);
+
+        // 注册 Agent 工具（仅 agent 模式）
+        if (agentEnabled) {
+            registerAgentTools(toolRegistry);
+        }
 
         // Node change callback — 重建 WorldInformation 以反映节点变更
         Runnable onNodeChanged = () -> {
@@ -124,18 +170,21 @@ public class GSimulatorApplication {
         // 注册 world info + node 管理工具
         registerWorldInfoTools(toolRegistry, onNodeChanged);
 
-        // 创建命令并注入到 adapter
-        wireCommands(onNodeChanged);
+        if (agentEnabled) {
+            // 创建命令并注入到 adapter
+            wireCommands(onNodeChanged);
 
-        // 将静态系统提示词写入缓存（首次启动时，缓存为空）
-        initCacheSystemPrompt();
+            // 将静态系统提示词写入缓存（首次启动时，缓存为空）
+            initCacheSystemPrompt();
+        }
 
-        // 创建 WebUiServer
-        com.gsim.webui.WebUiConfig webUiConfig = com.gsim.webui.WebUiConfig.from(config);
-        this.webUiServer = new com.gsim.webui.WebUiServer(webUiConfig, ctx);
+        // 创建 WebUiServer（仅 agent 模式）
+        this.webUiServer = agentEnabled
+                ? new com.gsim.webui.WebUiServer(com.gsim.webui.WebUiConfig.from(config), ctx)
+                : null;
 
         // 注册 ChatApiHandler（在 WebUiServer start 之前）
-        if (chatCommand != null) {
+        if (agentEnabled && chatCommand != null) {
             var chatApiHandler = new com.gsim.webui.handlers.ChatApiHandler(
                     chatCommand,
                     () -> worldInfo,
@@ -175,12 +224,6 @@ public class GSimulatorApplication {
     }
 
     private void registerAgentTools(ToolRegistry toolRegistry) {
-        // Import doc tools
-        var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentListTool(importDocService));
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentReadTool(importDocService));
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
-
         // Agent progress sinks: CLI + EventBus (SSE) + SessionPool (unified async pool)
         // Use JLine terminal output for proper scroll/cursor coordination
         var jlineTerminal = adapter.getJlineTerminal();
@@ -190,7 +233,7 @@ public class GSimulatorApplication {
         var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
         var sessionPoolBridge = new com.gsim.session.SessionPoolBridge(ctx.getSessionPool(), "default");
         this.compositeSink =
-                new com.gsim.agent.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
+                new com.gsim.event.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
 
         // Tool group manager
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
@@ -233,7 +276,6 @@ public class GSimulatorApplication {
         Path cachesBaseDir = worldsDir.resolveSibling("caches");
         var agentCacheStore = new com.gsim.agent.management.AgentCacheStore(cachesBaseDir, agentConfigStore);
         agentCacheStore.init();
-        var agentSseManager = new com.gsim.agent.management.AgentSseManager(ctx.getEventBus());
         var agentsManager = new com.gsim.agent.management.AgentsManager(
                 agentConfigStore,
                 agentCacheStore,
@@ -244,19 +286,7 @@ public class GSimulatorApplication {
                 config.getLlmModel(),
                 worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default");
-        var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(agentConfigStore, config.agentsDir());
-
-        // 注入到 ApiManager（必须在 start() 之前）
-        ctx.getApiManager().injectAgentManagers(agentsManager, agentSseManager, agentCacheStore, agentConfigManager);
-        log.info("Agent management layer initialized (Store + Manager + SSE + Config)");
-        // DocCacheManager 需在 doc 工具注册前创建
-        Path docsDir = worldsDir.resolveSibling("docs");
-        this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
-        try {
-            this.docCacheManager.init();
-        } catch (java.io.IOException e) {
-            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
-        }
+        log.info("Agent management layer initialized (Store + Manager)");
         this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory, this.docCacheManager);
 
         // 将 AgentsManager 注入到 DispatchSubAgentTool（新路径优先）
@@ -281,6 +311,43 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
         toolRegistry.register(new com.gsim.agent.tool.ListAgentConfigTool(agentConfigStore));
         toolRegistry.register(new com.gsim.agent.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
+
+        // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
+        var compactProvider = ctx.getLlmProviderRegistry().get("compact");
+        var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;
+        if (compactLlm != null) {
+            log.info("Using compact LLM provider: id={}", compactLlm.providerId());
+        } else {
+            compactLlm = ctx.getLlmManager();
+            log.info("No 'compact' provider in llms.json, using default LLM for compaction");
+        }
+        this.cacheCompactor = new com.gsim.compact.CacheCompactor(compactLlm, 4096);
+
+        // Compact Cache 工具（Agent 可调用）
+        toolRegistry.register(new com.gsim.agent.tool.CompactCacheTool(
+                ctx.getCachesManager(),
+                cacheCompactor,
+                compositeSink,
+                worldsDir,
+                () -> worldInfo != null ? worldInfo.worldId() : "default"));
+
+    }
+
+    /** 注册核心工具（Import/Doc/Ref/TextEdit），始终注册，不依赖 agent 模式。 */
+    private void registerCoreTools(ToolRegistry toolRegistry, Path docsDir) {
+        // Import doc tools
+        var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentListTool(importDocService));
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentReadTool(importDocService));
+        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
+
+        // DocCacheManager 需在 doc 工具注册前创建
+        this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
+        try {
+            this.docCacheManager.init();
+        } catch (java.io.IOException e) {
+            log.warn("Failed to init DocCacheManager: {}", e.getMessage());
+        }
 
         // ── 统一文档管理工具（docs 工具组）──
         var docStore = ctx.getDocStore(docsDir);
@@ -338,37 +405,13 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.text.TextEditTool(
                 worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
 
-        // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
-        var compactProvider = ctx.getLlmProviderRegistry().get("compact");
-        var compactLlm = (compactProvider instanceof com.gsim.llm.LlmManager m) ? m : null;
-        if (compactLlm != null) {
-            log.info("Using compact LLM provider: id={}", compactLlm.providerId());
-        } else {
-            compactLlm = ctx.getLlmManager();
-            log.info("No 'compact' provider in llms.json, using default LLM for compaction");
-        }
-        this.cacheCompactor = new com.gsim.compact.CacheCompactor(compactLlm, 4096);
-
-        // Compact Cache 工具（Agent 可调用）
-        toolRegistry.register(new com.gsim.agent.tool.CompactCacheTool(
-                ctx.getCachesManager(),
-                cacheCompactor,
-                compositeSink,
-                worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default"));
-
-        log.info(
-                "Registered 8 docs + 1 compact_cache tools (docsDir={}, embedding={})",
-                docsDir,
-                embeddingClient != null && embeddingClient.isConfigured() ? "enabled" : "disabled");
+        log.info("Registered import + 9 docs + ref + text_edit core tools (docsDir={})", docsDir);
     }
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
         // World management tools — don't depend on WorldInformation being loaded
         toolRegistry.register(new com.gsim.worldinfo.tool.WorldListTool(worldsDir, activeWorldId::get));
         toolRegistry.register(new com.gsim.worldinfo.tool.WorldCreateTool(worldsDir));
-        // DEPRECATED: world_switch — 不再注册（Step 7）
-        // toolRegistry.register(new com.gsim.worldinfo.tool.WorldSwitchTool(worldsDir, this::switchToWorld));
 
         if (worldInfo == null) {
             log.warn("WorldInformation not available, skipping world info tool registration");
@@ -403,9 +446,6 @@ public class GSimulatorApplication {
         toolRegistry.register(new NodeListTool(wiSupplier));
         toolRegistry.register(new NodeStatusTool(wiSupplier));
         toolRegistry.register(new NodeCreateTool(wiSupplier, worldsDir, onNodeChanged));
-        // DEPRECATED: node_switch / node_goto_parent — 不再注册（Step 7）
-        // toolRegistry.register(new NodeSwitchTool(wiSupplier, worldsDir, onNodeChanged));
-        // toolRegistry.register(new NodeGotoParentTool(wiSupplier, worldsDir, onNodeChanged));
 
         log.info("Registered 14 world info + node + world mgmt tools");
     }
