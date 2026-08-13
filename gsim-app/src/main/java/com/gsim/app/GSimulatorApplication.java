@@ -10,15 +10,15 @@ import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import com.gsim.worldinfo.WorldInformation;
-import com.gsim.worldinfo.tool.CreateCheckpointTool;
-import com.gsim.worldinfo.tool.NodeCreateTool;
-import com.gsim.worldinfo.tool.NodeListTool;
-import com.gsim.worldinfo.tool.NodeStatusTool;
-import com.gsim.worldinfo.tool.QueryCheckpointTool;
-import com.gsim.worldinfo.tool.QueryElementTool;
-import com.gsim.worldinfo.tool.QueryKeywordTool;
-import com.gsim.worldinfo.tool.QueryNodeTool;
-import com.gsim.worldinfo.tool.WriteElementTool;
+import com.gsim.agent.tools.worldinfo.CreateCheckpointTool;
+import com.gsim.agent.tools.worldinfo.NodeCreateTool;
+import com.gsim.agent.tools.worldinfo.NodeListTool;
+import com.gsim.agent.tools.worldinfo.NodeStatusTool;
+import com.gsim.agent.tools.worldinfo.QueryCheckpointTool;
+import com.gsim.agent.tools.worldinfo.QueryElementTool;
+import com.gsim.agent.tools.worldinfo.QueryKeywordTool;
+import com.gsim.agent.tools.worldinfo.QueryNodeTool;
+import com.gsim.agent.tools.worldinfo.WriteElementTool;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 
@@ -254,7 +254,7 @@ public class GSimulatorApplication {
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
 
         // MediaWiki search (Wikipedia + any MediaWiki site)
-        toolRegistry.register(new com.gsim.tool.MediaWikiSearchTool());
+        toolRegistry.register(new com.gsim.agent.tools.search.MediaWikiSearchTool());
 
         // Agent control flow tools
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
@@ -337,9 +337,9 @@ public class GSimulatorApplication {
     private void registerCoreTools(ToolRegistry toolRegistry, Path docsDir) {
         // Import doc tools
         var importDocService = new com.gsim.importing.ImportDocumentService(config.getImportDir());
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentListTool(importDocService));
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentReadTool(importDocService));
-        toolRegistry.register(new com.gsim.importing.tool.ImportDocumentSearchTool(importDocService));
+        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentListTool(importDocService));
+        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentReadTool(importDocService));
+        toolRegistry.register(new com.gsim.agent.tools.importing.ImportDocumentSearchTool(importDocService));
 
         // DocCacheManager 需在 doc 工具注册前创建
         this.docCacheManager = new com.gsim.doc.DocCacheManager(docsDir.resolve(".cache"));
@@ -387,22 +387,22 @@ public class GSimulatorApplication {
             log.warn("Failed to create embdb dir: {}", e.getMessage());
         }
 
-        toolRegistry.register(new com.gsim.doc.tool.DocListTool(docStore));
-        toolRegistry.register(new com.gsim.doc.tool.DocReadTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.doc.tool.DocCreateTool(docStore, docCacheManager, compositeSink));
-        toolRegistry.register(new com.gsim.doc.tool.DocWriteTool(docStore, docCacheManager, compositeSink));
-        toolRegistry.register(new com.gsim.doc.tool.DocSearchTool(docStore, docIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.doc.tool.DocIndexTool(docStore, docIndex, embeddingClient));
-        toolRegistry.register(new com.gsim.doc.tool.DocCropTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.doc.tool.DocTemplateTool(docStore, docCacheManager));
-        toolRegistry.register(new com.gsim.doc.tool.DocDeleteTool(docStore));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocListTool(docStore));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocReadTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocCreateTool(docStore, docCacheManager, compositeSink));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocWriteTool(docStore, docCacheManager, compositeSink));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocSearchTool(docStore, docIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocIndexTool(docStore, docIndex, embeddingClient));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocCropTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocTemplateTool(docStore, docCacheManager));
+        toolRegistry.register(new com.gsim.agent.tools.doc.DocDeleteTool(docStore));
 
         // 统一 @ 引用解析
-        toolRegistry.register(new com.gsim.ref.ResolveRefTool(
+        toolRegistry.register(new com.gsim.agent.tools.ref.ResolveRefTool(
                 worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
 
         // 通用文本编辑工具（@cache: ← text_edit → @cache:）
-        toolRegistry.register(new com.gsim.text.TextEditTool(
+        toolRegistry.register(new com.gsim.agent.tools.text.TextEditTool(
                 worldsDir, activeWorldId.get(), config.getImportDir(), docStore, docCacheManager));
 
         log.info("Registered import + 9 docs + ref + text_edit core tools (docsDir={})", docsDir);
@@ -410,8 +410,8 @@ public class GSimulatorApplication {
 
     private void registerWorldInfoTools(ToolRegistry toolRegistry, Runnable onNodeChanged) {
         // World management tools — don't depend on WorldInformation being loaded
-        toolRegistry.register(new com.gsim.worldinfo.tool.WorldListTool(worldsDir, activeWorldId::get));
-        toolRegistry.register(new com.gsim.worldinfo.tool.WorldCreateTool(worldsDir));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.WorldListTool(worldsDir, activeWorldId::get));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.WorldCreateTool(worldsDir));
 
         if (worldInfo == null) {
             log.warn("WorldInformation not available, skipping world info tool registration");
@@ -433,14 +433,14 @@ public class GSimulatorApplication {
         toolRegistry.register(new QueryKeywordTool(wiSupplier));
         toolRegistry.register(new QueryNodeTool(wiSupplier));
         toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
-        toolRegistry.register(new com.gsim.worldinfo.tool.QueryByTagTool(wiSupplier));
-        toolRegistry.register(new com.gsim.worldinfo.tool.QueryAddressTool(wiSupplier, toolRegistry));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.QueryByTagTool(wiSupplier));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.QueryAddressTool(wiSupplier, toolRegistry));
 
         // Write tools
         toolRegistry.register(new WriteElementTool(wiSupplier, worldsDir, docCacheManager));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, worldsDir));
-        toolRegistry.register(new com.gsim.worldinfo.tool.AttachmentWriteTool(worldsDir, wiSupplier));
-        toolRegistry.register(new com.gsim.worldinfo.tool.AttachmentReadTool(worldsDir, wiSupplier));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.AttachmentWriteTool(worldsDir, wiSupplier));
+        toolRegistry.register(new com.gsim.agent.tools.worldinfo.AttachmentReadTool(worldsDir, wiSupplier));
 
         // Node management tools
         toolRegistry.register(new NodeListTool(wiSupplier));

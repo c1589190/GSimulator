@@ -17,8 +17,8 @@ import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmProviderRegistry;
 import com.gsim.llm.LlmsConfigLoader;
 import com.gsim.session.SessionPool;
-import com.gsim.tool.LocalFileSearchService;
-import com.gsim.tool.WikiSearchTool;
+import com.gsim.agent.tools.search.LocalFileSearchService;
+import com.gsim.agent.tools.search.WikiSearchTool;
 import com.gsim.util.TimeProvider;
 import java.nio.file.Path;
 

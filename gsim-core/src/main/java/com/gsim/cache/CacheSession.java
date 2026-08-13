@@ -38,7 +38,7 @@ public class CacheSession {
     private List<Map<String, Object>> messages;
 
     @JsonProperty("toolGroupEvents")
-    private List<com.gsim.agent.ToolGroupEvent> toolGroupEvents;
+    private List<ToolGroupEvent> toolGroupEvents;
 
     public CacheSession() {
         this.messages = new ArrayList<>();
@@ -97,7 +97,7 @@ public class CacheSession {
         return messages;
     }
 
-    public List<com.gsim.agent.ToolGroupEvent> toolGroupEvents() {
+    public List<ToolGroupEvent> toolGroupEvents() {
         return toolGroupEvents;
     }
 
@@ -134,12 +134,12 @@ public class CacheSession {
         this.messages = v;
     }
 
-    public void setToolGroupEvents(List<com.gsim.agent.ToolGroupEvent> v) {
+    public void setToolGroupEvents(List<ToolGroupEvent> v) {
         this.toolGroupEvents = v;
     }
 
     /** 添加一条结构化工具组变更事件。 */
-    public void addToolGroupEvent(com.gsim.agent.ToolGroupEvent event) {
+    public void addToolGroupEvent(ToolGroupEvent event) {
         if (this.toolGroupEvents == null) {
             this.toolGroupEvents = new ArrayList<>();
         }

@@ -15,13 +15,6 @@
     <description>GSimulator 核心库 — 世界管理（WorldInfo）、文档管理（Doc）、LLM、缓存、会话、事件、配置等业务层。不含 Agent 运行时与工具实现（见 gsim-agent）。</description>
 
     <dependencies>
-        <!-- GSim AgentLib (AgentTool 协议 + MCP 框架) — 临时依赖，T4 随 agent 提取拆除 -->
-        <dependency>
-            <groupId>com.gsim</groupId>
-            <artifactId>gsim-agentlib</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- Jackson -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -59,12 +52,6 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j2-impl</artifactId>
             <scope>runtime</scope>
-        </dependency>
-
-        <!-- JLine 3 -->
-        <dependency>
-            <groupId>org.jline</groupId>
-            <artifactId>jline</artifactId>
         </dependency>
 
         <!-- JUnit 5 (test) -->

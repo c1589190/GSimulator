@@ -13,6 +13,7 @@
     <modules>
         <module>gsim-agentlib</module>
         <module>gsim-core</module>
+        <module>gsim-agent</module>
         <module>gsim-app</module>
         <module>gsimap</module>
     </modules>
