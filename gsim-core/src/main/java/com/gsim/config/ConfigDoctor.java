@@ -1,6 +1,5 @@
 package com.gsim.config;
 
-import com.gsim.app.AppConfig;
 import com.gsim.llm.LlmManager;
 import com.gsim.llm.LlmMessage;
 import com.gsim.llm.LlmRequest;
@@ -23,10 +22,10 @@ public class ConfigDoctor {
      * 运行配置诊断并返回完整报告文本。
      * <p>检查项包括：Java 版本、配置文件完整性、LLM 配置、数据目录可写性、LLM 连通性。</p>
      *
-     * @param appConfig 应用配置
+     * @param config 配置快照（core 自有输入类型，由调用方从 AppConfig 构造）
      * @return 诊断报告文本，包含各检查项的结果与状态标记（✅/⚠️/❌）
      */
-    public static String diagnose(AppConfig appConfig) {
+    public static String diagnose(ConfigSnapshot config) {
         StringBuilder report = new StringBuilder();
         report.append("========== GSimulator 配置诊断 ==========\n\n");
 
@@ -34,36 +33,36 @@ public class ConfigDoctor {
         checkJavaVersion(report);
 
         // 2. 配置文件
-        checkConfigFile(report, appConfig.getConfigPath());
+        checkConfigFile(report, config.configPath());
 
         // 3. LLM 配置
-        checkLlmConfig(report, appConfig);
+        checkLlmConfig(report, config);
 
         // 4. 目录可写
-        checkDirectories(report, appConfig);
+        checkDirectories(report, config);
 
         // 5. LLM 连通性
-        checkLlmConnectivity(report, appConfig);
+        checkLlmConnectivity(report, config);
 
         report.append("\n=========================================\n");
         return report.toString();
     }
 
     /**
-     * 基于应用配置快速测试 LLM 连通性。
+     * 基于配置快照快速测试 LLM 连通性。
      *
-     * @param appConfig 应用配置，需包含 LLM base URL、API Key、model 等字段
+     * @param config 配置快照，需包含 LLM base URL、API Key、model 等字段
      * @return 测试结果描述文本，包含成功标记（✅）或失败原因（❌）
      */
-    public static String testLlmConnectivity(AppConfig appConfig) {
-        if (!appConfig.isLlmConfigured()) {
+    public static String testLlmConnectivity(ConfigSnapshot config) {
+        if (!config.llmConfigured()) {
             return "❌ LLM 未配置，无法测试。";
         }
         return testLlmConnectivity(
-                appConfig.getLlmBaseUrl(),
-                appConfig.getLlmApiKey(),
-                appConfig.getLlmModel(),
-                appConfig.getLlmTimeoutSeconds());
+                config.llmBaseUrl(),
+                config.llmApiKey(),
+                config.llmModel(),
+                config.llmTimeoutSeconds());
     }
 
     /**
@@ -144,11 +143,11 @@ public class ConfigDoctor {
         report.append("\n");
     }
 
-    private static void checkLlmConfig(StringBuilder report, AppConfig appConfig) {
+    private static void checkLlmConfig(StringBuilder report, ConfigSnapshot config) {
         report.append("[LLM 配置]\n");
-        String baseUrl = appConfig.getLlmBaseUrl();
-        String apiKey = appConfig.getLlmApiKey();
-        String model = appConfig.getLlmModel();
+        String baseUrl = config.llmBaseUrl();
+        String apiKey = config.llmApiKey();
+        String model = config.llmModel();
 
         report.append("  Base URL: ");
         if (baseUrl != null && !baseUrl.isBlank()) {
@@ -159,7 +158,7 @@ public class ConfigDoctor {
 
         report.append("  API Key:  ");
         if (apiKey != null && !apiKey.isBlank()) {
-            report.append(appConfig.maskedApiKey()).append(" ✅\n");
+            report.append(config.maskedApiKey()).append(" ✅\n");
         } else {
             report.append("(未配置) ❌\n");
         }
@@ -172,7 +171,7 @@ public class ConfigDoctor {
         }
 
         report.append("  总体:     ");
-        if (appConfig.isLlmConfigured()) {
+        if (config.llmConfigured()) {
             report.append("已配置 ✅\n");
         } else {
             report.append("未配置 ❌ (执行 /config init)\n");
@@ -180,12 +179,12 @@ public class ConfigDoctor {
         report.append("\n");
     }
 
-    private static void checkDirectories(StringBuilder report, AppConfig appConfig) {
+    private static void checkDirectories(StringBuilder report, ConfigSnapshot config) {
         report.append("[数据目录]\n");
-        checkWritable(report, "data", appConfig.getDataDir());
-        checkWritable(report, "import", appConfig.getImportDir());
-        checkWritable(report, "output", appConfig.getOutputDir());
-        checkWritable(report, "log", appConfig.getLogDir());
+        checkWritable(report, "data", config.dataDir());
+        checkWritable(report, "import", config.importDir());
+        checkWritable(report, "output", config.outputDir());
+        checkWritable(report, "log", config.logDir());
         report.append("\n");
     }
 
@@ -208,12 +207,12 @@ public class ConfigDoctor {
         }
     }
 
-    private static void checkLlmConnectivity(StringBuilder report, AppConfig appConfig) {
+    private static void checkLlmConnectivity(StringBuilder report, ConfigSnapshot config) {
         report.append("[LLM 连通性]\n");
-        if (!appConfig.isLlmConfigured()) {
+        if (!config.llmConfigured()) {
             report.append("  跳过（LLM 未配置）\n");
         } else {
-            String result = testLlmConnectivity(appConfig);
+            String result = testLlmConnectivity(config);
             report.append("  ").append(result).append("\n");
         }
     }

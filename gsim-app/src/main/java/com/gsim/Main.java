@@ -10,6 +10,7 @@ import com.gsim.cache.CachesManager;
 import com.gsim.cache.FileSystemCachesManager;
 import com.gsim.config.ConfigDoctor;
 import com.gsim.config.ConfigLoader;
+import com.gsim.config.ConfigSnapshot;
 import com.gsim.config.ConfigWizard;
 import com.gsimap.http.GsimapHttpServer;
 import com.gsimap.service.MapService;
@@ -59,7 +60,18 @@ public class Main {
 
             // --doctor
             if (cliArgs.doctor()) {
-                String report = ConfigDoctor.diagnose(config);
+                String report = ConfigDoctor.diagnose(new ConfigSnapshot(
+                        config.getConfigPath(),
+                        config.isLlmConfigured(),
+                        config.getLlmBaseUrl(),
+                        config.getLlmApiKey(),
+                        config.getLlmModel(),
+                        config.getLlmTimeoutSeconds(),
+                        config.maskedApiKey(),
+                        config.getDataDir(),
+                        config.getImportDir(),
+                        config.getOutputDir(),
+                        config.getLogDir()));
                 System.out.println(report);
                 return;
             }

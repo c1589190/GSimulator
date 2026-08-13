@@ -1,6 +1,6 @@
 package com.gsim.llm;
 
-import com.gsim.app.AppConfig;
+import com.gsim.util.LogSanitizer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,7 +38,7 @@ public class LlmConfigManager {
             m.put("id", c.id());
             m.put("name", c.name());
             m.put("baseUrl", c.baseUrl());
-            m.put("apiKey", AppConfig.maskValue(c.apiKey()));
+            m.put("apiKey", LogSanitizer.maskValue(c.apiKey()));
             m.put("model", c.model());
             m.put("temperature", c.defaultTemperature());
             m.put("maxTokens", c.defaultMaxTokens());
@@ -63,7 +63,7 @@ public class LlmConfigManager {
         m.put("id", c.id());
         m.put("name", c.name());
         m.put("baseUrl", c.baseUrl());
-        m.put("apiKey", AppConfig.maskValue(c.apiKey()));
+        m.put("apiKey", LogSanitizer.maskValue(c.apiKey()));
         m.put("model", c.model());
         m.put("temperature", c.defaultTemperature());
         m.put("maxTokens", c.defaultMaxTokens());

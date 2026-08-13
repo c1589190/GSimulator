@@ -106,4 +106,17 @@ public final class LogSanitizer {
         result = maskBearerToken(result);
         return result;
     }
+
+    /**
+     * 密钥脱敏：显示前 2 和后 2 字符，如 "sk...xx"。
+     * 供 core 层与 app 层共用（AppConfig.maskValue 委托本方法）。
+     *
+     * @param value 原始密钥，可为 null
+     * @return 脱敏后的文本
+     */
+    public static String maskValue(String value) {
+        if (value == null || value.isBlank()) return "(未设置)";
+        if (value.length() <= 5) return "<configured>";
+        return value.substring(0, 2) + "..." + value.substring(value.length() - 2);
+    }
 }

@@ -26,6 +26,29 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-agentlib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- 交互壳直接依赖（app/commands/interaction/webui 迁入后不再经 core 传递） -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.thymeleaf</groupId>
+            <artifactId>thymeleaf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs-annotations</artifactId>
             <version>4.10.2</version>

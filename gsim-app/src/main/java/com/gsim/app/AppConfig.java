@@ -1,6 +1,7 @@
 package com.gsim.app;
 
 import com.gsim.config.ConfigLoader;
+import com.gsim.util.LogSanitizer;
 import java.nio.file.Path;
 
 /**
@@ -450,10 +451,9 @@ public class AppConfig {
 
     /**
      * 脱敏：显示前2和后2字符，如 "sk...xx"。
+     * 实现位于 core 层 {@link LogSanitizer#maskValue(String)}（core 层与 app 层共用）。
      */
     public static String maskValue(String value) {
-        if (value == null || value.isBlank()) return "(未设置)";
-        if (value.length() <= 5) return "<configured>";
-        return value.substring(0, 2) + "..." + value.substring(value.length() - 2);
+        return LogSanitizer.maskValue(value);
     }
 }

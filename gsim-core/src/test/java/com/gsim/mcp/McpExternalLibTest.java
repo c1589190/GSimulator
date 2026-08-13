@@ -11,6 +11,8 @@ import com.gsim.agentlib.mcp.ToolDef;
 import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
 import com.gsim.agentlib.mcp.UnknownToolException;
 import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.tool.StatusTool;
+import com.gsim.worldinfo.tool.WorldListTool;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +34,6 @@ import org.junit.jupiter.api.io.TempDir;
  * </ul>
  */
 @DisplayName("外部项目集成测试")
-@SuppressWarnings("deprecation")
 class McpExternalLibTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -81,7 +82,15 @@ class McpExternalLibTest {
 
     /** Helper: creates a GSim ToolRegistry wrapped as an McpToolRegistry adapter. */
     private static McpToolRegistry gsimAdapter(Path worldsDir) {
-        return new ToolRegistryMcpAdapter(McpStandaloneToolRegistry.create(worldsDir, null));
+        return new ToolRegistryMcpAdapter(registryWithWorldTools(worldsDir));
+    }
+
+    /** 构造含代表性 GSim 工具（world_list/get_status）的注册表（替代已删除的 McpStandaloneToolRegistry）。 */
+    private static ToolRegistry registryWithWorldTools(Path worldsDir) {
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new WorldListTool(worldsDir, () -> "default"));
+        registry.register(new StatusTool(worldsDir, () -> registry));
+        return registry;
     }
 
     /**
@@ -335,7 +344,7 @@ class McpExternalLibTest {
         @Test
         @DisplayName("ToolRegistry 构造函数可用")
         void toolRegistryConstructorWorks(@TempDir Path tempDir) {
-            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            ToolRegistry toolRegistry = registryWithWorldTools(tempDir);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
             assertNotNull(server);
             assertNotNull(server.getToolRegistry());
@@ -345,7 +354,7 @@ class McpExternalLibTest {
         @Test
         @DisplayName("getToolRegistry 返回正确的类型")
         void getToolRegistryReturnsCorrectType(@TempDir Path tempDir) {
-            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            ToolRegistry toolRegistry = registryWithWorldTools(tempDir);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
             assertNotNull(server.getToolRegistry());
             assertTrue(server.getToolRegistry().all().size() > 0, "Should have registered tools");
@@ -354,7 +363,7 @@ class McpExternalLibTest {
         @Test
         @DisplayName("start() 和 stop() 方法可用")
         void startAndStopAvailable(@TempDir Path tempDir) {
-            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            ToolRegistry toolRegistry = registryWithWorldTools(tempDir);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
             assertDoesNotThrow(server::stop);
         }
@@ -362,7 +371,7 @@ class McpExternalLibTest {
         @Test
         @DisplayName("world_list 工具仍可执行")
         void gsimListWorldsStillWorks(@TempDir Path tempDir) throws Exception {
-            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            ToolRegistry toolRegistry = registryWithWorldTools(tempDir);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
 
             var gsimArgs = MAPPER.createObjectNode();
@@ -375,7 +384,7 @@ class McpExternalLibTest {
         @Test
         @DisplayName("未知 gsim_ 工具抛出异常")
         void unknownGsimToolThrows(@TempDir Path tempDir) {
-            ToolRegistry toolRegistry = McpStandaloneToolRegistry.create(tempDir, null);
+            ToolRegistry toolRegistry = registryWithWorldTools(tempDir);
             GsimMcpServer server = new GsimMcpServer(toolRegistry);
 
             assertThrows(
