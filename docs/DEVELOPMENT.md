@@ -46,7 +46,7 @@ worlds/                      # 世界数据
 │       └── caches/          # SubAgent 对话缓存
 │           └── {sessionId}.json
 docs/                        # DocStore 文档（doc_* 工具）
-│   └── {docId}.md
+│   └── {type}/{docId}.md     # 按文档类型子目录存放
 import/                      # 导入资料
 ```
 

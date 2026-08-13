@@ -87,7 +87,7 @@ gsim-map（Hex 地图服务，依赖 core）
 gsim-app（主入口 + 组装 + 交互壳）
 ├── com.gsim.Main             — 主入口（默认 CLI REPL；--no-cli 为 MCP HTTP 8720）
 ├── com.gsim.app/             — 应用启动（GSimulatorApplication）、依赖注入（Bootstrap/AppConfig/ApplicationContext）
-├── com.gsim.commands/        — CLI 命令实现（AgentCommand/ChatCommand/CompactCommand/
+├── com.gsim.commands/        — CLI 命令实现（AgentCommand/BoardCommand/ChatCommand/CompactCommand/
 │                                LlmCommand/NodeCommand/WorldCommand）
 ├── com.gsim.interaction/     — 交互层（CLI REPL、CommandParser、ConsoleInteractionAdapter）
 └── com.gsim.webui/           — Web UI + HTTP API 层（WebUiServer：JDK 内嵌 HttpServer，端口 8710）
@@ -442,7 +442,7 @@ Web UI 由 `WebUiServer`（JDK 内嵌 `HttpServer`，端口 8710）提供：
   - gsim-map：16
   - gsim-app：51
 - 覆盖包（按模块）：
-  - gsim-core：`com.gsim.core.*`（cache/config/event/importing/llm/session/util/webimport/worldinfo 等）
+  - gsim-core：`com.gsim.core.*`（cache/event/importing/llm/session/util/webimport/worldinfo 等）
   - gsim-agent：`com.gsim.agent.*`（运行时 + tools.* + mcp）；`prompt/`、`root/` 仅存治理类测试
   - gsim-agentlib：`com.gsim.agentlib.mcp`
   - gsim-map：`com.gsim.map.service`

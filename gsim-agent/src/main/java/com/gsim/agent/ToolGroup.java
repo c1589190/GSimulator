@@ -6,11 +6,11 @@ import java.util.Set;
 /**
  * 工具组定义 — 所有工具按功能分组，LLM 通过 activate_tool_groups 按需激活。
  *
- * <p>4 个工具组，按 key 索引。默认工具（无需激活）见 {@link #DEFAULT_TOOLS}。
+ * <p>5 个工具组，按 key 索引。默认工具（无需激活）见 {@link #DEFAULT_TOOLS}。
  */
 public record ToolGroup(String key, String displayName, String description, Set<String> memberTools) {
 
-    // ===== 4 个工具组 =====
+    // ===== 5 个工具组 =====
 
     public static final ToolGroup WORLD_INFO = new ToolGroup(
             "world_info",
