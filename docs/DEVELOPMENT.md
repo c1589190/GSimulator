@@ -106,7 +106,6 @@ java -jar target/GSimulator.jar
 
 - Agent 系统提示词：`resources/gsim/agents/*/config.json` 的 `staticSystemPrompt` 字段
 - Markdown prompt 文件：`resources/gsim/prompts/` 目录
-- `prompts/` 根目录中的独立模板：`OrchestratorAgent_compress.md`、`SearchAgent_system.md`、`SimAgent_system.md`
 - 变量替换：`{{variable}}` 在 `AgentConfig.renderUserPrompt()` 中处理
 
 ## 10. 分支/World/Node 概念澄清

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * ToolExecutionPolicy 执行前门禁单元测试（v2：不再需要 ExpectedNextStep）。
+ * ToolExecutionPolicy 执行前门禁单元测试。
  */
 @DisplayName("工具执行前门禁")
 class ToolExecutionPolicyTest {

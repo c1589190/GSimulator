@@ -31,7 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Agent 生命周期管理器 — 仿 WorldManager 的门面模式。
+ * Agent 生命周期管理器 — 门面模式。
  *
  * <p>统一管理所有 Agent（主 Agent 和 SubAgent），通过 HTTP API 暴露。
  * 主 Agent 和 SubAgent 仅在 parentInstanceId 字段上区分。
