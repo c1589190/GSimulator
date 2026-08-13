@@ -34,10 +34,7 @@ public record ToolGroup(String key, String displayName, String description, Set<
     public static final ToolGroup NODE_MGMT = new ToolGroup(
             "node_mgmt",
             "节点管理",
-            "查看与创建分支节点。"
-                    + "node_list 列出当前链所有节点，"
-                    + "node_status 查看当前节点状态，"
-                    + "node_create 创建子节点（下一回合）并自动切换。",
+            "查看与创建分支节点。" + "node_list 列出当前链所有节点，" + "node_status 查看当前节点状态，" + "node_create 创建子节点（下一回合）并自动切换。",
             Set.of("node_list", "node_status", "node_create"));
 
     public static final ToolGroup IMPORT_DOC = new ToolGroup(

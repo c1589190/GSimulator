@@ -35,7 +35,7 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
-        <!-- SpotBugs annotations for @SuppressFBWarnings (map tools 使用) -->
+        <!-- 与兄弟模块一致的注解依赖；防御性补齐 -->
         <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs-annotations</artifactId>
@@ -65,7 +65,7 @@
 
     <build>
         <plugins>
-            <!-- SpotBugs: ratchet 模式（T9 生成 baseline） -->
+            <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-agent-baseline.xml（2026-08-13 重建） -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>

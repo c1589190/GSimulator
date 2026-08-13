@@ -4,14 +4,14 @@
 # Exits 1 if new bugs are found.
 #
 # Usage:  ./config/spotbugs/check-baseline.sh <module>
-#   ./config/spotbugs/check-baseline.sh gsim-lib
+#   ./config/spotbugs/check-baseline.sh gsim-core
 #
 # Requires: xmlstarlet or python3 for XML diff.
 # Baseline: config/spotbugs/<module>-baseline.xml
 
 set -euo pipefail
 
-MODULE="${1:-gsim-lib}"
+MODULE="${1:-gsim-core}"
 BASELINE="config/spotbugs/${MODULE}-baseline.xml"
 CURRENT="${MODULE}/target/spotbugsXml.xml"
 

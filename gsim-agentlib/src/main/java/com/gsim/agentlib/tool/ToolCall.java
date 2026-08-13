@@ -1,6 +1,5 @@
 package com.gsim.agentlib.tool;
 
-import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -14,7 +13,16 @@ public record ToolCall(String toolName, Map<String, String> parameters) {
      * @param parameters 参数映射，为 null 时视为空映射
      */
     public ToolCall {
-        parameters = parameters != null ? Collections.unmodifiableMap(parameters) : Collections.emptyMap();
+        parameters = parameters != null ? Map.copyOf(parameters) : Map.of();
+    }
+
+    /**
+     * 返回参数映射的不可修改视图（防御性拷贝，内部状态不受调用方修改影响）。
+     *
+     * @return 参数映射（不可修改）
+     */
+    public Map<String, String> parameters() {
+        return Map.copyOf(parameters);
     }
 
     /**

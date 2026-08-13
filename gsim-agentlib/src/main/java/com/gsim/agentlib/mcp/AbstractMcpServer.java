@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.gsim.agentlib.tool.ToolRegistry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -47,6 +48,9 @@ import org.slf4j.LoggerFactory;
  * server.start();  // 阻塞，从 stdin 读取 JSON-RPC 请求
  * }</pre>
  */
+@SuppressFBWarnings(
+        value = "CT_CONSTRUCTOR_THROW",
+        justification = "构造器参数校验抛 IllegalArgumentException 是框架惯例（fail-fast）；校验先于字段赋值与 this 发布，无部分初始化对象被利用风险")
 public abstract class AbstractMcpServer implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractMcpServer.class);

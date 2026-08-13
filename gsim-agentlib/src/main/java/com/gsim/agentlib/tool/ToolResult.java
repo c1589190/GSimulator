@@ -1,6 +1,5 @@
 package com.gsim.agentlib.tool;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -16,7 +15,16 @@ public record ToolResult(boolean success, String toolName, List<Item> items, Str
      * @param error    错误信息（success 为 false 时使用）
      */
     public ToolResult {
-        items = items != null ? Collections.unmodifiableList(items) : List.of();
+        items = items != null ? List.copyOf(items) : List.of();
+    }
+
+    /**
+     * 返回结果条目的不可修改视图（防御性拷贝，内部状态不受调用方修改影响）。
+     *
+     * @return 结果条目列表（不可修改）
+     */
+    public List<Item> items() {
+        return List.copyOf(items);
     }
 
     /**

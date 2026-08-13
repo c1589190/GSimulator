@@ -1,5 +1,6 @@
 package com.gsim.agentlib.mcp;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -262,7 +263,7 @@ public final class McpHttpServer {
             err.put("message", message);
             response.set("error", err);
             return MAPPER.writeValueAsString(response);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32603,\"message\":\"Internal error\"}}";
         }
     }
