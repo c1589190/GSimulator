@@ -71,7 +71,7 @@
 
     <build>
         <plugins>
-            <!-- SpotBugs: ratchet gate — baseline 文件 config/spotbugs/gsim-core-baseline.xml（2026-08-13 重建）。
+            <!-- SpotBugs: ratchet gate — baseline 文件 config/spotbugs/gsim-core-baseline.xml（2026-08-13 重建，111 个 issue）。
                  新 issue 由 config/spotbugs/check-baseline.sh 对比拦截（failOnError=false）。 -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>

@@ -25,14 +25,14 @@ import java.util.Scanner;
  * <p>启动模式：
  * <ul>
  *   <li><b>默认</b> — CLI REPL + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
- *   <li><b>--no-cli</b> — MCP stdio + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
+ *   <li><b>--no-cli</b> — MCP HTTP(8720) + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
  * </ul>
  *
  * <p>启动流程（三阶段）：
  * <ol>
  *   <li>Phase 1: 配置加载 — CLI 参数 → ConfigLoader → AppConfig → Bootstrap</li>
  *   <li>Phase 2: 应用组装 — GSimulatorApplication + MapService + HTTP 服务器</li>
- *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP stdio（阻塞主线程）</li>
+ *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP HTTP(8720)（阻塞主线程）</li>
  * </ol>
  */
 public class Main {
@@ -269,7 +269,7 @@ public class Main {
         System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");
-        System.out.println("  --no-cli           无 CLI 模式：MCP stdio + Web GUI(8710) + Map(8711)");
+        System.out.println("  --no-cli           无 CLI 模式：MCP HTTP(8720) + Web GUI(8710) + Map(8711)");
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");

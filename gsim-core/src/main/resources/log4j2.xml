@@ -93,8 +93,8 @@
             <AppenderRef ref="CONSOLE" level="WARN"/>
         </Logger>
 
-        <!-- LLM 调试：llm 包 DEBUG → llm.log；CONSOLE 仅 WARN+ -->
-        <Logger name="com.gsim.llm" level="DEBUG" additivity="false">
+        <!-- LLM 调试：core.llm 包 DEBUG → llm.log；CONSOLE 仅 WARN+ -->
+        <Logger name="com.gsim.core.llm" level="DEBUG" additivity="false">
             <AppenderRef ref="LLM_LOG"/>
             <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="WARN"/>
@@ -106,7 +106,7 @@
             <AppenderRef ref="CONSOLE" level="INFO"/>
             <AppenderRef ref="MAIN_LOG" level="INFO"/>
         </Logger>
-        <Logger name="com.gsim.event" level="INFO" additivity="false">
+        <Logger name="com.gsim.core.event" level="INFO" additivity="false">
             <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="INFO"/>
             <AppenderRef ref="MAIN_LOG" level="INFO"/>

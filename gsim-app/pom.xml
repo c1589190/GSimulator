@@ -63,8 +63,8 @@
 
     <build>
         <plugins>
-            <!-- SpotBugs: ratchet 模式 — app 模块承载迁移代码（GSimulatorApplication 等），
-                 与 core/agent 一致的 baseline 对比模式（failOnError=false）；
+            <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-app-baseline.xml（2026-08-13 重建，70 个 issue）；
+                 app 模块承载迁移代码（GSimulatorApplication 等），与 core/agent 一致的 baseline 对比模式（failOnError=false）；
                  零容忍（failOnError=true）留给 gsim-agentlib/gsim-map。 -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>

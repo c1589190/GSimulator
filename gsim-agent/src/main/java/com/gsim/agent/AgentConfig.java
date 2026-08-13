@@ -16,7 +16,7 @@ import java.util.Map;
  * 不再使用 FreeMarker 动态渲染 -- 全部内容直接存储在 JSON 中。
  *
  * @param agentId             Agent 唯一标识（如 "orchestrator", "sim", "search"）
- * @param llmProvider         引用的 LLM provider ID（对应 data/llms.json 中的 id）
+ * @param llmProvider         引用的 LLM provider ID（对应 llms.json（应用工作目录 baseDir）中的 id）
  * @param staticSystemPrompt  静态系统提示词，直接定义 Agent 的行为边界（可选）
  * @param systemPrompt        兼容旧字段，staticSystemPrompt 为空时使用
  * @param userTemplate        用户 prompt 模板，支持 {{变量}} 替换（可选）

@@ -65,7 +65,7 @@
 
     <build>
         <plugins>
-            <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-agent-baseline.xml（2026-08-13 重建） -->
+            <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-agent-baseline.xml（2026-08-13 重建，100 个 issue） -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>

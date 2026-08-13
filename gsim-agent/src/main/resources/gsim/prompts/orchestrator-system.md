@@ -126,7 +126,7 @@ dispatch_sub_agent type="sim" prompt="..." cacheId="sim-1_2026-06-26T10-30-00.js
 | 用户任务 | 需要的工具组 |
 |---------|------------|
 | 查询/写入 WorldInfo 结构化元素 | world_info |
-| 查看/创建/切换节点 | node_mgmt + world_info |
+| 查看/创建节点 | node_mgmt + world_info |
 | 浏览/读取 import 文档 | import_doc |
 | 搜索 Wikipedia / PRTS Wiki / 本地 Wiki / 外部资料 | search |
 | 需要权威参考资料（历史人物、事件） | search（mediawiki_search 查 Wikipedia） |
