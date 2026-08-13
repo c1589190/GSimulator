@@ -1,4 +1,4 @@
-package com.gsim.map.tool;
+package com.gsim.agent.tools.map;
 
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;

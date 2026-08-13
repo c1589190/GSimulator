@@ -25,9 +25,22 @@
             <artifactId>gsim-agentlib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- 地图工具（com.gsim.agent.tools.map.*）依赖 gsim-map 业务层（MapService/MapData 等） -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-map</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- SpotBugs annotations for @SuppressFBWarnings (map tools 使用) -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.2</version>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

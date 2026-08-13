@@ -1,34 +1,33 @@
-package com.gsim.map.tool;
+package com.gsim.agent.tools.map;
 
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.util.JsonUtils;
-import com.gsim.map.map.MapResolver;
 import com.gsim.map.service.MapService;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * gsimap_get_history — Get the map history across all nodes in the chain.
- * Returns per-node snapshots with hex counts and map ownership.
+ * gsimap_rename_region — Rename a region across all data stores:
+ * MapData provinces + all GSim checkpoint references (factions, narrative, map, etc.).
+ * Updates keys, tags, and text references. Auto-saves.
  */
-public final class GsimapGetHistoryTool extends AbstractGsimapTool {
+public final class GsimapRenameRegionTool extends AbstractGsimapTool {
 
-    public GsimapGetHistoryTool(MapService mapService) {
+    public GsimapRenameRegionTool(MapService mapService) {
         super(mapService);
     }
 
     @Override
     public String name() {
-        return "gsimap_get_history";
+        return "gsimap_rename_region";
     }
 
     @Override
     public String description() {
-        return "Get the map history across all nodes in the chain.";
+        return "Rename a region across all data stores: provinces, checkpoint references, keys, and tags. Auto-saves.";
     }
 
     @Override
@@ -44,23 +43,19 @@ public final class GsimapGetHistoryTool extends AbstractGsimapTool {
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = mapService.readActiveNodeId(worldId);
         }
-
-        List<MapResolver.HistoryEntry> history = mapService.history(worldId, nodeId);
-        List<Map<String, Object>> entries = new ArrayList<>();
-        for (MapResolver.HistoryEntry h : history) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("nodeId", h.nodeId());
-            entry.put("hasOwnMap", h.hasOwnMap());
-            entry.put("hexCount", h.map().hexes().size());
-            entries.add(entry);
+        String oldName = call.param("oldName");
+        if (oldName == null || oldName.isBlank()) {
+            return ToolResult.fail(name(), "oldName is required");
+        }
+        String newName = call.param("newName");
+        if (newName == null || newName.isBlank()) {
+            return ToolResult.fail(name(), "newName is required");
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("worldId", worldId);
-        result.put("chain", entries);
-
+        Map<String, Object> result = new LinkedHashMap<>(mapService.renameRegion(worldId, nodeId, oldName, newName));
+        result.put("address", "gsimap:region:" + newName);
         return ToolResult.ok(
-                name(), List.of(new ToolResult.Item(worldId, "gsimap_get_history", JsonUtils.toJson(result), 1.0)));
+                name(), List.of(new ToolResult.Item(newName, "gsimap_rename_region", JsonUtils.toJson(result), 1.0)));
     }
 
     @Override
@@ -75,12 +70,14 @@ public final class GsimapGetHistoryTool extends AbstractGsimapTool {
                                                 "type",
                                                 "string",
                                                 "description",
-                                                "Node ID (optional, defaults to active node)")),
-                "required", List.of("worldId"));
+                                                "Node ID (optional, defaults to active node)"),
+                                "oldName", Map.of("type", "string", "description", "Current region name"),
+                                "newName", Map.of("type", "string", "description", "New region name")),
+                "required", List.of("worldId", "oldName", "newName"));
     }
 
     @Override
     public Permission permission() {
-        return Permission.READ;
+        return Permission.WRITE;
     }
 }

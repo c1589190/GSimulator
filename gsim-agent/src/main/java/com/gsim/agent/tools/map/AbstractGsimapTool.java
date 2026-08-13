@@ -1,4 +1,4 @@
-package com.gsim.map.tool;
+package com.gsim.agent.tools.map;
 
 import com.gsim.agentlib.mcp.GsimRequestContext;
 import com.gsim.agentlib.tool.AgentTool;

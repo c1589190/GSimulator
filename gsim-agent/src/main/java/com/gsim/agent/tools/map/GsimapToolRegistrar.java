@@ -1,4 +1,4 @@
-package com.gsim.map.tool;
+package com.gsim.agent.tools.map;
 
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.map.service.MapService;

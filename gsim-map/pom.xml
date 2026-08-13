@@ -22,13 +22,6 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- GSim AgentLib (AgentTool 协议 + MCP 框架) — 地图工具用协议类；T6b 拆除 -->
-        <dependency>
-            <groupId>com.gsim</groupId>
-            <artifactId>gsim-agentlib</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- JSON serialization (direct dependency — also transitively from gsim-core) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

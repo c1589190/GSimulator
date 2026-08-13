@@ -14,7 +14,7 @@ import com.gsim.core.config.ConfigSnapshot;
 import com.gsim.core.config.ConfigWizard;
 import com.gsim.map.http.GsimapHttpServer;
 import com.gsim.map.service.MapService;
-import com.gsim.map.tool.GsimapToolRegistrar;
+import com.gsim.agent.tools.map.GsimapToolRegistrar;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
