@@ -452,8 +452,8 @@ Web UI 由 `WebUiServer`（JDK 内嵌 `HttpServer`，端口 8710）提供：
 
 ## 测试
 
-- 测试数（按模块分布；本计划新增内嵌引用/暂存/核心配置测试，以下为 `@Test` 计数，最终以控制器 `mvn clean verify` surefire 实测为准）：
-  - gsim-core：175
+- 测试数（按模块分布；本计划新增内嵌引用/暂存/核心配置测试，（`mvn clean verify` surefire 实测））：
+  - gsim-core：178
   - gsim-agent：184
   - gsim-agentlib：32
   - gsim-map：16
