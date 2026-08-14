@@ -4,16 +4,25 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocCacheManager;
+import com.gsim.core.doc.DocStore;
+import com.gsim.core.doc.DocType;
+import com.gsim.core.doc.Document;
+import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +40,12 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code append} -- 始终添加新元素，即使 key 已存在</li>
  * </ul>
  *
- * <p>value 参数支持 {@code @cache:id} 引用，自动解析为缓存全文。
+ * <p>value 参数支持 {@code @cache:id} 引用，自动解析为缓存全文；也支持
+ * {@code @doc:"docId"} / {@code @import:"file"} 内嵌引用，写入前展开为文档全文，
+ * 引用无法解析时调用失败（[@DOC_REF_FAILED]）。
+ *
+ * <p>value 长度超过 {@code core.doc.staging.threshold}（默认 500）时不直接写入，
+ * 而是暂存为 TMP 文档（docs/tmp/）并返回 {@code @doc:} 地址，供后续调用二次提交。
  * links 应使用相同的 {@code nodeId:checkpointId:key} 格式以便交叉引用。
  */
 public final class WriteElementTool implements AgentTool {
@@ -41,11 +55,23 @@ public final class WriteElementTool implements AgentTool {
     private final Supplier<WorldInformation> worldInfo;
     private final Path worldsDir;
     private final DocCacheManager cacheManager;
+    private final DocStore docStore;
+    private final InlineRefResolver inlineRefResolver;
+    private final CoreConfig coreConfig;
 
-    public WriteElementTool(Supplier<WorldInformation> worldInfo, Path worldsDir, DocCacheManager cacheManager) {
+    public WriteElementTool(
+            Supplier<WorldInformation> worldInfo,
+            Path worldsDir,
+            DocCacheManager cacheManager,
+            DocStore docStore,
+            InlineRefResolver inlineRefResolver,
+            CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
         this.worldsDir = worldsDir;
         this.cacheManager = cacheManager;
+        this.docStore = docStore;
+        this.inlineRefResolver = inlineRefResolver;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -116,6 +142,19 @@ public final class WriteElementTool implements AgentTool {
         if (cacheManager != null) {
             value = cacheManager.resolve(value);
         }
+
+        // 阈值检查（@cache: 展开后、@doc: 展开前）：超过阈值 → 暂存 docs 引导二次提交
+        int threshold = coreConfig.getInt(CoreConfig.STAGING_THRESHOLD, 500);
+        if (value.length() > threshold) {
+            return stageToDoc(nodeId, checkpointId, key, value);
+        }
+
+        // 内嵌引用解析：@doc:"id" / @import:"file" 展开为全文，未解析则失败
+        InlineRefResolver.ResolveResult rr = inlineRefResolver.resolve(value);
+        if (!rr.unresolved().isEmpty()) {
+            return ToolResult.fail(name(), "[@DOC_REF_FAILED] 以下引用无法解析: " + String.join("; ", rr.unresolved()));
+        }
+        value = rr.text();
 
         List<String> tags = tagsStr != null && !tagsStr.isBlank() ? Arrays.asList(tagsStr.split(",")) : List.of();
         List<String> links = linksStr != null && !linksStr.isBlank() ? Arrays.asList(linksStr.split(",")) : List.of();
@@ -224,5 +263,43 @@ public final class WriteElementTool implements AgentTool {
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("Failed to load node " + nodeId + " from disk: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 大文本暂存 — 将超过阈值的 value 写入 docs/tmp/ 下的 TMP 文档并返回 {@code @doc:} 地址。
+     * docId 冲突（极低概率）时重新生成一次；仍冲突则返回失败。
+     */
+    private ToolResult stageToDoc(String nodeId, String checkpointId, String key, String value) {
+        try {
+            String docId = "wstg_write_"
+                    + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                    + "_" + randomHex(8);
+            String title = nodeId + ":" + checkpointId + ":" + key; // 信息单元地址
+            Document doc = docStore.create(docId, DocType.TMP, title, value, List.of());
+            if (doc == null) { // docId 冲突（极低概率）→ 重试一次：重新生成时间戳+随机再 create
+                String retryId = "wstg_write_"
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                        + "_" + randomHex(8);
+                doc = docStore.create(retryId, DocType.TMP, title, value, List.of());
+                if (doc == null) return ToolResult.fail(name(), "[STAGING_FAILED] 暂存文档创建失败（docId 冲突）");
+                docId = retryId;
+            }
+            log.warn("[WriteElement] value {} chars > threshold, staged to doc {}", value.length(), docId);
+            return ToolResult.ok(name(), List.of(new ToolResult.Item(
+                    "内容已暂存为文档（" + value.length() + " 字符，超过阈值）",
+                    docId,
+                    "请在后续调用中使用 write_element(value=\"@doc:\"" + docId + "\") 提交到信息单元 " + title,
+                    1.0)));
+        } catch (IOException e) {
+            return ToolResult.fail(name(), "[STAGING_FAILED] 暂存失败: " + e.getMessage());
+        }
+    }
+
+    private static String randomHex(int len) {
+        StringBuilder sb = new StringBuilder(len);
+        for (int i = 0; i < len; i++) {
+            sb.append(Integer.toHexString(ThreadLocalRandom.current().nextInt(16)));
+        }
+        return sb.toString();
     }
 }
