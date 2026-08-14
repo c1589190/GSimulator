@@ -41,17 +41,17 @@ gsim-agentlib（零业务依赖，可独立打包复用）
 
 gsim-core（纯业务，零兄弟模块依赖）
 ├── com.gsim.core.worldinfo/  — WorldInfo 结构化元素存储（WorldInformation/Checkpoint/Element/loader/）
-├── com.gsim.core.doc/        — 文档管理（DocStore/DocCacheManager/Document）
+├── com.gsim.core.doc/        — 文档管理（DocStore/DocCacheManager/Document/DocType）
 ├── com.gsim.core.session/    — Session 管理（SessionPool/SessionNode/SessionPoolBridge）
 ├── com.gsim.core.importing/  — 导入服务（ImportDocumentService）
 ├── com.gsim.core.cache/      — SubAgent 对话缓存（CacheSession/CacheStore/CachesManager）
 ├── com.gsim.core.compact/    — 缓存压缩（摘要生成）
 ├── com.gsim.core.llm/        — LLM 客户端统一封装（LlmManager/LlmProviderRegistry/StreamPool/LlmConfigManager）
 ├── com.gsim.core.event/      — 统一事件系统（EventBus/GSimEvent/ConsoleEventSink/SseEventSink）
-├── com.gsim.core.config/     — 配置系统（ConfigLoader/ConfigDoctor/ConfigWizard）
+├── com.gsim.core.config/     — 配置系统（ConfigLoader/ConfigDoctor/ConfigWizard/CoreConfig）
 ├── com.gsim.core.skill/      — SkillIndex 语义索引
 ├── com.gsim.core.embedding/  — EmbeddingClient
-├── com.gsim.core.ref/        — RefResolver（引用解析）
+├── com.gsim.core.ref/        — 引用解析（RefResolver + InlineRefResolver：内嵌 @doc:/@import: 引用展开）
 ├── com.gsim.core.text/       — TextEditor
 ├── com.gsim.core.webimport/  — MediaWikiApiClient（仅此一个类）
 └── com.gsim.core.util/       — 工具类（IdGenerator/LogSanitizer/JsonUtils core 副本）
@@ -154,6 +154,14 @@ rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-*.j
 | `api.enabled` | false | 是否启用 HTTP API |
 | `llm.default_provider` | base | 默认 LLM provider ID |
 | `agent.max_tool_rounds` | 64 | Agent ToolLoop 最大轮数 |
+
+### 核心配置（core.properties）
+
+`core.properties` — core 层全局配置（`CoreConfig`，独立于 AppConfig/ConfigLoader，零依赖、仅 JDK）。classpath 内置默认（jar 内置 `/core.properties`），应用启动时落盘到工作目录（baseDir，即 `worlds/` 的上级目录），**已存在不覆盖**；外部文件覆盖内置默认。
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `core.doc.staging.threshold` | 500 | `write_element` 大文本暂存阈值（value 字符数超过即暂存） |
 
 ### LLM Provider 配置
 
@@ -307,6 +315,13 @@ public interface AgentTool {
 - 禁止 `{key=value}` 伪造工具输出（MODEL_FAKE_TOOL_RESULT 检测）
 - 验证失败 → 打回 LLM 重写，不消耗额外轮次配额
 
+### 文档系统（Doc）
+
+- 存储布局：`docs/{type}/{id}.md`（DocStore 管理）；docId 支持嵌套路径（`^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$`，如 `story/ch1/scene3`）
+- DocType 共 9 种：character / skill / world_state / template / context / rule / board / **tmp** / other（`tmp` 为暂存类型，`write_element` 大文本暂存使用）
+- 内嵌引用（`InlineRefResolver`，`com.gsim.core.ref`）：文本中 `@doc:"docId"` / `@import:"docId"` 原位展开为文档全文；未解析的引用原样保留并记录（不抛异常，供回传 LLM 修正）；无引号形态（`@doc:xxx`）视为普通文本
+- `@cache:` 虚拟文档引用：**消费端保留**（doc_read / doc_write / doc_create / doc_crop / text_edit 等可引用 `@cache:id` 读取缓存全文）；**写入端已停用**（doc_read 等不再自动产出 `@cache:id` 引用）
+
 ## WorldInfo / Node 系统
 
 ### 概念模型
@@ -326,7 +341,7 @@ public interface AgentTool {
 | `query_element` | READ | 按 ref 精确查询单个元素（含 links 解析） |
 | `query_by_tag` | READ | 按 tag 索引查询元素 |
 | `query_address` | READ | 解析通用地址（`gsimap:*` → 地图实体、`nodeId:checkpointId:key` → 元素等） |
-| `write_element` | MUTATING | 写入/更新元素（默认 upsert，mode=append 追加） |
+| `write_element` | MUTATING | 写入/更新元素（默认 upsert，mode=append 追加；value 超阈值 → 暂存 docs/tmp/ 并返回 @doc: 地址） |
 | `create_checkpoint` | MUTATING | 显式创建检查点（带 label/type 元数据） |
 | `attachment_write` | MUTATING | 写入绑定到节点的附件文件（`nXXXX_{key}.json`） |
 | `attachment_read` | READ | 读取绑定到节点的附件文件 |
@@ -335,6 +350,8 @@ public interface AgentTool {
 | `node_create` | MUTATING | 创建子节点并自动切换（必填 worldTime） |
 | `world_list` | READ | 列出所有 World |
 | `world_create` | MUTATING | 创建新 World |
+
+**write_element 大文本暂存**：value 长度超过 `core.doc.staging.threshold`（默认 500 字符）时**不直接写入**，而是暂存为 TMP 文档（`docs/tmp/wstg_write_*.md`，DocType.TMP），返回暂存 docId 并引导二次提交 `write_element(value="@doc:\"wstg_write_xxx\"")` — 经 InlineRefResolver 展开全文后写入信息单元；引用无法解析时拒绝（`[@DOC_REF_FAILED]`）。
 
 ## 缓存系统（Cache）
 
@@ -435,14 +452,14 @@ Web UI 由 `WebUiServer`（JDK 内嵌 `HttpServer`，端口 8710）提供：
 
 ## 测试
 
-- 测试数（按模块分布，最近一次 `mvn clean verify` surefire 实测）：
-  - gsim-core：162（另有 7 skipped）
-  - gsim-agent：171
+- 测试数（按模块分布；本计划新增内嵌引用/暂存/核心配置测试，以下为 `@Test` 计数，最终以控制器 `mvn clean verify` surefire 实测为准）：
+  - gsim-core：175
+  - gsim-agent：184
   - gsim-agentlib：32
   - gsim-map：16
-  - gsim-app：51
+  - gsim-app：54
 - 覆盖包（按模块）：
-  - gsim-core：`com.gsim.core.*`（cache/event/importing/llm/session/util/webimport/worldinfo 等）
+  - gsim-core：`com.gsim.core.*`（cache/event/importing/llm/session/util/webimport/worldinfo/ref/config/doc 等）
   - gsim-agent：`com.gsim.agent.*`（运行时 + tools.* + mcp）；`prompt/`、`root/` 仅存治理类测试
   - gsim-agentlib：`com.gsim.agentlib.mcp`
   - gsim-map：`com.gsim.map.service`
