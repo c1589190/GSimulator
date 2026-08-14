@@ -27,7 +27,7 @@ public final class DocTemplateTool implements AgentTool {
      * 创建文档模板工具实例。
      *
      * @param store         文档存储
-     * @param cacheManager  缓存管理器，用于缓存生成的模板文本
+     * @param cacheManager  文档缓存管理器
      */
     public DocTemplateTool(DocStore store, com.gsim.core.doc.DocCacheManager cacheManager) {
         this.store = store;
@@ -126,17 +126,7 @@ public final class DocTemplateTool implements AgentTool {
                 return ToolResult.fail(name(), "文档已存在: " + docId);
             }
 
-            // 缓存生成的文本
-            String cacheId = null;
-            try {
-                cacheId = cacheManager.put("tmpl", templateText);
-            } catch (java.io.IOException ignored) {
-            }
-
             String msg = "从模板 " + templateName + " 创建: type=" + type.key() + " v" + doc.version();
-            if (cacheId != null) {
-                msg = "[@cache:" + cacheId + "]\n" + msg + "\n\n---\n使用 @cache:" + cacheId + " 在后续工具调用中引用此文本。";
-            }
 
             return ToolResult.ok(name(), List.of(new ToolResult.Item(finalTitle, docId, msg, 1.0)));
         } catch (IOException e) {

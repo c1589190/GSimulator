@@ -8,15 +8,12 @@ import com.gsim.core.doc.DocCacheManager;
 import com.gsim.core.doc.DocStore;
 import com.gsim.core.ref.RefResolver;
 import com.gsim.core.ref.RefResolver.ResolvedRef;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 /**
  * resolve_ref — 统一 @ 引用解析工具，LLM 可通过 @import:/@world:/@doc: 格式读取任意来源的文档/元素。
- *
- * <p>内容超过 200 字符时自动缓存到 @cache: 以节省上下文。
  */
 public final class ResolveRefTool implements AgentTool {
 
@@ -90,22 +87,8 @@ public final class ResolveRefTool implements AgentTool {
             Path cacheDir = worldsDir.resolveSibling("docs").resolve(".cache");
             ResolvedRef resolved = RefResolver.resolve(ref, worldsDir, worldId, importDir, docStore, cacheDir);
 
-            String cacheId = null;
-            if (resolved.content().length() > 200 && cacheManager != null) {
-                try {
-                    cacheId = cacheManager.put("ref", resolved.content());
-                } catch (IOException ignored) {
-                }
-            }
-
             StringBuilder sb = new StringBuilder();
-            if (cacheId != null) {
-                sb.append("[@cache:").append(cacheId).append("]\n");
-            }
             sb.append(resolved.content());
-            if (cacheId != null) {
-                sb.append("\n\n---\n使用 @cache:").append(cacheId).append(" 在后续工具调用中引用此文本。");
-            }
 
             return ToolResult.ok(
                     name(),

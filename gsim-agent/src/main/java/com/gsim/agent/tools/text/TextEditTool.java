@@ -16,14 +16,13 @@ import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
 import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 通用文本编辑工具 — 对任何来源的文本执行行级/关键词级修改，返回新 @cache:id。
+ * 通用文本编辑工具 — 对任何来源的文本执行行级/关键词级修改。
  *
  * <p>输入 source 支持：
  * <ul>
@@ -44,8 +43,6 @@ import java.util.Map;
  *   <li>mask_kw — 关键词遮蔽为 ***</li>
  *   <li>mask_lines_spec — 整行遮蔽为 ***</li>
  * </ul>
- *
- * <p>返回 @cache:id 引用，可传入 write_element、doc_write 等工具。
  */
 public final class TextEditTool implements AgentTool {
 
@@ -83,7 +80,7 @@ public final class TextEditTool implements AgentTool {
     @Override
     public String description() {
         return """
-                对任意来源的文本进行行级和关键词级编辑，返回新的 @cache:id 引用。
+                对任意来源的文本进行行级和关键词级编辑。
 
                 参数:
                 - source (必填): 文本来源 — @cache:id、@world:ref、@doc:id、@import:id 或裸文本。
@@ -99,7 +96,6 @@ public final class TextEditTool implements AgentTool {
                 - mask_lines_spec: 整行遮蔽的行范围，如 "8-9"（可选）
 
                 操作按 select → delete → insert → replace_lines → replace_kw → mask_kw → mask_lines 顺序执行。
-                返回新 @cache:id，可立即传入 write_element、doc_write 等工具复用。
 
                 示例:
                 text_edit(source="@doc:turn_5_state", select_lines="1-6,11-14", mask_kw="王允",
@@ -184,17 +180,8 @@ public final class TextEditTool implements AgentTool {
         // Execute
         EditResult result = TextEditor.edit(sourceText, ops);
 
-        // Cache result
-        String cacheId;
-        try {
-            cacheId = cacheManager.put("text_edit", result.text());
-        } catch (IOException e) {
-            return ToolResult.fail(NAME, "缓存写入失败: " + e.getMessage());
-        }
-
         // Build output with line numbers
         StringBuilder sb = new StringBuilder();
-        sb.append("[@cache:").append(cacheId).append("]\n");
         String[] lines = result.text().split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
             sb.append(String.format("%6d| ", i)).append(lines[i]).append("\n");
@@ -202,12 +189,11 @@ public final class TextEditTool implements AgentTool {
         sb.append("\n---\n");
         sb.append("源: ").append(sourceLabel).append("\n");
         sb.append("编辑: ").append(result.summary()).append("\n");
-        sb.append("使用 @cache:").append(cacheId).append(" 在后续工具调用中引用此文本。");
 
         return ToolResult.ok(
                 NAME,
                 List.of(new ToolResult.Item(
-                        "text_edit: " + sourceLabel + " → " + result.summary(), cacheId, sb.toString(), 1.0)));
+                        "text_edit: " + sourceLabel + " → " + result.summary(), source, sb.toString(), 1.0)));
     }
 
     // ── Source resolution ──
