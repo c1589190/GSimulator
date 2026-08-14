@@ -139,7 +139,13 @@ public final class AgentBridge {
         toolRegistry.register(new QueryAddressTool(wiSupplier, toolRegistry));
 
         // Write tools
-        toolRegistry.register(new WriteElementTool(wiSupplier, ctx.worldsDir(), ctx.docCacheManager()));
+        toolRegistry.register(new WriteElementTool(
+                wiSupplier,
+                ctx.worldsDir(),
+                ctx.docCacheManager(),
+                ctx.docStore(),
+                ctx.inlineRefResolver(),
+                ctx.coreConfig()));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, ctx.worldsDir()));
         toolRegistry.register(new AttachmentWriteTool(ctx.worldsDir(), wiSupplier));
         toolRegistry.register(new AttachmentReadTool(ctx.worldsDir(), wiSupplier));

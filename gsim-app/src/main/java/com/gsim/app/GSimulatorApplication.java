@@ -44,6 +44,8 @@ public class GSimulatorApplication {
     private com.gsim.core.compact.CacheCompactor cacheCompactor;
     private com.gsim.commands.CompactCommand compactCommand;
     private com.gsim.core.doc.DocCacheManager docCacheManager;
+    private com.gsim.core.config.CoreConfig coreConfig;
+    private com.gsim.core.ref.InlineRefResolver inlineRefResolver;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
@@ -188,6 +190,17 @@ public class GSimulatorApplication {
             log.warn("Failed to create embdb dir: {}", e.getMessage());
         }
 
+        // ── core.properties 落盘 + CoreConfig + 内嵌引用解析器（write_element 阈值/引用展开用）──
+        // baseDir 推导：AppConfig 中 worldsDir = baseDir/worlds，故 baseDir = worldsDir.getParent()
+        Path baseDir = worldsDir.getParent();
+        try {
+            ensureCorePropertiesTemplate(baseDir);
+        } catch (java.io.IOException e) {
+            log.warn("Failed to write core.properties template: {}", e.getMessage());
+        }
+        this.coreConfig = com.gsim.core.config.CoreConfig.load(baseDir.resolve("core.properties"));
+        this.inlineRefResolver = new com.gsim.core.ref.InlineRefResolver(docStore, importDocService);
+
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
         AgentBridge.registerCoreTools(
                 toolRegistry,
@@ -227,7 +240,14 @@ public class GSimulatorApplication {
         AgentBridge.registerWorldInfoTools(
                 toolRegistry,
                 new WorldInfoToolContext(
-                        worldsDir, () -> worldInfo, activeWorldId::get, docCacheManager, onNodeChanged));
+                        worldsDir,
+                        () -> worldInfo,
+                        activeWorldId::get,
+                        docCacheManager,
+                        onNodeChanged,
+                        docStore,
+                        inlineRefResolver,
+                        coreConfig));
 
         if (agentEnabled) {
             // 创建命令并注入到 adapter
@@ -278,6 +298,19 @@ public class GSimulatorApplication {
             webUiServer.registerHandler("/api/worlds", worldApiHandler);
 
             log.info("Registered LlmApiHandler + AgentApiHandler + WorldApiHandler");
+        }
+    }
+
+    /**
+     * 将 classpath 内置 core.properties 模板落盘到 baseDir（已存在不覆盖；classpath 缺失则静默跳过）。
+     */
+    static void ensureCorePropertiesTemplate(Path baseDir) throws java.io.IOException {
+        Path target = baseDir.resolve("core.properties");
+        if (java.nio.file.Files.exists(target)) return; // 已存在不覆盖
+        try (var in = com.gsim.core.config.CoreConfig.class.getResourceAsStream("/core.properties")) {
+            if (in == null) return; // classpath 缺失则静默跳过（不应发生）
+            java.nio.file.Files.createDirectories(baseDir);
+            java.nio.file.Files.copy(in, target);
         }
     }
 

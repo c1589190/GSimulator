@@ -1,6 +1,9 @@
 package com.gsim.agent.bridge;
 
+import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocCacheManager;
+import com.gsim.core.doc.DocStore;
+import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.nio.file.Path;
 import java.util.function.Supplier;
@@ -18,4 +21,7 @@ public record WorldInfoToolContext(
         Supplier<WorldInformation> worldInfoSupplier,
         Supplier<String> activeWorldId,
         DocCacheManager docCacheManager,
-        Runnable onNodeChanged) {}
+        Runnable onNodeChanged,
+        DocStore docStore,
+        InlineRefResolver inlineRefResolver,
+        CoreConfig coreConfig) {}
