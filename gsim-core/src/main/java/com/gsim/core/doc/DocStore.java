@@ -49,6 +49,16 @@ public class DocStore {
                     // docId = relative path from docsDir, strip .md
                     String relPath = docsDir.relativize(file).toString();
                     String docId = relPath.substring(0, relPath.length() - 3); // strip .md
+                    // 首段是已知 DocType.key → 布局段，剥掉（docId 不含 type 前缀）
+                    int slash = docId.indexOf('/');
+                    if (slash > 0) {
+                        for (DocType t : DocType.values()) {
+                            if (t.key().equals(docId.substring(0, slash))) {
+                                docId = docId.substring(slash + 1);
+                                break;
+                            }
+                        }
+                    }
                     doc = Document.create(docId, doc.type(), doc.title(), doc.content(), doc.tags());
                     cache.put(docId, doc);
                 } catch (Exception e) {

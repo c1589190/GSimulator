@@ -61,7 +61,7 @@ public final class DocIndexTool implements AgentTool {
     public ToolResult execute(ToolCall call) {
         String docId = call.param("docId", "").trim();
         if (docId.isEmpty()) return ToolResult.fail(name(), "docId 不能为空");
-        if (!docId.matches("^[a-zA-Z0-9_-]+$")) {
+        if (!docId.matches("^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$")) {
             return ToolResult.fail(name(), "docId 只能包含字母、数字、连字符、下划线");
         }
 

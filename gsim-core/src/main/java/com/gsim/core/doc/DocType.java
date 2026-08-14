@@ -11,6 +11,7 @@ public enum DocType {
     CONTEXT("context", "上下文片段"),
     RULE("rule", "规则文档"),
     BOARD("board", "展示板"),
+    TMP("tmp", "暂存"),
     OTHER("other", "其他");
 
     private final String key;

@@ -80,7 +80,7 @@ public final class DocTemplateTool implements AgentTool {
         String varsJson = call.param("vars", "").trim();
 
         if (docId.isEmpty()) return ToolResult.fail(name(), "docId 不能为空");
-        if (!docId.matches("^[a-zA-Z0-9_-]+$")) {
+        if (!docId.matches("^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$")) {
             return ToolResult.fail(name(), "docId 只能包含字母、数字、连字符、下划线");
         }
         if (templateName.isEmpty()) return ToolResult.fail(name(), "template 不能为空");

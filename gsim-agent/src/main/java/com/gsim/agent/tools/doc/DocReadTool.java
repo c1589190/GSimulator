@@ -70,7 +70,7 @@ public final class DocReadTool implements AgentTool {
             title = docId; // 直接显示 @cache:id
         } else {
             // 常规 docId 校验
-            if (!docId.matches("^[a-zA-Z0-9_-]+$")) {
+            if (!docId.matches("^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$")) {
                 return ToolResult.fail(name(), "docId 只能包含字母、数字、连字符、下划线，或以 @cache: 开头");
             }
             Document doc = store.get(docId);
