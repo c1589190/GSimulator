@@ -285,11 +285,13 @@ public final class WriteElementTool implements AgentTool {
                 docId = retryId;
             }
             log.warn("[WriteElement] value {} chars > threshold, staged to doc {}", value.length(), docId);
-            return ToolResult.ok(name(), List.of(new ToolResult.Item(
-                    "内容已暂存为文档（" + value.length() + " 字符，超过阈值）",
-                    docId,
-                    "请在后续调用中使用 write_element(value=\"@doc:\"" + docId + "\") 提交到信息单元 " + title,
-                    1.0)));
+            return ToolResult.ok(
+                    name(),
+                    List.of(new ToolResult.Item(
+                            "内容已暂存为文档（" + value.length() + " 字符，超过阈值）",
+                            docId,
+                            "请在后续调用中使用 write_element(value=\"@doc:\"" + docId + "\") 提交到信息单元 " + title,
+                            1.0)));
         } catch (IOException e) {
             return ToolResult.fail(name(), "[STAGING_FAILED] 暂存失败: " + e.getMessage());
         }

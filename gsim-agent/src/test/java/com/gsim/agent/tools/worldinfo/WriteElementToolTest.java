@@ -134,8 +134,7 @@ class WriteElementToolTest {
     void oversizedValueIsStagedToDocInsteadOfWriting() {
         String big = "灾".repeat(501);
         var tool = tool();
-        ToolResult r = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
+        ToolResult r = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
 
         assertTrue(r.success());
         String message = r.items().get(0).snippet();
@@ -160,8 +159,7 @@ class WriteElementToolTest {
     void valueWithinThresholdWritesDirectly() {
         String value = "中".repeat(500);
         var tool = tool();
-        ToolResult r = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:长文", "value", value)));
+        ToolResult r = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:长文", "value", value)));
 
         assertTrue(r.success());
         List<ElementRef> history = wi.checkpointHistory("worldview");
@@ -175,15 +173,15 @@ class WriteElementToolTest {
 
         // 恰 500 字符 → 直接写入
         String atLimit = "字".repeat(500);
-        ToolResult r1 = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界一", "value", atLimit)));
+        ToolResult r1 =
+                tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界一", "value", atLimit)));
         assertTrue(r1.success());
         assertEquals(1, wi.checkpointHistory("worldview").size());
 
         // 501 字符 → 暂存
         String over = "字".repeat(501);
-        ToolResult r2 = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界二", "value", over)));
+        ToolResult r2 =
+                tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界二", "value", over)));
         assertTrue(r2.success());
         assertTrue(r2.items().get(0).path().startsWith("wstg_write_"));
         assertEquals(1, wi.checkpointHistory("worldview").size()); // 未写入
@@ -193,18 +191,19 @@ class WriteElementToolTest {
     void inlineDocRefIsResolvedToSnapshotBeforeWrite() throws IOException {
         docStore.create("设定集", DocType.OTHER, "设定集", "唐朝背景架空设定", List.of("设定"));
         var tool = tool();
-        ToolResult r = tool.execute(new ToolCall(
-                "write_element", Map.of("ref", "n0000:worldview:设定", "value", "@doc:\"设定集\"")));
+        ToolResult r = tool.execute(
+                new ToolCall("write_element", Map.of("ref", "n0000:worldview:设定", "value", "@doc:\"设定集\"")));
 
         assertTrue(r.success());
-        assertEquals("唐朝背景架空设定", wi.checkpointHistory("worldview").get(0).element().value());
+        assertEquals(
+                "唐朝背景架空设定", wi.checkpointHistory("worldview").get(0).element().value());
     }
 
     @Test
     void unresolvedDocRefFailsWithoutWriting() {
         var tool = tool();
-        ToolResult r = tool.execute(new ToolCall(
-                "write_element", Map.of("ref", "n0000:worldview:设定", "value", "@doc:\"不存在的\"")));
+        ToolResult r = tool.execute(
+                new ToolCall("write_element", Map.of("ref", "n0000:worldview:设定", "value", "@doc:\"不存在的\"")));
 
         assertFalse(r.success());
         assertTrue(r.error().contains("[@DOC_REF_FAILED]"));
@@ -217,16 +216,15 @@ class WriteElementToolTest {
         var tool = tool();
 
         // 第一次调用：超阈值 → 暂存
-        ToolResult r1 = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
+        ToolResult r1 = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
         assertTrue(r1.success());
         String docId = r1.items().get(0).path();
         assertTrue(docId.startsWith("wstg_write_"));
         assertTrue(wi.checkpointHistory("worldview").isEmpty());
 
         // 第二次调用：@doc: 引用暂存文档 → 正常写入全文
-        ToolResult r2 = tool.execute(new ToolCall(
-                "write_element", Map.of("ref", "n0000:worldview:大事件", "value", "@doc:\"" + docId + "\"")));
+        ToolResult r2 = tool.execute(
+                new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", "@doc:\"" + docId + "\"")));
         assertTrue(r2.success());
         List<ElementRef> history = wi.checkpointHistory("worldview");
         assertEquals(1, history.size());
@@ -240,24 +238,23 @@ class WriteElementToolTest {
         var tool = tool();
         ToolResult r = tool.execute(new ToolCall(
                 "write_element",
-                Map.of(
-                        "ref",
-                        "n0000:worldview:设定",
-                        "value",
-                        "前文 @doc:\"设定集\" 中段 @import:\"附件.txt\" 后文")));
+                Map.of("ref", "n0000:worldview:设定", "value", "前文 @doc:\"设定集\" 中段 @import:\"附件.txt\" 后文")));
 
         assertTrue(r.success());
         assertEquals(
-                "前文 唐朝设定 中段 山河辽阔 后文", wi.checkpointHistory("worldview").get(0).element().value());
+                "前文 唐朝设定 中段 山河辽阔 后文",
+                wi.checkpointHistory("worldview").get(0).element().value());
     }
 
     @Test
     void unquotedDocRefWrittenAsIs() {
         var tool = tool();
-        ToolResult r = tool.execute(new ToolCall(
-                "write_element", Map.of("ref", "n0000:worldview:设定", "value", "引用 @doc:设定集 未加引号")));
+        ToolResult r = tool.execute(
+                new ToolCall("write_element", Map.of("ref", "n0000:worldview:设定", "value", "引用 @doc:设定集 未加引号")));
 
         assertTrue(r.success());
-        assertEquals("引用 @doc:设定集 未加引号", wi.checkpointHistory("worldview").get(0).element().value());
+        assertEquals(
+                "引用 @doc:设定集 未加引号",
+                wi.checkpointHistory("worldview").get(0).element().value());
     }
 }
