@@ -32,8 +32,7 @@ class DocCreateToolTest {
 
     @Test
     void nestedDocIdCreatesDocument() {
-        ToolCall call = new ToolCall(
-                "doc_create", Map.of("docId", "a/b/c", "title", "嵌套标题", "content", "嵌套正文"));
+        ToolCall call = new ToolCall("doc_create", Map.of("docId", "a/b/c", "title", "嵌套标题", "content", "嵌套正文"));
         ToolResult r = tool.execute(call);
 
         assertTrue(r.success());
