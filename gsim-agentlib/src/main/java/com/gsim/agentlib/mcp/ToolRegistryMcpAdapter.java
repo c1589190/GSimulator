@@ -47,10 +47,6 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     private static final String PARAM_PAGE = "_page";
 
     private static final String PARAM_PAGE_SIZE = "_pageSize";
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
-    /** Hard ceiling for the serialized JSON response before aggressive truncation. */
-    private static final int MAX_JSON_BYTES = 50_000;
 
     private final ToolRegistry registry;
 
@@ -60,6 +56,12 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      * When null, only worldId presence is validated (no match check).
      */
     private final Supplier<String> activeWorldId;
+
+    /** Response limits (pagination, size ceiling, truncation length). Never null. */
+    private final McpResponseConfig config;
+
+    /** Optional overflow handler; null → legacy snippet truncation path. */
+    private final ToolResultOverflowHandler overflowHandler;
 
     /**
      * Tools that should additionally validate worldId matches the active world.
@@ -100,11 +102,30 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      *                       when set, worldinfo tools validate worldId matches the active world
      */
     public ToolRegistryMcpAdapter(ToolRegistry registry, Supplier<String> activeWorldId) {
+        this(registry, activeWorldId, McpResponseConfig.defaults(), null);
+    }
+
+    /**
+     * Creates an MCP adapter with configurable response limits and a pluggable overflow handler.
+     *
+     * @param registry        the tool registry to expose via MCP (must not be null)
+     * @param activeWorldId   optional supplier for the active world ID;
+     *                        when set, worldinfo tools validate worldId matches the active world
+     * @param config          response limits; {@code null} falls back to {@link McpResponseConfig#defaults()}
+     * @param overflowHandler optional handler for oversized responses; {@code null} → legacy truncation
+     */
+    public ToolRegistryMcpAdapter(
+            ToolRegistry registry,
+            Supplier<String> activeWorldId,
+            McpResponseConfig config,
+            ToolResultOverflowHandler overflowHandler) {
         if (registry == null) {
             throw new IllegalArgumentException("ToolRegistry must not be null");
         }
         this.registry = registry;
         this.activeWorldId = activeWorldId;
+        this.config = config != null ? config : McpResponseConfig.defaults();
+        this.overflowHandler = overflowHandler;
     }
 
     // ── McpToolRegistry ─────────────────────────────────────
@@ -185,7 +206,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
         }
 
         // Pass original args (with pagination params and worldId) to the serialization layer
-        return toolResultToJson(result, args);
+        return toolResultToJson(result, name, args);
     }
 
     // ── Name mapping ───────────────────────────────────────
@@ -332,18 +353,21 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      * <ol>
      *   <li>Slices {@code items} by {@code _page}/{@code _pageSize} from args</li>
      *   <li>Adds pagination metadata ({@code _totalItems}, {@code _hasMore})</li>
-     *   <li>If serialized JSON exceeds 50 KB, truncates individual snippet lengths</li>
+     *   <li>If serialized JSON exceeds {@code config.maxJsonBytes()}, applies the
+     *       overflow handler (when enabled) or truncates individual snippet lengths</li>
      * </ol>
      *
      * @param result the tool execution result
+     * @param name   the MCP-facing tool name (with {@code gsim_} prefix)
      * @param args   original MCP request arguments (may contain pagination params)
      * @return JSON string ready for MCP response
      */
-    static String toolResultToJson(ToolResult result, JsonNode args) {
+    String toolResultToJson(ToolResult result, String name, JsonNode args) {
         try {
             // ── 1. Extract pagination params ──────────────────
             int page = extractInt(args, PARAM_PAGE, 1);
-            int pageSize = Math.clamp(extractInt(args, PARAM_PAGE_SIZE, DEFAULT_PAGE_SIZE), 1, MAX_PAGE_SIZE);
+            int pageSize = Math.clamp(extractInt(args, PARAM_PAGE_SIZE, config.defaultPageSize()), 1,
+                    config.maxPageSize());
 
             List<ToolResult.Item> allItems = result.items();
             int totalItems = allItems.size();
@@ -408,8 +432,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
 
             // ── 3. Hard size ceiling (last-resort safety net) ──
             String json = MAPPER.writeValueAsString(map);
-            if (json.length() > MAX_JSON_BYTES) {
-                json = truncateSnippetsInJson(map);
+            if (json.length() > config.maxJsonBytes()) {
+                json = handleOversizedResult(result, name, args, map);
             }
             return json;
 
@@ -471,14 +495,42 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
     }
 
     /**
-     * Last-resort safety net: truncate every item's snippet to 300 chars and re-serialize.
-     * Only reached when character-level pagination is not enough (e.g. a single huge
-     * snippet with hundreds of thousands of chars). After truncation, re-checks size;
-     * if still exceeds {@link #MAX_JSON_BYTES}, replaces all snippets with a placeholder.
+     * Handles a serialized response that exceeds {@code config.maxJsonBytes()}.
+     *
+     * <p>First tries the pluggable {@link ToolResultOverflowHandler} (only when
+     * {@code config.stagingEnabled()} and a handler is present): a rewritten result
+     * whose re-serialized JSON fits within the ceiling is returned as-is. Otherwise
+     * (handler null/disabled, returned null, or still oversized) the legacy
+     * snippet-truncation path applies to the current working map.
+     */
+    private String handleOversizedResult(
+            ToolResult result, String name, JsonNode args, Map<String, Object> map)
+            throws JsonProcessingException {
+        if (config.stagingEnabled() && overflowHandler != null) {
+            ToolResult rewritten = overflowHandler.handle(result, name);
+            if (rewritten != null) {
+                Map<String, Object> rewrittenMap = buildResponseMap(rewritten, rewritten.items(), args);
+                String json = MAPPER.writeValueAsString(rewrittenMap);
+                if (json.length() <= config.maxJsonBytes()) {
+                    return json;
+                }
+                return truncateSnippetsInJson(rewrittenMap);
+            }
+        }
+        return truncateSnippetsInJson(map);
+    }
+
+    /**
+     * Last-resort safety net: truncate every item's snippet to
+     * {@code config.snippetMaxChars()} chars and re-serialize. Only reached when
+     * character-level pagination is not enough (e.g. a single huge snippet with
+     * hundreds of thousands of chars). After truncation, re-checks size; if still
+     * exceeds {@link McpResponseConfig#maxJsonBytes()}, replaces all snippets with
+     * a placeholder.
      */
     @SuppressWarnings("unchecked")
-    private static String truncateSnippetsInJson(Map<String, Object> map) throws JsonProcessingException {
-        final int maxChars = 300;
+    private String truncateSnippetsInJson(Map<String, Object> map) throws JsonProcessingException {
+        final int maxChars = config.snippetMaxChars();
         List<Map<String, Object>> items = (List<Map<String, Object>>) map.get("items");
         if (items != null) {
             for (Map<String, Object> item : items) {
@@ -492,7 +544,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
             }
             // Aggressive fallback: still too large → drop snippet content entirely
             String json = MAPPER.writeValueAsString(map);
-            if (json.length() > MAX_JSON_BYTES) {
+            if (json.length() > config.maxJsonBytes()) {
                 for (Map<String, Object> item : items) {
                     item.put("snippet", "(truncated — use query_element or _page for full content)");
                 }
