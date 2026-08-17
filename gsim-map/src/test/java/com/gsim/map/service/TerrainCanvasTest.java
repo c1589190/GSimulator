@@ -195,6 +195,15 @@ public class TerrainCanvasTest {
     }
 
     @Test
+    void testCustomRadiusConstructorHonored() {
+        TerrainCanvas canvas = new TerrainCanvas(10);
+        assertEquals(10, canvas.getMapRadius());
+
+        // Default canvas keeps the legacy default radius
+        assertEquals(80, new TerrainCanvas().getMapRadius());
+    }
+
+    @Test
     void testSetBlocksFromGsimBlocks() {
         TerrainCanvas canvas = new TerrainCanvas();
         List<MapData.TerrainBlock> gsimBlocks = List.of(

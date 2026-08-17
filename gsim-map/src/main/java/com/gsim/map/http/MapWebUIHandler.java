@@ -1,6 +1,7 @@
 package com.gsim.map.http;
 
 import com.gsim.core.util.JsonUtils;
+import com.gsim.map.config.MapConfig;
 import com.gsim.map.map.MapData;
 import com.gsim.map.map.MapDiff;
 import com.gsim.map.map.MapResolver;
@@ -51,15 +52,27 @@ public class MapWebUIHandler implements HttpHandler {
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private final MapService mapService;
+    private final MapConfig mapConfig;
+
+    /**
+     * Creates a new handler backed by the given map service instance with default limits.
+     *
+     * @param mapService the shared map service
+     */
+    public MapWebUIHandler(MapService mapService) {
+        this(mapService, MapConfig.defaults());
+    }
 
     /**
      * Creates a new handler backed by the given map service instance.
      *
      * @param mapService the shared map service
+     * @param mapConfig configurable map limits (default radius, contour cache, etc.)
      */
     @SuppressFBWarnings("EI_EXPOSE_REP2")
-    public MapWebUIHandler(MapService mapService) {
+    public MapWebUIHandler(MapService mapService, MapConfig mapConfig) {
         this.mapService = mapService;
+        this.mapConfig = mapConfig;
     }
 
     /**
@@ -178,7 +191,7 @@ public class MapWebUIHandler implements HttpHandler {
                 sendError(exchange, 404, "No contour found for world: " + worldId);
                 return;
             }
-            ContourQueryEngine engine = new ContourQueryEngine(contour);
+            ContourQueryEngine engine = new ContourQueryEngine(contour, mapConfig.contourCacheMax());
             MapData map = engine.materialize(
                     -contour.getRadius(), contour.getRadius(), -contour.getRadius(), contour.getRadius());
             mapService.saveMap(worldId, "n0000", map);
@@ -416,20 +429,28 @@ public class MapWebUIHandler implements HttpHandler {
     private void handleGenerate(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
         String worldId = sub.substring(1, sub.indexOf("/generate"));
         long seed = Long.parseLong(params.getOrDefault("seed", String.valueOf(System.currentTimeMillis())));
-        int radius = Integer.parseInt(params.getOrDefault("radius", "80"));
+        int radius = Integer.parseInt(params.getOrDefault("radius", String.valueOf(mapConfig.defaultMapRadius())));
         int mainCount = Integer.parseInt(params.getOrDefault("ridges", "2"));
         int fragmentCount = Integer.parseInt(params.getOrDefault("fragments", "5"));
         double landRatio = Double.parseDouble(params.getOrDefault("land", "0.55"));
         double coastRoughness = Double.parseDouble(params.getOrDefault("roughness", "0.6"));
 
         // Generate continent (deprecated path — use TerrainCanvas.addBlock for new worlds)
-        var gen = new MapGenerator(seed, radius);
+        var gen = new MapGenerator(seed, radius, mapConfig.contourCacheMax());
         gen.placeRidges(mainCount, fragmentCount);
         ContinentContour contour = gen.generateContour(landRatio);
         mapService.saveContour(worldId, contour);
 
         // Also materialize full map for editor rendering
-        MapData map = MapGenerator.generate(worldId, seed, radius, mainCount, fragmentCount, landRatio, coastRoughness);
+        MapData map = MapGenerator.generate(
+                worldId,
+                seed,
+                radius,
+                mainCount,
+                fragmentCount,
+                landRatio,
+                coastRoughness,
+                mapConfig.contourCacheMax());
         mapService.saveMap(worldId, "n0000", map);
 
         // Populate terrain blocks from contour: create blocks for land areas
@@ -519,7 +540,8 @@ public class MapWebUIHandler implements HttpHandler {
                     for (var node : body.get("lassoKeys")) {
                         rawKeys.add(node.asText());
                     }
-                    Set<String> hexSet = LassoProcessor.fill(rawKeys);
+                    Set<String> hexSet =
+                            LassoProcessor.fill(rawKeys, mapConfig.lassoMaxRadius(), mapConfig.lassoMaxFill());
                     if (hexSet.isEmpty()) {
                         sendJson(exchange, 200, Map.of("ok", false, "reason", "lasso fill returned empty"));
                     } else {

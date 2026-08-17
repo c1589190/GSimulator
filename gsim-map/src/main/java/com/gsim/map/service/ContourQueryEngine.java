@@ -19,29 +19,41 @@ public class ContourQueryEngine {
 
     // LRU cache: coordinate key → TerrainSample
     private final Map<String, TerrainSample> cache;
-    private static final int MAX_CACHE = 5000;
+    static final int MAX_CACHE = 5000;
+
+    /**
+     * Constructs a query engine from the given continent contour with the
+     * default cache size.
+     * @param contour the continent contour to query against
+     */
+    public ContourQueryEngine(ContinentContour contour) {
+        this(contour, MAX_CACHE);
+    }
 
     /**
      * Constructs a query engine from the given continent contour.
      * @param contour the continent contour to query against
+     * @param cacheMax maximum number of cached terrain samples
      */
     @SuppressFBWarnings("EI_EXPOSE_REP2") // contour is read-only after construction
-    public ContourQueryEngine(ContinentContour contour) {
+    public ContourQueryEngine(ContinentContour contour, int cacheMax) {
         this.contour = contour;
         this.noise = new SimplexNoise(contour.getSeed());
-        this.cache = new LruCache();
+        this.cache = new LruCache(cacheMax);
     }
 
     private static class LruCache extends LinkedHashMap<String, TerrainSample> {
         private static final long serialVersionUID = 1L;
+        private final int maxEntries;
 
-        LruCache() {
-            super(MAX_CACHE, 0.75f, true);
+        LruCache(int maxEntries) {
+            super(maxEntries, 0.75f, true);
+            this.maxEntries = maxEntries;
         }
 
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, TerrainSample> e) {
-            return size() > MAX_CACHE;
+            return size() > maxEntries;
         }
     }
 

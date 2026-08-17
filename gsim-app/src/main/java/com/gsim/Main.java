@@ -141,13 +141,13 @@ public class Main {
             GSimulatorApplication app = new GSimulatorApplication(config, bootResult, !noCli);
 
             // 地图服务 + 工具注册
-            MapService mapService = new MapService(config.worldsDir());
+            MapService mapService = new MapService(config.worldsDir(), config.mapConfig());
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
             AgentBridge.registerMapTools(toolRegistry, mapService);
 
             // Map HTTP 服务器（map.port，默认 8711）— 始终启动
             int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());
-            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
+            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService, config.mapConfig());
             gsimapServer.start();
             System.err.println("[BOOT] Map UI: http://127.0.0.1:" + gsimapPort);
 

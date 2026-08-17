@@ -25,19 +25,31 @@ public final class LassoProcessor {
     private static final int MAX_FILL = 30000;
 
     /**
-     * Compute the flood-filled hex set from a lasso's perimeter hex keys.
-     * Bridges consecutive hexes with Bresenham lines, then flood-fills interior.
+     * Compute the flood-filled hex set from a lasso's perimeter hex keys,
+     * using the default radius and fill limits.
      * @param rawKeys lasso perimeter hex keys in draw order
      * @return the set of hex keys inside the closed lasso, or empty if invalid
      */
     public static Set<String> fill(List<String> rawKeys) {
+        return fill(rawKeys, MAX_RADIUS, MAX_FILL);
+    }
+
+    /**
+     * Compute the flood-filled hex set from a lasso's perimeter hex keys.
+     * Bridges consecutive hexes with Bresenham lines, then flood-fills interior.
+     * @param rawKeys lasso perimeter hex keys in draw order
+     * @param maxRadius coordinate bound for accepted hexes
+     * @param maxFill maximum number of hexes to fill before treating as a leak
+     * @return the set of hex keys inside the closed lasso, or empty if invalid
+     */
+    public static Set<String> fill(List<String> rawKeys, int maxRadius, int maxFill) {
         if (rawKeys == null || rawKeys.size() < 3) return Collections.emptySet();
 
         // Parse and filter OOB
         List<int[]> pts = new ArrayList<>();
         for (String k : rawKeys) {
             int[] qr = MapData.parseHexKey(k);
-            if (Math.abs(qr[0]) <= MAX_RADIUS && Math.abs(qr[1]) <= MAX_RADIUS) pts.add(qr);
+            if (Math.abs(qr[0]) <= maxRadius && Math.abs(qr[1]) <= maxRadius) pts.add(qr);
         }
         if (pts.size() < 3) return Collections.emptySet();
 
@@ -78,11 +90,11 @@ public final class LassoProcessor {
         Deque<String> stack = new ArrayDeque<>();
         stack.push(seed);
 
-        while (!stack.isEmpty() && filled.size() < MAX_FILL) {
+        while (!stack.isEmpty() && filled.size() < maxFill) {
             String key = stack.pop();
             if (filled.contains(key) || wall.contains(key)) continue;
             int[] qr = MapData.parseHexKey(key);
-            if (Math.abs(qr[0]) > MAX_RADIUS || Math.abs(qr[1]) > MAX_RADIUS) continue;
+            if (Math.abs(qr[0]) > maxRadius || Math.abs(qr[1]) > maxRadius) continue;
             filled.add(key);
             for (int[] d : DIRS) {
                 String nk = (qr[0] + d[0]) + "_" + (qr[1] + d[1]);
@@ -91,7 +103,7 @@ public final class LassoProcessor {
         }
 
         // If fill is suspiciously large (leaked), return empty
-        if (filled.size() >= MAX_FILL) return Collections.emptySet();
+        if (filled.size() >= maxFill) return Collections.emptySet();
 
         return filled;
     }

@@ -19,6 +19,7 @@ public class MapGenerator {
 
     private final Random rng;
     private final int radius;
+    private final int contourCacheMax;
     private List<Ridge> ridges;
 
     record Ridge(List<Pt> points, double weight) {}
@@ -31,8 +32,19 @@ public class MapGenerator {
      * @param mapRadius hex grid radius
      */
     public MapGenerator(long seed, int mapRadius) {
+        this(seed, mapRadius, ContourQueryEngine.MAX_CACHE);
+    }
+
+    /**
+     * Constructs a map generator with the given seed, radius and contour cache size.
+     * @param seed random seed for reproducibility
+     * @param mapRadius hex grid radius
+     * @param contourCacheMax cache size for the internal ContourQueryEngine
+     */
+    public MapGenerator(long seed, int mapRadius, int contourCacheMax) {
         this.rng = new Random(seed);
         this.radius = mapRadius;
+        this.contourCacheMax = contourCacheMax;
         this.ridges = new ArrayList<>();
     }
 
@@ -151,7 +163,7 @@ public class MapGenerator {
      */
     public MapData generate(double landRatio) {
         ContinentContour contour = generateContour(landRatio);
-        ContourQueryEngine engine = new ContourQueryEngine(contour);
+        ContourQueryEngine engine = new ContourQueryEngine(contour, contourCacheMax);
         return engine.materialize(-radius, radius, -radius, radius);
     }
 
@@ -196,7 +208,39 @@ public class MapGenerator {
             int fragments,
             double landRatio,
             double coastRoughness) {
-        var gen = new MapGenerator(seed, mapRadius);
+        return generate(
+                worldId,
+                seed,
+                mapRadius,
+                mainRidges,
+                fragments,
+                landRatio,
+                coastRoughness,
+                ContourQueryEngine.MAX_CACHE);
+    }
+
+    /**
+     * Static convenience — generate a full map in one call.
+     * @param worldId  world identifier (for terrain types)
+     * @param seed     random seed for reproducibility
+     * @param mapRadius hex grid radius
+     * @param mainRidges number of main ridge chains
+     * @param fragments number of fragment ridges
+     * @param landRatio target land-to-total ratio
+     * @param coastRoughness coastline roughness factor
+     * @param contourCacheMax cache size for the internal ContourQueryEngine
+     * @return generated MapData with hexes
+     */
+    public static MapData generate(
+            String worldId,
+            long seed,
+            int mapRadius,
+            int mainRidges,
+            int fragments,
+            double landRatio,
+            double coastRoughness,
+            int contourCacheMax) {
+        var gen = new MapGenerator(seed, mapRadius, contourCacheMax);
         gen.placeRidges(mainRidges, fragments);
         return gen.generate(landRatio);
     }

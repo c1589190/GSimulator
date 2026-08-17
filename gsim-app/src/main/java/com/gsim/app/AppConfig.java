@@ -2,6 +2,7 @@ package com.gsim.app;
 
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.util.LogSanitizer;
+import com.gsim.map.config.MapConfig;
 import java.nio.file.Path;
 
 /**
@@ -124,6 +125,9 @@ public class AppConfig {
     private final int cliWsPort;
     private final int mcpHttpPort;
 
+    /** gsim-map 限值（默认 80/32/5000/200/30000/100/200）。 */
+    private final MapConfig mapConfig;
+
     /**
      * 从 ConfigLoader 结果构造。
      */
@@ -245,6 +249,16 @@ public class AppConfig {
         this.mapPort = parsePort(result.get("map.port"), 8711);
         this.cliWsPort = parsePort(result.get("cli.ws.port"), 8712);
         this.mcpHttpPort = parsePort(result.get("mcp.http.port"), 37201);
+
+        // gsim-map 限值（默认值与 MapConfig.DEFAULT 一致，行为零变化）
+        this.mapConfig = new MapConfig(
+                parseInt(result.get("map.radius.default"), 80),
+                parseInt(result.get("map.cache.max_entries"), 32),
+                parseInt(result.get("map.contour.cache.max"), 5000),
+                parseInt(result.get("map.lasso.max_radius"), 200),
+                parseInt(result.get("map.lasso.max_fill"), 30000),
+                parseInt(result.get("map.compression.min_region_size"), 100),
+                parseInt(result.get("map.resolver.max_chain_depth"), 200));
     }
 
     // ---- Getters ----
@@ -589,6 +603,11 @@ public class AppConfig {
     /** MCP HTTP 服务端口（默认 37201）。 */
     public int getMcpHttpPort() {
         return mcpHttpPort;
+    }
+
+    /** gsim-map 限值配置（默认 80/32/5000/200/30000/100/200）。 */
+    public MapConfig mapConfig() {
+        return mapConfig;
     }
 
     /** 获取当前生效的配置文件路径。 */

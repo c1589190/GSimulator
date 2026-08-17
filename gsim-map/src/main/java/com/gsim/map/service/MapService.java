@@ -1,5 +1,7 @@
 package com.gsim.map.service;
 
+import com.gsim.core.worldinfo.loader.WorldManager;
+import com.gsim.map.config.MapConfig;
 import com.gsim.map.map.MapData;
 import com.gsim.map.map.MapDiff;
 import com.gsim.map.map.MapResolver;
@@ -28,17 +30,22 @@ import org.slf4j.LoggerFactory;
 public class MapService {
 
     private static final Logger log = LoggerFactory.getLogger(MapService.class);
-    private static final int MAX_CACHE_SIZE = 32;
 
     private final Path worldsDir;
-    private final Map<String, MapData> cache = Collections.synchronizedMap(new LruCache());
-
+    private final WorldManager worldManager;
+    private final MapConfig mapConfig;
+    private final Map<String, MapData> cache;
     private static final class LruCache extends LinkedHashMap<String, MapData> {
         private static final long serialVersionUID = 1L;
+        private final int maxEntries;
+
+        LruCache(int maxEntries) {
+            this.maxEntries = maxEntries;
+        }
 
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, MapData> eldest) {
-            return size() > MAX_CACHE_SIZE;
+            return size() > maxEntries;
         }
     }
 
@@ -53,9 +60,21 @@ public class MapService {
      * @param worldsDir path to the worlds directory
      */
     public MapService(Path worldsDir) {
-        this.worldsDir = worldsDir;
-        if (!Files.isDirectory(worldsDir)) {
-            log.warn("Worlds directory does not exist: {}", worldsDir);
+        this(worldsDir, MapConfig.defaults());
+    }
+
+    /**
+     * Creates a new MapService for the given worlds directory with configurable limits.
+     * @param worldsDir path to the worlds directory
+     * @param mapConfig configurable map limits (radius, cache sizes, etc.)
+     */
+    public MapService(Path worldsDir, MapConfig mapConfig) {
+        this.worldsDir = worldsDir.toAbsolutePath().normalize();
+        this.worldManager = new WorldManager(this.worldsDir);
+        this.mapConfig = mapConfig;
+        this.cache = Collections.synchronizedMap(new LruCache(mapConfig.cacheMaxEntries()));
+        if (!Files.isDirectory(this.worldsDir)) {
+            log.warn("Worlds directory does not exist: {}", this.worldsDir);
         }
     }
 
@@ -91,7 +110,7 @@ public class MapService {
             map = MapStore.loadFull(worldsDir, worldId, nodeId);
         } else {
             // Child node: use MapResolver for diff chain
-            map = MapResolver.resolve(worldsDir, worldId, nodeId);
+            map = MapResolver.resolve(worldsDir, worldId, nodeId, mapConfig.maxChainDepth());
         }
         // Transparently validate and repair CR boundaries on every load.
         // This fixes legacy single-ring boundaries that lack hole rings.
@@ -134,7 +153,7 @@ public class MapService {
      * @return list of history entries
      */
     public List<MapResolver.HistoryEntry> history(String worldId, String nodeId) {
-        return MapResolver.history(worldsDir, worldId, nodeId);
+        return MapResolver.history(worldsDir, worldId, nodeId, mapConfig.maxChainDepth());
     }
 
     // ── TerrainCanvas (block system) ────────────────────────
@@ -150,7 +169,7 @@ public class MapService {
         String key = canvasKey(worldId, nodeId);
         return canvases.computeIfAbsent(key, k -> {
             MapData map = resolve(worldId, nodeId);
-            TerrainCanvas canvas = new TerrainCanvas();
+            TerrainCanvas canvas = new TerrainCanvas(mapConfig.defaultMapRadius());
             if (map != null
                     && map.terrainBlocks() != null
                     && !map.terrainBlocks().isEmpty()) {
@@ -181,7 +200,7 @@ public class MapService {
         // Fallback 1: load stored terrainBlocks into canvas and query
         MapData map = resolve(worldId, nodeId);
         if (map != null && map.terrainBlocks() != null && !map.terrainBlocks().isEmpty()) {
-            canvas = new TerrainCanvas();
+            canvas = new TerrainCanvas(mapConfig.defaultMapRadius());
             canvas.setBlocks(map.terrainBlocks());
             canvases.put(key, canvas);
             String terrain = canvas.queryHex(q, r);
@@ -675,7 +694,7 @@ public class MapService {
             if (cell == null) return new ContourQueryEngine.TerrainSample(0, "water", "#3295D2");
             return new ContourQueryEngine.TerrainSample(0.5, cell.terrain(), cell.color());
         }
-        ContourQueryEngine engine = new ContourQueryEngine(contour);
+        ContourQueryEngine engine = new ContourQueryEngine(contour, mapConfig.contourCacheMax());
         return engine.query(q, r);
     }
 
@@ -853,7 +872,8 @@ public class MapService {
 
         // Load contour for terrain generation
         ContinentContour contour = loadContour(worldId);
-        ContourQueryEngine engine = contour != null ? new ContourQueryEngine(contour) : null;
+        ContourQueryEngine engine =
+                contour != null ? new ContourQueryEngine(contour, mapConfig.contourCacheMax()) : null;
 
         // Build expanded hex grid
         var newHexes = new LinkedHashMap<>(map.hexes());
@@ -944,7 +964,7 @@ public class MapService {
         MapData map = resolve(worldId, nodeId);
         if (map == null || map.hexes().isEmpty()) return Map.of("ok", false, "error", "No map data");
 
-        if (minRegionSize <= 0) minRegionSize = CompressionService.DEFAULT_MIN_REGION_SIZE;
+        if (minRegionSize <= 0) minRegionSize = mapConfig.minRegionSize();
 
         List<MapData.CompressedRegion> regions = CompressionService.compress(map, minRegionSize);
 
@@ -1093,7 +1113,15 @@ public class MapService {
             int fragments,
             double landRatio,
             double coastRoughness) {
-        MapData map = MapGenerator.generate(worldId, seed, radius, ridges, fragments, landRatio, coastRoughness);
+        MapData map = MapGenerator.generate(
+                worldId,
+                seed,
+                radius,
+                ridges,
+                fragments,
+                landRatio,
+                coastRoughness,
+                mapConfig.contourCacheMax());
         saveMap(worldId, nodeId, map);
         long landHexes = map.hexes().values().stream()
                 .filter(h -> !"water".equals(h.terrain()))
@@ -1547,58 +1575,17 @@ public class MapService {
     // ── Helpers ───────────────────────────────────────────
 
     /**
-     * Returns the active (leaf) node ID for a world by scanning the nodes directory.
-     * Finds the node that is not referenced as a parent by any other node
-     * (the leaf of the chain), falling back to {@code "n0000"}.
+     * Returns the active node ID for a world.
+     *
+     * <p>Delegates to {@link WorldManager#activeNodeIdOr(String, String)} — the single
+     * source of truth for active-node discovery. Falls back to {@code "n0000"} only
+     * when the world does not exist or has no readable nodes.
      *
      * @param worldId the world identifier
-     * @return the leaf node ID, or {@code "n0000"} if discovery fails
+     * @return the active node ID, or {@code "n0000"} if discovery fails
      */
     public String readActiveNodeId(String worldId) {
-        try {
-            java.nio.file.Path nodesDir = com.gsim.core.worldinfo.loader.NodeLoader.nodesDir(worldsDir, worldId);
-            if (!java.nio.file.Files.isDirectory(nodesDir)) return "n0000";
-
-            // Load all nodes
-            java.util.Map<String, com.gsim.core.worldinfo.NodeSnapshot> allNodes = new java.util.LinkedHashMap<>();
-            java.util.regex.Pattern nodePattern = java.util.regex.Pattern.compile("n\\d{4}\\.json");
-            try (var files = java.nio.file.Files.list(nodesDir)) {
-                files.filter(f ->
-                                nodePattern.matcher(f.getFileName().toString()).matches())
-                        .forEach(f -> {
-                            try {
-                                var n = com.gsim.core.worldinfo.loader.NodeLoader.load(f);
-                                allNodes.put(n.nodeId(), n);
-                            } catch (RuntimeException ignored) {
-                            }
-                        });
-            }
-
-            if (allNodes.isEmpty()) return "n0000";
-
-            // Find nodeIds referenced as parents
-            java.util.Set<String> parents = new java.util.HashSet<>();
-            for (var n : allNodes.values()) {
-                if (n.parentId() != null && !n.isRoot()) {
-                    parents.add(n.parentId());
-                }
-            }
-
-            // Leaf: node NOT referenced as parent, highest turn wins
-            com.gsim.core.worldinfo.NodeSnapshot leaf = null;
-            for (var n : allNodes.values()) {
-                if (!parents.contains(n.nodeId())) {
-                    if (leaf == null || n.turn() > leaf.turn()) {
-                        leaf = n;
-                    }
-                }
-            }
-
-            if (leaf != null) return leaf.nodeId();
-        } catch (Exception e) {
-            log.warn("Failed to discover active node for world {}: {}", worldId, e.getMessage());
-        }
-        return "n0000";
+        return worldManager.activeNodeIdOr(worldId, "n0000");
     }
 
     public String readParentId(String worldId, String nodeId) {

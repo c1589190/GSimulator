@@ -1,5 +1,6 @@
 package com.gsim.map.http;
 
+import com.gsim.map.config.MapConfig;
 import com.gsim.map.service.MapService;
 import com.sun.net.httpserver.HttpServer;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -17,6 +18,7 @@ public class GsimapHttpServer {
     private static final Logger log = LoggerFactory.getLogger(GsimapHttpServer.class);
     private final int port;
     private final MapService mapService;
+    private final MapConfig mapConfig;
     private HttpServer server;
 
     /**
@@ -25,10 +27,22 @@ public class GsimapHttpServer {
      * @param port      listening port (bound to 127.0.0.1)
      * @param mapService shared map service instance
      */
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public GsimapHttpServer(int port, MapService mapService) {
+        this(port, mapService, MapConfig.defaults());
+    }
+
+    /**
+     * Creates an HTTP server that serves the map API and static web editor.
+     *
+     * @param port      listening port (bound to 127.0.0.1)
+     * @param mapService shared map service instance
+     * @param mapConfig configurable map limits (default radius, contour cache, etc.)
+     */
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    public GsimapHttpServer(int port, MapService mapService, MapConfig mapConfig) {
         this.port = port;
         this.mapService = mapService;
+        this.mapConfig = mapConfig;
     }
 
     /**
@@ -39,7 +53,7 @@ public class GsimapHttpServer {
      */
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.createContext("/api/map", new MapWebUIHandler(mapService));
+        server.createContext("/api/map", new MapWebUIHandler(mapService, mapConfig));
         server.createContext("/", new StaticFileHandler());
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();

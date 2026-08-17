@@ -46,7 +46,21 @@ public final class MapResolver {
      * @return the resolved MapData
      */
     public static MapData resolve(Path worldsDir, String worldId, String nodeId) {
-        List<String> chain = walkParentChain(worldsDir, worldId, nodeId);
+        return resolve(worldsDir, worldId, nodeId, MAX_CHAIN_DEPTH);
+    }
+
+    /**
+     * Resolve the hex map for a given world + node by walking the parent chain.
+     * Returns an empty default map if no map files exist at all.
+     *
+     * @param worldsDir the worlds root directory
+     * @param worldId   the world identifier
+     * @param nodeId    the node identifier
+     * @param maxChainDepth maximum parent-chain walk depth
+     * @return the resolved MapData
+     */
+    public static MapData resolve(Path worldsDir, String worldId, String nodeId, int maxChainDepth) {
+        List<String> chain = walkParentChain(worldsDir, worldId, nodeId, maxChainDepth);
         if (chain.isEmpty()) return MapData.empty();
 
         // Root is first in chain (after reverse)
@@ -79,7 +93,20 @@ public final class MapResolver {
      * @return list of history entries for each node in the chain
      */
     public static List<HistoryEntry> history(Path worldsDir, String worldId, String nodeId) {
-        List<String> chain = walkParentChain(worldsDir, worldId, nodeId);
+        return history(worldsDir, worldId, nodeId, MAX_CHAIN_DEPTH);
+    }
+
+    /**
+     * Resolve the map for every node in the chain and return per-node history.
+     *
+     * @param worldsDir the worlds root directory
+     * @param worldId   the world identifier
+     * @param nodeId    the node identifier
+     * @param maxChainDepth maximum parent-chain walk depth
+     * @return list of history entries for each node in the chain
+     */
+    public static List<HistoryEntry> history(Path worldsDir, String worldId, String nodeId, int maxChainDepth) {
+        List<String> chain = walkParentChain(worldsDir, worldId, nodeId, maxChainDepth);
         if (chain.isEmpty()) return List.of();
         List<HistoryEntry> entries = new ArrayList<>();
 
@@ -124,6 +151,19 @@ public final class MapResolver {
      * @return list of node ids from root to the starting node, or empty if the nodes dir does not exist
      */
     static List<String> walkParentChain(Path worldsDir, String worldId, String nodeId) {
+        return walkParentChain(worldsDir, worldId, nodeId, MAX_CHAIN_DEPTH);
+    }
+
+    /**
+     * Walk the parent chain from a node up to the root.
+     *
+     * @param worldsDir the worlds root directory
+     * @param worldId   the world identifier
+     * @param nodeId    the starting node identifier
+     * @param maxChainDepth maximum chain depth before giving up
+     * @return list of node ids from root to the starting node, or empty if the nodes dir does not exist
+     */
+    static List<String> walkParentChain(Path worldsDir, String worldId, String nodeId, int maxChainDepth) {
         Path nodesDir = worldsDir.resolve(worldId).resolve("nodes");
         if (!Files.isDirectory(nodesDir)) return List.of();
 
@@ -136,8 +176,8 @@ public final class MapResolver {
                 log.warn("Cycle detected in parent chain at node: {}", current);
                 break;
             }
-            if (chain.size() >= MAX_CHAIN_DEPTH) {
-                log.warn("Max chain depth ({}) exceeded", MAX_CHAIN_DEPTH);
+            if (chain.size() >= maxChainDepth) {
+                log.warn("Max chain depth ({}) exceeded", maxChainDepth);
                 break;
             }
             chain.add(current);
