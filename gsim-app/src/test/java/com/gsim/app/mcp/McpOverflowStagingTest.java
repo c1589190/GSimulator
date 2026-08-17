@@ -35,6 +35,7 @@ class McpOverflowStagingTest {
     private static final String NOTICE = "内容已暂存为文档";
     /** 截断路径的标记（truncateSnippetsInJson 产物）。 */
     private static final String TRUNC_MARKER = "truncated — use query_element or _page for full content";
+
     private static final Pattern DOC_ID = Pattern.compile("mcp_\\d{8}_\\d{6}_[0-9a-f]{8}");
 
     /** 返回 {@code itemCount} 条、每条 snippet 为 {@code snippetLength} 字符的测试工具。 */

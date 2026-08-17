@@ -146,9 +146,7 @@ public class GSimulatorApplication {
 
         // Import doc tools
         var importDocService = new com.gsim.core.importing.ImportDocumentService(
-                config.getImportDir(),
-                config.importDocMaxFullReadChars(),
-                config.importDocDefaultLimit());
+                config.getImportDir(), config.importDocMaxFullReadChars(), config.importDocDefaultLimit());
 
         // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
         this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
@@ -193,9 +191,10 @@ public class GSimulatorApplication {
             try {
                 int removed = docStore.deleteByTypeOlderThan(
                         com.gsim.core.doc.DocType.TMP,
-                        java.time.Instant.now()
-                                .minus(java.time.Duration.ofHours(config.tmpMaxAgeHours())));
-                log.info("TMP doc GC: startup sweep removed {} stale staging docs (max age {}h)", removed,
+                        java.time.Instant.now().minus(java.time.Duration.ofHours(config.tmpMaxAgeHours())));
+                log.info(
+                        "TMP doc GC: startup sweep removed {} stale staging docs (max age {}h)",
+                        removed,
                         config.tmpMaxAgeHours());
             } catch (java.io.IOException e) {
                 log.warn("Failed to sweep stale TMP docs: {}", e.getMessage());
@@ -309,8 +308,7 @@ public class GSimulatorApplication {
 
             // LlmApiHandler + AgentApiHandler — 配置管理
             var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
-                    new com.gsim.core.llm.LlmConfigManager(
-                            config.getLlmsPath(), config.getLlmTimeoutSeconds()),
+                    new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds()),
                     ctx.getLlmProviderRegistry());
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
@@ -546,8 +544,8 @@ public class GSimulatorApplication {
         ctx.setNodeCommand(nc);
 
         // LLM + Agent config management commands
-        var llmConfigManager = new com.gsim.core.llm.LlmConfigManager(
-                config.getLlmsPath(), config.getLlmTimeoutSeconds());
+        var llmConfigManager =
+                new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds());
         var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);
