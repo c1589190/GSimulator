@@ -1,6 +1,7 @@
 package com.gsim.app;
 
 import com.gsim.core.config.ConfigLoader;
+import com.gsim.core.config.ConfigSource;
 import com.gsim.core.util.LogSanitizer;
 import com.gsim.map.config.MapConfig;
 import java.nio.file.Path;
@@ -179,10 +180,13 @@ public class AppConfig {
         this.embeddingDimensions = parseInt(result.get("embedding.dimensions"), 0);
         this.embeddingModelDir = result.get("embedding.model_dir");
 
-        // Knowledge DB
-        this.knowledgeDbPath = isBlank(result.get("knowledge.db.path"))
-                ? baseDir.resolve("data").resolve("gsim.db").toAbsolutePath()
-                : resolvePath(result.get("knowledge.db.path"), baseDir, "data/gsim.db");
+        // Knowledge DB — 内置默认值（ConfigSource.DEFAULT）视为未设置，回退 data/knowledge/gsim.db
+        String rawKnowledgeDbPath = result.get("knowledge.db.path");
+        boolean knowledgeDbUnset = isBlank(rawKnowledgeDbPath)
+                || ConfigLoader.getSource(result.entries(), "knowledge.db.path") == ConfigSource.DEFAULT;
+        this.knowledgeDbPath = knowledgeDbUnset
+                ? baseDir.resolve("data").resolve("knowledge").resolve("gsim.db").toAbsolutePath()
+                : resolvePath(rawKnowledgeDbPath, baseDir, "data/knowledge/gsim.db");
 
         this.configPath = result.configPath();
         this.sourceSummary = result.sourceSummary();
@@ -367,7 +371,7 @@ public class AppConfig {
         return embeddingModelDir;
     }
 
-    /** Knowledge DB 文件路径 — knowledge.db.path 未设置时回退 baseDir/data/gsim.db。 */
+    /** Knowledge DB 文件路径 — knowledge.db.path 未设置时回退 baseDir/data/knowledge/gsim.db。 */
     public Path knowledgeDbPath() {
         return knowledgeDbPath;
     }
@@ -421,7 +425,8 @@ public class AppConfig {
                 base = file.defaultConfig();
             }
             if (base == null) return LlmsOverride.EMPTY;
-            return new LlmsOverride(base.baseUrl(), base.apiKey(), base.model(), base.defaultTemperature(), 120);
+            int timeoutSeconds = parseInt(result.get("llm.timeout_seconds"), 120);
+            return new LlmsOverride(base.baseUrl(), base.apiKey(), base.model(), base.defaultTemperature(), timeoutSeconds);
         } catch (Exception e) {
             return LlmsOverride.EMPTY;
         }

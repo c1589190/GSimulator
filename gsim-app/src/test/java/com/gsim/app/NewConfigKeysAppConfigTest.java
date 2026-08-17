@@ -53,10 +53,10 @@ class NewConfigKeysAppConfigTest {
         assertEquals(8000, config.importDocDefaultLimit());
         assertEquals("https://en.wikipedia.org/w/api.php", config.wikiUrl());
 
-        // Knowledge DB 默认解析到 baseDir/data/gsim.db
+        // Knowledge DB 默认解析到 baseDir/data/knowledge/gsim.db
         assertTrue(
-                config.knowledgeDbPath().endsWith(Path.of("data/gsim.db")),
-                "默认 knowledgeDbPath 应为 baseDir/data/gsim.db，实际 " + config.knowledgeDbPath());
+                config.knowledgeDbPath().endsWith(Path.of("data/knowledge/gsim.db")),
+                "默认 knowledgeDbPath 应为 baseDir/data/knowledge/gsim.db，实际 " + config.knowledgeDbPath());
     }
 
     @Test
