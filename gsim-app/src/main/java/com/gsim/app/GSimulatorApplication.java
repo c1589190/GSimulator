@@ -188,6 +188,19 @@ public class GSimulatorApplication {
         } catch (java.io.IOException e) {
             log.warn("Failed to init DocStore: {}", e.getMessage());
         }
+        // 启动清扫：删除超过保留期的 TMP 暂存文档（默认 168h，core.doc.tmp.* 可配）
+        if (config.tmpCleanupEnabled()) {
+            try {
+                int removed = docStore.deleteByTypeOlderThan(
+                        com.gsim.core.doc.DocType.TMP,
+                        java.time.Instant.now()
+                                .minus(java.time.Duration.ofHours(config.tmpMaxAgeHours())));
+                log.info("TMP doc GC: startup sweep removed {} stale staging docs (max age {}h)", removed,
+                        config.tmpMaxAgeHours());
+            } catch (java.io.IOException e) {
+                log.warn("Failed to sweep stale TMP docs: {}", e.getMessage());
+            }
+        }
         var embeddingClient = ctx.getEmbeddingClient();
         var docIndex = ctx.getSkillIndex(docsDir); // SkillIndex reused for docs embdb
         try {

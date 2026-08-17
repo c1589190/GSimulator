@@ -3,6 +3,7 @@ package com.gsim.core.doc;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -86,6 +87,45 @@ public class DocStore {
                         || d.tags().stream().anyMatch(t -> t.equalsIgnoreCase(tagFilter.trim())))
                 .sorted((a, b) -> Long.compare(b.updatedAt(), a.updatedAt()))
                 .toList();
+    }
+
+    /**
+     * 按类型列出 docId 以指定前缀开头的文档（去重扫描用，避免全量遍历）。
+     *
+     * @param type     文档类型过滤器
+     * @param idPrefix docId 前缀（null 表示不过滤）
+     * @return 符合条件的文档列表，按更新时间降序排列
+     */
+    public List<Document> listByTypeAndPrefix(DocType type, String idPrefix) {
+        return list(type, null).stream()
+                .filter(d -> idPrefix == null || d.id().startsWith(idPrefix))
+                .toList();
+    }
+
+    /**
+     * 删除指定类型中最后修改时间早于截止时间的文档（GC）。
+     *
+     * <p>仅按文件系统 mtime 判定；文件缺失时跳过（幂等，不抛错）。只影响传入的
+     * {@code type}，其他类型不受影响。调用方仅用于 {@link DocType#TMP} 清扫。
+     *
+     * @param type   要清扫的文档类型
+     * @param cutoff 截止时间，mtime 严格早于该时刻的文档才会被删除
+     * @return 实际删除的文档数量
+     * @throws IOException 文件系统读取/删除失败时抛出
+     */
+    public int deleteByTypeOlderThan(DocType type, Instant cutoff) throws IOException {
+        int removed = 0;
+        for (Document doc : list(type, null)) {
+            Path file = fileFor(doc);
+            if (!Files.isRegularFile(file)) continue; // 文件缺失 → 跳过
+            Instant lastModified = Files.getLastModifiedTime(file).toInstant();
+            if (!lastModified.isBefore(cutoff)) continue; // 未过期 → 保留
+            Files.deleteIfExists(file);
+            cache.remove(doc.id());
+            removed++;
+            log.info("[DocStore] GC removed stale {} doc: {} (mtime {})", type.key(), doc.id(), lastModified);
+        }
+        return removed;
     }
 
     /**
