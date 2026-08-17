@@ -40,7 +40,10 @@ public final class GsimapGenerateTool extends AbstractGsimapTool {
         if (worldId == null || worldId.isBlank()) {
             return ToolResult.fail(name(), "worldId is required");
         }
-        String nodeId = call.param("nodeId", "n0000");
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            return ToolResult.fail(name(), "nodeId is required — specify the target node explicitly");
+        }
 
         long seed;
         String seedStr = call.param("seed");
@@ -93,7 +96,12 @@ public final class GsimapGenerateTool extends AbstractGsimapTool {
                 "properties",
                         Map.of(
                                 "worldId", Map.of("type", "string", "description", "GSim world ID"),
-                                "nodeId", Map.of("type", "string", "description", "Node ID (default: n0000)"),
+                                "nodeId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "Node ID to write to (required — specify the target node explicitly, e.g. n0000 or the current turn node)"),
                                 "seed", Map.of("type", "integer", "description", "Random seed (default: current time)"),
                                 "radius",
                                         Map.of(
@@ -121,7 +129,7 @@ public final class GsimapGenerateTool extends AbstractGsimapTool {
                                                 "Target land ratio 0..1 (default: 0.55)"),
                                 "coastRoughness",
                                         Map.of("type", "number", "description", "Coast roughness 0..1 (default: 0.6)")),
-                "required", List.of("worldId"));
+                "required", List.of("worldId", "nodeId"));
     }
 
     @Override

@@ -37,7 +37,10 @@ public final class GsimapUpdateTerrainTypeTool extends AbstractGsimapTool {
                 return ToolResult.fail(name(), "worldId is required");
             }
         }
-        String nodeId = call.param("nodeId", "n0000");
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            return ToolResult.fail(name(), "nodeId is required — specify the target node explicitly");
+        }
         String key = call.param("key");
         if (key == null || key.isBlank()) {
             return ToolResult.fail(
@@ -81,7 +84,7 @@ public final class GsimapUpdateTerrainTypeTool extends AbstractGsimapTool {
                                                 "type",
                                                 "string",
                                                 "description",
-                                                "Node ID (optional, defaults to n0000)"),
+                                                "Node ID to write to (required — specify the target node explicitly, e.g. n0000 or the current turn node)"),
                                 "key",
                                         Map.of(
                                                 "type",
@@ -95,7 +98,7 @@ public final class GsimapUpdateTerrainTypeTool extends AbstractGsimapTool {
                                 "stone", Map.of("type", "integer", "description", "Stone output"),
                                 "moveCost", Map.of("type", "integer", "description", "Movement cost"),
                                 "description", Map.of("type", "string", "description", "Tooltip description")),
-                "required", List.of("worldId", "key"));
+                "required", List.of("worldId", "nodeId", "key"));
     }
 
     @Override

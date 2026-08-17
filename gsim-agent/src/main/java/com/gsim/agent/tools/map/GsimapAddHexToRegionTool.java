@@ -36,7 +36,10 @@ public final class GsimapAddHexToRegionTool extends AbstractGsimapTool {
                 return ToolResult.fail(name(), "worldId is required");
             }
         }
-        String nodeId = call.param("nodeId", "n0000");
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            return ToolResult.fail(name(), "nodeId is required — specify the target node explicitly");
+        }
         String name = call.param("name");
         if (name == null || name.isBlank()) {
             return ToolResult.fail(name(), "name is required");
@@ -75,11 +78,11 @@ public final class GsimapAddHexToRegionTool extends AbstractGsimapTool {
                                                 "type",
                                                 "string",
                                                 "description",
-                                                "Node ID (optional, defaults to n0000)"),
+                                                "Node ID to write to (required — specify the target node explicitly, e.g. n0000 or the current turn node)"),
                                 "name", Map.of("type", "string", "description", "Region name"),
                                 "q", Map.of("type", "integer", "description", "Hex axial q coordinate"),
                                 "r", Map.of("type", "integer", "description", "Hex axial r coordinate")),
-                "required", List.of("worldId", "name", "q", "r"));
+                "required", List.of("worldId", "nodeId", "name", "q", "r"));
     }
 
     @Override

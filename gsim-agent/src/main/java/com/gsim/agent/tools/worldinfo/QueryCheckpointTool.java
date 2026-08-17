@@ -4,6 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.ElementRef;
 import com.gsim.core.worldinfo.WorldInformation;
@@ -25,9 +27,13 @@ import java.util.function.Supplier;
 public final class QueryCheckpointTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
 
-    public QueryCheckpointTool(Supplier<WorldInformation> worldInfo) {
+    public QueryCheckpointTool(Supplier<WorldInformation> worldInfo, DocStore docStore, CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -90,11 +96,16 @@ public final class QueryCheckpointTool implements AgentTool {
         }
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
+        int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
         List<ToolResult.Item> items = refs.stream()
                 .map(r -> {
                     String value = r.element().value();
                     if (!detail && value != null && value.length() > 200) {
                         value = value.substring(0, 200) + "... (truncated, use detail=true for full content)";
+                    } else if (detail && value != null && value.length() > threshold && docStore != null) {
+                        String ref = r.nodeId() + ":" + r.checkpointId() + ":"
+                                + r.element().key();
+                        value = DocStaging.stageOrInline(docStore, "wstg_query_", ref, value);
                     }
                     return new ToolResult.Item(
                             r.element().key(),

@@ -37,7 +37,10 @@ public final class GsimapCreateRegionTool extends AbstractGsimapTool {
                 return ToolResult.fail(name(), "worldId is required");
             }
         }
-        String nodeId = call.param("nodeId", "n0000");
+        String nodeId = call.param("nodeId");
+        if (nodeId == null || nodeId.isBlank()) {
+            return ToolResult.fail(name(), "nodeId is required — specify the target node explicitly");
+        }
         String name = call.param("name");
         if (name == null || name.isBlank()) {
             return ToolResult.fail(name(), "name is required");
@@ -75,7 +78,7 @@ public final class GsimapCreateRegionTool extends AbstractGsimapTool {
                                                 "type",
                                                 "string",
                                                 "description",
-                                                "Node ID (optional, defaults to n0000)"),
+                                                "Node ID to write to (required — specify the target node explicitly, e.g. n0000 or the current turn node)"),
                                 "name", Map.of("type", "string", "description", "New region name"),
                                 "tag", Map.of("type", "string", "description", "Tag (optional)"),
                                 "color",
@@ -91,7 +94,7 @@ public final class GsimapCreateRegionTool extends AbstractGsimapTool {
                                                 "string",
                                                 "description",
                                                 "Initial hex keys as CSV e.g. '10_-5,11_-5' (optional)")),
-                "required", List.of("worldId", "name"));
+                "required", List.of("worldId", "nodeId", "name"));
     }
 
     @Override

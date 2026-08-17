@@ -15,7 +15,7 @@ import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
-import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -255,7 +255,7 @@ public final class TextEditTool implements AgentTool {
         if (active == null) throw new IllegalStateException("World 无活跃状态: " + worldId);
 
         String resolveNodeId = nodeId != null ? nodeId : "n0000";
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, worldId, "n0000");
+        WorldInformation wi = new WorldManager(worldsDir).loadWorld(worldId);
         if (wi == null) throw new IllegalStateException("无法加载 World: " + worldId);
 
         NodeSnapshot node = wi.nodeById(resolveNodeId);

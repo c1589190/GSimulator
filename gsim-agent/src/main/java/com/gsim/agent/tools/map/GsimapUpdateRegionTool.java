@@ -81,7 +81,7 @@ public final class GsimapUpdateRegionTool extends AbstractGsimapTool {
                                                 "type",
                                                 "string",
                                                 "description",
-                                                "Node ID (optional, defaults to n0000)"),
+                                                "Node ID (optional, defaults to active node)"),
                                 "name", Map.of("type", "string", "description", "Region name"),
                                 "tag", Map.of("type", "string", "description", "New tag (optional)"),
                                 "description", Map.of("type", "string", "description", "New description (optional)"),

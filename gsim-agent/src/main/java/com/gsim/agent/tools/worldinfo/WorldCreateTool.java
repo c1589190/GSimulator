@@ -5,6 +5,7 @@ import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,7 @@ public final class WorldCreateTool implements AgentTool {
         if (name.isEmpty()) return ToolResult.fail(name(), "name 不能为空");
 
         // 检查是否已存在
-        WorldIndexManager.WorldMeta existing = WorldIndexManager.loadWorldMeta(worldsDir, worldId);
+        WorldIndexManager.WorldMeta existing = new WorldManager(worldsDir).loadMeta(worldId);
         if (existing != null) {
             return ToolResult.fail(name(), "World 已存在: " + worldId + " (" + existing.name() + ")");
         }

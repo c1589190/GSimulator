@@ -4,6 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.util.List;
@@ -22,9 +24,13 @@ import java.util.function.Supplier;
 public final class QueryNodeTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
 
-    public QueryNodeTool(Supplier<WorldInformation> worldInfo) {
+    public QueryNodeTool(Supplier<WorldInformation> worldInfo, DocStore docStore, CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -52,6 +58,7 @@ public final class QueryNodeTool implements AgentTool {
         }
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
+        int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
         List<ToolResult.Item> items = new java.util.ArrayList<>();
         for (var entry : node.checkpoints().entrySet()) {
             String cpId = entry.getKey();
@@ -60,6 +67,9 @@ public final class QueryNodeTool implements AgentTool {
                 String value = el.value();
                 if (!detail && value != null && value.length() > 200) {
                     value = value.substring(0, 200) + "... (truncated, use detail=true for full content)";
+                } else if (detail && value != null && value.length() > threshold && docStore != null) {
+                    value = DocStaging.stageOrInline(
+                            docStore, "wstg_query_", nodeId + ":" + cpId + ":" + el.key(), value);
                 }
                 items.add(new ToolResult.Item(el.key(), nodeId + ":" + cpId + ":" + el.key(), value, 1.0));
             }

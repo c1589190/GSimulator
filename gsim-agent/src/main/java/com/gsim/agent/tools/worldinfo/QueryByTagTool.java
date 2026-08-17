@@ -4,6 +4,8 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.ElementRef;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.util.List;
@@ -20,9 +22,13 @@ import java.util.function.Supplier;
 public final class QueryByTagTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
 
-    public QueryByTagTool(Supplier<WorldInformation> worldInfo) {
+    public QueryByTagTool(Supplier<WorldInformation> worldInfo, DocStore docStore, CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -77,6 +83,7 @@ public final class QueryByTagTool implements AgentTool {
                 .append("\n\n");
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
+        int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
         for (ElementRef ref : page) {
             sb.append("### ")
                     .append(ref.element().key())
@@ -101,6 +108,11 @@ public final class QueryByTagTool implements AgentTool {
             if (val != null && !val.isBlank()) {
                 if (!detail && val.length() > 200) {
                     sb.append(val, 0, 200).append("... (truncated, use detail=true for full content)\n\n");
+                } else if (detail && val.length() > threshold && docStore != null) {
+                    String refAddr = ref.nodeId() + ":" + ref.checkpointId() + ":"
+                            + ref.element().key();
+                    sb.append(DocStaging.stageOrInline(docStore, "wstg_query_", refAddr, val))
+                            .append("\n\n");
                 } else {
                     sb.append(val).append("\n\n");
                 }

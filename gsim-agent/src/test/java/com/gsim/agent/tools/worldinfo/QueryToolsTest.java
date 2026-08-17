@@ -4,19 +4,32 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.*;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class QueryToolsTest {
 
+    @TempDir
+    Path tmpDir;
+
     private WorldInformation wi;
+    private DocStore docStore;
+    private CoreConfig coreConfig;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
+        coreConfig = CoreConfig.load();
+        docStore = new DocStore(tmpDir.resolve("docs"));
+        docStore.init();
         NodeSnapshot n0 = new NodeSnapshot(
                 "n0000",
                 null,
@@ -70,7 +83,7 @@ class QueryToolsTest {
 
     @Test
     void queryCheckpointReturnsAllHistory() {
-        var tool = new QueryCheckpointTool(() -> wi);
+        var tool = new QueryCheckpointTool(() -> wi, docStore, coreConfig);
         ToolResult r = tool.execute(new ToolCall("query_checkpoint", Map.of("checkpointId", "player.曹操")));
 
         assertTrue(r.success());
@@ -80,7 +93,7 @@ class QueryToolsTest {
 
     @Test
     void queryCheckpointWildcardReturnsAllMatching() {
-        var tool = new QueryCheckpointTool(() -> wi);
+        var tool = new QueryCheckpointTool(() -> wi, docStore, coreConfig);
         ToolResult r = tool.execute(new ToolCall("query_checkpoint", Map.of("checkpointId", "player.*")));
 
         assertTrue(r.success());
@@ -90,7 +103,7 @@ class QueryToolsTest {
 
     @Test
     void queryCheckpointMissingIdFails() {
-        var tool = new QueryCheckpointTool(() -> wi);
+        var tool = new QueryCheckpointTool(() -> wi, docStore, coreConfig);
         ToolResult r = tool.execute(new ToolCall("query_checkpoint", Map.of()));
         assertFalse(r.success());
     }
@@ -140,7 +153,7 @@ class QueryToolsTest {
 
     @Test
     void queryNodeReturnsAllCheckpoints() {
-        var tool = new QueryNodeTool(() -> wi);
+        var tool = new QueryNodeTool(() -> wi, docStore, coreConfig);
         ToolResult r = tool.execute(new ToolCall("query_node", Map.of("nodeId", "n0001")));
 
         assertTrue(r.success());
@@ -149,7 +162,7 @@ class QueryToolsTest {
 
     @Test
     void queryNodeUnknownIdFails() {
-        var tool = new QueryNodeTool(() -> wi);
+        var tool = new QueryNodeTool(() -> wi, docStore, coreConfig);
         ToolResult r = tool.execute(new ToolCall("query_node", Map.of("nodeId", "n9999")));
         assertFalse(r.success());
     }

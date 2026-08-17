@@ -5,6 +5,7 @@ import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +42,7 @@ public final class WorldListTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        List<WorldIndexManager.WorldEntry> worlds = WorldIndexManager.listWorlds(worldsDir);
+        List<WorldIndexManager.WorldEntry> worlds = new WorldManager(worldsDir).listWorlds();
         if (worlds.isEmpty()) {
             return ToolResult.ok(name(), List.of(new ToolResult.Item("(empty)", "", "尚无任何 World", 0)));
         }

@@ -5,6 +5,8 @@ import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.ElementRef;
@@ -29,10 +31,15 @@ public final class QueryElementTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
     private final ToolRegistry toolRegistry;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
 
-    public QueryElementTool(Supplier<WorldInformation> worldInfo, ToolRegistry toolRegistry) {
+    public QueryElementTool(
+            Supplier<WorldInformation> worldInfo, ToolRegistry toolRegistry, DocStore docStore, CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
         this.toolRegistry = toolRegistry;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -140,7 +147,14 @@ public final class QueryElementTool implements AgentTool {
         String unifiedId = nodeId + ":" + checkpointId + ":" + key;
 
         // Main result
-        items.add(new ToolResult.Item(key, unifiedId, found.value(), 1.0));
+        String value = found.value();
+        int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
+        if (value != null && value.length() > threshold && docStore != null) {
+            items.add(new ToolResult.Item(
+                    key, unifiedId, DocStaging.stageOrInline(docStore, "wstg_query_", unifiedId, value), 1.0));
+        } else {
+            items.add(new ToolResult.Item(key, unifiedId, value, 1.0));
+        }
 
         // Tags
         if (!found.tags().isEmpty()) {

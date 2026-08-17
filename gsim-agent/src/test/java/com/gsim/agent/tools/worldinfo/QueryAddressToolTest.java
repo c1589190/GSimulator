@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;
 import java.nio.file.Files;
@@ -25,9 +27,14 @@ class QueryAddressToolTest {
 
     private ToolRegistry toolRegistry;
     private Supplier<WorldInformation> wiSupplier;
+    private DocStore docStore;
+    private CoreConfig coreConfig;
 
     @BeforeEach
     void setUp() throws Exception {
+        coreConfig = CoreConfig.load();
+        docStore = new DocStore(worldsDir.resolve("docs"));
+        docStore.init();
         Path worldDir = worldsDir.resolve("testworld");
         Path nodesDir = worldDir.resolve("nodes");
         Files.createDirectories(nodesDir);
@@ -79,15 +86,15 @@ class QueryAddressToolTest {
 
         toolRegistry = new ToolRegistry();
         // Register the tools query_address needs
-        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
-        toolRegistry.register(new QueryByTagTool(wiSupplier));
-        toolRegistry.register(new QueryAddressTool(wiSupplier, toolRegistry));
+        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry, docStore, coreConfig));
+        toolRegistry.register(new QueryByTagTool(wiSupplier, docStore, coreConfig));
+        toolRegistry.register(new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig));
     }
 
     @Test
     @DisplayName("GSim ref 地址路由到 query_element")
     void routesGsimRefToQueryElement() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "n0000:characters:曹操")));
 
         assertTrue(result.success(), "Should resolve: " + result.error());
@@ -97,7 +104,7 @@ class QueryAddressToolTest {
     @Test
     @DisplayName("checkpointId:key 格式需显式 nodeId")
     void routesShortRefWithExplicitNodeId() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result =
                 tool.execute(new ToolCall("query_address", Map.of("address", "characters:曹操", "nodeId", "n0000")));
 
@@ -108,7 +115,7 @@ class QueryAddressToolTest {
     @Test
     @DisplayName("纯 tag 文本走 byTag 索引")
     void routesPlainTextToByTag() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "曹魏")));
 
         assertTrue(result.success(), "Should find by tag");
@@ -119,7 +126,7 @@ class QueryAddressToolTest {
     @Test
     @DisplayName("gsimap: 前缀需要 worldId")
     void gsimapPrefixRequiresWorldId() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "gsimap:region:蜀")));
 
         // Should fail because worldId is missing (gsimap tools not registered in this test)
@@ -130,7 +137,7 @@ class QueryAddressToolTest {
     @Test
     @DisplayName("不存在的 tag 返回失败")
     void nonexistentTagFails() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result = tool.execute(new ToolCall("query_address", Map.of("address", "不存在的标签")));
 
         assertFalse(result.success());
@@ -139,7 +146,7 @@ class QueryAddressToolTest {
     @Test
     @DisplayName("缺少 address 参数时报错")
     void failsWithoutAddress() {
-        var tool = new QueryAddressTool(wiSupplier, toolRegistry);
+        var tool = new QueryAddressTool(wiSupplier, toolRegistry, docStore, coreConfig);
         ToolResult result = tool.execute(new ToolCall("query_address", Map.of()));
         assertFalse(result.success());
         assertTrue(result.error().contains("address"));

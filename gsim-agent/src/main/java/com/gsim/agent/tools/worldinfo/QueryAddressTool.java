@@ -5,6 +5,8 @@ import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.worldinfo.ElementRef;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.util.List;
@@ -28,10 +30,15 @@ public final class QueryAddressTool implements AgentTool {
 
     private final Supplier<WorldInformation> worldInfo;
     private final ToolRegistry toolRegistry;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
 
-    public QueryAddressTool(Supplier<WorldInformation> worldInfo, ToolRegistry toolRegistry) {
+    public QueryAddressTool(
+            Supplier<WorldInformation> worldInfo, ToolRegistry toolRegistry, DocStore docStore, CoreConfig coreConfig) {
         this.worldInfo = worldInfo;
         this.toolRegistry = toolRegistry;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -95,6 +102,7 @@ public final class QueryAddressTool implements AgentTool {
         StringBuilder sb = new StringBuilder();
         sb.append("## Address lookup by tag: `").append(address).append("`\n\n");
 
+        int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
         int limit = Math.min(refs.size(), 20);
         for (int i = 0; i < limit; i++) {
             ElementRef ref = refs.get(i);
@@ -114,7 +122,14 @@ public final class QueryAddressTool implements AgentTool {
             sb.append("- **updatedAt**: ").append(ref.element().updatedAt()).append("\n\n");
             String val = ref.element().value();
             if (val != null && !val.isBlank()) {
-                sb.append(val).append("\n\n");
+                if (val.length() > threshold && docStore != null) {
+                    String refAddr = ref.nodeId() + ":" + ref.checkpointId() + ":"
+                            + ref.element().key();
+                    sb.append(DocStaging.stageOrInline(docStore, "wstg_query_", refAddr, val))
+                            .append("\n\n");
+                } else {
+                    sb.append(val).append("\n\n");
+                }
             }
             sb.append("---\n\n");
         }
