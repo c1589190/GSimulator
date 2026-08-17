@@ -17,6 +17,7 @@ import java.util.function.Supplier;
  */
 public record CoreToolContext(
         Path worldsDir,
+        Path docsDir,
         Path importDir,
         ImportDocumentService importDocService,
         DocStore docStore,

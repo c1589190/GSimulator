@@ -44,6 +44,11 @@ public class DocCacheManager {
         this.cacheDir = cacheDir;
     }
 
+    /** 缓存文件存储目录（供依赖方解析 @cache: 时保持一致）。 */
+    public Path cacheDir() {
+        return cacheDir;
+    }
+
     /**
      * 确保缓存目录存在。
      *

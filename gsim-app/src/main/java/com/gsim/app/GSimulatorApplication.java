@@ -99,7 +99,7 @@ public class GSimulatorApplication {
         ToolRegistry toolRegistry = ctx.getToolRegistry();
 
         // 初始化 Cache 根目录（peer to worldsDir）
-        Path cachesRoot = worldsDir.resolveSibling("caches");
+        Path cachesRoot = config.cachesDir();
         com.gsim.core.cache.CacheStore.setCachesRoot(cachesRoot);
         // 迁移旧缓存（如有）
         Path oldCachesDir = worldsDir.resolve("default").resolve("caches");
@@ -120,7 +120,7 @@ public class GSimulatorApplication {
                 : null;
 
         // DocCacheManager（doc 工具与 worldinfo 工具共用，需提前创建）
-        Path docsDir = worldsDir.resolveSibling("docs");
+        Path docsDir = config.docsDir();
         this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
         try {
             this.docCacheManager.init();
@@ -145,7 +145,10 @@ public class GSimulatorApplication {
         // ── 核心业务对象构造（原 registerCoreTools 内，整体上移）──
 
         // Import doc tools
-        var importDocService = new com.gsim.core.importing.ImportDocumentService(config.getImportDir());
+        var importDocService = new com.gsim.core.importing.ImportDocumentService(
+                config.getImportDir(),
+                config.importDocMaxFullReadChars(),
+                config.importDocDefaultLimit());
 
         // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
         this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
@@ -209,6 +212,7 @@ public class GSimulatorApplication {
                 toolRegistry,
                 new CoreToolContext(
                         worldsDir,
+                        config.docsDir(),
                         config.getImportDir(),
                         importDocService,
                         docStore,
@@ -336,11 +340,12 @@ public class GSimulatorApplication {
                 toolGroupManager);
         this.orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
         this.orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
+        this.orchestrator.setCollectTimeoutSeconds(config.subagentCollectTimeoutSeconds());
 
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
 
         // MediaWiki search (Wikipedia + any MediaWiki site)
-        toolRegistry.register(new com.gsim.agent.tools.search.MediaWikiSearchTool());
+        toolRegistry.register(new com.gsim.agent.tools.search.MediaWikiSearchTool(config.wikiUrl()));
 
         // Agent control flow tools
         toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
@@ -356,10 +361,11 @@ public class GSimulatorApplication {
                 compositeSink,
                 config.getLlmModel(),
                 worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default");
+                () -> worldInfo != null ? worldInfo.worldId() : "default",
+                config.subagentMaxCompleted());
 
         // ── Agent 管理层（仿 World/Docs 体系：Store → Manager → HTTP API）──
-        Path cachesBaseDir = worldsDir.resolveSibling("caches");
+        Path cachesBaseDir = config.cachesDir();
         var agentCacheStore = new com.gsim.agent.management.AgentCacheStore(cachesBaseDir, agentConfigStore);
         agentCacheStore.init();
         var agentsManager = new com.gsim.agent.management.AgentsManager(
@@ -505,7 +511,7 @@ public class GSimulatorApplication {
             adapter.setCompactCommand(compactCommand);
 
             // Board 指令（公开展示板）
-            var boardDocsDir = worldsDir.resolveSibling("docs");
+            var boardDocsDir = config.docsDir();
             var boardDocStore = ctx.getDocStore(boardDocsDir);
             var boardCommand = new com.gsim.commands.BoardCommand(boardDocStore, worldInfo);
             adapter.setBoardCommand(boardCommand);

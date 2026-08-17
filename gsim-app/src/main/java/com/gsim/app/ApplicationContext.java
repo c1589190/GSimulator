@@ -239,7 +239,10 @@ public class ApplicationContext {
             embeddingClient = new com.gsim.core.embedding.EmbeddingClient(
                     config.getEmbeddingBaseUrl(),
                     config.getEmbeddingApiKey(),
-                    config.getEmbeddingModel() != null ? config.getEmbeddingModel() : "BAAI/bge-large-zh-v1.5");
+                    config.getEmbeddingModel() != null ? config.getEmbeddingModel() : "BAAI/bge-large-zh-v1.5",
+                    config.embeddingTimeoutConnectSeconds(),
+                    config.embeddingTimeoutReadSeconds(),
+                    config.embeddingTimeoutWriteSeconds());
         }
         return embeddingClient;
     }
@@ -263,7 +266,7 @@ public class ApplicationContext {
     /** 获取当前的 DocStore（懒初始化，无参）。 */
     public com.gsim.core.doc.DocStore getDocStore() {
         if (docStore == null) {
-            Path docsDir = config.worldsDir().resolveSibling("docs");
+            Path docsDir = config.docsDir();
             docStore = new com.gsim.core.doc.DocStore(docsDir);
             try {
                 docStore.init();

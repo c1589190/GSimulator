@@ -33,7 +33,7 @@ import com.gsim.agent.tools.worldinfo.WriteElementTool;
 import com.gsim.agentlib.mcp.GsimRequestContext;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.core.worldinfo.WorldInformation;
-import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.map.service.MapService;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -95,7 +95,7 @@ public final class AgentBridge {
 
         log.info(
                 "Registered import + 9 docs + ref + text_edit core tools (docsDir={})",
-                ctx.worldsDir().resolveSibling("docs"));
+                ctx.docsDir());
     }
 
     /**
@@ -119,24 +119,26 @@ public final class AgentBridge {
             log.warn("WorldInformation not available, skipping world info tool registration");
             return;
         }
-        // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染
+        // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染。
+        // 所有磁盘读取统一经 WorldManager（WorldInfoBuilder.discover 的唯一入口）。
+        WorldManager worldManager = new WorldManager(ctx.worldsDir());
         Map<String, WorldInformation> wiCache = new ConcurrentHashMap<>();
         Supplier<WorldInformation> wiSupplier = () -> {
             String reqWorldId = GsimRequestContext.worldId();
             WorldInformation current = ctx.worldInfoSupplier().get();
-            if (reqWorldId != null && !reqWorldId.equals(current.worldId())) {
-                return wiCache.computeIfAbsent(reqWorldId, wid -> WorldInfoBuilder.discover(ctx.worldsDir(), wid));
+            if (reqWorldId != null && current != null && !reqWorldId.equals(current.worldId())) {
+                return wiCache.computeIfAbsent(reqWorldId, worldManager::loadWorld);
             }
             return current;
         };
 
         // Query tools
-        toolRegistry.register(new QueryCheckpointTool(wiSupplier));
+        toolRegistry.register(new QueryCheckpointTool(wiSupplier, ctx.docStore(), ctx.coreConfig()));
         toolRegistry.register(new QueryKeywordTool(wiSupplier));
-        toolRegistry.register(new QueryNodeTool(wiSupplier));
-        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry));
-        toolRegistry.register(new QueryByTagTool(wiSupplier));
-        toolRegistry.register(new QueryAddressTool(wiSupplier, toolRegistry));
+        toolRegistry.register(new QueryNodeTool(wiSupplier, ctx.docStore(), ctx.coreConfig()));
+        toolRegistry.register(new QueryElementTool(wiSupplier, toolRegistry, ctx.docStore(), ctx.coreConfig()));
+        toolRegistry.register(new QueryByTagTool(wiSupplier, ctx.docStore(), ctx.coreConfig()));
+        toolRegistry.register(new QueryAddressTool(wiSupplier, toolRegistry, ctx.docStore(), ctx.coreConfig()));
 
         // Write tools
         toolRegistry.register(new WriteElementTool(

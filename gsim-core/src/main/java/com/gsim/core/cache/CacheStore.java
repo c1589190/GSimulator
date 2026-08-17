@@ -33,7 +33,8 @@ public final class CacheStore {
      * @return 缓存根目录路径
      */
     public static Path cachesDir(Path worldsDir) {
-        return cachesRoot != null ? cachesRoot : worldsDir.resolveSibling("caches");
+        // 未显式设置时回退 worldsDir 同级 caches（与 AppConfig.cachesDir() 默认推导一致）
+        return cachesRoot != null ? cachesRoot : worldsDir.getParent().resolve("caches");
     }
 
     /**
