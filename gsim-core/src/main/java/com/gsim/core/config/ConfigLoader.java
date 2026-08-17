@@ -255,6 +255,9 @@ public class ConfigLoader {
             case "WEBUI_HOST" -> "webui.host";
             case "WEBUI_PORT" -> "webui.port";
             case "WEBUI_ENABLED" -> "webui.enabled";
+            case "GSIMAP_PORT", "GSIM_MAP_PORT" -> "map.port";
+            case "CLI_WS_PORT", "GSIM_CLI_WS_PORT" -> "cli.ws.port";
+            case "MCP_HTTP_PORT", "GSIM_MCP_HTTP_PORT" -> "mcp.http.port";
             case "EMBEDDING_PROVIDER" -> "embedding.provider";
             case "EMBEDDING_BASE_URL" -> "embedding.base_url";
             case "EMBEDDING_API_KEY" -> "embedding.api_key";
@@ -268,6 +271,35 @@ public class ConfigLoader {
             case "GSIM_CLI_STREAM_PREVIEW_ENABLED" -> "cli.stream.preview.enabled";
             case "GSIM_CLI_STREAM_PREVIEW_MAX_CHARS" -> "cli.stream.preview.max_chars";
             case "GSIM_CLI_STREAM_PREVIEW_SHOW_REASONING" -> "cli.stream.preview.show_reasoning";
+            case "GSIM_AGENT_TOOL_LOOP_RESULT_INLINE_MAX_CHARS" -> "agent.tool_loop.result_inline_max_chars";
+            case "GSIM_AGENT_TOOL_LOOP_RESULT_STAGING_ENABLED" -> "agent.tool_loop.result_staging.enabled";
+            case "GSIM_MCP_RESPONSE_MAX_JSON_BYTES" -> "mcp.response.max_json_bytes";
+            case "GSIM_MCP_RESPONSE_SNIPPET_MAX_CHARS" -> "mcp.response.snippet_max_chars";
+            case "GSIM_MCP_RESPONSE_DEFAULT_PAGE_SIZE" -> "mcp.response.default_page_size";
+            case "GSIM_MCP_RESPONSE_MAX_PAGE_SIZE" -> "mcp.response.max_page_size";
+            case "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED" -> "mcp.response.overflow_staging.enabled";
+            case "GSIM_CORE_DOC_STAGING_THRESHOLD" -> "core.doc.staging.threshold";
+            case "GSIM_CORE_DOC_QUERY_STAGING_THRESHOLD" -> "core.doc.query.staging.threshold";
+            case "GSIM_CORE_DOC_TMP_MAX_AGE_HOURS" -> "core.doc.tmp.max_age_hours";
+            case "GSIM_CORE_DOC_TMP_CLEANUP_ENABLED" -> "core.doc.tmp.cleanup_enabled";
+            case "GSIM_DOCS_DIR" -> "docs.dir";
+            case "GSIM_CACHES_DIR" -> "caches.dir";
+            case "GSIM_KNOWLEDGE_DB_PATH" -> "knowledge.db.path";
+            case "GSIM_EMBEDDING_TIMEOUT_CONNECT_SECONDS" -> "embedding.timeout_connect_seconds";
+            case "GSIM_EMBEDDING_TIMEOUT_READ_SECONDS" -> "embedding.timeout_read_seconds";
+            case "GSIM_EMBEDDING_TIMEOUT_WRITE_SECONDS" -> "embedding.timeout_write_seconds";
+            case "GSIM_AGENT_SUBAGENT_COLLECT_TIMEOUT_SECONDS" -> "agent.subagent.collect.timeout_seconds";
+            case "GSIM_AGENT_SUBAGENT_MAX_COMPLETED" -> "agent.subagent.max_completed";
+            case "GSIM_IMPORT_DOC_MAX_FULL_READ_CHARS" -> "import.doc.max_full_read_chars";
+            case "GSIM_IMPORT_DOC_DEFAULT_LIMIT" -> "import.doc.default_limit";
+            case "GSIM_WEB_RESEARCH_WIKI_URL" -> "web_research.wiki.url";
+            case "GSIM_MAP_RADIUS_DEFAULT" -> "map.radius.default";
+            case "GSIM_MAP_CACHE_MAX_ENTRIES" -> "map.cache.max_entries";
+            case "GSIM_MAP_CONTOUR_CACHE_MAX" -> "map.contour.cache.max";
+            case "GSIM_MAP_LASSO_MAX_RADIUS" -> "map.lasso.max_radius";
+            case "GSIM_MAP_LASSO_MAX_FILL" -> "map.lasso.max_fill";
+            case "GSIM_MAP_COMPRESSION_MIN_REGION_SIZE" -> "map.compression.min_region_size";
+            case "GSIM_MAP_RESOLVER_MAX_CHAIN_DEPTH" -> "map.resolver.max_chain_depth";
             default -> null; // unrecognized env vars ignored
         };
     }
@@ -290,10 +322,65 @@ public class ConfigLoader {
         defaults.put("api.port", "8710");
         defaults.put("api.enabled", "false");
 
+        // 本地服务端口 — 可在 gsim.properties 中覆盖；环境变量映射作为 fallback
+        defaults.put("webui.host", "127.0.0.1");
+        defaults.put("webui.port", "8710");
+        defaults.put("webui.enabled", "false");
+        defaults.put("map.port", "8711");
+        defaults.put("cli.ws.port", "8712");
+        defaults.put("mcp.http.port", "8720");
+
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");
 
         defaults.put("agent.tool_loop.max_rounds", "64");
+
+        // Agent ToolLoop 结果回传 — 超限时改写为 @cache 引用，落盘 staging
+        defaults.put("agent.tool_loop.result_inline_max_chars", "4000");
+        defaults.put("agent.tool_loop.result_staging.enabled", "true");
+
+        // MCP 响应限流与分页 — 超出走 overflow staging
+        defaults.put("mcp.response.max_json_bytes", "50000");
+        defaults.put("mcp.response.snippet_max_chars", "300");
+        defaults.put("mcp.response.default_page_size", "20");
+        defaults.put("mcp.response.max_page_size", "100");
+        defaults.put("mcp.response.overflow_staging.enabled", "true");
+
+        // 文档暂存与临时目录清理
+        defaults.put("core.doc.staging.threshold", "500");
+        defaults.put("core.doc.query.staging.threshold", "3000");
+        defaults.put("core.doc.tmp.max_age_hours", "168");
+        defaults.put("core.doc.tmp.cleanup_enabled", "true");
+
+        // 目录与知识库（空串 = 未设置，下游解析为 worldsDir 同级目录）
+        defaults.put("docs.dir", "");
+        defaults.put("caches.dir", "");
+        defaults.put("knowledge.db.path", "data/gsim.db");
+
+        // 嵌入服务超时（秒）
+        defaults.put("embedding.timeout_connect_seconds", "30");
+        defaults.put("embedding.timeout_read_seconds", "60");
+        defaults.put("embedding.timeout_write_seconds", "30");
+
+        // SubAgent 收集超时与缓存上限
+        defaults.put("agent.subagent.collect.timeout_seconds", "300");
+        defaults.put("agent.subagent.max_completed", "100");
+
+        // 导入文档读取限制
+        defaults.put("import.doc.max_full_read_chars", "30000");
+        defaults.put("import.doc.default_limit", "8000");
+
+        // Web 研究
+        defaults.put("web_research.wiki.url", "https://en.wikipedia.org/w/api.php");
+
+        // 地图查询与编辑限制
+        defaults.put("map.radius.default", "80");
+        defaults.put("map.cache.max_entries", "32");
+        defaults.put("map.contour.cache.max", "5000");
+        defaults.put("map.lasso.max_radius", "200");
+        defaults.put("map.lasso.max_fill", "30000");
+        defaults.put("map.compression.min_region_size", "100");
+        defaults.put("map.resolver.max_chain_depth", "200");
 
         defaults.put("llm.stream.enabled", "true");
         defaults.put("cli.stream.preview.enabled", "true");
