@@ -51,6 +51,9 @@ llms.json
 docs/
 test0704/
 
+# Runtime-generated config (created by running the app)
+gsim.properties
+
 # IDE / tooling temp files
 .omo/
 .serena/
