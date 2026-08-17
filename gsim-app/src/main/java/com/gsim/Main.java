@@ -2,10 +2,13 @@ package com.gsim;
 
 import com.gsim.agent.bridge.AgentBridge;
 import com.gsim.agentlib.mcp.McpHttpServer;
+import com.gsim.agentlib.mcp.McpResponseConfig;
+import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
+import com.gsim.app.mcp.DocStagingOverflowHandler;
 import com.gsim.core.cache.CacheInfo;
 import com.gsim.core.cache.CachesManager;
 import com.gsim.core.cache.FileSystemCachesManager;
@@ -160,7 +163,19 @@ public class Main {
             if (noCli) {
                 // MCP HTTP mode: start Streamable HTTP MCP server（mcp.http.port，默认 37201）
                 int mcpPort = Integer.getInteger("mcp.http.port", config.getMcpHttpPort());
-                McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort);
+                McpResponseConfig mcpResponseConfig = new McpResponseConfig(
+                        config.mcpResponseDefaultPageSize(),
+                        config.mcpResponseMaxPageSize(),
+                        config.mcpResponseMaxJsonBytes(),
+                        config.mcpResponseSnippetMaxChars(),
+                        config.mcpResponseOverflowStagingEnabled());
+                // 溢出暂存 handler：超限 snippet 暂存为 docs/tmp 文档并返回 docId；未启用时传 null（走截断）
+                ToolResultOverflowHandler overflowHandler = config.mcpResponseOverflowStagingEnabled()
+                        ? new DocStagingOverflowHandler(
+                                app.getContext().getDocStore(config.docsDir()), config.stagingThreshold(), "mcp_")
+                        : null;
+                McpHttpServer mcpHttpServer =
+                        new McpHttpServer(toolRegistry, mcpPort, mcpResponseConfig, overflowHandler);
                 mcpHttpServer.start();
 
                 Runtime.getRuntime()

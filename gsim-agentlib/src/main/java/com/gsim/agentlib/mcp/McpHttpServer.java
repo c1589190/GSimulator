@@ -60,7 +60,18 @@ public final class McpHttpServer {
      * @param port         HTTP listen port (default 8720)
      */
     public McpHttpServer(ToolRegistry toolRegistry, int port) {
-        this.adapter = new ToolRegistryMcpAdapter(toolRegistry);
+        this(toolRegistry, port, McpResponseConfig.defaults(), null);
+    }
+
+    /**
+     * @param toolRegistry the tool registry to expose via MCP
+     * @param port         HTTP listen port (default 8720)
+     * @param config       response limits; {@code null} falls back to {@link McpResponseConfig#defaults()}
+     * @param handler      optional overflow handler for oversized responses; {@code null} → legacy truncation
+     */
+    public McpHttpServer(
+            ToolRegistry toolRegistry, int port, McpResponseConfig config, ToolResultOverflowHandler handler) {
+        this.adapter = new ToolRegistryMcpAdapter(toolRegistry, null, config, handler);
         this.port = port;
     }
 
