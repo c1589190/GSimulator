@@ -140,7 +140,29 @@ public class OrchestratorAgent extends AbstractAgent {
                 new ToolExecutionPolicy(),
                 permissionGate,
                 new ToolPermissionConfig(),
-                groupManager);
+                groupManager,
+                null);
+    }
+
+    public OrchestratorAgent(
+            LlmManager llmManager,
+            ToolRegistry toolRegistry,
+            String model,
+            AgentProgressSink progressSink,
+            ToolPermissionGate permissionGate,
+            ToolGroupManager groupManager,
+            AbstractAgent.ToolResultPolicy resultPolicy) {
+        this(
+                llmManager,
+                toolRegistry,
+                model,
+                progressSink != null ? progressSink : AgentProgressSink.NOOP,
+                new ToolRoutePolicy(),
+                new ToolExecutionPolicy(),
+                permissionGate,
+                new ToolPermissionConfig(),
+                groupManager,
+                resultPolicy);
     }
 
     OrchestratorAgent(
@@ -161,7 +183,8 @@ public class OrchestratorAgent extends AbstractAgent {
                 executionPolicy,
                 permissionGate,
                 permissionConfig,
-                ToolGroupManager.createWithAllGroupsActivated());
+                ToolGroupManager.createWithAllGroupsActivated(),
+                null);
     }
 
     OrchestratorAgent(
@@ -174,12 +197,37 @@ public class OrchestratorAgent extends AbstractAgent {
             ToolPermissionGate permissionGate,
             ToolPermissionConfig permissionConfig,
             ToolGroupManager groupManager) {
+        this(
+                llmManager,
+                toolRegistry,
+                model,
+                progressSink,
+                routePolicy,
+                executionPolicy,
+                permissionGate,
+                permissionConfig,
+                groupManager,
+                null);
+    }
+
+    OrchestratorAgent(
+            LlmManager llmManager,
+            ToolRegistry toolRegistry,
+            String model,
+            AgentProgressSink progressSink,
+            ToolRoutePolicy routePolicy,
+            ToolExecutionPolicy executionPolicy,
+            ToolPermissionGate permissionGate,
+            ToolPermissionConfig permissionConfig,
+            ToolGroupManager groupManager,
+            AbstractAgent.ToolResultPolicy resultPolicy) {
         super(
                 AgentConfig.defaultOrchestrator(),
                 llmManager,
                 toolRegistry,
                 progressSink != null ? progressSink : AgentProgressSink.NOOP,
-                model);
+                model,
+                resultPolicy);
         this.llmManager = llmManager;
         this.toolRegistry = toolRegistry;
         this.model = model;

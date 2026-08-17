@@ -5,9 +5,11 @@ import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
 import com.gsim.agent.ParsedToolCall;
 import com.gsim.agent.ToolCallExtractor;
 import com.gsim.agent.ToolFilterEvaluator;
+import com.gsim.agent.tools.worldinfo.DocStaging;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.event.AgentProgressEvent;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmCall;
@@ -18,6 +20,7 @@ import com.gsim.core.llm.LlmResult;
 import com.gsim.core.llm.LlmToolCall;
 import com.gsim.core.llm.StreamPool;
 import com.gsim.core.llm.ToolDef;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +51,17 @@ import org.slf4j.LoggerFactory;
  */
 public class AbstractAgent {
 
+    /**
+     * 工具结果反馈策略 — 控制 {@link #buildToolFeedback} 对单条 snippet 的内联上限与溢出暂存。
+     *
+     * @param inlineMaxChars 单条 snippet 内联字符上限（超过则触发溢出处理）
+     * @param stagingEnabled 是否允许将超限内容暂存为 TMP 文档
+     * @param docStore       文档存储（null = 无暂存能力，超限一律截断）
+     * @param docIdPrefix    暂存文档 docId 前缀（如 {@code wstg_agent_}）
+     */
+    public record ToolResultPolicy(
+            int inlineMaxChars, boolean stagingEnabled, DocStore docStore, String docIdPrefix) {}
+
     private static final Logger log = LoggerFactory.getLogger(AbstractAgent.class);
 
     protected String agentId;
@@ -56,6 +70,9 @@ public class AbstractAgent {
     protected final ToolRegistry allTools;
     protected final String model;
     protected final AtomicBoolean cancelRequested = new AtomicBoolean(false);
+
+    /** 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）。 */
+    protected final ToolResultPolicy resultPolicy;
 
     /** Progress sink — may be replaced post-construction via AgentFactory.dispatch(). */
     protected AgentProgressSink progressSink;
@@ -99,12 +116,33 @@ public class AbstractAgent {
      */
     public AbstractAgent(
             AgentConfig config, LlmManager llm, ToolRegistry allTools, AgentProgressSink progressSink, String model) {
+        this(config, llm, allTools, progressSink, model, null);
+    }
+
+    /**
+     * 创建 AbstractAgent 实例。
+     *
+     * @param config       Agent 配置
+     * @param llm          LLM 管理器
+     * @param allTools     全局工具注册表
+     * @param progressSink 进度事件接收器（null 则使用 NOOP）
+     * @param model        默认模型名称
+     * @param resultPolicy 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）
+     */
+    public AbstractAgent(
+            AgentConfig config,
+            LlmManager llm,
+            ToolRegistry allTools,
+            AgentProgressSink progressSink,
+            String model,
+            ToolResultPolicy resultPolicy) {
         this.config = config;
         this.agentId = config.agentId();
         this.llm = llm;
         this.allTools = allTools;
         this.progressSink = progressSink != null ? progressSink : AgentProgressSink.NOOP;
         this.model = model;
+        this.resultPolicy = resultPolicy;
     }
 
     // ══════════════════════════════════════════
@@ -563,13 +601,32 @@ public class AbstractAgent {
                 if (!path.isEmpty()) sb.append("    path: ").append(path).append("\n");
                 String snippet = item.snippet();
                 if (snippet != null) {
-                    if (snippet.length() > 500) snippet = snippet.substring(0, 500) + "...";
+                    int cap = resultPolicy != null ? resultPolicy.inlineMaxChars() : 500;
+                    if (snippet.length() > cap) {
+                        snippet = handleOverflowSnippet(toolName, item, snippet, cap);
+                    }
                     sb.append("    snippet: ").append(snippet).append("\n");
                 }
             }
         }
         sb.append("[/TOOL_RESULT]\n\n请基于以上工具结果继续。已足够则调用 finish_action 结束。");
         return sb.toString();
+    }
+
+    /**
+     * 处理超限 snippet：暂存可用 → 暂存为 TMP 文档并返回暂存提示；暂存不可用/禁用/失败 → 截断到 cap + "...".
+     */
+    private String handleOverflowSnippet(String toolName, ToolResult.Item item, String snippet, int cap) {
+        if (resultPolicy != null && resultPolicy.stagingEnabled() && resultPolicy.docStore() != null) {
+            try {
+                String title = item.title() != null && !item.title().isBlank() ? item.title() : toolName;
+                String docId = DocStaging.stage(resultPolicy.docStore(), resultPolicy.docIdPrefix(), title, snippet);
+                return DocStaging.stagedNotice(docId, snippet.length());
+            } catch (IOException e) {
+                log.debug("[ToolFeedback] staging failed for {}: {}", toolName, e.getMessage());
+            }
+        }
+        return snippet.substring(0, cap) + "...";
     }
 
     /** 构建参数摘要（单行，每值截断到 80 字符），供 CLI 显示。 */

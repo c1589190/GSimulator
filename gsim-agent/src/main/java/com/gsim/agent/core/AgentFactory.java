@@ -45,6 +45,9 @@ public class AgentFactory {
     private final Map<String, AgentResult> completed = new ConcurrentHashMap<>();
     private final int maxCompleted;
 
+    /** 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）。 */
+    private final AbstractAgent.ToolResultPolicy resultPolicy;
+
     /** Cache 文件输出目录（worlds/<worldId>/caches/）。 */
     private final Path worldsDir;
     /** 当前 worldId 提供者（运行时可能切换 world）。 */
@@ -93,6 +96,32 @@ public class AgentFactory {
             Path worldsDir,
             java.util.function.Supplier<String> worldIdSupplier,
             int maxCompleted) {
+        this(configStore, llmRegistry, allTools, rootSink, model, worldsDir, worldIdSupplier, maxCompleted, null);
+    }
+
+    /**
+     * 创建 AgentFactory 实例。
+     *
+     * @param configStore    Agent 配置存储
+     * @param llmRegistry    LLM provider 注册表
+     * @param allTools       全局工具注册表
+     * @param rootSink       根进度事件接收器
+     * @param model          默认模型名称
+     * @param worldsDir      Cache 文件输出目录
+     * @param worldIdSupplier 当前 worldId 提供者
+     * @param maxCompleted   已完成结果缓存上限（FIFO 淘汰）
+     * @param resultPolicy   工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）
+     */
+    public AgentFactory(
+            AgentConfigStore configStore,
+            LlmProviderRegistry llmRegistry,
+            ToolRegistry allTools,
+            AgentProgressSink rootSink,
+            String model,
+            Path worldsDir,
+            java.util.function.Supplier<String> worldIdSupplier,
+            int maxCompleted,
+            AbstractAgent.ToolResultPolicy resultPolicy) {
         this.configStore = configStore;
         this.llmRegistry = llmRegistry;
         this.llm = (LlmManager) llmRegistry.getDefault();
@@ -102,6 +131,7 @@ public class AgentFactory {
         this.worldsDir = worldsDir;
         this.worldIdSupplier = worldIdSupplier;
         this.maxCompleted = maxCompleted;
+        this.resultPolicy = resultPolicy;
     }
 
     /**
@@ -132,7 +162,7 @@ public class AgentFactory {
         // 按 Agent 配置选择 LLM provider
         LlmProvider agentLlm = llmRegistry.get(config.llmProvider());
         // 使用 rootSink — 调用方可随后 replaceProgressSink()
-        return new AbstractAgent(fullConfig, (LlmManager) agentLlm, allTools, rootSink, model);
+        return new AbstractAgent(fullConfig, (LlmManager) agentLlm, allTools, rootSink, model, resultPolicy);
     }
 
     /**

@@ -328,6 +328,13 @@ public class GSimulatorApplication {
         // Tool group manager
         var toolGroupManager = new com.gsim.agent.ToolGroupManager();
 
+        // 工具结果反馈策略：超限 snippet 暂存为 TMP 文档（docStore 同 docs 工具组实例）
+        var agentResultPolicy = new com.gsim.agent.core.AbstractAgent.ToolResultPolicy(
+                config.resultInlineMaxChars(),
+                config.resultStagingEnabled(),
+                ctx.getDocStore(config.docsDir()),
+                "wstg_agent_");
+
         // Orchestrator
         this.orchestrator = new OrchestratorAgent(
                 ctx.getLlmManager(),
@@ -337,7 +344,8 @@ public class GSimulatorApplication {
                 !interactive
                         ? new com.gsim.agent.AutoApprovePermissionGate()
                         : new com.gsim.agent.CliToolPermissionGate(),
-                toolGroupManager);
+                toolGroupManager,
+                agentResultPolicy);
         this.orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
         this.orchestrator.setStreamEnabled(config.isLlmStreamEnabled());
         this.orchestrator.setCollectTimeoutSeconds(config.subagentCollectTimeoutSeconds());
@@ -362,7 +370,8 @@ public class GSimulatorApplication {
                 config.getLlmModel(),
                 worldsDir,
                 () -> worldInfo != null ? worldInfo.worldId() : "default",
-                config.subagentMaxCompleted());
+                config.subagentMaxCompleted(),
+                agentResultPolicy);
 
         // ── Agent 管理层（仿 World/Docs 体系：Store → Manager → HTTP API）──
         Path cachesBaseDir = config.cachesDir();
