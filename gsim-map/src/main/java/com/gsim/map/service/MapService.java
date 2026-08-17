@@ -35,6 +35,7 @@ public class MapService {
     private final WorldManager worldManager;
     private final MapConfig mapConfig;
     private final Map<String, MapData> cache;
+
     private static final class LruCache extends LinkedHashMap<String, MapData> {
         private static final long serialVersionUID = 1L;
         private final int maxEntries;
@@ -314,8 +315,15 @@ public class MapService {
         if (isRootNode(worldId, nodeId)) {
             MapStore.saveFull(worldsDir, worldId, nodeId, updated);
         } else {
-            MapData parent = resolve(worldId, readParentId(worldId, nodeId));
-            MapDiff diff = MapDiff.compute(readParentId(worldId, nodeId), parent, updated);
+            String parentId = readParentId(worldId, nodeId);
+            MapData parent = resolve(worldId, parentId);
+            if (parent == null) {
+                // 父节点尚无地图：自动创建空地图基线并落盘，后续 diff 相对空基线记录
+                parent = MapData.empty();
+                MapStore.saveFull(worldsDir, worldId, parentId, parent);
+                evict(worldId, parentId);
+            }
+            MapDiff diff = MapDiff.compute(parentId, parent, updated);
             MapStore.saveDiff(worldsDir, worldId, nodeId, diff);
         }
         evict(worldId, nodeId);
@@ -1114,14 +1122,7 @@ public class MapService {
             double landRatio,
             double coastRoughness) {
         MapData map = MapGenerator.generate(
-                worldId,
-                seed,
-                radius,
-                ridges,
-                fragments,
-                landRatio,
-                coastRoughness,
-                mapConfig.contourCacheMax());
+                worldId, seed, radius, ridges, fragments, landRatio, coastRoughness, mapConfig.contourCacheMax());
         saveMap(worldId, nodeId, map);
         long landHexes = map.hexes().values().stream()
                 .filter(h -> !"water".equals(h.terrain()))
