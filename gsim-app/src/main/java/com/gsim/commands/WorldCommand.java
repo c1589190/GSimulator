@@ -1,6 +1,7 @@
 package com.gsim.commands;
 
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Function;
@@ -40,7 +41,7 @@ public final class WorldCommand {
     }
 
     private String listWorlds() {
-        List<WorldIndexManager.WorldEntry> worlds = WorldIndexManager.listWorlds(worldsDir);
+        List<WorldIndexManager.WorldEntry> worlds = new WorldManager(worldsDir).listWorlds();
         if (worlds.isEmpty()) return "No worlds found.";
         StringBuilder sb = new StringBuilder("Worlds:\n");
         for (var w : worlds) {
@@ -61,7 +62,7 @@ public final class WorldCommand {
         if (args.size() < 2) return "Usage: /world switch <id>";
         String id = args.get(1);
         // validate world exists
-        if (WorldIndexManager.loadWorldMeta(worldsDir, id) == null) {
+        if (!new WorldManager(worldsDir).exists(id)) {
             return "World not found: " + id;
         }
         // trigger re-bootstrap with target world

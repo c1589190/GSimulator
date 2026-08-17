@@ -3,6 +3,7 @@ package com.gsim.webui.handlers;
 import com.gsim.core.util.JsonUtils;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
@@ -80,7 +81,7 @@ public class WorldApiHandler implements HttpHandler {
     }
 
     private void handleListWorlds(HttpExchange exchange) throws IOException {
-        List<WorldIndexManager.WorldEntry> entries = WorldIndexManager.listWorlds(worldsDir);
+        List<WorldIndexManager.WorldEntry> entries = new WorldManager(worldsDir).listWorlds();
         String active = activeWorldId.get();
         List<Map<String, Object>> worlds = new ArrayList<>();
         for (var e : entries) {
@@ -121,7 +122,7 @@ public class WorldApiHandler implements HttpHandler {
     }
 
     private void handleSwitchWorld(HttpExchange exchange, String id) throws IOException {
-        if (!Files.exists(WorldIndexManager.worldFile(worldsDir, id))) {
+        if (!Files.exists(new WorldManager(worldsDir).worldFile(id))) {
             HandlerUtils.sendJson(exchange, 404, Map.of("error", "World not found: " + id));
             return;
         }

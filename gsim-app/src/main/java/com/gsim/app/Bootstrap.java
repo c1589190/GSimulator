@@ -4,9 +4,8 @@ import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.CachesManager;
 import com.gsim.core.worldinfo.WorldInformation;
-import com.gsim.core.worldinfo.loader.ActiveStateManager;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
-import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -18,6 +17,7 @@ public final class Bootstrap {
     private final Path worldsDir;
     private final Path promptsDir;
     private final CachesManager cachesManager;
+    private final WorldManager worldManager;
 
     // result
     private WorldInformation worldInfo;
@@ -29,6 +29,7 @@ public final class Bootstrap {
         this.worldsDir = worldsDir;
         this.promptsDir = promptsDir;
         this.cachesManager = cachesManager;
+        this.worldManager = new WorldManager(worldsDir);
     }
 
     /** 使用默认缓存选择（最新 cache 或新建）。 */
@@ -54,14 +55,14 @@ public final class Bootstrap {
     public BootstrapResult boot(String selectedSessionId, String targetWorldId) {
         // 1. 确定 worldId
         if (targetWorldId != null && !targetWorldId.isBlank()) {
-            var meta = WorldIndexManager.loadWorldMeta(worldsDir, targetWorldId);
+            var meta = worldManager.loadMeta(targetWorldId);
             if (meta == null) {
                 throw new IllegalArgumentException("World 不存在: " + targetWorldId);
             }
             worldId = targetWorldId;
         } else {
             // 原有逻辑：从列表中选取第一个
-            List<WorldIndexManager.WorldEntry> worlds = WorldIndexManager.listWorlds(worldsDir);
+            List<WorldIndexManager.WorldEntry> worlds = worldManager.listWorlds();
 
             if (worlds.isEmpty()) {
                 worldId = "default";
@@ -71,19 +72,14 @@ public final class Bootstrap {
             }
         }
 
-        // 3. Read active state
-        ActiveStateManager.ActiveState active = ActiveStateManager.load(worldsDir, worldId);
-        if (active == null) {
-            activeNodeId = "n0000";
-        } else {
-            activeNodeId = "n0000";
-        }
-
-        // 4. Build WorldInformation
-        worldInfo = WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);
+        // 3. 通过 WorldManager 统一读取世界信息与活跃节点
+        //    ActiveState 不再追踪 nodeId — 由 discover 从磁盘扫描推导完整节点集合，
+        //    不依赖任何硬编码锚点（此前硬编码 n0000 导致后续回合节点对 MCP 不可见）
+        worldInfo = worldManager.loadWorld(worldId);
         if (worldInfo == null) {
             throw new IllegalStateException("Failed to load world: " + worldId);
         }
+        activeNodeId = worldInfo.activeNodeId();
 
         // 5. Load Orchestrator cache — 仅加载指定缓存或新建
         //    不再自动选取最新缓存；调用方（Main CLI / WebUI）负责选择。
