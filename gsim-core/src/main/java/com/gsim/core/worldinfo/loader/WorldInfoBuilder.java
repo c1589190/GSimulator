@@ -75,21 +75,78 @@ public final class WorldInfoBuilder {
     }
 
     /**
-     * 扫描 nodes 目录，自动发现当前活跃链（无需预先知道 activeNodeId）。
+     * 扫描 nodes 目录，自动发现完整节点集合（无需预先知道 activeNodeId）。
      *
-     * <p>算法：加载所有节点 → 找到叶子节点（不被任何其他节点作为 parent 引用的节点）
-     * → 从叶子向上回溯到根节点 → 反转得到 root→leaf 链。
-     * 如果有多个叶子（分支），取 turn 最大的那条链。
+     * <p>宽松模式（"有啥取啥"）：加载所有可读节点 → 从最高 turn 的叶子节点（不被任何
+     * 其他节点作为 parent 引用的节点）出发沿父链向上回溯，仅用于断链诊断（父节点
+     * 文件缺失时记录告警）；最终链为全部可读节点按 turn 升序（同 turn 按 nodeId），
+     * 断链丢失的祖先、其他分支、孤立节点全部保留可见。
+     * rootNodeId = 最小 turn 节点，activeNodeId = 最大 turn 节点。
+     * 若所有节点都互为 parent（疑似成环），从最高 turn 节点出发回溯（visited 防环）。
      *
      * @param worldsDir worlds 根目录
      * @param worldId   世界 ID
-     * @return 完整的 WorldInformation，若 nodes 目录不存在或无节点则返回 null
+     * @return 完整 WorldInformation（全部节点按 turn 升序），
+     *         若 nodes 目录不存在或无节点则返回 null
      */
     public static WorldInformation discover(Path worldsDir, String worldId) {
-        Path nodesDir = NodeLoader.nodesDir(worldsDir, worldId);
-        if (!Files.exists(nodesDir)) return null;
+        // 1. Load all readable node metadata (unified via WorldManager callers)
+        Map<String, NodeSnapshot> allNodes = loadAllNodes(worldsDir, worldId);
+        if (allNodes.isEmpty()) return null;
 
-        // 1. Load all nodes
+        // 2. Find parentId set — nodeIds that are referenced as parents
+        Set<String> referencedAsParent = new HashSet<>();
+        for (NodeSnapshot n : allNodes.values()) {
+            if (n.parentId() != null && !n.isRoot()) {
+                referencedAsParent.add(n.parentId());
+            }
+        }
+
+        // 3. Starting point: highest-turn leaf (node NOT referenced as parent).
+        //    If every node is referenced as a parent (circular?), fall back to highest-turn node.
+        NodeSnapshot start = allNodes.values().stream()
+                .filter(n -> !referencedAsParent.contains(n.nodeId()))
+                .max(java.util.Comparator.comparingInt(NodeSnapshot::turn))
+                .orElseGet(() -> allNodes.values().stream()
+                        .max(java.util.Comparator.comparingInt(NodeSnapshot::turn))
+                        .orElse(null));
+        if (start == null) return null;
+
+        // 4. Walk up along parent links (visited guards against cycles) —
+        //    diagnostics only, ordering below is by turn, so nothing is dropped.
+        Set<String> visited = new HashSet<>();
+        NodeSnapshot cursor = start;
+        while (cursor != null && visited.add(cursor.nodeId())) {
+            if (cursor.isRoot()) break;
+            Path parentFile = NodeLoader.nodeFile(worldsDir, worldId, cursor.parentId());
+            if (!Files.exists(parentFile)) {
+                log.warn(
+                        "Parent node file missing during discover: {} (chain truncated at {})",
+                        parentFile,
+                        cursor.nodeId());
+                break;
+            }
+            cursor = NodeLoader.load(parentFile);
+        }
+
+        // 5. 有啥取啥 — every readable node, ordered by turn then nodeId.
+        //    Root = lowest turn, active = highest turn; branches/orphans stay visible.
+        List<NodeSnapshot> chain = new ArrayList<>(allNodes.values());
+        chain.sort(java.util.Comparator.comparingInt(NodeSnapshot::turn).thenComparing(NodeSnapshot::nodeId));
+
+        return new WorldInformation(worldId, chain);
+    }
+
+    /**
+     * 扫描并加载节点目录中所有可读的 {@code nXXXX.json} 节点。
+     *
+     * <p>仅供同包的 {@link WorldManager} 做轻量活跃/根节点推导使用；
+     * 返回不可修改的 nodeId → NodeSnapshot 映射，目录不存在或扫描失败时返回空 Map。
+     */
+    static Map<String, NodeSnapshot> loadAllNodes(Path worldsDir, String worldId) {
+        Path nodesDir = NodeLoader.nodesDir(worldsDir, worldId);
+        if (!Files.isDirectory(nodesDir)) return Map.of();
+
         Map<String, NodeSnapshot> allNodes = new LinkedHashMap<>();
         try (Stream<Path> files = Files.list(nodesDir)) {
             files.filter(f -> f.getFileName().toString().matches("n\\d{4}\\.json"))
@@ -103,59 +160,8 @@ public final class WorldInfoBuilder {
                     });
         } catch (IOException e) {
             log.error("Failed to list nodes directory: {}", nodesDir, e);
-            return null;
+            return Map.of();
         }
-
-        if (allNodes.isEmpty()) return null;
-
-        // 2. Find parentId set — nodeIds that are referenced as parents
-        Set<String> referencedAsParent = new HashSet<>();
-        for (NodeSnapshot n : allNodes.values()) {
-            if (n.parentId() != null && !n.isRoot()) {
-                referencedAsParent.add(n.parentId());
-            }
-        }
-
-        // 3. Find leaf: node whose nodeId is NOT referenced as parent
-        //    If multiple leaves, pick highest turn
-        NodeSnapshot leaf = null;
-        for (NodeSnapshot n : allNodes.values()) {
-            if (!referencedAsParent.contains(n.nodeId())) {
-                if (leaf == null || n.turn() > leaf.turn()) {
-                    leaf = n;
-                }
-            }
-        }
-
-        if (leaf == null) {
-            // All nodes are parents of some other node — circular reference?
-            // Fall back to highest-turn node
-            leaf = allNodes.values().stream()
-                    .max((a, b) -> Integer.compare(a.turn(), b.turn()))
-                    .orElse(null);
-        }
-        if (leaf == null) return null;
-
-        // 4. Walk up from leaf to root
-        List<NodeSnapshot> chain = new ArrayList<>();
-        chain.add(leaf);
-        NodeSnapshot cursor = leaf;
-        while (!cursor.isRoot()) {
-            Path parentFile = NodeLoader.nodeFile(worldsDir, worldId, cursor.parentId());
-            if (!Files.exists(parentFile)) {
-                log.warn(
-                        "Parent node file missing during discover: {} (chain truncated at {})",
-                        parentFile,
-                        cursor.nodeId());
-                break;
-            }
-            cursor = NodeLoader.load(parentFile);
-            chain.add(cursor);
-        }
-
-        // 5. Reverse so root is first
-        java.util.Collections.reverse(chain);
-
-        return new WorldInformation(worldId, chain);
+        return Map.copyOf(allNodes);
     }
 }

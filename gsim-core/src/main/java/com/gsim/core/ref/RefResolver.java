@@ -8,7 +8,7 @@ import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
-import com.gsim.core.worldinfo.loader.WorldInfoBuilder;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -118,7 +118,7 @@ public final class RefResolver {
         }
 
         String resolveNodeId = nodeId != null ? nodeId : "n0000";
-        WorldInformation wi = WorldInfoBuilder.build(worldsDir, activeWorldId, "n0000");
+        WorldInformation wi = new WorldManager(worldsDir).loadWorld(activeWorldId);
         if (wi == null) {
             throw new IllegalStateException("Cannot load world: " + activeWorldId);
         }
