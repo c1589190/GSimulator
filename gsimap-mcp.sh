@@ -1,9 +1,9 @@
 #!/bin/bash
 # GSimulator MCP stdio→HTTP bridge
-# Requires GSimulator HTTP MCP server already running on port 8720.
+# Requires GSimulator HTTP MCP server already running on port 37201.
 # Start it separately: java -jar gsim-app/target/gsim-app-*.jar --no-cli
 
-MCP_URL="http://127.0.0.1:8720/mcp"
+MCP_URL="http://127.0.0.1:37201/mcp"
 
 while IFS= read -r line; do
     [ -z "$line" ] && continue
