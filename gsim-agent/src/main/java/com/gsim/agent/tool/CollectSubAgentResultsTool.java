@@ -6,6 +6,7 @@ import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.llm.ToolDef;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +35,7 @@ public class CollectSubAgentResultsTool implements AgentTool {
         this(runningSubAgents, 300);
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP2") // runningSubAgents 为跨工具共享的运行时状态容器（按设计）
     public CollectSubAgentResultsTool(
             Map<String, CompletableFuture<AgentResult>> runningSubAgents, int collectTimeoutSeconds) {
         this.runningSubAgents = runningSubAgents;
@@ -46,6 +48,7 @@ public class CollectSubAgentResultsTool implements AgentTool {
     }
 
     @Override
+    @SuppressFBWarnings("VA_FORMAT_STRING_USES_NEWLINE") // 文本块多行描述按设计包含换行
     public String description() {
         return """
                 收集所有异步派发的子代理执行结果。

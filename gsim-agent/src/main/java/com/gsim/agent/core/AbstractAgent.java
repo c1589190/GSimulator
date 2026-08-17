@@ -20,6 +20,7 @@ import com.gsim.core.llm.LlmResult;
 import com.gsim.core.llm.LlmToolCall;
 import com.gsim.core.llm.StreamPool;
 import com.gsim.core.llm.ToolDef;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +60,7 @@ public class AbstractAgent {
      * @param docStore       文档存储（null = 无暂存能力，超限一律截断）
      * @param docIdPrefix    暂存文档 docId 前缀（如 {@code wstg_agent_}）
      */
+    @SuppressFBWarnings({"EI_EXPOSE_REP2", "EI_EXPOSE_REP"}) // DocStore 按设计跨线程共享（暂存内容经 DocStaging 去重）
     public record ToolResultPolicy(int inlineMaxChars, boolean stagingEnabled, DocStore docStore, String docIdPrefix) {}
 
     private static final Logger log = LoggerFactory.getLogger(AbstractAgent.class);
