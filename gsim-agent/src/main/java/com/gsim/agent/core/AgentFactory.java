@@ -249,14 +249,16 @@ public class AgentFactory {
                 // Move from running to completed cache (bounded FIFO)
                 AgentResult result = f.getNow(null);
                 if (result != null) {
-                    if (completed.size() >= maxCompleted) {
-                        // Simple FIFO: remove one arbitrary entry
-                        var it = completed.keySet().iterator();
-                        if (it.hasNext()) {
-                            completed.remove(it.next());
+                    synchronized (completed) {
+                        if (completed.size() >= maxCompleted) {
+                            // Simple FIFO: remove one arbitrary entry
+                            var it = completed.keySet().iterator();
+                            if (it.hasNext()) {
+                                completed.remove(it.next());
+                            }
                         }
+                        completed.put(instanceId, result);
                     }
-                    completed.put(instanceId, result);
                 }
             }
         });
