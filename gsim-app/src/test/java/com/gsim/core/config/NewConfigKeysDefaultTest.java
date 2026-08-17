@@ -54,13 +54,16 @@ class NewConfigKeysDefaultTest {
     private static final Map<String, String> EXPECTED_ENV_MAPPINGS = new LinkedHashMap<>();
 
     static {
-        EXPECTED_ENV_MAPPINGS.put("GSIM_AGENT_TOOL_LOOP_RESULT_INLINE_MAX_CHARS", "agent.tool_loop.result_inline_max_chars");
-        EXPECTED_ENV_MAPPINGS.put("GSIM_AGENT_TOOL_LOOP_RESULT_STAGING_ENABLED", "agent.tool_loop.result_staging.enabled");
+        EXPECTED_ENV_MAPPINGS.put(
+                "GSIM_AGENT_TOOL_LOOP_RESULT_INLINE_MAX_CHARS", "agent.tool_loop.result_inline_max_chars");
+        EXPECTED_ENV_MAPPINGS.put(
+                "GSIM_AGENT_TOOL_LOOP_RESULT_STAGING_ENABLED", "agent.tool_loop.result_staging.enabled");
         EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_MAX_JSON_BYTES", "mcp.response.max_json_bytes");
         EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_SNIPPET_MAX_CHARS", "mcp.response.snippet_max_chars");
         EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_DEFAULT_PAGE_SIZE", "mcp.response.default_page_size");
         EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_MAX_PAGE_SIZE", "mcp.response.max_page_size");
-        EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED", "mcp.response.overflow_staging.enabled");
+        EXPECTED_ENV_MAPPINGS.put(
+                "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED", "mcp.response.overflow_staging.enabled");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_STAGING_THRESHOLD", "core.doc.staging.threshold");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_QUERY_STAGING_THRESHOLD", "core.doc.query.staging.threshold");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_TMP_MAX_AGE_HOURS", "core.doc.tmp.max_age_hours");
@@ -71,7 +74,8 @@ class NewConfigKeysDefaultTest {
         EXPECTED_ENV_MAPPINGS.put("GSIM_EMBEDDING_TIMEOUT_CONNECT_SECONDS", "embedding.timeout_connect_seconds");
         EXPECTED_ENV_MAPPINGS.put("GSIM_EMBEDDING_TIMEOUT_READ_SECONDS", "embedding.timeout_read_seconds");
         EXPECTED_ENV_MAPPINGS.put("GSIM_EMBEDDING_TIMEOUT_WRITE_SECONDS", "embedding.timeout_write_seconds");
-        EXPECTED_ENV_MAPPINGS.put("GSIM_AGENT_SUBAGENT_COLLECT_TIMEOUT_SECONDS", "agent.subagent.collect.timeout_seconds");
+        EXPECTED_ENV_MAPPINGS.put(
+                "GSIM_AGENT_SUBAGENT_COLLECT_TIMEOUT_SECONDS", "agent.subagent.collect.timeout_seconds");
         EXPECTED_ENV_MAPPINGS.put("GSIM_AGENT_SUBAGENT_MAX_COMPLETED", "agent.subagent.max_completed");
         EXPECTED_ENV_MAPPINGS.put("GSIM_IMPORT_DOC_MAX_FULL_READ_CHARS", "import.doc.max_full_read_chars");
         EXPECTED_ENV_MAPPINGS.put("GSIM_IMPORT_DOC_DEFAULT_LIMIT", "import.doc.default_limit");
@@ -104,7 +108,8 @@ class NewConfigKeysDefaultTest {
     void envKeysMapToConfigKeys() {
         assertEquals(29, EXPECTED_ENV_MAPPINGS.size());
         for (var expected : EXPECTED_ENV_MAPPINGS.entrySet()) {
-            assertEquals(expected.getValue(), ConfigLoader.mapEnvKey(expected.getKey()), "环境变量映射不匹配: " + expected.getKey());
+            assertEquals(
+                    expected.getValue(), ConfigLoader.mapEnvKey(expected.getKey()), "环境变量映射不匹配: " + expected.getKey());
         }
     }
 
