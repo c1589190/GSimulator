@@ -12,6 +12,7 @@ import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.worldinfo.WorldInformation;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.interaction.ConsoleInteractionAdapter;
 import java.nio.file.Path;
 
@@ -46,6 +47,7 @@ public class GSimulatorApplication {
     private com.gsim.core.doc.DocCacheManager docCacheManager;
     private com.gsim.core.config.CoreConfig coreConfig;
     private com.gsim.core.ref.InlineRefResolver inlineRefResolver;
+    private final WorldManager worldManager;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
     private final java.util.concurrent.atomic.AtomicReference<String> activeWorldId =
@@ -83,6 +85,7 @@ public class GSimulatorApplication {
         this.agentEnabled = agentEnabled;
         this.ctx = new ApplicationContext(config);
         this.worldsDir = config.worldsDir();
+        this.worldManager = new WorldManager(this.worldsDir);
 
         // Store BootstrapResult data
         if (bootResult != null) {
@@ -190,15 +193,15 @@ public class GSimulatorApplication {
             log.warn("Failed to create embdb dir: {}", e.getMessage());
         }
 
-        // ── core.properties 落盘 + CoreConfig + 内嵌引用解析器（write_element 阈值/引用展开用）──
-        // baseDir 推导：AppConfig 中 worldsDir = baseDir/worlds，故 baseDir = worldsDir.getParent()
-        Path baseDir = worldsDir.getParent();
-        try {
-            ensureCorePropertiesTemplate(baseDir);
-        } catch (java.io.IOException e) {
-            log.warn("Failed to write core.properties template: {}", e.getMessage());
-        }
-        this.coreConfig = com.gsim.core.config.CoreConfig.load(baseDir.resolve("core.properties"));
+        // ── CoreConfig（主链视图）+ 内嵌引用解析器（write_element 阈值/引用展开用）──
+        // CoreConfig 从 ConfigLoader 主链构造：AppConfig 已解析 core.doc.* 键，此处取其类型化值
+        this.coreConfig = com.gsim.core.config.CoreConfig.from(
+                java.util.Map.of(
+                        com.gsim.core.config.CoreConfig.STAGING_THRESHOLD,
+                        String.valueOf(config.stagingThreshold()),
+                        com.gsim.core.config.CoreConfig.QUERY_STAGING_THRESHOLD,
+                        String.valueOf(config.queryStagingThreshold())),
+                java.util.Map.of());
         this.inlineRefResolver = new com.gsim.core.ref.InlineRefResolver(docStore, importDocService);
 
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
@@ -220,16 +223,19 @@ public class GSimulatorApplication {
             registerAgentTools(toolRegistry);
         }
 
-        // Node change callback — 重建 WorldInformation 以反映节点变更
+        // Node change callback — 从磁盘重新 discover 完整节点集合（宽松加载：断链/孤儿全保留）
         Runnable onNodeChanged = () -> {
             if (worldInfo == null) return;
             try {
                 String wid = worldInfo.worldId();
-                // ActiveState 不再追踪 nodeId，使用当前 WorldInformation 的 activeNodeId
-                String activeNodeId = worldInfo.activeNodeId();
-                var newWi = com.gsim.core.worldinfo.loader.WorldInfoBuilder.build(worldsDir, wid, activeNodeId);
-                this.worldInfo = newWi;
-                log.info("WorldInformation rebuilt after node change: world={} activeNode={}", wid, activeNodeId);
+                var newWi = worldManager.loadWorld(wid);
+                if (newWi != null) {
+                    this.worldInfo = newWi;
+                }
+                log.info(
+                        "WorldInformation rebuilt after node change: world={} nodes={}",
+                        wid,
+                        newWi != null ? newWi.branchChain().size() : -1);
             } catch (Exception e) {
                 log.error("Failed to rebuild WorldInformation after node change: {}", e.getMessage());
             }
@@ -298,19 +304,6 @@ public class GSimulatorApplication {
             webUiServer.registerHandler("/api/worlds", worldApiHandler);
 
             log.info("Registered LlmApiHandler + AgentApiHandler + WorldApiHandler");
-        }
-    }
-
-    /**
-     * 将 classpath 内置 core.properties 模板落盘到 baseDir（已存在不覆盖；classpath 缺失则静默跳过）。
-     */
-    static void ensureCorePropertiesTemplate(Path baseDir) throws java.io.IOException {
-        Path target = baseDir.resolve("core.properties");
-        if (java.nio.file.Files.exists(target)) return; // 已存在不覆盖
-        try (var in = com.gsim.core.config.CoreConfig.class.getResourceAsStream("/core.properties")) {
-            if (in == null) return; // classpath 缺失则静默跳过（不应发生）
-            java.nio.file.Files.createDirectories(baseDir);
-            java.nio.file.Files.copy(in, target);
         }
     }
 
@@ -430,15 +423,12 @@ public class GSimulatorApplication {
     private String switchToWorld(String worldId) {
         try {
             // 1. 验证 world 存在
-            var meta = com.gsim.core.worldinfo.loader.WorldIndexManager.loadWorldMeta(worldsDir, worldId);
+            var meta = worldManager.loadMeta(worldId);
             if (meta == null) return "World 不存在: " + worldId;
 
-            // 2. 加载目标 world 的 active state
-            // ActiveState 不再追踪 nodeId，切换 world 时从根节点开始
-            String activeNodeId = "n0000";
-
+            // 2. 加载目标 world 的完整节点集合（discover 宽松加载，从磁盘扫描，不依赖硬编码锚点）
             // 3. Build WorldInformation（不经过 Bootstrap，避免触碰缓存）
-            var newWi = com.gsim.core.worldinfo.loader.WorldInfoBuilder.build(worldsDir, worldId, activeNodeId);
+            var newWi = worldManager.loadWorld(worldId);
             if (newWi == null) {
                 return "Failed to load world: " + worldId;
             }
@@ -450,14 +440,14 @@ public class GSimulatorApplication {
 
             // 5. 更新缓存中的 nodeId（信息性字段，不影响对话内容）
             if (this.activeCache != null) {
-                this.activeCache.setNodeId(activeNodeId);
+                this.activeCache.setNodeId(newWi.activeNodeId());
                 com.gsim.core.cache.CacheStore.save(worldsDir, this.activeCache);
             }
 
             log.info(
                     "[switchToWorld] switched to world={} node={} root={} (cache unchanged: {})",
                     worldId,
-                    activeNodeId,
+                    newWi.activeNodeId(),
                     worldInfo != null ? worldInfo.rootNodeId() : "?",
                     this.activeCache != null ? this.activeCache.sessionId() : "none");
             return null;
@@ -566,8 +556,8 @@ public class GSimulatorApplication {
         webUiServer.forceEnable();
         webUiServer.start();
 
-        // CLI WebSocket server (port 8712) — always on
-        cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, 8712, compositeSink);
+        // CLI WebSocket server（端口由 gsim.properties 的 cli.ws.port 配置，默认 8712）— always on
+        cliWsServer = new com.gsim.webui.CliWebSocketServer(ctx, config.getCliWsPort(), compositeSink);
         cliWsServer.setCommands(worldCommand, nodeCommand, chatCommand);
         try {
             cliWsServer.start();
@@ -598,7 +588,7 @@ public class GSimulatorApplication {
         System.out.println("✅ GSimulator 已启动");
         System.out.println("   CLI REPL:  当前终端（输入 /help）");
         System.out.println("   Web GUI:   http://" + config.getWebUiHost() + ":" + config.getWebUiPort());
-        System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":8712");
+        System.out.println("   CLI WS:    ws://" + config.getWebUiHost() + ":" + config.getCliWsPort());
         System.out.println();
 
         adapter.start();

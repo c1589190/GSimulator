@@ -2,43 +2,19 @@ package com.gsim.app;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.config.CoreConfig;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.gsim.core.config.ConfigLoader;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-/** GSimulatorApplication.ensureCorePropertiesTemplate 落盘行为测试（package-private static 方法）。 */
+/**
+ * core.* 阈值默认值已并入 ConfigLoader 主链（原 core.properties 模板机制删除后，
+ * 主链 buildDefaults 承担默认值职责，此处锁定 500/3000）。
+ */
 class CorePropertiesTemplateTest {
 
-    @TempDir
-    Path tmpDir;
-
     @Test
-    void ensureWritesTemplateWithThreshold() throws Exception {
-        GSimulatorApplication.ensureCorePropertiesTemplate(tmpDir);
-
-        Path target = tmpDir.resolve("core.properties");
-        assertTrue(Files.isRegularFile(target));
-        String content = Files.readString(target);
-        assertTrue(content.contains("core.doc.staging.threshold=500"));
-    }
-
-    @Test
-    void ensureDoesNotOverwriteExisting() throws Exception {
-        Path target = tmpDir.resolve("core.properties");
-        Files.writeString(target, "custom=1");
-
-        GSimulatorApplication.ensureCorePropertiesTemplate(tmpDir);
-
-        assertEquals("custom=1", Files.readString(target));
-    }
-
-    @Test
-    void writtenFileIsReadableByCoreConfig() throws Exception {
-        GSimulatorApplication.ensureCorePropertiesTemplate(tmpDir);
-
-        CoreConfig config = CoreConfig.load(tmpDir.resolve("core.properties"));
-        assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
+    void mainChainCarriesCoreStagingDefaults() {
+        ConfigLoader.ConfigResult result = new ConfigLoader(new String[0]).load();
+        assertEquals("500", result.get("core.doc.staging.threshold"));
+        assertEquals("3000", result.get("core.doc.query.staging.threshold"));
     }
 }

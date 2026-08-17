@@ -2,63 +2,53 @@ package com.gsim.core.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-/** CoreConfig 内置默认 + 外部文件覆盖测试。 */
+/** CoreConfig 主链视图（from 工厂）默认值 / 覆盖 / 回退行为测试。 */
 class CoreConfigTest {
 
-    @TempDir
-    Path tempDir;
+    private static final Map<String, String> DEFAULTS = Map.of(
+            CoreConfig.STAGING_THRESHOLD, "500",
+            CoreConfig.QUERY_STAGING_THRESHOLD, "3000");
 
     @Test
-    void loadUsesClasspathDefaultThreshold() {
-        CoreConfig config = CoreConfig.load();
+    void fromWithDefaultsOnlyReturnsDefaultThresholds() {
+        CoreConfig config = CoreConfig.from(Map.of(), DEFAULTS);
         assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
+        assertEquals(3000, config.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, -1));
     }
 
     @Test
-    void externalFileOverridesDefaultThreshold() throws IOException {
-        writeExternal("core.doc.staging.threshold=100");
-        CoreConfig config = CoreConfig.load(externalPath());
+    void mergedValuesOverrideDefaults() {
+        CoreConfig config = CoreConfig.from(Map.of(CoreConfig.STAGING_THRESHOLD, "100"), DEFAULTS);
         assertEquals(100, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
     }
 
     @Test
-    void missingExternalFileFallsBackToDefault() {
-        CoreConfig config = CoreConfig.load(tempDir.resolve("no-such-file.properties"));
-        assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
+    void missingKeyFallsBackToCallerDefault() {
+        CoreConfig config = CoreConfig.from(Map.of(), Map.of());
+        assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, 500));
+        assertEquals(3000, config.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000));
     }
 
     @Test
-    void externalFileWithoutThresholdKeyKeepsDefault() throws IOException {
-        writeExternal("unrelated.key=1");
-        CoreConfig config = CoreConfig.load(externalPath());
-        assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
-    }
-
-    @Test
-    void invalidThresholdValueFallsBackToDefault() throws IOException {
-        writeExternal("core.doc.staging.threshold=abc");
-        CoreConfig config = CoreConfig.load(externalPath());
+    void invalidValueFallsBackToDefaults() {
+        CoreConfig config = CoreConfig.from(Map.of(CoreConfig.STAGING_THRESHOLD, "abc"), DEFAULTS);
         assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, -1));
     }
 
     @Test
     void getReturnsNullForUnknownKey() {
-        CoreConfig config = CoreConfig.load();
+        CoreConfig config = CoreConfig.from(Map.of(), DEFAULTS);
         assertNull(config.get("no.such.key"));
     }
 
-    private Path externalPath() {
-        return tempDir.resolve("core.properties");
-    }
-
-    private void writeExternal(String content) throws IOException {
-        Files.writeString(externalPath(), content + "\n", StandardCharsets.UTF_8);
+    @Test
+    void loadShimReturnsEmptyViewForTestCompat() {
+        CoreConfig config = CoreConfig.load();
+        assertNull(config.get(CoreConfig.STAGING_THRESHOLD));
+        assertEquals(500, config.getInt(CoreConfig.STAGING_THRESHOLD, 500));
+        assertEquals(3000, config.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000));
     }
 }

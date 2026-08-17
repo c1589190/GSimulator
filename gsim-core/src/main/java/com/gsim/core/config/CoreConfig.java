@@ -1,20 +1,18 @@
 package com.gsim.core.config;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Properties;
 
 /**
- * 轻量配置 — classpath 内置默认（core.properties）+ 外部文件覆盖。
+ * 主链（ConfigLoader）合并配置的只读视图 — 供 worldinfo 工具读取暂存阈值。
  *
- * <p>独立于 ConfigLoader：零依赖，仅使用 JDK 与自身 classpath 资源。
+ * <p>不再独立加载 classpath {@code core.properties}；实例由 {@link #from(Map, Map)} 从
+ * ConfigLoader 合并结果构造。{@link #load()} / {@link #load(Path)} 仅为测试兼容保留
+ * （classpath 资源已删除，返回空值视图，{@code getInt} 落到调用方默认参数）。
  */
 public final class CoreConfig {
     public static final String STAGING_THRESHOLD = "core.doc.staging.threshold";
-    private static final String RESOURCE = "/core.properties";
+    public static final String QUERY_STAGING_THRESHOLD = "core.doc.query.staging.threshold";
     private final Map<String, String> values;
     private final Map<String, String> defaults;
 
@@ -23,32 +21,24 @@ public final class CoreConfig {
         this.defaults = Map.copyOf(defaults);
     }
 
-    public static CoreConfig load() {
-        Map<String, String> m = new LinkedHashMap<>();
-        try (var in = CoreConfig.class.getResourceAsStream(RESOURCE)) {
-            if (in != null) {
-                Properties p = new Properties();
-                p.load(in);
-                p.forEach((k, v) -> m.put(String.valueOf(k), String.valueOf(v)));
-            }
-        } catch (IOException e) {
-            // classpath 资源不可读时以空默认继续（不应发生）
-        }
-        return new CoreConfig(m, m);
+    /**
+     * 从主链合并结果构造只读视图。
+     *
+     * @param mergedValues 合并后的配置值（含用户覆盖，ConfigLoader 主链结果）
+     * @param defaults     兜底默认值（主链未携带或值非法时使用；可为空，此时 getInt 落到调用方默认）
+     */
+    public static CoreConfig from(Map<String, String> mergedValues, Map<String, String> defaults) {
+        return new CoreConfig(mergedValues, defaults);
     }
 
+    /** 测试兼容：classpath {@code core.properties} 已删除，返回空值视图。 */
+    public static CoreConfig load() {
+        return new CoreConfig(Map.of(), Map.of());
+    }
+
+    /** 测试兼容：classpath {@code core.properties} 已删除，外部文件不再被读取。 */
     public static CoreConfig load(Path externalFile) {
-        CoreConfig base = load();
-        if (externalFile == null || !Files.isRegularFile(externalFile)) return base;
-        Map<String, String> m = new LinkedHashMap<>(base.values);
-        try {
-            Properties p = new Properties();
-            p.load(Files.newBufferedReader(externalFile));
-            p.forEach((k, v) -> m.put(String.valueOf(k), String.valueOf(v)));
-        } catch (IOException e) {
-            // 外部文件不可读时用 classpath 默认
-        }
-        return new CoreConfig(m, base.values);
+        return load();
     }
 
     public String get(String key) {
@@ -61,7 +51,7 @@ public final class CoreConfig {
             try {
                 return Integer.parseInt(v.trim());
             } catch (NumberFormatException e) {
-                // values 非法 → 回退 classpath 默认（defaults）
+                // values 非法 → 回退 defaults
             }
         }
         String d = defaults.get(key);
