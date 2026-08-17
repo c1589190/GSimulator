@@ -181,7 +181,10 @@ public class AppConfig {
 
         // Knowledge DB — 空串 = 未设置，回退 baseDir/data/knowledge/gsim.db
         this.knowledgeDbPath = isBlank(result.get("knowledge.db.path"))
-                ? baseDir.resolve("data").resolve("knowledge").resolve("gsim.db").toAbsolutePath()
+                ? baseDir.resolve("data")
+                        .resolve("knowledge")
+                        .resolve("gsim.db")
+                        .toAbsolutePath()
                 : resolvePath(result.get("knowledge.db.path"), baseDir, "data/knowledge/gsim.db");
 
         this.configPath = result.configPath();
@@ -422,7 +425,8 @@ public class AppConfig {
             }
             if (base == null) return LlmsOverride.EMPTY;
             int timeoutSeconds = parseInt(result.get("llm.timeout_seconds"), 120);
-            return new LlmsOverride(base.baseUrl(), base.apiKey(), base.model(), base.defaultTemperature(), timeoutSeconds);
+            return new LlmsOverride(
+                    base.baseUrl(), base.apiKey(), base.model(), base.defaultTemperature(), timeoutSeconds);
         } catch (Exception e) {
             return LlmsOverride.EMPTY;
         }
