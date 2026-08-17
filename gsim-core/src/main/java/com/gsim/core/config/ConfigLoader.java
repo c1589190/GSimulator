@@ -355,7 +355,7 @@ public class ConfigLoader {
         // 目录与知识库（空串 = 未设置，下游解析为 worldsDir 同级目录）
         defaults.put("docs.dir", "");
         defaults.put("caches.dir", "");
-        defaults.put("knowledge.db.path", "data/gsim.db");
+        defaults.put("knowledge.db.path", "");
 
         // 嵌入服务超时（秒）
         defaults.put("embedding.timeout_connect_seconds", "30");

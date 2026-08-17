@@ -32,7 +32,7 @@ class NewConfigKeysDefaultTest {
         EXPECTED_DEFAULTS.put("core.doc.tmp.cleanup_enabled", "true");
         EXPECTED_DEFAULTS.put("docs.dir", "");
         EXPECTED_DEFAULTS.put("caches.dir", "");
-        EXPECTED_DEFAULTS.put("knowledge.db.path", "data/gsim.db");
+        EXPECTED_DEFAULTS.put("knowledge.db.path", "");
         EXPECTED_DEFAULTS.put("embedding.timeout_connect_seconds", "30");
         EXPECTED_DEFAULTS.put("embedding.timeout_read_seconds", "60");
         EXPECTED_DEFAULTS.put("embedding.timeout_write_seconds", "30");

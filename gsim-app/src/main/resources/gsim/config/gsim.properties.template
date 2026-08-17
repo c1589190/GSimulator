@@ -22,8 +22,8 @@ worlds.dir=worlds
 # docs.dir=
 # 缓存目录（默认空串 = 未设置）。
 # caches.dir=
-# 知识库数据库路径（默认 data/gsim.db）。
-# knowledge.db.path=data/gsim.db
+# 知识库数据库路径（默认空串 = 未设置，下游解析为 baseDir/data/knowledge/gsim.db）。
+# knowledge.db.path=
 # data.dir=data
 # import.dir=import
 # output.dir=data/outputs

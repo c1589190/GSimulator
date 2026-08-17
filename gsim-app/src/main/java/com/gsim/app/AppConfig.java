@@ -1,7 +1,6 @@
 package com.gsim.app;
 
 import com.gsim.core.config.ConfigLoader;
-import com.gsim.core.config.ConfigSource;
 import com.gsim.core.util.LogSanitizer;
 import com.gsim.map.config.MapConfig;
 import java.nio.file.Path;
@@ -180,13 +179,10 @@ public class AppConfig {
         this.embeddingDimensions = parseInt(result.get("embedding.dimensions"), 0);
         this.embeddingModelDir = result.get("embedding.model_dir");
 
-        // Knowledge DB — 内置默认值（ConfigSource.DEFAULT）视为未设置，回退 data/knowledge/gsim.db
-        String rawKnowledgeDbPath = result.get("knowledge.db.path");
-        boolean knowledgeDbUnset = isBlank(rawKnowledgeDbPath)
-                || ConfigLoader.getSource(result.entries(), "knowledge.db.path") == ConfigSource.DEFAULT;
-        this.knowledgeDbPath = knowledgeDbUnset
+        // Knowledge DB — 空串 = 未设置，回退 baseDir/data/knowledge/gsim.db
+        this.knowledgeDbPath = isBlank(result.get("knowledge.db.path"))
                 ? baseDir.resolve("data").resolve("knowledge").resolve("gsim.db").toAbsolutePath()
-                : resolvePath(rawKnowledgeDbPath, baseDir, "data/knowledge/gsim.db");
+                : resolvePath(result.get("knowledge.db.path"), baseDir, "data/knowledge/gsim.db");
 
         this.configPath = result.configPath();
         this.sourceSummary = result.sourceSummary();
