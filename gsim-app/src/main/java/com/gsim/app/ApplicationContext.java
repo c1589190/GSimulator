@@ -63,7 +63,7 @@ public class ApplicationContext {
         // LLM — 从 llms.json 加载所有 provider
         LlmsConfigLoader llmsLoader = new LlmsConfigLoader(config.getLlmsPath());
         LlmsConfigLoader.LoadResult llmsResult = llmsLoader.load();
-        this.llmProviderRegistry = LlmProviderRegistry.fromConfig(llmsResult.file());
+        this.llmProviderRegistry = LlmProviderRegistry.fromConfig(llmsResult.file(), config.getLlmTimeoutSeconds());
 
         // 保留 llmManager 引用指向默认 provider（向后兼容）
         this.llmManager = (LlmManager) llmProviderRegistry.getDefault();

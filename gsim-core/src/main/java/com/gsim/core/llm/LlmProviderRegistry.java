@@ -27,11 +27,21 @@ public class LlmProviderRegistry {
     private final Map<String, LlmProvider> providers = new LinkedHashMap<>();
     private volatile String defaultId;
 
-    /** 从 LlmsConfigFile 构建所有 provider 实例。 */
+    /** 从 LlmsConfigFile 构建所有 provider 实例（超时取默认 120 秒）。 */
     public static LlmProviderRegistry fromConfig(LlmsConfigFile configFile) {
+        return fromConfig(configFile, 120);
+    }
+
+    /**
+     * 从 LlmsConfigFile 构建所有 provider 实例。
+     *
+     * @param configFile     llms.json 文件模型
+     * @param timeoutSeconds LLM 请求超时（秒），由调用方从配置（llm.timeout_seconds）传入
+     */
+    public static LlmProviderRegistry fromConfig(LlmsConfigFile configFile, int timeoutSeconds) {
         LlmProviderRegistry registry = new LlmProviderRegistry();
         for (LlmConfig cfg : configFile.providers()) {
-            LlmManager manager = new LlmManager(cfg.toProviderConfig(), cfg.id());
+            LlmManager manager = new LlmManager(cfg.toProviderConfig(timeoutSeconds), cfg.id());
             registry.register(cfg.id(), manager);
             if (cfg.isDefault()) {
                 registry.defaultId = cfg.id();
@@ -40,7 +50,7 @@ public class LlmProviderRegistry {
                     "[LlmProviderRegistry] registered provider '{}': {} @ {}",
                     cfg.id(),
                     cfg.name(),
-                    cfg.toProviderConfig().toSafeString());
+                    cfg.toProviderConfig(timeoutSeconds).toSafeString());
         }
         // 若没有标记 default，用第一个
         if (registry.defaultId == null && !registry.providers.isEmpty()) {

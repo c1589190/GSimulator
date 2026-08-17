@@ -30,7 +30,7 @@ import java.util.Scanner;
  * </ul>
  *
  * <p>服务端口统一由 gsim.properties 配置（webui.port / map.port /
- * cli.ws.port / mcp.http.port），默认分别为 8710 / 8711 / 8712 / 8720。
+ * cli.ws.port / mcp.http.port），默认分别为 8710 / 8711 / 8712 / 37201。
  *
  * <p>启动流程（三阶段）：
  * <ol>
@@ -158,7 +158,7 @@ public class Main {
             // ── Phase 3: 传输启动 ─────────────────────────────
 
             if (noCli) {
-                // MCP HTTP mode: start Streamable HTTP MCP server（mcp.http.port，默认 8720）
+                // MCP HTTP mode: start Streamable HTTP MCP server（mcp.http.port，默认 37201）
                 int mcpPort = Integer.getInteger("mcp.http.port", config.getMcpHttpPort());
                 McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort);
                 mcpHttpServer.start();
@@ -297,6 +297,6 @@ public class Main {
         System.out.println("  webui.port=8710     Web UI");
         System.out.println("  map.port=8711       Map UI");
         System.out.println("  cli.ws.port=8712    CLI WebSocket");
-        System.out.println("  mcp.http.port=8720  MCP HTTP (JSON-RPC 2.0)");
+        System.out.println("  mcp.http.port=37201  MCP HTTP (JSON-RPC 2.0)");
     }
 }

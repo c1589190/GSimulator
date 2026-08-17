@@ -244,7 +244,7 @@ public class AppConfig {
         this.webUiEnabled = parseBoolean(result.get("webui.enabled"), false);
         this.mapPort = parsePort(result.get("map.port"), 8711);
         this.cliWsPort = parsePort(result.get("cli.ws.port"), 8712);
-        this.mcpHttpPort = parsePort(result.get("mcp.http.port"), 8720);
+        this.mcpHttpPort = parsePort(result.get("mcp.http.port"), 37201);
     }
 
     // ---- Getters ----
@@ -586,7 +586,7 @@ public class AppConfig {
         return cliWsPort;
     }
 
-    /** MCP HTTP 服务端口（默认 8720）。 */
+    /** MCP HTTP 服务端口（默认 37201）。 */
     public int getMcpHttpPort() {
         return mcpHttpPort;
     }

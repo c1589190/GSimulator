@@ -292,7 +292,9 @@ public class GSimulatorApplication {
 
             // LlmApiHandler + AgentApiHandler — 配置管理
             var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
-                    new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath()), ctx.getLlmProviderRegistry());
+                    new com.gsim.core.llm.LlmConfigManager(
+                            config.getLlmsPath(), config.getLlmTimeoutSeconds()),
+                    ctx.getLlmProviderRegistry());
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
             var agentApiHandler = new com.gsim.webui.handlers.AgentApiHandler(
@@ -516,7 +518,8 @@ public class GSimulatorApplication {
         ctx.setNodeCommand(nc);
 
         // LLM + Agent config management commands
-        var llmConfigManager = new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath());
+        var llmConfigManager = new com.gsim.core.llm.LlmConfigManager(
+                config.getLlmsPath(), config.getLlmTimeoutSeconds());
         var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);

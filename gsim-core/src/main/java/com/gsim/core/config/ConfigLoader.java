@@ -328,7 +328,7 @@ public class ConfigLoader {
         defaults.put("webui.enabled", "false");
         defaults.put("map.port", "8711");
         defaults.put("cli.ws.port", "8712");
-        defaults.put("mcp.http.port", "8720");
+        defaults.put("mcp.http.port", "37201");
 
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");

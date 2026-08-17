@@ -58,15 +58,19 @@ public record LlmConfig(
         return new LlmConfig(id, name, baseUrl, apiKey, model, temp, maxTok, extraBody, thinking, isDefault);
     }
 
-    /** 转换为 ProviderConfig（用于 Provider/LlmManager 构造）。 */
-    public ProviderConfig toProviderConfig() {
+    /**
+     * 转换为 ProviderConfig（用于 Provider/LlmManager 构造）。
+     *
+     * @param timeoutSeconds LLM 请求超时（秒），由调用方从配置（llm.timeout_seconds）传入
+     */
+    public ProviderConfig toProviderConfig(int timeoutSeconds) {
         return new ProviderConfig(
                 name,
                 baseUrl,
                 apiKey,
                 model,
                 defaultTemperature,
-                120, // timeout seconds
+                timeoutSeconds,
                 true, // supportsForcedToolChoice
                 thinking != null, // hasNativeReasoning (heuristic: if thinking config present, provider may support it)
                 extraBody,

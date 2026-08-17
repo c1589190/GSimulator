@@ -57,7 +57,7 @@ class ConfigTemplateTest {
         "webui.port=8710",
         "map.port=8711",
         "cli.ws.port=8712",
-        "mcp.http.port=8720",
+        "mcp.http.port=37201",
         "worlds.dir=worlds",
         "agent.tool_loop.max_rounds=64",
         "context.session.history.turns=12",

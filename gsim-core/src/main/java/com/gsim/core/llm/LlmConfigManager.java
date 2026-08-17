@@ -20,9 +20,19 @@ import java.util.Map;
 public class LlmConfigManager {
 
     private final Path llmsPath;
+    private final int timeoutSeconds;
 
     public LlmConfigManager(Path llmsPath) {
+        this(llmsPath, 120);
+    }
+
+    /**
+     * @param llmsPath       llms.json 路径
+     * @param timeoutSeconds LLM 请求超时（秒），由调用方从配置（llm.timeout_seconds）传入
+     */
+    public LlmConfigManager(Path llmsPath, int timeoutSeconds) {
         this.llmsPath = llmsPath;
+        this.timeoutSeconds = timeoutSeconds;
     }
 
     /**
@@ -204,7 +214,7 @@ public class LlmConfigManager {
             LlmsConfigFile file = load();
             LlmConfig c = file.find(id);
             if (c == null) return "Provider not found: " + id;
-            ProviderConfig pc = c.toProviderConfig();
+            ProviderConfig pc = c.toProviderConfig(timeoutSeconds);
             LlmManager temp = new LlmManager(pc, id);
             try {
                 boolean ok = temp.isAvailable();

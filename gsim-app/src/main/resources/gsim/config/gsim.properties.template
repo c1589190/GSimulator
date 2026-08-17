@@ -12,8 +12,8 @@ webui.port=8710
 map.port=8711
 # CLI WebSocket 端口（默认 8712）。
 cli.ws.port=8712
-# MCP HTTP（JSON-RPC 2.0）端口（默认 8720）。
-mcp.http.port=8720
+# MCP HTTP（JSON-RPC 2.0）端口（默认 37201）。
+mcp.http.port=37201
 
 # ── 数据目录（相对路径基于本文件所在目录） ──
 # 世界数据目录。
