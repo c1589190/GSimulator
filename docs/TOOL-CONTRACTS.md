@@ -75,6 +75,8 @@ LLM 通过 `activate_tool_groups` 在运行时激活工具组，避免 context �
 
 响应始终包含：`_page`, `_pageSize`, `_hasMore: boolean`。
 
+分页与截断限值均可通过 `mcp.response.*` 配置键调整：`default_page_size`（默认 20）、`max_page_size`（默认 100）、`max_json_bytes`（默认 50000）、`snippet_max_chars`（默认 300）、`overflow_staging.enabled`（默认 true，超限结果自动暂存为 TMP 文档并返回 docId）。默认值详见 README `## 配置`。
+
 ## 7. 响应格式
 
 **成功**：

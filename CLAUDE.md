@@ -85,7 +85,7 @@ gsim-map（Hex 地图服务，依赖 core）
 └── com.gsim.map.http/        — GsimapHttpServer（Map UI 端口 8711）
 
 gsim-app（主入口 + 组装 + 交互壳）
-├── com.gsim.Main             — 主入口（默认 CLI REPL；--no-cli 为 MCP HTTP 8720）
+├── com.gsim.Main             — 主入口（默认 CLI REPL；--no-cli 为 MCP HTTP 37201）
 ├── com.gsim.app/             — 应用启动（GSimulatorApplication）、依赖注入（Bootstrap/AppConfig/ApplicationContext）
 ├── com.gsim.commands/        — CLI 命令实现（AgentCommand/BoardCommand/ChatCommand/CompactCommand/
 │                                LlmCommand/NodeCommand/WorldCommand）
@@ -119,7 +119,7 @@ mvn -pl gsim-core,gsim-agent,gsim-app -am clean test
 # 运行（默认模式：CLI REPL + Web GUI(8710) + Map UI(8711)）
 java -jar gsim-app/target/gsim-app-*.jar
 
-# 运行 MCP 模式（--no-cli：MCP HTTP 服务 8720 + Web GUI(8710) + Map UI(8711)）
+# 运行 MCP 模式（--no-cli：MCP HTTP 服务 37201 + Web GUI(8710) + Map UI(8711)）
 java -jar gsim-app/target/gsim-app-*.jar --no-cli
 
 # 测试（始终 clean 避免增量编译陷阱）
@@ -134,7 +134,12 @@ rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-*.j
 
 ## 配置系统
 
-### 应用配置（gsim.properties）
+配置分三层，职责清晰：
+- **单一 properties 主链** — `gsim.properties`（`--config <path>` 可指定其他位置），经 `ConfigLoader` 统一加载（classpath 内置默认 → 外部文件 → 环境变量 `GSIM_*` 覆盖）。应用 / 核心 / 地图 / 导入 / 溢出暂存等全部配置键（含 `core.doc.*`、`mcp.response.*`、`map.*`）均在此主链。
+- **`llms.json`** — LLM provider 配置（baseUrl / key / model / temperature 等），支持运行时热更新。
+- **`agents/*.json`** — Agent 配置（系统提示词、工具权限、轮数上限等），经 `AgentConfigStore` 加载，支持运行时热更新。
+
+### 应用配置主链（gsim.properties）
 
 配置文件与数据布局（实际状态）：
 
@@ -154,14 +159,8 @@ rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-*.j
 | `api.enabled` | false | 是否启用 HTTP API |
 | `llm.default_provider` | base | 默认 LLM provider ID |
 | `agent.max_tool_rounds` | 64 | Agent ToolLoop 最大轮数 |
-
-### 核心配置（core.properties）
-
-`core.properties` — core 层全局配置（`CoreConfig`，独立于 AppConfig/ConfigLoader，零依赖、仅 JDK）。classpath 内置默认（jar 内置 `/core.properties`），应用启动时落盘到工作目录（baseDir，即 `worlds/` 的上级目录），**已存在不覆盖**；外部文件覆盖内置默认。
-
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
 | `core.doc.staging.threshold` | 500 | `write_element` 大文本暂存阈值（value 字符数超过即暂存） |
+| `core.doc.query.staging.threshold` | 3000 | `query_*` 返回元素暂存阈值（元素值字符数超过即暂存为 TMP 文档，返回 docId 供 `doc_read` 读取） |
 
 ### LLM Provider 配置
 
@@ -353,6 +352,8 @@ public interface AgentTool {
 
 **write_element 大文本暂存**：value 长度超过 `core.doc.staging.threshold`（默认 500 字符）时**不直接写入**，而是暂存为 TMP 文档（`docs/tmp/wstg_write_*.md`，DocType.TMP），返回暂存 docId 并引导二次提交 `write_element(value="@doc:\"wstg_write_xxx\"")` — 经 InlineRefResolver 展开全文后写入信息单元；引用无法解析时拒绝（`[@DOC_REF_FAILED]`）。
 
+**query 侧大文本暂存（DocStaging 共享机制）**：`query_element` 及 `query_checkpoint`/`query_node`/`query_by_tag`（detail=true）/`query_address`（tag 分支）返回的元素值超过 `core.doc.query.staging.threshold`（默认 3000 字符）时，不内联返回全文，而是暂存为 TMP 文档（`docs/tmp/wstg_query_*.md`）并在 snippet 返回暂存提示 + docId，调用方用 `doc_read(docId=...)` 读取全文；item.path 保持元素 ref 不变。内容去重：同前缀（`wstg_write_`/`wstg_query_` 各自独立）下 content 完全相同的文档复用同一 docId，不产生重复文件。暂存失败（IO/冲突）降级为内联返回原文。写入/暂存阈值均可在 `gsim.properties` 主链调整（`core.doc.staging.threshold` / `core.doc.query.staging.threshold`）。
+
 ## 缓存系统（Cache）
 
 SubAgent 对话缓存存储在 `worlds/{worldId}/caches/` 下，每个缓存文件为 JSON 格式：
@@ -368,7 +369,7 @@ SubAgent 对话缓存存储在 `worlds/{worldId}/caches/` 下，每个缓存文�
 
 ### 启动方式
 
-HTTP 层由 `webui/` 的 `WebUiServer`（JDK 内嵌 `HttpServer`）提供，端口 8710（`webui.port`），随应用启动常驻；Map UI 端口 8711（gsim-map 模块），MCP HTTP 端口 8720（`--no-cli` 模式）。
+HTTP 层由 `webui/` 的 `WebUiServer`（JDK 内嵌 `HttpServer`）提供，端口 8710（`webui.port`），随应用启动常驻；Map UI 端口 8711（gsim-map 模块），MCP HTTP 端口 37201（`--no-cli` 模式）。
 
 ### API 列表
 
@@ -453,8 +454,8 @@ Web UI 由 `WebUiServer`（JDK 内嵌 `HttpServer`，端口 8710）提供：
 ## 测试
 
 - 测试数（按模块分布；本计划新增内嵌引用/暂存/核心配置测试，（`mvn clean verify` surefire 实测））：
-  - gsim-core：178
-  - gsim-agent：184
+  - gsim-core：185
+  - gsim-agent：190
   - gsim-agentlib：32
   - gsim-map：16
   - gsim-app：54

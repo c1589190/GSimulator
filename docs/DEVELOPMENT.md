@@ -15,7 +15,7 @@ git clone <repo-url>
 cd GSimulator
 mvn package -DskipTests
 java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar              # CLI 交互模式（+ Web GUI 8710 + Map UI 8711）
-java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar --no-cli     # MCP HTTP(8720) 模式
+java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar --no-cli     # MCP HTTP(37201) 模式
 ```
 
 ## 3. 首次配置
@@ -64,7 +64,7 @@ import/                      # 导入资料
 | `mvn test -pl gsim-map` | 仅 gsim-map 模块测试 |
 | `mvn test -pl gsim-core,gsim-agent,gsim-app -am` | 指定模块及其依赖测试 |
 | `java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar` | CLI 模式启动 |
-| `java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar --no-cli` | MCP HTTP(8720) 模式启动 |
+| `java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar --no-cli` | MCP HTTP(37201) 模式启动 |
 | `rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-0.1.0-Alpha260723.jar` | 清除运行时数据从头启动 |
 
 ## 6. IDE 设置
