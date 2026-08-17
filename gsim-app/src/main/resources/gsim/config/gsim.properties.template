@@ -1,0 +1,146 @@
+# GSimulator Configuration
+# ========================
+# GSimulator 配置文件（首次运行自动生成，修改后重启生效）。
+# 环境变量（如 WEBUI_PORT / GSIMAP_PORT / MCP_HTTP_PORT）也可配置，但本文件优先级更高。
+# Do NOT commit gsim.properties to Git.
+
+# ── 本地服务端口 ──
+# Web UI 监听地址与端口（默认 127.0.0.1:8710）。
+webui.host=127.0.0.1
+webui.port=8710
+# Map UI 六角格地图编辑器端口（默认 8711）。
+map.port=8711
+# CLI WebSocket 端口（默认 8712）。
+cli.ws.port=8712
+# MCP HTTP（JSON-RPC 2.0）端口（默认 8720）。
+mcp.http.port=8720
+
+# ── 数据目录（相对路径基于本文件所在目录） ──
+# 世界数据目录。
+worlds.dir=worlds
+# 文档暂存目录（默认空串 = 未设置，下游解析为 worldsDir 同级目录）。
+# docs.dir=
+# 缓存目录（默认空串 = 未设置）。
+# caches.dir=
+# 知识库数据库路径（默认 data/gsim.db）。
+# knowledge.db.path=data/gsim.db
+# data.dir=data
+# import.dir=import
+# output.dir=data/outputs
+# log.dir=data/logs
+
+# ── LLM Configuration ──
+# OpenAI-compatible API endpoint. Must NOT end with a trailing slash.
+# 推荐直接在 llms.json 中配置（支持多 provider、运行时热更新）；
+# 以下键仅在 llms.json 不存在时作为 fallback 创建默认 provider。
+# llm.base_url=https://api.example.com/v1
+# llm.api_key=your-api-key-here
+# llm.model=deepseek-v4-pro
+# llm.temperature=0.3
+# llm.timeout_seconds=300
+
+# ── Agent / LLM 行为 ──
+# 对话上下文保留轮数（默认 12）。
+context.session.history.turns=12
+# 上下文消息最大字符数（默认 4000）。
+# context.session.message.max_chars=4000
+
+# ── Agent Tool Loop ──
+# 主 Orchestrator 最大工具调用轮数。达到上限时 Agent 停止并报错 "达到最大轮数"。
+# 增大此值可让 Agent 有更多轮次完成复杂任务。
+agent.tool_loop.max_rounds=64
+# 单条工具结果喂给 LLM 的内联字符上限，超出改写为 @cache 引用并落盘 staging（默认 4000）。
+# agent.tool_loop.result_inline_max_chars=4000
+# 超限结果自动暂存（默认 true）。
+# agent.tool_loop.result_staging.enabled=true
+
+# ── Sub-Agent Config ──
+# 子 Agent 的最大工具轮数在 agents/ 目录下各自的 JSON 文件中配置。
+# 字段: "maxToolRounds" (默认 32)；增大可防止子 Agent "达到最大轮数 (N) 未完成" 错误。
+# 示例: { "maxToolRounds": 16, "temperature": 0.7, "maxTokens": 4096 }
+# 收集子 Agent 结果的超时（秒，默认 300）。
+# agent.subagent.collect.timeout_seconds=300
+# 已完成子 Agent 缓存数量上限（默认 100）。
+# agent.subagent.max_completed=100
+
+# ── MCP 响应限流与分页 ──
+# 单次 MCP 响应 JSON 最大字节数，超出走 overflow staging（默认 50000）。
+# mcp.response.max_json_bytes=50000
+# 暂存后单条结果替换为的摘要片段字符数（默认 300）。
+# mcp.response.snippet_max_chars=300
+# 分页默认页大小（默认 20）。
+# mcp.response.default_page_size=20
+# 分页最大页大小（默认 100）。
+# mcp.response.max_page_size=100
+# 超出上限时自动暂存（默认 true）。
+# mcp.response.overflow_staging.enabled=true
+
+# ── 文档暂存与临时目录清理 ──
+# 写入元素时超过该字符数即暂存为 TMP doc（默认 500）。
+# core.doc.staging.threshold=500
+# 查询结果暂存阈值（默认 3000）。
+# core.doc.query.staging.threshold=3000
+# TMP doc 最长保留时间（小时，默认 168 = 7 天）。
+# core.doc.tmp.max_age_hours=168
+# 启动时 + 暂存前自动清理过期 TMP doc（默认 true）。
+# core.doc.tmp.cleanup_enabled=true
+
+# ── Embedding Configuration ──
+# Provider: "external"（OpenAI 兼容 API）或 "local-small"（stub，暂未实现）。
+# embedding.provider=external
+# embedding.base_url=https://example.com/v1
+# embedding.api_key=your_embedding_api_key
+# embedding.model=your_embedding_model
+# embedding.dimensions=1024
+# embedding.model_dir=data/models/local-small
+# 嵌入服务超时（秒，连接 30 / 读取 60 / 写入 30）。
+# embedding.timeout_connect_seconds=30
+# embedding.timeout_read_seconds=60
+# embedding.timeout_write_seconds=30
+
+# ── ChromaDB ──
+# 启用向量知识库（默认关闭）。
+# chroma.enabled=false
+# chroma.base_url=http://localhost:8000
+
+# ── Web Research ──
+# 启用网络搜索和抓取（实验性，默认关闭）。
+# web_research.enabled=false
+# web_research.timeout_seconds=30
+# web_research.user_agent=GSimulator/0.1.0
+# MediaWiki API 端点（默认英文维基百科）。
+# web_research.wiki.url=https://en.wikipedia.org/w/api.php
+
+# ── Import Documents ──
+# 导入文档整篇读取的最大字符数（默认 30000）。
+# import.doc.max_full_read_chars=30000
+# 导入文档默认截断读取字符数（默认 8000）。
+# import.doc.default_limit=8000
+
+# ── LLM Streaming ──
+# 启用真实流式 API 调用（stream=true）。
+llm.stream.enabled=true
+
+# ── CLI Stream Preview ──
+# 流式输出时显示灰色 ANSI 预览框。
+# cli.stream.preview.enabled=true
+# 预览框最大字符数。
+# cli.stream.preview.max_chars=3000
+# 预览框显示 reasoning/thinking 内容。
+# cli.stream.preview.show_reasoning=true
+
+# ── Map 查询与编辑限制 ──
+# 查询半径默认值（默认 80）。
+# map.radius.default=80
+# 地图缓存最大条目数（默认 32）。
+# map.cache.max_entries=32
+# 等高线缓存上限（默认 5000）。
+# map.contour.cache.max=5000
+# 套索最大半径（默认 200）。
+# map.lasso.max_radius=200
+# 套索最大填充格数（默认 30000）。
+# map.lasso.max_fill=30000
+# 地图压缩最小区域大小（默认 100）。
+# map.compression.min_region_size=100
+# 地图解析器最大链深度（默认 200）。
+# map.resolver.max_chain_depth=200

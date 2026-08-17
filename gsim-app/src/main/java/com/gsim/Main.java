@@ -13,6 +13,7 @@ import com.gsim.core.config.ConfigDoctor;
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.config.ConfigSnapshot;
 import com.gsim.core.config.ConfigWizard;
+import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.map.http.GsimapHttpServer;
 import com.gsim.map.service.MapService;
 import java.nio.file.Path;
@@ -24,15 +25,18 @@ import java.util.Scanner;
  *
  * <p>启动模式：
  * <ul>
- *   <li><b>默认</b> — CLI REPL + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
- *   <li><b>--no-cli</b> — MCP HTTP(8720) + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
+ *   <li><b>默认</b> — CLI REPL + Web GUI + Map UI + CLI WS</li>
+ *   <li><b>--no-cli</b> — MCP HTTP + Web GUI + Map UI + CLI WS</li>
  * </ul>
+ *
+ * <p>服务端口统一由 gsim.properties 配置（webui.port / map.port /
+ * cli.ws.port / mcp.http.port），默认分别为 8710 / 8711 / 8712 / 8720。
  *
  * <p>启动流程（三阶段）：
  * <ol>
  *   <li>Phase 1: 配置加载 — CLI 参数 → ConfigLoader → AppConfig → Bootstrap</li>
  *   <li>Phase 2: 应用组装 — GSimulatorApplication + MapService + HTTP 服务器</li>
- *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP HTTP(8720)（阻塞主线程）</li>
+ *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP HTTP（阻塞主线程）</li>
  * </ol>
  */
 public class Main {
@@ -54,8 +58,12 @@ public class Main {
                 return;
             }
 
-            // 加载配置
+            // 加载配置；首次运行（无任何配置文件）时自动生成 gsim.properties 模板，
+            // 端口等配置随后可直接在文件中编辑。
             ConfigLoader.ConfigResult configResult = loader.load();
+            if (configResult.configPath() == null) {
+                ensureConfigTemplate(Path.of("gsim.properties").toAbsolutePath());
+            }
             AppConfig config = new AppConfig(configResult);
 
             // --doctor
@@ -137,9 +145,8 @@ public class Main {
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
             AgentBridge.registerMapTools(toolRegistry, mapService);
 
-            // Map HTTP 服务器 (port 8711) — 始终启动
-            int gsimapPort = Integer.parseInt(
-                    System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
+            // Map HTTP 服务器（map.port，默认 8711）— 始终启动
+            int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());
             GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
             gsimapServer.start();
             System.err.println("[BOOT] Map UI: http://127.0.0.1:" + gsimapPort);
@@ -151,9 +158,8 @@ public class Main {
             // ── Phase 3: 传输启动 ─────────────────────────────
 
             if (noCli) {
-                // MCP HTTP mode: start Streamable HTTP MCP server (port 8720)
-                int mcpPort = Integer.parseInt(
-                        System.getProperty("mcp.http.port", System.getenv().getOrDefault("MCP_HTTP_PORT", "8720")));
+                // MCP HTTP mode: start Streamable HTTP MCP server（mcp.http.port，默认 8720）
+                int mcpPort = Integer.getInteger("mcp.http.port", config.getMcpHttpPort());
                 McpHttpServer mcpHttpServer = new McpHttpServer(toolRegistry, mcpPort);
                 mcpHttpServer.start();
 
@@ -184,6 +190,18 @@ public class Main {
         }
     }
 
+    /** 首次运行时写入 gsim.properties 模板（已存在不覆盖）。 */
+    private static void ensureConfigTemplate(Path target) throws java.io.IOException {
+        if (java.nio.file.Files.exists(target)) return;
+        try (java.io.InputStream in = Main.class.getResourceAsStream("/gsim/config/gsim.properties.template")) {
+            if (in == null) {
+                throw new java.io.IOException("classpath 模板缺失: /gsim/config/gsim.properties.template");
+            }
+            java.nio.file.Files.copy(in, target);
+        }
+        System.err.println("[BOOT] 已生成配置模板: " + target);
+    }
+
     /** 缓存选择结果：sessionId + worldId 配对。 */
     private record CacheSelection(String sessionId, String worldId) {}
 
@@ -193,7 +211,7 @@ public class Main {
         if (caches.isEmpty()) return new CacheSelection(null, null);
 
         List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
-                com.gsim.core.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
+                new WorldManager(worldsDir).listWorlds();
 
         System.out.println();
         System.out.println("══════════════════════════════════════════");
@@ -263,21 +281,22 @@ public class Main {
     private static void printUsage() {
         System.out.println("GSimulator — 多 Agent 推演工作流引擎");
         System.out.println();
-        System.out.println("用法: java -jar GSimulator.jar [选项]");
+        System.out.println("用法: java -jar gsim-app/target/gsim-app-*.jar [选项]");
         System.out.println();
-        System.out.println("默认启动 CLI REPL + Web GUI(8710) + Map UI(8711)");
+        System.out.println("默认启动 CLI REPL + Web GUI + Map UI + CLI WS");
         System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");
-        System.out.println("  --no-cli           无 CLI 模式：MCP HTTP(8720) + Web GUI(8710) + Map(8711)");
+        System.out.println("  --no-cli           无 CLI 模式：MCP HTTP + Web GUI + Map UI + CLI WS");
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
-        System.out.println("API 配置环境变量:");
-        System.out.println("  API_HOST=127.0.0.1");
-        System.out.println("  API_PORT=8710");
-        System.out.println("  API_ENABLED=true");
+        System.out.println("服务端口在 gsim.properties 中配置：");
+        System.out.println("  webui.port=8710     Web UI");
+        System.out.println("  map.port=8711       Map UI");
+        System.out.println("  cli.ws.port=8712    CLI WebSocket");
+        System.out.println("  mcp.http.port=8720  MCP HTTP (JSON-RPC 2.0)");
     }
 }
