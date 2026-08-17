@@ -41,10 +41,9 @@ public class AgentFactory {
     private final Map<String, CompletableFuture<AgentResult>> running = new ConcurrentHashMap<>();
     /** 追踪所有运行中的 AbstractAgent 实例，用于 ESC 取消时设置 cancelRequested。 */
     private final Map<String, AbstractAgent> runningAgents = new ConcurrentHashMap<>();
-    /** 已完成子代理的结果缓存（最多保留 100 条，FIFO 淘汰）。 */
+    /** 已完成子代理的结果缓存（FIFO 淘汰，上限由构造参数注入，默认 100）。 */
     private final Map<String, AgentResult> completed = new ConcurrentHashMap<>();
-
-    private static final int MAX_COMPLETED = 100;
+    private final int maxCompleted;
 
     /** Cache 文件输出目录（worlds/<worldId>/caches/）。 */
     private final Path worldsDir;
@@ -70,6 +69,30 @@ public class AgentFactory {
             String model,
             Path worldsDir,
             java.util.function.Supplier<String> worldIdSupplier) {
+        this(configStore, llmRegistry, allTools, rootSink, model, worldsDir, worldIdSupplier, 100);
+    }
+
+    /**
+     * 创建 AgentFactory 实例。
+     *
+     * @param configStore    Agent 配置存储
+     * @param llmRegistry    LLM provider 注册表
+     * @param allTools       全局工具注册表
+     * @param rootSink       根进度事件接收器
+     * @param model          默认模型名称
+     * @param worldsDir      Cache 文件输出目录
+     * @param worldIdSupplier 当前 worldId 提供者
+     * @param maxCompleted   已完成结果缓存上限（FIFO 淘汰）
+     */
+    public AgentFactory(
+            AgentConfigStore configStore,
+            LlmProviderRegistry llmRegistry,
+            ToolRegistry allTools,
+            AgentProgressSink rootSink,
+            String model,
+            Path worldsDir,
+            java.util.function.Supplier<String> worldIdSupplier,
+            int maxCompleted) {
         this.configStore = configStore;
         this.llmRegistry = llmRegistry;
         this.llm = (LlmManager) llmRegistry.getDefault();
@@ -78,6 +101,7 @@ public class AgentFactory {
         this.model = model;
         this.worldsDir = worldsDir;
         this.worldIdSupplier = worldIdSupplier;
+        this.maxCompleted = maxCompleted;
     }
 
     /**
@@ -194,7 +218,7 @@ public class AgentFactory {
                 // Move from running to completed cache (bounded FIFO)
                 AgentResult result = f.getNow(null);
                 if (result != null) {
-                    if (completed.size() >= MAX_COMPLETED) {
+                    if (completed.size() >= maxCompleted) {
                         // Simple FIFO: remove one arbitrary entry
                         var it = completed.keySet().iterator();
                         if (it.hasNext()) {
@@ -280,6 +304,11 @@ public class AgentFactory {
 
     public Map<String, CompletableFuture<AgentResult>> running() {
         return running;
+    }
+
+    /** 已完成结果缓存（包可见，测试断言 maxCompleted 淘汰用）。 */
+    Map<String, AgentResult> completed() {
+        return completed;
     }
 
     /** 取消所有正在运行的 SubAgent（设置 cancelRequested 标志 + 中断线程）。 */

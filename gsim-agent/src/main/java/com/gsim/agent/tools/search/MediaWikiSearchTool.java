@@ -24,8 +24,25 @@ public class MediaWikiSearchTool implements AgentTool {
 
     public static final String NAME = "mediawiki_search";
 
-    private static final String DEFAULT_WIKI_URL = "https://en.wikipedia.org/w/api.php";
-    private static final String DEFAULT_USER_AGENT = "GSimulator/1.0 (research tool)";
+    public static final String DEFAULT_WIKI_URL = "https://en.wikipedia.org/w/api.php";
+    public static final String DEFAULT_USER_AGENT = "GSimulator/1.0 (research tool)";
+
+    private final String defaultWikiUrl;
+    private final String defaultUserAgent;
+
+    /** 默认使用 Wikipedia + 默认 User-Agent。 */
+    public MediaWikiSearchTool() {
+        this(DEFAULT_WIKI_URL, DEFAULT_USER_AGENT);
+    }
+
+    public MediaWikiSearchTool(String wikiUrl) {
+        this(wikiUrl, DEFAULT_USER_AGENT);
+    }
+
+    public MediaWikiSearchTool(String wikiUrl, String userAgent) {
+        this.defaultWikiUrl = wikiUrl;
+        this.defaultUserAgent = userAgent;
+    }
 
     @Override
     public String name() {
@@ -52,7 +69,7 @@ public class MediaWikiSearchTool implements AgentTool {
             return ToolResult.fail(NAME, "query is required");
         }
 
-        String wikiUrl = call.param("wiki_url", DEFAULT_WIKI_URL);
+        String wikiUrl = call.param("wiki_url", defaultWikiUrl);
         int limit = parseInt(call.param("limit"), 10);
         boolean fetchExtracts = "true".equalsIgnoreCase(call.param("fetch_extracts"));
 
@@ -64,7 +81,7 @@ public class MediaWikiSearchTool implements AgentTool {
 
         log.info("MediaWikiSearchTool: query='{}' wiki={} limit={} extracts={}", query, wikiUrl, limit, fetchExtracts);
 
-        MediaWikiApiClient client = new MediaWikiApiClient(wikiUrl, 15, DEFAULT_USER_AGENT);
+        MediaWikiApiClient client = new MediaWikiApiClient(wikiUrl, 15, defaultUserAgent);
 
         try {
             List<MediaWikiApiClient.SearchResult> results = client.search(query, limit);

@@ -30,18 +30,37 @@ public class ImportDocumentService {
     public static final String SOURCE_WIKI_DOWNLOADED = "WIKI_DOWNLOADED";
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("txt", "md", "markdown");
-    private static final int MAX_FULL_READ_CHARS = 30000;
-    private static final int DEFAULT_LIMIT = 8000;
 
     private final Path importDir;
+    private final int maxFullReadChars;
+    private final int defaultLimit;
+
+    /** 默认全文读取上限 30000 字符 / 默认分页 8000 字符。 */
+    public ImportDocumentService(Path importDir) {
+        this(importDir, 30000, 8000);
+    }
 
     /**
      * 创建导入文档服务。
      *
      * @param importDir 导入文档所在的根目录
+     * @param maxFullReadChars 全文读取（full=true）的字符上限
+     * @param defaultLimit 默认分页读取字符数
      */
-    public ImportDocumentService(Path importDir) {
+    public ImportDocumentService(Path importDir, int maxFullReadChars, int defaultLimit) {
         this.importDir = importDir.toAbsolutePath().normalize();
+        this.maxFullReadChars = maxFullReadChars;
+        this.defaultLimit = defaultLimit;
+    }
+
+    /** 全文读取字符上限（包可见，测试断言配置注入用）。 */
+    int maxFullReadChars() {
+        return maxFullReadChars;
+    }
+
+    /** 默认分页字符数（包可见，测试断言配置注入用）。 */
+    int defaultLimit() {
+        return defaultLimit;
     }
 
     /**
@@ -97,7 +116,7 @@ public class ImportDocumentService {
         String content = readFileContent(file);
         int originalLength = content.length();
 
-        int effectiveLimit = full ? MAX_FULL_READ_CHARS : Math.max(1, limit);
+        int effectiveLimit = full ? maxFullReadChars : Math.max(1, limit);
         if (offset < 0) offset = 0;
 
         String source = determineSource(file);

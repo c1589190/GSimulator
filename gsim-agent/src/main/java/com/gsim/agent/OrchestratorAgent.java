@@ -53,6 +53,14 @@ public class OrchestratorAgent extends AbstractAgent {
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
 
+    /** SubAgent 结果收集超时（秒，默认 300，由 AppConfig 注入）。 */
+    private volatile int collectTimeoutSeconds = 300;
+
+    /** 设置 SubAgent 结果收集超时（秒）。 */
+    public void setCollectTimeoutSeconds(int seconds) {
+        this.collectTimeoutSeconds = seconds;
+    }
+
     /** SubAgent 异步结果收集（agentId → future）。 */
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents = new ConcurrentHashMap<>();
     /** SubAgent ID 计数器。 */
@@ -86,7 +94,7 @@ public class OrchestratorAgent extends AbstractAgent {
                 agentFactory,
                 agentFactory.store(),
                 docCacheManager));
-        registry.register(new CollectSubAgentResultsTool(runningSubAgents));
+        registry.register(new CollectSubAgentResultsTool(runningSubAgents, collectTimeoutSeconds));
     }
 
     public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {

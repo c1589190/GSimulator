@@ -27,9 +27,17 @@ public class CollectSubAgentResultsTool implements AgentTool {
     private static final Logger log = LoggerFactory.getLogger(CollectSubAgentResultsTool.class);
 
     private final Map<String, CompletableFuture<AgentResult>> runningSubAgents;
+    private final int collectTimeoutSeconds;
 
+    /** 默认超时 300 秒。 */
     public CollectSubAgentResultsTool(Map<String, CompletableFuture<AgentResult>> runningSubAgents) {
+        this(runningSubAgents, 300);
+    }
+
+    public CollectSubAgentResultsTool(
+            Map<String, CompletableFuture<AgentResult>> runningSubAgents, int collectTimeoutSeconds) {
         this.runningSubAgents = runningSubAgents;
+        this.collectTimeoutSeconds = collectTimeoutSeconds;
     }
 
     @Override
@@ -43,8 +51,9 @@ public class CollectSubAgentResultsTool implements AgentTool {
                 收集所有异步派发的子代理执行结果。
                 dispatch_sub_agent 现已改为同步阻塞（派发后自动等待结果），
                 此工具仅在需要手动检查运行状态或清理残留 future 时使用。
-                超时时间: 300 秒。
-                """;
+                超时时间: %d 秒。
+                """
+                .formatted(collectTimeoutSeconds);
     }
 
     @Override
@@ -64,15 +73,19 @@ public class CollectSubAgentResultsTool implements AgentTool {
         // 阻塞等待所有 CompletableFuture 完成
         CompletableFuture<?>[] futures = runningSubAgents.values().toArray(CompletableFuture[]::new);
         try {
-            CompletableFuture.allOf(futures).get(300, TimeUnit.SECONDS);
+            CompletableFuture.allOf(futures).get(collectTimeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            log.warn("[CollectSubAgent] timeout after 300s, cancelling {} sub-agents", runningSubAgents.size());
+            log.warn(
+                    "[CollectSubAgent] timeout after {}s, cancelling {} sub-agents",
+                    collectTimeoutSeconds,
+                    runningSubAgents.size());
             // 取消所有未完成的 future
             for (var entry : runningSubAgents.entrySet()) {
                 entry.getValue().cancel(true);
             }
             runningSubAgents.clear();
-            return ToolResult.fail(NAME, "子代理执行超时（300 秒），已取消所有子代理。");
+            return ToolResult.fail(
+                    NAME, "子代理执行超时（" + collectTimeoutSeconds + " 秒），已取消所有子代理。");
         } catch (Exception e) {
             log.error("[CollectSubAgent] collection failed: {}", e.getMessage(), e);
             runningSubAgents.clear();

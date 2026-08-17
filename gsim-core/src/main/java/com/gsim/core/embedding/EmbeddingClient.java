@@ -33,17 +33,39 @@ public class EmbeddingClient {
     private final String baseUrl;
     private final String apiKey;
     private final String model;
-    private final OkHttpClient http;
+    /** 包可见（测试断言超时配置用）。 */
+    final OkHttpClient http;
 
+    /** 默认超时：连接 30s / 读取 60s / 写入 30s。 */
     public EmbeddingClient(String baseUrl, String apiKey, String model) {
+        this(baseUrl, apiKey, model, 30, 60, 30);
+    }
+
+    /**
+     * 创建 EmbeddingClient。
+     *
+     * @param baseUrl API 基础地址（如 https://api.siliconflow.cn/v1）
+     * @param apiKey API 密钥
+     * @param model 模型名（如 BAAI/bge-large-zh-v1.5）
+     * @param connectTimeoutSeconds 连接超时（秒）
+     * @param readTimeoutSeconds 读取超时（秒）
+     * @param writeTimeoutSeconds 写入超时（秒）
+     */
+    public EmbeddingClient(
+            String baseUrl,
+            String apiKey,
+            String model,
+            int connectTimeoutSeconds,
+            int readTimeoutSeconds,
+            int writeTimeoutSeconds) {
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
         this.model = model;
         this.http = new OkHttpClient.Builder()
                 .proxy(Proxy.NO_PROXY)
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
+                .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+                .writeTimeout(writeTimeoutSeconds, TimeUnit.SECONDS)
                 .build();
     }
 
