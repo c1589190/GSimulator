@@ -12,7 +12,6 @@ import com.gsim.agentlib.tool.ToolResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -148,8 +147,7 @@ class McpAdapterOverflowTest {
     void stagingDisabledIgnoresHandler() throws Exception {
         registry.register(new BigResultTool(20, 3000));
         StagingLikeHandler handler = new StagingLikeHandler();
-        ToolRegistryMcpAdapter adapter =
-                adapterFor(new McpResponseConfig(20, 100, 50000, 300, false), handler);
+        ToolRegistryMcpAdapter adapter = adapterFor(new McpResponseConfig(20, 100, 50000, 300, false), handler);
 
         String json = adapter.execute("gsim_big_tool", MAPPER.createObjectNode());
 
@@ -162,9 +160,7 @@ class McpAdapterOverflowTest {
     @DisplayName("(6) handler 返回 null → 回退截断，不抛 NPE")
     void nullHandlerResultFallsBackToTruncation() throws Exception {
         registry.register(new BigResultTool(20, 3000));
-        ToolRegistryMcpAdapter adapter = adapterFor(
-                McpResponseConfig.defaults(),
-                (result, toolName) -> null);
+        ToolRegistryMcpAdapter adapter = adapterFor(McpResponseConfig.defaults(), (result, toolName) -> null);
 
         String json = adapter.execute("gsim_big_tool", MAPPER.createObjectNode());
 

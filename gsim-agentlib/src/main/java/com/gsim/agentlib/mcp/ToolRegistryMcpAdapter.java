@@ -366,8 +366,8 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
         try {
             // ── 1. Extract pagination params ──────────────────
             int page = extractInt(args, PARAM_PAGE, 1);
-            int pageSize = Math.clamp(extractInt(args, PARAM_PAGE_SIZE, config.defaultPageSize()), 1,
-                    config.maxPageSize());
+            int pageSize =
+                    Math.clamp(extractInt(args, PARAM_PAGE_SIZE, config.defaultPageSize()), 1, config.maxPageSize());
 
             List<ToolResult.Item> allItems = result.items();
             int totalItems = allItems.size();
@@ -503,8 +503,7 @@ public final class ToolRegistryMcpAdapter implements McpToolRegistry {
      * (handler null/disabled, returned null, or still oversized) the legacy
      * snippet-truncation path applies to the current working map.
      */
-    private String handleOversizedResult(
-            ToolResult result, String name, JsonNode args, Map<String, Object> map)
+    private String handleOversizedResult(ToolResult result, String name, JsonNode args, Map<String, Object> map)
             throws JsonProcessingException {
         if (config.stagingEnabled() && overflowHandler != null) {
             ToolResult rewritten = overflowHandler.handle(result, name);
