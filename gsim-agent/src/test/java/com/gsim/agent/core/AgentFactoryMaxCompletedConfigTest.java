@@ -9,7 +9,6 @@ import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
 import com.gsim.core.llm.ProviderConfig;
 import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

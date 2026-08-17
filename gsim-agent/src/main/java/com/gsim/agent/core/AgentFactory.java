@@ -43,6 +43,7 @@ public class AgentFactory {
     private final Map<String, AbstractAgent> runningAgents = new ConcurrentHashMap<>();
     /** 已完成子代理的结果缓存（FIFO 淘汰，上限由构造参数注入，默认 100）。 */
     private final Map<String, AgentResult> completed = new ConcurrentHashMap<>();
+
     private final int maxCompleted;
 
     /** 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）。 */

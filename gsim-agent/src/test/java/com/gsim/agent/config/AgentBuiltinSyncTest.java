@@ -39,8 +39,7 @@ class AgentBuiltinSyncTest {
             assertEquals(
                     cpNode,
                     fsNode,
-                    agentId + ": agents/" + agentId + ".json 与 classpath 模板必须 JSON 语义相等"
-                            + "（类路径是唯一源，运行时可编辑副本不得漂移）");
+                    agentId + ": agents/" + agentId + ".json 与 classpath 模板必须 JSON 语义相等" + "（类路径是唯一源，运行时可编辑副本不得漂移）");
         }
     }
 

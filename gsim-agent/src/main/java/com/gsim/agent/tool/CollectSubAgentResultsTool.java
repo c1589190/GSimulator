@@ -84,8 +84,7 @@ public class CollectSubAgentResultsTool implements AgentTool {
                 entry.getValue().cancel(true);
             }
             runningSubAgents.clear();
-            return ToolResult.fail(
-                    NAME, "子代理执行超时（" + collectTimeoutSeconds + " 秒），已取消所有子代理。");
+            return ToolResult.fail(NAME, "子代理执行超时（" + collectTimeoutSeconds + " 秒），已取消所有子代理。");
         } catch (Exception e) {
             log.error("[CollectSubAgent] collection failed: {}", e.getMessage(), e);
             runningSubAgents.clear();

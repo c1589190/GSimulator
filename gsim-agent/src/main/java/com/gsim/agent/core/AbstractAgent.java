@@ -59,8 +59,7 @@ public class AbstractAgent {
      * @param docStore       文档存储（null = 无暂存能力，超限一律截断）
      * @param docIdPrefix    暂存文档 docId 前缀（如 {@code wstg_agent_}）
      */
-    public record ToolResultPolicy(
-            int inlineMaxChars, boolean stagingEnabled, DocStore docStore, String docIdPrefix) {}
+    public record ToolResultPolicy(int inlineMaxChars, boolean stagingEnabled, DocStore docStore, String docIdPrefix) {}
 
     private static final Logger log = LoggerFactory.getLogger(AbstractAgent.class);
 

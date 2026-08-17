@@ -68,8 +68,8 @@ class MediaWikiSearchToolConfigTest {
     void explicitWikiUrlParamWins() {
         var tool = new MediaWikiSearchTool(serverUrl, "TestAgent/1.0");
 
-        ToolResult result = tool.execute(
-                new ToolCall("mediawiki_search", Map.of("query", "test", "wiki_url", serverUrl)));
+        ToolResult result =
+                tool.execute(new ToolCall("mediawiki_search", Map.of("query", "test", "wiki_url", serverUrl)));
 
         assertTrue(result.success());
         assertTrue(lastPath.get().contains("list=search"));

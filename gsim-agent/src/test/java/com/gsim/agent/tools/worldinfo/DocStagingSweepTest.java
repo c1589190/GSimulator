@@ -46,8 +46,8 @@ class DocStagingSweepTest {
         Document stale = docStore.create("wstg_write_stale", DocType.TMP, "旧", "旧内容", List.of());
         setMtime(fileOf(stale), Instant.now().minus(10, ChronoUnit.DAYS));
 
-        String docId = DocStaging.stage(
-                docStore, "wstg_write_", "n0000:worldview:大事件", "新内容", true, Duration.ofHours(168));
+        String docId =
+                DocStaging.stage(docStore, "wstg_write_", "n0000:worldview:大事件", "新内容", true, Duration.ofHours(168));
 
         assertNull(docStore.get("wstg_write_stale"));
         assertFalse(Files.exists(fileOf(stale)));
@@ -71,10 +71,10 @@ class DocStagingSweepTest {
     @Test
     void dedupStillHitsSamePrefixContentWithCleanupEnabled() throws IOException {
         String content = "重复内容";
-        String docId1 = DocStaging.stage(
-                docStore, "wstg_write_", "n0000:worldview:大事件", content, true, Duration.ofHours(168));
-        String docId2 = DocStaging.stage(
-                docStore, "wstg_write_", "n0000:worldview:大事件", content, true, Duration.ofHours(168));
+        String docId1 =
+                DocStaging.stage(docStore, "wstg_write_", "n0000:worldview:大事件", content, true, Duration.ofHours(168));
+        String docId2 =
+                DocStaging.stage(docStore, "wstg_write_", "n0000:worldview:大事件", content, true, Duration.ofHours(168));
 
         assertEquals(docId1, docId2);
         assertEquals(1, docStore.listByTypeAndPrefix(DocType.TMP, "wstg_write_").size());

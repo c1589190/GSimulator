@@ -93,9 +93,7 @@ public final class AgentBridge {
         toolRegistry.register(new TextEditTool(
                 ctx.worldsDir(), ctx.activeWorldId().get(), ctx.importDir(), ctx.docStore(), ctx.docCacheManager()));
 
-        log.info(
-                "Registered import + 9 docs + ref + text_edit core tools (docsDir={})",
-                ctx.docsDir());
+        log.info("Registered import + 9 docs + ref + text_edit core tools (docsDir={})", ctx.docsDir());
     }
 
     /**
