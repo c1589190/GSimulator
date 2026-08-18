@@ -438,6 +438,7 @@ public class MapService {
      * @return the updated map data
      * @throws IllegalArgumentException if the hex does not exist
      */
+    @SuppressWarnings("deprecation")
     public MapData setHexTags(
             String worldId, String nodeId, int q, int r, String description, Map<String, String> tags) {
         // Read from the same node that will be written (active-node reads here would pollute the target node).
@@ -499,6 +500,7 @@ public class MapService {
      * @return the updated map data
      * @throws IllegalArgumentException if the hex or the tag does not exist
      */
+    @SuppressWarnings("deprecation")
     public MapData removeHexTag(String worldId, String nodeId, int q, int r, String tagKey) {
         // Read from the same node that will be written (active-node reads here would pollute the target node).
         String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
