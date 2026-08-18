@@ -21,6 +21,7 @@ public final class WorldInformation {
     private final Map<String, List<ElementRef>> byCheckpoint; // checkpointId → all elements
     private final Map<String, List<ElementRef>> byTag; // tag → elements
     private final KeywordIndex keywordIndex;
+    private final LinkIndex linkIndex; // link string → elements referencing it
 
     public WorldInformation(String worldId, List<NodeSnapshot> branchChain) {
         this.worldId = worldId;
@@ -32,6 +33,7 @@ public final class WorldInformation {
         this.byCheckpoint = buildByCheckpoint(branchChain);
         this.byTag = buildByTag(branchChain);
         this.keywordIndex = KeywordIndex.build(branchChain);
+        this.linkIndex = LinkIndex.build(branchChain);
     }
 
     // -- accessors --
@@ -106,6 +108,7 @@ public final class WorldInformation {
                     byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
                 }
                 keywordIndex.add(ref);
+                linkIndex.addElement(ref);
             }
         }
     }
@@ -188,6 +191,15 @@ public final class WorldInformation {
         return keywordIndex;
     }
 
+    /**
+     * 获取链接反向索引。
+     *
+     * @return 链接索引实例
+     */
+    public LinkIndex linkIndex() {
+        return linkIndex;
+    }
+
     // -- mutation (called by write_element tool) --
 
     /**
@@ -218,6 +230,7 @@ public final class WorldInformation {
             byTag.computeIfAbsent(t, k -> new ArrayList<>()).add(ref);
         }
         keywordIndex.add(ref);
+        linkIndex.addElement(ref);
     }
 
     /**
@@ -254,6 +267,8 @@ public final class WorldInformation {
                 // add new ref to indexes
                 ElementRef newRef = ElementRef.from(nodeId, node.turn(), node.worldTime(), checkpointId, element);
                 addRefToIndexes(newRef);
+                // swap links in the reverse index: old keys removed, new keys added
+                linkIndex.replaceElement(newRef, oldRef.element().links(), element.links());
                 return true;
             }
         }
@@ -262,6 +277,7 @@ public final class WorldInformation {
         cp.elements().add(element);
         ElementRef ref = ElementRef.from(nodeId, node.turn(), node.worldTime(), checkpointId, element);
         addRefToIndexes(ref);
+        linkIndex.addElement(ref);
         return false;
     }
 

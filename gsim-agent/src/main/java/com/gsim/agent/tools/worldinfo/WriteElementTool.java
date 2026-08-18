@@ -152,7 +152,20 @@ public final class WriteElementTool implements AgentTool {
         value = rr.text();
 
         List<String> tags = tagsStr != null && !tagsStr.isBlank() ? Arrays.asList(tagsStr.split(",")) : List.of();
-        List<String> links = linksStr != null && !linksStr.isBlank() ? Arrays.asList(linksStr.split(",")) : List.of();
+        List<String> links = linksStr != null && !linksStr.isBlank()
+                ? Arrays.stream(linksStr.split(",")).map(String::trim).toList()
+                : List.of();
+
+        // links 存在时逐条校验 — 任一条非法则整个调用失败且元素不写入
+        for (String link : links) {
+            if (!isValidLink(link)) {
+                return ToolResult.fail(
+                        name(),
+                        "[INVALID_LINK] 非法链接格式: '"
+                                + link
+                                + "' — 期望 @world:|@doc:|@cache:|@import:|gsimap:|nodeId:checkpointId:key 或 checkpointId:key");
+            }
+        }
 
         String now = java.time.Instant.now().toString();
         String createdAt = now;
@@ -237,6 +250,15 @@ public final class WriteElementTool implements AgentTool {
     @Override
     public Permission permission() {
         return Permission.WRITE;
+    }
+
+    /**
+     * 校验单条链接格式 — {@code @world:|@doc:|@cache:|@import:|gsimap:|nodeId:checkpointId:key}
+     * 前缀形式，或 {@code checkpointId:key} 两段形式。
+     */
+    private static boolean isValidLink(String link) {
+        return link.matches("^(@world:|@doc:|@cache:|@import:|gsimap:|[a-z]+\\d{4}:)[^\\s]+$")
+                || link.matches("^[^:\\s]+:[^:\\s]+$");
     }
 
     /**
