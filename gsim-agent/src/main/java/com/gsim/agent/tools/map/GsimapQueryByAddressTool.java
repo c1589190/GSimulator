@@ -160,8 +160,7 @@ public final class GsimapQueryByAddressTool extends AbstractGsimapTool {
             result.put("tagKey", tagKey);
             result.put("tagValue", tagValue);
         }
-        return ToolResult.ok(
-                name(), List.of(new ToolResult.Item(cellKey, itemPath, JsonUtils.toJson(result), 1.0)));
+        return ToolResult.ok(name(), List.of(new ToolResult.Item(cellKey, itemPath, JsonUtils.toJson(result), 1.0)));
     }
 
     private ToolResult resolveCity(MapData map, String name, String address) {

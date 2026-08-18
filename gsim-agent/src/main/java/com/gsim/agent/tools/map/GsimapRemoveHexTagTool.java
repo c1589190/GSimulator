@@ -44,12 +44,7 @@ public final class GsimapRemoveHexTagTool extends AbstractGsimapTool {
         props.put("r", Map.of("type", "integer", "description", "Hex axial r"));
         props.put("tagKey", Map.of("type", "string", "description", "Tag key to remove"));
         return Map.of(
-                "type",
-                "object",
-                "properties",
-                props,
-                "required",
-                List.of("worldId", "nodeId", "q", "r", "tagKey"));
+                "type", "object", "properties", props, "required", List.of("worldId", "nodeId", "q", "r", "tagKey"));
     }
 
     @Override
@@ -73,9 +68,17 @@ public final class GsimapRemoveHexTagTool extends AbstractGsimapTool {
                     List.of(new ToolResult.Item(
                             key,
                             "gsimap:hex:" + key,
-                            Map.of("ok", true, "hexKey", key, "removed", tagKey, "hex", cell != null
-                                            ? cell.toString()
-                                            : Map.of().toString())
+                            Map.of(
+                                            "ok",
+                                            true,
+                                            "hexKey",
+                                            key,
+                                            "removed",
+                                            tagKey,
+                                            "hex",
+                                            cell != null
+                                                    ? cell.toString()
+                                                    : Map.of().toString())
                                     .toString(),
                             1.0)));
         } catch (IllegalArgumentException e) {

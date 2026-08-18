@@ -38,8 +38,10 @@ class GsimapRemoveHexTagToolTest {
         MapData mapData = new MapData(
                 30,
                 false,
-                Map.of(MapData.hexKey(0, 0), new MapData.HexCell(
-                        "#6CC261", "plains", null, null, "王都", 0, Map.of(), Map.of("a", "1", "b", "2"))),
+                Map.of(
+                        MapData.hexKey(0, 0),
+                        new MapData.HexCell(
+                                "#6CC261", "plains", null, null, "王都", 0, Map.of(), Map.of("a", "1", "b", "2"))),
                 List.of(),
                 Map.of(),
                 Map.of(),

@@ -49,8 +49,7 @@ public final class GsimapSetHexTool extends AbstractGsimapTool {
         props.put("r", Map.of("type", "integer", "description", "Hex axial r"));
         props.put("description", Map.of("type", "string", "description", "Optional hex description"));
         props.put("tags", Map.of("type", "object", "description", "Optional key:value tags as JSON object"));
-        return Map.of(
-                "type", "object", "properties", props, "required", List.of("worldId", "nodeId", "q", "r"));
+        return Map.of("type", "object", "properties", props, "required", List.of("worldId", "nodeId", "q", "r"));
     }
 
     @Override
@@ -81,7 +80,9 @@ public final class GsimapSetHexTool extends AbstractGsimapTool {
                                             "hexKey",
                                             key,
                                             "hex",
-                                            cell != null ? cell.toString() : Map.of().toString())
+                                            cell != null
+                                                    ? cell.toString()
+                                                    : Map.of().toString())
                                     .toString(),
                             1.0)));
         } catch (IllegalArgumentException e) {

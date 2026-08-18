@@ -88,14 +88,7 @@ class GsimapSearchHexToolTest {
                 Map.of(
                         "0_0",
                         new MapData.HexCell(
-                                "#228B22",
-                                "forest",
-                                null,
-                                null,
-                                "",
-                                0,
-                                Map.of(),
-                                Map.of("煤炭资源", "23662吨"))),
+                                "#228B22", "forest", null, null, "", 0, Map.of(), Map.of("煤炭资源", "23662吨"))),
                 List.of(),
                 Map.of(),
                 Map.of(),
@@ -209,8 +202,8 @@ class GsimapSearchHexToolTest {
     @Test
     @DisplayName("tags 文本命中：全角冒号分段使 key 与 value 独立可搜")
     void tagsTextHits() {
-        ToolResult byKey = tool.execute(
-                new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "煤炭资源")));
+        ToolResult byKey =
+                tool.execute(new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "煤炭资源")));
         assertTrue(byKey.success(), "error: " + byKey.error());
         assertEquals(1, byKey.items().size(), "items: " + byKey.items());
         ToolResult.Item hit = byKey.items().get(0);
@@ -219,8 +212,8 @@ class GsimapSearchHexToolTest {
         assertTrue(hit.snippet().contains("煤炭资源：23662吨"), "snippet: " + hit.snippet());
         assertTrue(hit.score() > 0, "score: " + hit.score());
 
-        ToolResult byValue = tool.execute(
-                new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "23662")));
+        ToolResult byValue =
+                tool.execute(new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "23662")));
         assertTrue(byValue.success(), "error: " + byValue.error());
         assertEquals(1, byValue.items().size(), "items: " + byValue.items());
         assertEquals(KEY_TAGGED, byValue.items().get(0).path());
@@ -235,8 +228,7 @@ class GsimapSearchHexToolTest {
                 false,
                 Map.of(
                         "3_3",
-                        new MapData.HexCell(
-                                "#228B22", "forest", null, null, "", 0, Map.of(), Map.of("铁矿", "5吨")),
+                        new MapData.HexCell("#228B22", "forest", null, null, "", 0, Map.of(), Map.of("铁矿", "5吨")),
                         "4_4",
                         MapData.HexCell.of("#6CC261", "plains")),
                 List.of(),
