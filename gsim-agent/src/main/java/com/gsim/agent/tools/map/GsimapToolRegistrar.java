@@ -57,6 +57,10 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapEdgeRemoveTool(mapService));
         registry.register(new GsimapEdgeListTool(mapService));
 
+        // ── Hex tag tools (2) ─────────────────────────────────
+        registry.register(new GsimapSetHexTool(mapService));
+        registry.register(new GsimapRemoveHexTagTool(mapService));
+
         // ── Init tools (2) ──────────────────────────────────
         registry.register(new GsimapGenerateTool(mapService));
         registry.register(new GsimapUpdateTerrainTypeTool(mapService));

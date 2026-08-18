@@ -420,6 +420,133 @@ public class MapService {
         return updated;
     }
 
+    // ── Hex tag operations ───────────────────────────────
+
+    /**
+     * Set the description and/or tags of a hex cell.
+     *
+     * <p>Mirrors {@link #setEdgeTag}: reads from the target node, copies the cell while
+     * preserving color/terrain/symbol/symbolColor/riverMask/edgeTags, overwrites the
+     * description only when non-null, and merges tags without removing unmentioned keys.
+     *
+     * @param worldId     the world id
+     * @param nodeId      the target node to write to (blank → active node)
+     * @param q           hex axial q
+     * @param r           hex axial r
+     * @param description new description, or null to keep the existing one
+     * @param tags        tags to merge (unmentioned keys preserved); null/empty → no tag change
+     * @return the updated map data
+     * @throws IllegalArgumentException if the hex does not exist
+     */
+    public MapData setHexTags(
+            String worldId, String nodeId, int q, int r, String description, Map<String, String> tags) {
+        // Read from the same node that will be written (active-node reads here would pollute the target node).
+        String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
+        MapData map = resolve(worldId, targetNode);
+        if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
+
+        String key = MapData.hexKey(q, r);
+        MapData.HexCell cell = map.hexes().get(key);
+        if (cell == null) {
+            throw new IllegalArgumentException("Hex not found: " + key);
+        }
+
+        Map<String, String> merged = new LinkedHashMap<>(cell.tags());
+        if (tags != null && !tags.isEmpty()) {
+            merged.putAll(tags);
+        }
+
+        MapData.HexCell updatedCell = new MapData.HexCell(
+                cell.color(),
+                cell.terrain(),
+                cell.symbol(),
+                cell.symbolColor(),
+                description != null ? description : cell.description(),
+                cell.riverMask(),
+                cell.edgeTags(),
+                merged);
+
+        Map<String, MapData.HexCell> hexes = new LinkedHashMap<>(map.hexes());
+        hexes.put(key, updatedCell);
+
+        MapData updated = new MapData(
+                map.gridSize(),
+                map.hexOrientation(),
+                Map.copyOf(hexes),
+                map.terrainBlocks(),
+                map.provinces(),
+                map.cities(),
+                map.rivers(),
+                map.roads(),
+                map.terrainTypes(),
+                map.compressedRegions(),
+                map.pathwayGroups(),
+                map.edges());
+        saveMap(worldId, targetNode, updated);
+        return updated;
+    }
+
+    /**
+     * Remove a single tag from a hex cell.
+     *
+     * <p>After removal the tags map is emptied rather than left null.
+     *
+     * @param worldId the world id
+     * @param nodeId  the target node to write to (blank → active node)
+     * @param q       hex axial q
+     * @param r       hex axial r
+     * @param tagKey  the tag key to remove
+     * @return the updated map data
+     * @throws IllegalArgumentException if the hex or the tag does not exist
+     */
+    public MapData removeHexTag(String worldId, String nodeId, int q, int r, String tagKey) {
+        // Read from the same node that will be written (active-node reads here would pollute the target node).
+        String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
+        MapData map = resolve(worldId, targetNode);
+        if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
+
+        String key = MapData.hexKey(q, r);
+        MapData.HexCell cell = map.hexes().get(key);
+        if (cell == null) {
+            throw new IllegalArgumentException("Hex not found: " + key);
+        }
+        if (!cell.tags().containsKey(tagKey)) {
+            throw new IllegalArgumentException("Tag not found: " + tagKey + " on hex " + key);
+        }
+
+        Map<String, String> remaining = new LinkedHashMap<>(cell.tags());
+        remaining.remove(tagKey);
+
+        MapData.HexCell updatedCell = new MapData.HexCell(
+                cell.color(),
+                cell.terrain(),
+                cell.symbol(),
+                cell.symbolColor(),
+                cell.description(),
+                cell.riverMask(),
+                cell.edgeTags(),
+                remaining.isEmpty() ? Map.of() : remaining);
+
+        Map<String, MapData.HexCell> hexes = new LinkedHashMap<>(map.hexes());
+        hexes.put(key, updatedCell);
+
+        MapData updated = new MapData(
+                map.gridSize(),
+                map.hexOrientation(),
+                Map.copyOf(hexes),
+                map.terrainBlocks(),
+                map.provinces(),
+                map.cities(),
+                map.rivers(),
+                map.roads(),
+                map.terrainTypes(),
+                map.compressedRegions(),
+                map.pathwayGroups(),
+                map.edges());
+        saveMap(worldId, targetNode, updated);
+        return updated;
+    }
+
     /**
      * Merge edge tag values with defaults defined in PathwayGroup.properties.
      */

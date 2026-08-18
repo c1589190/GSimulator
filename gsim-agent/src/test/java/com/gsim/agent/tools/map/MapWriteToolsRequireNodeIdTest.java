@@ -32,7 +32,9 @@ class MapWriteToolsRequireNodeIdTest {
                 new GsimapRemoveHexFromRegionTool(mapService),
                 new GsimapUpdateTerrainTypeTool(mapService),
                 new GsimapEdgeSetTool(mapService),
-                new GsimapEdgeRemoveTool(mapService));
+                new GsimapEdgeRemoveTool(mapService),
+                new GsimapSetHexTool(mapService),
+                new GsimapRemoveHexTagTool(mapService));
     }
 
     @Test
