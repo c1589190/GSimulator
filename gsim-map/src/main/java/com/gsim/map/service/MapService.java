@@ -907,7 +907,8 @@ public class MapService {
                     color = "#5B8C3E";
                 }
                 int riverMask = 0;
-                newHexes.put(key, new MapData.HexCell(color, terrain, null, null, "", riverMask, Map.of()));
+                newHexes.put(
+                        key, new MapData.HexCell(color, terrain, null, null, "", riverMask, Map.of(), Map.of()));
                 added++;
                 if ("water".equals(terrain)) {
                     waterAdded++;

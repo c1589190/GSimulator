@@ -178,6 +178,7 @@ public record MapData(
      * @param description optional description
      * @param riverMask   6-bit edge mask (bits 0-5 for edges E,SE,SW,W,NW,NE)
      * @param edgeTags    per-edge tags keyed by direction (0-5)
+     * @param tags        arbitrary key:value tags for this hex
      */
     @JsonDeserialize
     public record HexCell(
@@ -187,13 +188,15 @@ public record MapData(
             @JsonProperty("symbolColor") String symbolColor,
             @JsonProperty("description") String description,
             @JsonProperty("riverMask") int riverMask,
-            @JsonProperty("edgeTags") Map<Integer, List<String>> edgeTags) {
+            @JsonProperty("edgeTags") Map<Integer, List<String>> edgeTags,
+            @JsonProperty("tags") Map<String, String> tags) {
         public HexCell {
             if (color == null) color = "#808080";
             if (terrain == null) terrain = "unknown";
             if (description == null) description = "";
             if (riverMask < 0 || riverMask > 63) riverMask = 0;
             if (edgeTags == null) edgeTags = new LinkedHashMap<>();
+            if (tags == null) tags = new LinkedHashMap<>();
             // Migrate legacy riverMask to edgeTags
             if (edgeTags.isEmpty() && riverMask > 0) {
                 for (int d = 0; d < 6; d++) {
@@ -208,6 +211,9 @@ public record MapData(
                 frozen.put(entry.getKey(), List.copyOf(entry.getValue()));
             }
             edgeTags = Collections.unmodifiableMap(frozen);
+            // Deep freeze tags map (values are immutable Strings — no inner copy needed)
+            Map<String, String> frozenTags = new LinkedHashMap<>(tags);
+            tags = Collections.unmodifiableMap(frozenTags);
         }
 
         /**
@@ -217,7 +223,7 @@ public record MapData(
          * @return a new HexCell instance
          */
         public static HexCell of(String color) {
-            return new HexCell(color, "unknown", null, null, "", 0, Map.of());
+            return new HexCell(color, "unknown", null, null, "", 0, Map.of(), Map.of());
         }
 
         /**
@@ -228,7 +234,7 @@ public record MapData(
          * @return a new HexCell instance
          */
         public static HexCell of(String color, String terrain) {
-            return new HexCell(color, terrain, null, null, "", 0, Map.of());
+            return new HexCell(color, terrain, null, null, "", 0, Map.of(), Map.of());
         }
     }
 

@@ -99,7 +99,8 @@ public class ContourQueryEngine {
                 TerrainSample ts = query(q, r);
                 hexes.put(
                         q + "_" + r,
-                        new com.gsim.map.map.MapData.HexCell(ts.color, ts.terrain, null, null, "", 0, Map.of()));
+                        new com.gsim.map.map.MapData.HexCell(
+                                ts.color, ts.terrain, null, null, "", 0, Map.of(), Map.of()));
             }
         }
         return new com.gsim.map.map.MapData(

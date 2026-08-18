@@ -71,7 +71,7 @@ class GsimSearchToolTest {
                 Map.of(
                         // 森林 + 迷雾描述：与 region/world/doc 同词命中
                         "0_0",
-                        new MapData.HexCell("#228B22", "forest", null, null, "迷雾笼罩的密林", 0, Map.of()),
+                        new MapData.HexCell("#228B22", "forest", null, null, "迷雾笼罩的密林", 0, Map.of(), Map.of()),
                         // 无标注平原：不含「迷雾」相关字，不参与命中
                         "1_0",
                         MapData.HexCell.of("#6CC261", "plains")),

@@ -57,11 +57,11 @@ class GsimapSearchHexToolTest {
                 false,
                 Map.of(
                         // 森林 + description + symbol（非空标注）
-                        "10_-5", new MapData.HexCell("#228B22", "forest", "祭", null, "神秘祭坛", 0, Map.of()),
+                        "10_-5", new MapData.HexCell("#228B22", "forest", "祭", null, "神秘祭坛", 0, Map.of(), Map.of()),
                         // 森林，无标注（守卫模式下应被排除）
                         "0_0", MapData.HexCell.of("#228B22", "forest"),
                         // 水，仅 symbol
-                        "2_3", new MapData.HexCell("#3292D5", "water", "W", null, "", 0, Map.of()),
+                        "2_3", new MapData.HexCell("#3292D5", "water", "W", null, "", 0, Map.of(), Map.of()),
                         // 平原，无标注
                         "-4_1", MapData.HexCell.of("#6CC261", "plains"),
                         // 未注册地形 lava（无 terrainTypes 定义 → 回退原值）
