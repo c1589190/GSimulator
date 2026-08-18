@@ -1,12 +1,13 @@
 package com.gsim.agent.tools.map;
 
+import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.map.service.MapService;
 
 /**
  * Registers all gsimap AgentTools into a ToolRegistry.
  *
- * <p>Call {@link #registerAll(ToolRegistry, MapService)} during application
+ * <p>Call {@link #registerAll(ToolRegistry, MapService, SearchToolContext)} during application
  * startup to make all 25 gsimap map tools available to the agent system.
  */
 public final class GsimapToolRegistrar {
@@ -18,8 +19,10 @@ public final class GsimapToolRegistrar {
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
+     * @param searchCtx  the shared search tool context（T8 接线传递；T9 renameRegion 传播将
+     *                   在此使用，本方法当前保持既有 25 个工具注册行为不变）
      */
-    public static void registerAll(ToolRegistry registry, MapService mapService) {
+    public static void registerAll(ToolRegistry registry, MapService mapService, SearchToolContext searchCtx) {
         // ── Query tools (9) ─────────────────────────────────
         registry.register(new GsimapGetHexTool(mapService));
         registry.register(new GsimapGetProvinceTool(mapService));

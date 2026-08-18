@@ -14,6 +14,12 @@ import com.gsim.agent.tools.importing.ImportDocumentReadTool;
 import com.gsim.agent.tools.importing.ImportDocumentSearchTool;
 import com.gsim.agent.tools.map.GsimapToolRegistrar;
 import com.gsim.agent.tools.ref.ResolveRefTool;
+import com.gsim.agent.tools.search.GsimSearchDocTool;
+import com.gsim.agent.tools.search.GsimSearchTool;
+import com.gsim.agent.tools.search.GsimSearchWorldTool;
+import com.gsim.agent.tools.search.GsimapSearchHexTool;
+import com.gsim.agent.tools.search.GsimapSearchRegionTool;
+import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agent.tools.text.TextEditTool;
 import com.gsim.agent.tools.worldinfo.AttachmentReadTool;
 import com.gsim.agent.tools.worldinfo.AttachmentWriteTool;
@@ -49,11 +55,12 @@ import org.slf4j.LoggerFactory;
  * WorldInformation 等，来自 gsim-core 接口），再调用本类注册全部工具。
  * 工具实现（AgentTool）全部位于 gsim-agent，宿主不再直接 import 任何工具实现类。
  *
- * <p>三个入口：
+ * <p>四个入口：
  * <ul>
  *   <li>{@link #registerCoreTools} — importing 3 + doc 9 + ref 1 + text 1 = 14 个工具（始终注册）</li>
  *   <li>{@link #registerWorldInfoTools} — worldinfo/node 管理工具（worldInfo 为 null 时仅注册 WorldList/WorldCreate）</li>
  *   <li>{@link #registerMapTools} — 委托 GsimapToolRegistrar 注册全部地图工具</li>
+ *   <li>{@link #registerSearchTools} — 领域搜索工具：4 个细化搜索工具 + gsim_search 聚合器（T8 接线）</li>
  * </ul>
  */
 public final class AgentBridge {
@@ -173,8 +180,31 @@ public final class AgentBridge {
      *
      * @param toolRegistry 工具注册中心
      * @param mapService   共享的 MapService 实例
+     * @param searchCtx    共享的搜索工具上下文（T8 接线传递；GsimapToolRegistrar 当前
+     *                     不使用，T9 renameRegion 传播将在此消费）
      */
-    public static void registerMapTools(ToolRegistry toolRegistry, MapService mapService) {
-        GsimapToolRegistrar.registerAll(toolRegistry, mapService);
+    public static void registerMapTools(ToolRegistry toolRegistry, MapService mapService, SearchToolContext searchCtx) {
+        GsimapToolRegistrar.registerAll(toolRegistry, mapService, searchCtx);
+    }
+
+    /**
+     * 注册领域搜索工具（T8 独占接线）：T4-T7 的 4 个细化搜索工具 + gsim_search 聚合器。
+     *
+     * <p>四个细化工具与聚合器共享同一 {@link SearchToolContext}（共享语料源，避免
+     * ToolRegistry 往返解析）。仅本入口注册，不并入 registerWorldInfoTools/
+     * registerCoreTools。
+     *
+     * @param toolRegistry 工具注册中心
+     * @param ctx          共享的搜索工具上下文（由宿主组装）
+     */
+    public static void registerSearchTools(ToolRegistry toolRegistry, SearchToolContext ctx) {
+        toolRegistry.register(new GsimSearchWorldTool(ctx));
+        toolRegistry.register(new GsimapSearchRegionTool(ctx));
+        toolRegistry.register(new GsimapSearchHexTool(ctx));
+        toolRegistry.register(new GsimSearchDocTool(ctx));
+        toolRegistry.register(new GsimSearchTool(ctx));
+
+        log.info("Registered 5 search tools (gsim_search_world, gsimap_search_region, gsimap_search_hex, "
+                + "gsim_search_doc, gsim_search)");
     }
 }

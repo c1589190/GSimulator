@@ -642,4 +642,12 @@ public class GSimulatorApplication {
     public java.util.function.Supplier<String> getActiveWorldIdSupplier() {
         return activeWorldId::get;
     }
+
+    /**
+     * Returns a dynamic supplier for the current WorldInformation (mutable field, rebuilt on
+     * node changes / world switch) — the same instance the worldinfo tools receive.
+     */
+    public java.util.function.Supplier<WorldInformation> getWorldInfoSupplier() {
+        return () -> worldInfo;
+    }
 }

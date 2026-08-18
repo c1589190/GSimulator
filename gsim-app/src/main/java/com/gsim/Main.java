@@ -1,6 +1,8 @@
 package com.gsim;
 
 import com.gsim.agent.bridge.AgentBridge;
+import com.gsim.agent.tools.search.SearchToolContext;
+import com.gsim.agentlib.mcp.GsimRequestContext;
 import com.gsim.agentlib.mcp.McpHttpServer;
 import com.gsim.agentlib.mcp.McpResponseConfig;
 import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
@@ -16,12 +18,16 @@ import com.gsim.core.config.ConfigDoctor;
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.config.ConfigSnapshot;
 import com.gsim.core.config.ConfigWizard;
+import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.map.http.GsimapHttpServer;
 import com.gsim.map.service.MapService;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * GSimulator 主入口类。
@@ -146,10 +152,37 @@ public class Main {
             // 地图服务 + 工具注册
             MapService mapService = new MapService(config.worldsDir(), config.mapConfig());
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
-            AgentBridge.registerMapTools(toolRegistry, mapService);
+
+            // 领域搜索上下文（T8 接线）—— wiSupplier 沿用 AgentBridge.registerWorldInfoTools
+            // 闭包语义：按 GsimRequestContext.worldId() 解析 WorldInformation（当前世界取应用侧
+            // 最新实例，其他世界经 WorldManager 加载并按世界缓存），而非 Bootstrap 世界单例。
+            // registry 与 T2 装配的 ResolverRegistry 同一实例（GsimapResolver 注册后即可解析 gsimap:）。
+            Map<String, WorldInformation> wiCache = new ConcurrentHashMap<>();
+            WorldManager worldManager = new WorldManager(config.worldsDir());
+            Supplier<WorldInformation> wiSupplier = () -> {
+                String reqWorldId = GsimRequestContext.worldId();
+                WorldInformation current = app.getWorldInfoSupplier().get();
+                if (reqWorldId != null && current != null && !reqWorldId.equals(current.worldId())) {
+                    return wiCache.computeIfAbsent(reqWorldId, worldManager::loadWorld);
+                }
+                return current;
+            };
+            SearchToolContext searchCtx = new SearchToolContext(
+                    wiSupplier,
+                    mapService,
+                    app.getContext().getDocStore(config.docsDir()),
+                    app.getContext().getResolverRegistry(),
+                    config.worldsDir(),
+                    config.getImportDir(),
+                    config.cachesDir());
+
+            AgentBridge.registerMapTools(toolRegistry, mapService, searchCtx);
 
             // gsimap: 前缀引用解析器（依赖 MapService）注册进统一 ResolverRegistry（resolve_ref/text_edit 即刻可用）
             app.getContext().getResolverRegistry().register(new com.gsim.agent.tools.map.GsimapResolver(mapService));
+
+            // 领域搜索工具（T8 独占接线）：4 个细化搜索工具 + gsim_search 聚合器
+            AgentBridge.registerSearchTools(toolRegistry, searchCtx);
 
             // Map HTTP 服务器（map.port，默认 8711）— 始终启动
             int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());
