@@ -14,18 +14,20 @@ import java.util.function.Supplier;
  *
  * <p>语料语义（从 {@link GsimapSearchHexTool} 抽取，行为完全一致）：当前节点地图的
  * 全部 hex 各生成一条 {@link SearchEntry}，文本为
- * {@code terrain名称 + " " + description + " " + symbol}，key 为
+ * {@code terrain名称 + " " + description + " " + symbol + " " + tags}，key 为
  * {@code gsimap:hex:{q}_{r}}（q_r 即 hexes map 的键），sortKey 为该节点回合数。
+ * tags 以 {@code key：value}（全角冒号 U+FF1A）逐对空格连接——分词器
+ * {@code SearchTextTokenizer} 以全角冒号为分隔符，key 与 value 独立成段可搜。
  *
  * <p><b>规模守卫</b>：网格最大可达 1000×1000（全量 100 万格），当 {@code hexes}
- * 数量超过 {@value #DEFAULT_CORPUS_LIMIT} 时，只收录 description 或 symbol 非空的格
- * （地形名单独不能作为入选理由，否则巨图下语料依然接近全量）。
+ * 数量超过 {@value #DEFAULT_CORPUS_LIMIT} 时，只收录 description / symbol / tags
+ * 任一非空的格（地形名单独不能作为入选理由，否则巨图下语料依然接近全量）。
  *
  * <p>包可见：仅限 search 包内工具/聚合器直接调用，避免 ToolRegistry 往返解析。
  */
 final class HexSearchSource {
 
-    /** 语料规模守卫上限：hexes 超过该数量时仅索引 description/symbol 非空的格。 */
+    /** 语料规模守卫上限：hexes 超过该数量时仅索引 description/symbol/tags 非空的格。 */
     static final int DEFAULT_CORPUS_LIMIT = 50_000;
 
     private final SearchToolContext ctx;
@@ -66,7 +68,8 @@ final class HexSearchSource {
         for (Map.Entry<String, MapData.HexCell> entry : map.hexes().entrySet()) {
             MapData.HexCell cell = entry.getValue();
             if (overLimit && !hasSearchableText(cell)) continue;
-            String text = terrainName(map, cell) + " " + cell.description() + " " + symbolOrEmpty(cell);
+            String text = terrainName(map, cell) + " " + cell.description() + " " + symbolOrEmpty(cell) + " "
+                    + tagsText(cell);
             entries.add(new SearchEntry(text, "gsimap:hex:" + entry.getKey(), turn));
         }
         return List.copyOf(entries);
@@ -86,10 +89,25 @@ final class HexSearchSource {
         return cell.symbol() != null ? cell.symbol() : "";
     }
 
-    /** 守卫模式下仅 description/symbol 非空的格入选语料。 */
+    /**
+     * 标签文本：每对 tags 渲染为 {@code key + "：" + value}（全角冒号 U+FF1A——分词器
+     * 以其为分隔符，key/value 独立成段可搜），多标签以空格连接；tags 为空返回空串。
+     */
+    private static String tagsText(MapData.HexCell cell) {
+        if (cell.tags().isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> tag : cell.tags().entrySet()) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(tag.getKey()).append('：').append(tag.getValue());
+        }
+        return sb.toString();
+    }
+
+    /** 守卫模式下 description / symbol / tags 任一非空的格入选语料。 */
     private static boolean hasSearchableText(MapData.HexCell cell) {
         return (cell.description() != null && !cell.description().isBlank())
-                || (cell.symbol() != null && !cell.symbol().isBlank());
+                || (cell.symbol() != null && !cell.symbol().isBlank())
+                || !cell.tags().isEmpty();
     }
 
     /**

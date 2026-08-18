@@ -34,7 +34,8 @@ import org.junit.jupiter.api.io.TempDir;
  * <p>固定世界「searchworld」四域语料均可被关键词「迷雾」命中：
  * <ul>
  *   <li><b>region</b> — 区域 迷雾森林（name+tag+desc）</li>
- *   <li><b>hex</b> — 单格 0_0（terrain 森林 + description 迷雾笼罩的密林）</li>
+ *   <li><b>hex</b> — 单格 0_0（terrain 森林 + description 迷雾笼罩的密林）；另有标签格
+ *     2_0（tags 煤矿=储量300万吨，验证聚合器透传 hex 标签语料）</li>
  *   <li><b>world</b> — 元素 都城=长安迷雾（n0000:worldview:都城）</li>
  *   <li><b>doc</b> — 文档 mcp_search_doc（title 迷雾森林考察，直读 DocStore）</li>
  * </ul>
@@ -74,7 +75,11 @@ class GsimSearchToolTest {
                         new MapData.HexCell("#228B22", "forest", null, null, "迷雾笼罩的密林", 0, Map.of(), Map.of()),
                         // 无标注平原：不含「迷雾」相关字，不参与命中
                         "1_0",
-                        MapData.HexCell.of("#6CC261", "plains")),
+                        MapData.HexCell.of("#6CC261", "plains"),
+                        // 标签格：tags 文本经 HexSearchSource 透传进 hex 域语料
+                        "2_0",
+                        new MapData.HexCell(
+                                "#808080", "mountain", null, null, "", 0, Map.of(), Map.of("煤矿", "储量300万吨"))),
                 List.of(),
                 Map.of(),
                 Map.of(),
@@ -164,6 +169,25 @@ class GsimSearchToolTest {
         ToolResult r = search("虚无");
         assertTrue(r.success(), "error: " + r.error());
         assertTrue(r.items().isEmpty(), "items: " + r.items());
+    }
+
+    @Test
+    @DisplayName("标签关键词命中 hex 域：聚合器透传 HexSearchSource，零改动仍工作")
+    void keywordMatchesHexTagsThroughAggregator() {
+        ToolResult byKey = search("煤矿");
+        assertTrue(byKey.success(), "error: " + byKey.error());
+        List<String> paths = byKey.items().stream().map(ToolResult.Item::path).toList();
+        assertIterableEquals(List.of("gsimap:hex:2_0"), paths, "paths: " + paths);
+        ToolResult.Item hit = byKey.items().get(0);
+        assertTrue(hit.snippet().startsWith("type=hex | "), "snippet: " + hit.snippet());
+        assertTrue(hit.snippet().contains("煤矿：储量300万吨"), "snippet: " + hit.snippet());
+        assertTrue(hit.score() > 0, "score: " + hit.score());
+
+        ToolResult byValue = search("300");
+        assertTrue(byValue.success(), "error: " + byValue.error());
+        assertIterableEquals(
+                List.of("gsimap:hex:2_0"),
+                byValue.items().stream().map(ToolResult.Item::path).toList());
     }
 
     // ── domains 过滤 ──

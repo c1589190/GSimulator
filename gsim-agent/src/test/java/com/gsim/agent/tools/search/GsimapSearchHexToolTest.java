@@ -25,21 +25,24 @@ import org.junit.jupiter.api.io.TempDir;
  * GsimapSearchHexTool — {@code gsimap_search_hex} 单格域搜索测试。
  *
  * <p>覆盖：地形名命中（key=gsimap:hex:q_r）、description/symbol 文本命中、
- * 未注册地形回退原值、无匹配返回空、nodeId 无地图返回空（不抛异常）、
- * 语料规模守卫分支（超限时仅非空 description/symbol 的格被索引且不抛异常）、
- * wiSupplier 非空时的回合数推导路径。
+ * tags 文本命中（全角冒号分段使 key/value 独立可搜）、未注册地形回退原值、
+ * 无匹配返回空、nodeId 无地图返回空（不抛异常）、语料规模守卫分支（超限时仅
+ * description/symbol/tags 任一非空的格被索引且不抛异常）、wiSupplier 非空时的
+ * 回合数推导路径。
  */
 @DisplayName("GsimapSearchHexTool — 单格域搜索")
 class GsimapSearchHexToolTest {
 
     private static final String WORLD = "mapworld";
     private static final String NO_MAP_WORLD = "nomapworld";
+    private static final String TAG_WORLD = "tagworld";
 
     private static final String KEY_ALTAR = "gsimap:hex:10_-5";
     private static final String KEY_FOREST = "gsimap:hex:0_0";
     private static final String KEY_WATER = "gsimap:hex:2_3";
     private static final String KEY_PLAINS = "gsimap:hex:-4_1";
     private static final String KEY_LAVA = "gsimap:hex:5_5";
+    private static final String KEY_TAGGED = "gsimap:hex:0_0";
 
     @TempDir
     Path tmpDir;
@@ -76,6 +79,33 @@ class GsimapSearchHexToolTest {
                 Map.of(),
                 Map.of());
         MapStore.saveFull(tmpDir, WORLD, "n0000", mapData);
+
+        // 标签世界：hex(0,0) 仅 tags 非空（description/symbol 空）
+        WorldIndexManager.createWorld(tmpDir, TAG_WORLD, "标签世界");
+        MapData tagMap = new MapData(
+                30,
+                false,
+                Map.of(
+                        "0_0",
+                        new MapData.HexCell(
+                                "#228B22",
+                                "forest",
+                                null,
+                                null,
+                                "",
+                                0,
+                                Map.of(),
+                                Map.of("煤炭资源", "23662吨"))),
+                List.of(),
+                Map.of(),
+                Map.of(),
+                List.of(),
+                List.of(),
+                MapData.TerrainType.defaults(),
+                List.of(),
+                Map.of(),
+                Map.of());
+        MapStore.saveFull(tmpDir, TAG_WORLD, "n0000", tagMap);
 
         mapService = new MapService(tmpDir);
         tool = new GsimapSearchHexTool(new SearchToolContext(() -> null, mapService, null, null));
@@ -174,6 +204,71 @@ class GsimapSearchHexToolTest {
         assertTrue(bySymbol.success(), "error: " + bySymbol.error());
         assertEquals(1, bySymbol.items().size(), "items: " + bySymbol.items());
         assertEquals(KEY_WATER, bySymbol.items().get(0).path());
+    }
+
+    @Test
+    @DisplayName("tags 文本命中：全角冒号分段使 key 与 value 独立可搜")
+    void tagsTextHits() {
+        ToolResult byKey = tool.execute(
+                new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "煤炭资源")));
+        assertTrue(byKey.success(), "error: " + byKey.error());
+        assertEquals(1, byKey.items().size(), "items: " + byKey.items());
+        ToolResult.Item hit = byKey.items().get(0);
+        assertEquals(KEY_TAGGED, hit.path());
+        assertEquals(KEY_TAGGED, hit.title());
+        assertTrue(hit.snippet().contains("煤炭资源：23662吨"), "snippet: " + hit.snippet());
+        assertTrue(hit.score() > 0, "score: " + hit.score());
+
+        ToolResult byValue = tool.execute(
+                new ToolCall("gsimap_search_hex", Map.of("worldId", TAG_WORLD, "keywords", "23662")));
+        assertTrue(byValue.success(), "error: " + byValue.error());
+        assertEquals(1, byValue.items().size(), "items: " + byValue.items());
+        assertEquals(KEY_TAGGED, byValue.items().get(0).path());
+    }
+
+    @Test
+    @DisplayName("语料规模守卫：仅 tags 非空（description/symbol 空）的格被保留索引，全空格被丢弃")
+    void guardKeepsTagOnlyHexesAndDropsEmptyHexes() {
+        WorldIndexManager.createWorld(tmpDir, "guardtagworld", "守卫标签世界");
+        MapData mapData = new MapData(
+                30,
+                false,
+                Map.of(
+                        "3_3",
+                        new MapData.HexCell(
+                                "#228B22", "forest", null, null, "", 0, Map.of(), Map.of("铁矿", "5吨")),
+                        "4_4",
+                        MapData.HexCell.of("#6CC261", "plains")),
+                List.of(),
+                Map.of(),
+                Map.of(),
+                List.of(),
+                List.of(),
+                MapData.TerrainType.defaults(),
+                List.of(),
+                Map.of(),
+                Map.of());
+        MapStore.saveFull(tmpDir, "guardtagworld", "n0000", mapData);
+
+        MapService guardedMapService = new MapService(tmpDir);
+        // 2 格 > 注入阈值 1 → 守卫生效：仅 tags 非空的 3_3 入选，全空的 4_4 被丢弃
+        GsimapSearchHexTool guarded =
+                new GsimapSearchHexTool(new SearchToolContext(() -> null, guardedMapService, null, null), 1);
+
+        List<SearchEntry> entries = guarded.buildEntries("guardtagworld", "n0000");
+        assertEquals(1, entries.size(), "entries: " + entries);
+        assertEquals("gsimap:hex:3_3", entries.get(0).key(), "keys: " + entries);
+
+        ToolResult byTagKey = guarded.execute(
+                new ToolCall("gsimap_search_hex", Map.of("worldId", "guardtagworld", "keywords", "铁矿")));
+        assertTrue(byTagKey.success(), "error: " + byTagKey.error());
+        assertEquals(1, byTagKey.items().size(), "items: " + byTagKey.items());
+        assertEquals("gsimap:hex:3_3", byTagKey.items().get(0).path());
+
+        ToolResult byTerrain = guarded.execute(
+                new ToolCall("gsimap_search_hex", Map.of("worldId", "guardtagworld", "keywords", "平原")));
+        assertTrue(byTerrain.success(), "error: " + byTerrain.error());
+        assertTrue(byTerrain.items().isEmpty(), "items: " + byTerrain.items());
     }
 
     @Test
