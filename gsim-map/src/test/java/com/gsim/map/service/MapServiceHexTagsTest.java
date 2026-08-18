@@ -45,8 +45,9 @@ class MapServiceHexTagsTest {
         return new MapData(
                 30,
                 false,
-                Map.of(MapData.hexKey(0, 0), new MapData.HexCell(
-                        "#6CC261", "plains", null, null, description, 0, Map.of(), tags)),
+                Map.of(
+                        MapData.hexKey(0, 0),
+                        new MapData.HexCell("#6CC261", "plains", null, null, description, 0, Map.of(), tags)),
                 List.of(),
                 Map.of(),
                 Map.of(),
@@ -138,8 +139,8 @@ class MapServiceHexTagsTest {
         saveRoot(mapWithHex("王都", Map.of("a", "1")));
         MapService service = new MapService(tmpDir);
 
-        IllegalArgumentException e = assertThrows(
-                IllegalArgumentException.class, () -> service.removeHexTag(WORLD, "n0000", 0, 0, "nope"));
+        IllegalArgumentException e =
+                assertThrows(IllegalArgumentException.class, () -> service.removeHexTag(WORLD, "n0000", 0, 0, "nope"));
         assertEquals("Tag not found: nope on hex 0_0", e.getMessage());
     }
 
@@ -149,8 +150,8 @@ class MapServiceHexTagsTest {
         saveRoot(mapWithHex("王都", Map.of("a", "1")));
         MapService service = new MapService(tmpDir);
 
-        IllegalArgumentException e = assertThrows(
-                IllegalArgumentException.class, () -> service.removeHexTag(WORLD, "n0000", 9, -9, "a"));
+        IllegalArgumentException e =
+                assertThrows(IllegalArgumentException.class, () -> service.removeHexTag(WORLD, "n0000", 9, -9, "a"));
         assertEquals("Hex not found: 9_-9", e.getMessage());
     }
 
@@ -165,7 +166,9 @@ class MapServiceHexTagsTest {
 
         MapDiff diff = MapStore.loadDiff(tmpDir, WORLD, "n0001");
         assertNotNull(diff, "child diff must exist");
-        assertTrue(diff.changed().containsKey("0_0"), "changed hexes must contain 0_0: " + diff.changed().keySet());
+        assertTrue(
+                diff.changed().containsKey("0_0"),
+                "changed hexes must contain 0_0: " + diff.changed().keySet());
         assertEquals("23662吨", diff.changed().get("0_0").tags().get("煤炭资源"), "diff cell carries the new tag");
     }
 }

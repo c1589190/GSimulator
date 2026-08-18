@@ -38,8 +38,7 @@ class HexCellTagsTest {
     @Test
     @DisplayName("构造器 null tags → 空不可变 map（冻结生效）")
     void nullTagsBecomesEmptyFrozenMap() {
-        MapData.HexCell cell = new MapData.HexCell(
-                "#228B22", "forest", "祭", null, "神秘祭坛", 0, Map.of(), null);
+        MapData.HexCell cell = new MapData.HexCell("#228B22", "forest", "祭", null, "神秘祭坛", 0, Map.of(), null);
 
         assertNotNull(cell.tags());
         assertTrue(cell.tags().isEmpty());
@@ -94,10 +93,9 @@ class HexCellTagsTest {
     @Test
     @DisplayName("仅修改 tags → MapDiff.compute 检测 changed 含该 hex")
     void tagsOnlyChangeIsDetectedByMapDiff() {
-        MapData.HexCell base = new MapData.HexCell(
-                "#228B22", "forest", null, null, "", 0, Map.of(), Map.of("a", "1"));
-        MapData.HexCell changed = new MapData.HexCell(
-                "#228B22", "forest", null, null, "", 0, Map.of(), Map.of("a", "2"));
+        MapData.HexCell base = new MapData.HexCell("#228B22", "forest", null, null, "", 0, Map.of(), Map.of("a", "1"));
+        MapData.HexCell changed =
+                new MapData.HexCell("#228B22", "forest", null, null, "", 0, Map.of(), Map.of("a", "2"));
 
         MapData parent = mapWithHex("0_0", base);
         MapData child = mapWithHex("0_0", changed);
