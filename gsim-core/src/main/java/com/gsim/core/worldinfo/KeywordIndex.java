@@ -1,5 +1,6 @@
 package com.gsim.core.worldinfo;
 
+import com.gsim.core.search.SearchTextTokenizer;
 import java.util.*;
 import java.util.Locale;
 
@@ -140,18 +141,7 @@ public final class KeywordIndex {
     // -- helpers --
 
     private static List<String> tokenize(String text) {
-        if (text == null || text.isBlank()) return List.of();
-        List<String> tokens = new ArrayList<>();
-        for (String seg : text.split("[\\s，。、；：！？,.\\-]+")) {
-            if (seg.isBlank()) continue;
-            seg = seg.trim().toLowerCase(Locale.ROOT);
-            tokens.add(seg);
-            // unigram tokens so CJK text without spaces is still searchable
-            for (int i = 0; i < seg.length(); i++) {
-                tokens.add(String.valueOf(seg.charAt(i)));
-            }
-        }
-        return tokens.stream().distinct().toList();
+        return SearchTextTokenizer.tokenize(text);
     }
 
     private static String snippet(String value, String keyword) {
