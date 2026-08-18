@@ -19,8 +19,9 @@ public final class GsimapToolRegistrar {
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
-     * @param searchCtx  the shared search tool context（T8 接线传递；T9 renameRegion 传播将
-     *                   在此使用，本方法当前保持既有 25 个工具注册行为不变）
+     * @param searchCtx  the shared search tool context（T8 接线传递；T9 renameRegion 传播
+     *                   已消费——GsimapRenameRegionTool 借此改写 LinkIndex 关联；其余
+     *                   24 个 gsimap 工具注册行为不变）
      */
     public static void registerAll(ToolRegistry registry, MapService mapService, SearchToolContext searchCtx) {
         // ── Query tools (9) ─────────────────────────────────
@@ -47,7 +48,7 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapRemoveHexFromRegionTool(mapService));
         registry.register(new GsimapCreateRegionTool(mapService));
         registry.register(new GsimapDeleteRegionTool(mapService));
-        registry.register(new GsimapRenameRegionTool(mapService));
+        registry.register(new GsimapRenameRegionTool(mapService, searchCtx));
         registry.register(new GsimapMergeRegionsTool(mapService));
 
         // ── Edge pathway tools (4) ────────────────────────────
