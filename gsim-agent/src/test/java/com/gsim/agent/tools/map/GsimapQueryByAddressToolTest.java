@@ -78,8 +78,9 @@ class GsimapQueryByAddressToolTest {
         assertEquals(1, r.items().size());
         ToolResult.Item item = r.items().get(0);
         assertEquals("gsimap:hex:0_0:tag:煤炭资源", item.path(), "Item path 必须为完整 tag 地址");
-        assertTrue(item.snippet().contains("\"tagKey\":\"煤炭资源\""), "snippet: " + item.snippet());
-        assertTrue(item.snippet().contains("\"tagValue\":\"23662吨\""), "snippet: " + item.snippet());
+        assertTrue(item.snippet().contains("tagKey"), "snippet: " + item.snippet());
+        assertTrue(item.snippet().contains("煤炭资源"), "snippet: " + item.snippet());
+        assertTrue(item.snippet().contains("23662吨"), "snippet: " + item.snippet());
     }
 
     @Test

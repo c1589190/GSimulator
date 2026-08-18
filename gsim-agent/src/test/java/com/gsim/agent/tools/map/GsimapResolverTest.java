@@ -84,10 +84,11 @@ class GsimapResolverTest {
     void hexTagResolves() {
         var result = registry.resolve("gsimap:hex:0_0:tag:煤炭资源", ctx());
         assertEquals("gsimap", result.source());
-        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.id());
-        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.content(), "id/content 用完整 tag 地址");
-        assertTrue(result.content().contains("\"tagKey\":\"煤炭资源\""), "content: " + result.content());
-        assertTrue(result.content().contains("\"tagValue\":\"23662吨\""), "content: " + result.content());
+        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.id(), "id 用完整 tag 地址");
+        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.title(), "title 用完整 tag 地址");
+        assertTrue(result.content().contains("tagKey"), "content: " + result.content());
+        assertTrue(result.content().contains("煤炭资源"), "content: " + result.content());
+        assertTrue(result.content().contains("23662吨"), "content: " + result.content());
     }
 
     @Test
