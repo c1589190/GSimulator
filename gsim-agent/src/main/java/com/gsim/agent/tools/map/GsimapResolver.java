@@ -16,6 +16,7 @@ import java.util.Map;
  * <ul>
  *   <li>{@code gsimap:region:{name}} — 按名称查找省/区域</li>
  *   <li>{@code gsimap:hex:{q}_{r}} — 查找单个六角格</li>
+ *   <li>{@code gsimap:hex:{q}_{r}:tag:{tag_key}} — 按标签键解析 hex 的单个标签</li>
  *   <li>{@code gsimap:city:{name}} — 按名称查找城市</li>
  *   <li>{@code gsimap:terrain:{key}} — 查找地形类型定义</li>
  * </ul>
@@ -88,26 +89,58 @@ public final class GsimapResolver implements Resolver {
     }
 
     private ResolvedRef resolveHex(MapData map, String hexKey) {
-        MapData.HexCell cell = map.hexes().get(hexKey);
-        if (cell == null) {
-            throw new IllegalArgumentException("Hex not found: " + hexKey);
+        // entityId 可能是 "q_r"（整格）或 "q_r:tag:<tagKey>"（单标签）——按第一个冒号切分
+        int colon = hexKey.indexOf(':');
+        String cellKey = hexKey;
+        String rest = null;
+        if (colon >= 0) {
+            cellKey = hexKey.substring(0, colon);
+            rest = hexKey.substring(colon + 1);
         }
+        MapData.HexCell cell = map.hexes().get(cellKey);
+        if (cell == null) {
+            throw new IllegalArgumentException("Hex not found: " + cellKey);
+        }
+
+        String tagKey = null;
+        String tagValue = null;
+        String address = "gsimap:hex:" + cellKey;
+        if (rest != null) {
+            if (!rest.startsWith("tag:") || rest.substring(4).isBlank()) {
+                throw new IllegalArgumentException("Invalid hex tag address: gsimap:hex:" + hexKey);
+            }
+            tagKey = rest.substring(4);
+            tagValue = cell.tags().get(tagKey);
+            if (tagValue == null) {
+                throw new IllegalArgumentException("Tag not found: " + tagKey + " on hex " + cellKey);
+            }
+            address = "gsimap:hex:" + cellKey + ":tag:" + tagKey;
+        }
+
         String owner = null;
         for (var entry : map.provinces().entrySet()) {
-            if (entry.getValue().hexes().contains(hexKey)) {
+            if (entry.getValue().hexes().contains(cellKey)) {
                 owner = entry.getKey();
                 break;
             }
         }
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("address", "gsimap:hex:" + hexKey);
+        result.put("address", address);
         result.put("entityType", "hex");
-        result.put("hexKey", hexKey);
+        result.put("hexKey", cellKey);
         result.put("terrain", cell.terrain());
         result.put("color", cell.color());
         result.put("symbol", cell.symbol());
         if (owner != null) result.put("province", owner);
-        return new ResolvedRef("gsimap", "gsimap:hex:" + hexKey, hexKey, JsonUtils.toJson(result));
+        if (tagKey != null) {
+            result.put("tagKey", tagKey);
+            result.put("tagValue", tagValue);
+        }
+        if (tagKey == null) {
+            // 无 tag 子段：现有整格语义完全不变（id/content 保持原形）
+            return new ResolvedRef("gsimap", "gsimap:hex:" + cellKey, cellKey, JsonUtils.toJson(result));
+        }
+        return new ResolvedRef("gsimap", address, address, JsonUtils.toJson(result));
     }
 
     private ResolvedRef resolveCity(MapData map, String name) {

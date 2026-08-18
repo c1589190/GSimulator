@@ -17,6 +17,7 @@ import java.util.Map;
  * <ul>
  *   <li>{@code gsimap:region:{name}} — looks up a province by name</li>
  *   <li>{@code gsimap:hex:{q}_{r}} — looks up a single hex cell</li>
+ *   <li>{@code gsimap:hex:{q}_{r}:tag:{tag_key}} — 按标签键解析 hex 的单个标签</li>
  *   <li>{@code gsimap:city:{name}} — looks up a city by name</li>
  *   <li>{@code gsimap:terrain:{key}} — looks up terrain type definition</li>
  * </ul>
@@ -111,14 +112,38 @@ public final class GsimapQueryByAddressTool extends AbstractGsimapTool {
     }
 
     private ToolResult resolveHex(MapData map, String hexKey, String address) {
-        MapData.HexCell cell = map.hexes().get(hexKey);
-        if (cell == null) {
-            return ToolResult.fail(name(), "Hex not found: " + hexKey);
+        // entityId 可能是 "q_r"（整格）或 "q_r:tag:<tagKey>"（单标签）——按第一个冒号切分
+        int colon = hexKey.indexOf(':');
+        String cellKey = hexKey;
+        String rest = null;
+        if (colon >= 0) {
+            cellKey = hexKey.substring(0, colon);
+            rest = hexKey.substring(colon + 1);
         }
+        MapData.HexCell cell = map.hexes().get(cellKey);
+        if (cell == null) {
+            return ToolResult.fail(name(), "Hex not found: " + cellKey);
+        }
+
+        String tagKey = null;
+        String tagValue = null;
+        String itemPath = "gsimap:hex:" + cellKey;
+        if (rest != null) {
+            if (!rest.startsWith("tag:") || rest.substring(4).isBlank()) {
+                return ToolResult.fail(name(), "Invalid hex tag address: gsimap:hex:" + hexKey);
+            }
+            tagKey = rest.substring(4);
+            tagValue = cell.tags().get(tagKey);
+            if (tagValue == null) {
+                return ToolResult.fail(name(), "Tag not found: " + tagKey + " on hex " + cellKey);
+            }
+            itemPath = "gsimap:hex:" + cellKey + ":tag:" + tagKey;
+        }
+
         // Find which province owns this hex
         String owner = null;
         for (var entry : map.provinces().entrySet()) {
-            if (entry.getValue().hexes().contains(hexKey)) {
+            if (entry.getValue().hexes().contains(cellKey)) {
                 owner = entry.getKey();
                 break;
             }
@@ -126,13 +151,17 @@ public final class GsimapQueryByAddressTool extends AbstractGsimapTool {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("address", address);
         result.put("entityType", "hex");
-        result.put("hexKey", hexKey);
+        result.put("hexKey", cellKey);
         result.put("terrain", cell.terrain());
         result.put("color", cell.color());
         result.put("symbol", cell.symbol());
         if (owner != null) result.put("province", owner);
+        if (tagKey != null) {
+            result.put("tagKey", tagKey);
+            result.put("tagValue", tagValue);
+        }
         return ToolResult.ok(
-                name(), List.of(new ToolResult.Item(hexKey, "gsimap:hex:" + hexKey, JsonUtils.toJson(result), 1.0)));
+                name(), List.of(new ToolResult.Item(cellKey, itemPath, JsonUtils.toJson(result), 1.0)));
     }
 
     private ToolResult resolveCity(MapData map, String name, String address) {

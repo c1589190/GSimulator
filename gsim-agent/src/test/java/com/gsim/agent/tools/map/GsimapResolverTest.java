@@ -37,7 +37,10 @@ class GsimapResolverTest {
         MapData mapData = new MapData(
                 30,
                 false,
-                Map.of(MapData.hexKey(0, 0), MapData.HexCell.of("#6CC261", "plains")),
+                Map.of(
+                        MapData.hexKey(0, 0),
+                        new MapData.HexCell(
+                                "#6CC261", "plains", null, null, "", 0, Map.of(), Map.of("煤炭资源", "23662吨"))),
                 List.of(),
                 Map.of("迷雾森林", new MapData.Province(List.of(MapData.hexKey(0, 0)), "#228B22", "forest", "浓雾笼罩", "")),
                 Map.of("洛阳", new MapData.City(0, 0, "洛阳", "都城")),
@@ -74,6 +77,46 @@ class GsimapResolverTest {
         assertEquals("gsimap", result.source());
         assertEquals("gsimap:hex:0_0", result.id());
         assertTrue(result.content().contains("0_0"), "content: " + result.content());
+    }
+
+    @Test
+    @DisplayName("gsimap:hex:{q}_{r}:tag:{tag_key} 解析单标签")
+    void hexTagResolves() {
+        var result = registry.resolve("gsimap:hex:0_0:tag:煤炭资源", ctx());
+        assertEquals("gsimap", result.source());
+        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.id());
+        assertEquals("gsimap:hex:0_0:tag:煤炭资源", result.content(), "id/content 用完整 tag 地址");
+        assertTrue(result.content().contains("\"tagKey\":\"煤炭资源\""), "content: " + result.content());
+        assertTrue(result.content().contains("\"tagValue\":\"23662吨\""), "content: " + result.content());
+    }
+
+    @Test
+    @DisplayName("hex tag 不存在抛 IllegalArgumentException 且消息含 Tag not found")
+    void missingHexTagThrows() {
+        var e = assertThrows(IllegalArgumentException.class, () -> registry.resolve("gsimap:hex:0_0:tag:铁矿", ctx()));
+        assertTrue(e.getMessage().contains("Tag not found"), "msg: " + e.getMessage());
+        assertTrue(e.getMessage().contains("铁矿"), "msg: " + e.getMessage());
+    }
+
+    @Test
+    @DisplayName("空 tagKey 抛 Invalid hex tag address")
+    void blankHexTagKeyThrows() {
+        var e = assertThrows(IllegalArgumentException.class, () -> registry.resolve("gsimap:hex:0_0:tag:", ctx()));
+        assertTrue(e.getMessage().contains("Invalid hex tag address"), "msg: " + e.getMessage());
+    }
+
+    @Test
+    @DisplayName("非 tag: 前缀子段抛 Invalid hex tag address")
+    void nonTagPrefixThrows() {
+        var e = assertThrows(IllegalArgumentException.class, () -> registry.resolve("gsimap:hex:0_0:foo:bar", ctx()));
+        assertTrue(e.getMessage().contains("Invalid hex tag address"), "msg: " + e.getMessage());
+    }
+
+    @Test
+    @DisplayName("不存在的 hex 带 tag 子段同样抛 Hex not found")
+    void missingHexWithTagThrows() {
+        var e = assertThrows(IllegalArgumentException.class, () -> registry.resolve("gsimap:hex:99_99:tag:x", ctx()));
+        assertTrue(e.getMessage().contains("Hex not found"), "msg: " + e.getMessage());
     }
 
     @Test
