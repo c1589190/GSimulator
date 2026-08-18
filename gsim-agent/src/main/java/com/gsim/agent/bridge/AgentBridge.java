@@ -87,11 +87,21 @@ public final class AgentBridge {
 
         // 统一 @ 引用解析
         toolRegistry.register(new ResolveRefTool(
-                ctx.worldsDir(), ctx.activeWorldId().get(), ctx.importDir(), ctx.docStore(), ctx.docCacheManager()));
+                ctx.resolverRegistry(),
+                ctx.worldsDir(),
+                ctx.activeWorldId().get(),
+                ctx.importDir(),
+                ctx.docStore(),
+                ctx.docCacheManager()));
 
         // 通用文本编辑工具（@cache: ← text_edit → @cache:）
         toolRegistry.register(new TextEditTool(
-                ctx.worldsDir(), ctx.activeWorldId().get(), ctx.importDir(), ctx.docStore(), ctx.docCacheManager()));
+                ctx.resolverRegistry(),
+                ctx.worldsDir(),
+                ctx.activeWorldId().get(),
+                ctx.importDir(),
+                ctx.docStore(),
+                ctx.docCacheManager()));
 
         log.info("Registered import + 9 docs + ref + text_edit core tools (docsDir={})", ctx.docsDir());
     }

@@ -48,6 +48,9 @@ public class ApplicationContext {
     private Runnable onRootReadyCallback;
     private String activeRootId;
 
+    // 统一引用解析注册中心（GSimulatorApplication 装配，Main 注册 gsimap: resolver）
+    private com.gsim.core.ref.ResolverRegistry resolverRegistry;
+
     // Command instances (injected by GSimulatorApplication)
     private ChatCommand chatCommand;
     private WorldCommand worldCommand;
@@ -163,6 +166,14 @@ public class ApplicationContext {
 
     public void setActiveRootId(String rootId) {
         this.activeRootId = rootId;
+    }
+
+    public com.gsim.core.ref.ResolverRegistry getResolverRegistry() {
+        return resolverRegistry;
+    }
+
+    public void setResolverRegistry(com.gsim.core.ref.ResolverRegistry resolverRegistry) {
+        this.resolverRegistry = resolverRegistry;
     }
 
     /** 设置 root 就绪回调（bootstrap/root create/switch 后触发）。 */

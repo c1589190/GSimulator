@@ -6,17 +6,19 @@ import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.doc.DocCacheManager;
 import com.gsim.core.doc.DocStore;
-import com.gsim.core.ref.RefResolver;
 import com.gsim.core.ref.RefResolver.ResolvedRef;
+import com.gsim.core.ref.ResolverContext;
+import com.gsim.core.ref.ResolverRegistry;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 /**
- * resolve_ref — 统一 @ 引用解析工具，LLM 可通过 @import:/@world:/@doc: 格式读取任意来源的文档/元素。
+ * resolve_ref — 统一 @ 引用解析工具，LLM 可通过 @import:/@world:/@doc:/@cache:/gsimap: 格式读取任意来源的文档/元素。
  */
 public final class ResolveRefTool implements AgentTool {
 
+    private final ResolverRegistry registry;
     private final Path worldsDir;
     private final String activeWorldId;
     private final Path importDir;
@@ -26,6 +28,7 @@ public final class ResolveRefTool implements AgentTool {
     /**
      * 构造引用解析工具。
      *
+     * @param registry      统一引用解析注册中心（内置 @world/@doc/@cache/@import/裸引用 + 应用层 gsimap:）
      * @param worldsDir     世界目录根路径
      * @param activeWorldId 当前活跃世界 ID
      * @param importDir     导入文档目录
@@ -33,7 +36,13 @@ public final class ResolveRefTool implements AgentTool {
      * @param cacheManager  文档缓存管理器实例
      */
     public ResolveRefTool(
-            Path worldsDir, String activeWorldId, Path importDir, DocStore docStore, DocCacheManager cacheManager) {
+            ResolverRegistry registry,
+            Path worldsDir,
+            String activeWorldId,
+            Path importDir,
+            DocStore docStore,
+            DocCacheManager cacheManager) {
+        this.registry = registry;
         this.worldsDir = worldsDir;
         this.activeWorldId = activeWorldId;
         this.importDir = importDir;
@@ -56,6 +65,12 @@ public final class ResolveRefTool implements AgentTool {
               @world:<cpId>:<key>           — 读取当前活跃节点的 World 元素
               @doc:<docId>                  — 读取 Doc/Board 文档
               @cache:<id>                   — 读取缓存文本 (大段工具输出的短引用)
+              gsimap:region:<name>          — 读取地图区域
+              gsimap:hex:<q>_<r>            — 读取地图单格
+              gsimap:city:<name>            — 读取地图城市
+              gsimap:terrain:<key>          — 读取地形定义
+              <nodeId>:<cpId>:<key>         — 读取指定节点的 World 元素（裸引用）
+              <cpId>:<key>                  — 读取当前活跃节点的 World 元素（裸引用）
             """;
     }
 
@@ -86,7 +101,8 @@ public final class ResolveRefTool implements AgentTool {
             String worldId = call.param("worldId", activeWorldId);
             // 与 DocCacheManager 共用同一缓存目录（由宿主按 docsDir 注入）
             Path cacheDir = cacheManager.cacheDir();
-            ResolvedRef resolved = RefResolver.resolve(ref, worldsDir, worldId, importDir, docStore, cacheDir);
+            ResolverContext ctx = ResolverContext.of(worldsDir, worldId, importDir, docStore, cacheDir);
+            ResolvedRef resolved = registry.resolve(ref, ctx);
 
             StringBuilder sb = new StringBuilder();
             sb.append(resolved.content());

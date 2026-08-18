@@ -219,6 +219,10 @@ public class GSimulatorApplication {
                 java.util.Map.of());
         this.inlineRefResolver = new com.gsim.core.ref.InlineRefResolver(docStore, importDocService);
 
+        // 统一引用解析注册中心（内置 @world/@doc/@cache/@import/裸引用；gsimap: 由 Main 在 MapService 就绪后注册进同一实例）
+        com.gsim.core.ref.ResolverRegistry resolverRegistry = com.gsim.core.ref.ResolverRegistry.createWithBuiltins();
+        ctx.setResolverRegistry(resolverRegistry);
+
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
         AgentBridge.registerCoreTools(
                 toolRegistry,
@@ -232,7 +236,8 @@ public class GSimulatorApplication {
                         docIndex,
                         embeddingClient,
                         activeWorldId::get,
-                        compositeSink));
+                        compositeSink,
+                        resolverRegistry));
 
         // 注册 Agent 工具（仅 agent 模式）
         if (agentEnabled) {

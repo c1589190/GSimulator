@@ -148,6 +148,9 @@ public class Main {
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
             AgentBridge.registerMapTools(toolRegistry, mapService);
 
+            // gsimap: 前缀引用解析器（依赖 MapService）注册进统一 ResolverRegistry（resolve_ref/text_edit 即刻可用）
+            app.getContext().getResolverRegistry().register(new com.gsim.agent.tools.map.GsimapResolver(mapService));
+
             // Map HTTP 服务器（map.port，默认 8711）— 始终启动
             int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());
             GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService, config.mapConfig());

@@ -5,6 +5,7 @@ import com.gsim.core.doc.DocStore;
 import com.gsim.core.embedding.EmbeddingClient;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.importing.ImportDocumentService;
+import com.gsim.core.ref.ResolverRegistry;
 import com.gsim.core.skill.SkillIndex;
 import java.nio.file.Path;
 import java.util.function.Supplier;
@@ -25,4 +26,5 @@ public record CoreToolContext(
         SkillIndex docIndex,
         EmbeddingClient embeddingClient,
         Supplier<String> activeWorldId,
-        AgentProgressSink progressSink) {}
+        AgentProgressSink progressSink,
+        ResolverRegistry resolverRegistry) {}

@@ -6,16 +6,12 @@ import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.doc.DocCacheManager;
 import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.Document;
-import com.gsim.core.importing.ImportDocumentService;
+import com.gsim.core.ref.RefResolver.ResolvedRef;
+import com.gsim.core.ref.ResolverContext;
+import com.gsim.core.ref.ResolverRegistry;
 import com.gsim.core.text.TextEditor;
 import com.gsim.core.text.TextEditor.EditResult;
 import com.gsim.core.text.TextEditor.Op;
-import com.gsim.core.worldinfo.Element;
-import com.gsim.core.worldinfo.NodeSnapshot;
-import com.gsim.core.worldinfo.WorldInformation;
-import com.gsim.core.worldinfo.loader.ActiveStateManager;
-import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +44,7 @@ public final class TextEditTool implements AgentTool {
 
     public static final String NAME = "text_edit";
 
+    private final ResolverRegistry registry;
     private final Path worldsDir;
     private final String activeWorldId;
     private final Path importDir;
@@ -57,14 +54,21 @@ public final class TextEditTool implements AgentTool {
     /**
      * 创建文本编辑工具。
      *
-     * @param worldsDir      世界数据根目录
-     * @param activeWorldId  当前活跃的世界 ID
-     * @param importDir      导入文档目录
-     * @param docStore       文档存储
-     * @param cacheManager   文档缓存管理器
+     * @param registry      统一引用解析注册中心（@world/@doc/@cache/@import/gsimap:）
+     * @param worldsDir     世界数据根目录
+     * @param activeWorldId 当前活跃的世界 ID
+     * @param importDir     导入文档目录
+     * @param docStore      文档存储
+     * @param cacheManager  文档缓存管理器
      */
     public TextEditTool(
-            Path worldsDir, String activeWorldId, Path importDir, DocStore docStore, DocCacheManager cacheManager) {
+            ResolverRegistry registry,
+            Path worldsDir,
+            String activeWorldId,
+            Path importDir,
+            DocStore docStore,
+            DocCacheManager cacheManager) {
+        this.registry = registry;
         this.worldsDir = worldsDir;
         this.activeWorldId = activeWorldId;
         this.importDir = importDir;
@@ -200,80 +204,16 @@ public final class TextEditTool implements AgentTool {
 
     private record SourceResolved(String text, String label) {}
 
-    private SourceResolved resolveSource(String source, String worldId) throws Exception {
-        if (source.startsWith("@cache:")) {
-            String id = source.substring(7).trim();
-            String cached = cacheManager.get(id);
-            if (cached == null) throw new IllegalArgumentException("Cache 不存在: " + id);
-            return new SourceResolved(cached, "@cache:" + id);
+    private SourceResolved resolveSource(String source, String worldId) {
+        // @ 前缀或 gsimap: 前缀 → 统一走 ResolverRegistry（@world 两段式解析到活跃节点；gsimap: 解析地图实体）
+        if (source.startsWith("@") || source.startsWith("gsimap:")) {
+            Path cacheDir = cacheManager.cacheDir();
+            ResolverContext ctx = ResolverContext.of(worldsDir, worldId, importDir, docStore, cacheDir);
+            ResolvedRef resolved = registry.resolve(source, ctx);
+            return new SourceResolved(resolved.content(), resolved.title() + " [" + resolved.source() + "]");
         }
-
-        if (source.startsWith("@world:")) {
-            String path = source.substring(7).trim();
-            return resolveWorldSource(path, worldId);
-        }
-
-        if (source.startsWith("@doc:")) {
-            String docId = source.substring(5).trim();
-            if (docStore == null) throw new IllegalStateException("DocStore 不可用");
-            Document doc = docStore.get(docId);
-            if (doc == null) throw new IllegalArgumentException("Doc 不存在: " + docId);
-            return new SourceResolved(doc.content(), "@doc:" + docId + " (" + doc.title() + ")");
-        }
-
-        if (source.startsWith("@import:")) {
-            String docId = source.substring(8).trim();
-            ImportDocumentService service = new ImportDocumentService(importDir);
-            var result = service.readDocument(docId, 0, 100000, true);
-            return new SourceResolved(result.content(), "@import:" + docId);
-        }
-
         // Raw text
         return new SourceResolved(source, "raw text (" + source.length() + " chars)");
-    }
-
-    private SourceResolved resolveWorldSource(String path, String worldId) {
-        if (worldId == null || worldId.isBlank()) {
-            throw new IllegalStateException("没有活跃 World");
-        }
-        String[] parts = path.split(":", 3);
-        String nodeId, cpId, key;
-
-        if (parts.length == 2) {
-            nodeId = null;
-            cpId = parts[0].trim();
-            key = parts[1].trim();
-        } else if (parts.length == 3) {
-            nodeId = parts[0].trim();
-            cpId = parts[1].trim();
-            key = parts[2].trim();
-        } else {
-            throw new IllegalArgumentException("@world: 格式需为 <cpId>:<key> 或 <nodeId>:<cpId>:<key>");
-        }
-
-        var active = ActiveStateManager.load(worldsDir, worldId);
-        if (active == null) throw new IllegalStateException("World 无活跃状态: " + worldId);
-
-        String resolveNodeId = nodeId != null ? nodeId : "n0000";
-        WorldInformation wi = new WorldManager(worldsDir).loadWorld(worldId);
-        if (wi == null) throw new IllegalStateException("无法加载 World: " + worldId);
-
-        NodeSnapshot node = wi.nodeById(resolveNodeId);
-        if (node == null) throw new IllegalArgumentException("Node 不存在: " + resolveNodeId);
-
-        var cp = node.checkpoint(cpId);
-        if (cp == null) throw new IllegalArgumentException("Checkpoint 不存在: " + cpId);
-
-        Element found = null;
-        for (Element el : cp.elements()) {
-            if (el.key().equals(key)) {
-                found = el;
-                break;
-            }
-        }
-        if (found == null) throw new IllegalArgumentException("Element 不存在: " + key);
-
-        return new SourceResolved(found.value(), "@world:" + resolveNodeId + ":" + cpId + ":" + key);
     }
 
     // ── Helpers ──
