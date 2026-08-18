@@ -53,7 +53,7 @@ function showHexDetail(q, r) {
   // Check if this hex belongs to a compressed region
   const compMeta = State.mapData._compressedMeta?.get(key);
   const compLabel = compMeta
-    ? ` <span style="font-size:10px;color:var(--accent);background:#333;padding:1px 6px;border-radius:3px">压缩区域 · ${compMeta.terrain} ×${compMeta.size}格</span>`
+    ? ` <span style="font-size:10px;color:var(--accent);background:#333;padding:1px 6px;border-radius:3px">压缩区域 · ${escapeHtml(compMeta.terrain)} ×${escapeHtml(String(compMeta.size))}格</span>`
     : '';
 
   let provName = '';
@@ -67,22 +67,29 @@ function showHexDetail(q, r) {
 
   body.innerHTML = `
     <div class="field"><label>地形</label>
-      <span class="val"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${cell.color||getTerrainColor(cell.terrain)};margin-right:4px;vertical-align:middle"></span>${cell.terrain}</span>
+      <span class="val"><span id="hexColorSwatch" style="display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:middle"></span>${escapeHtml(cell.terrain)}</span>
     </div>
     <div class="field"><label>产出</label>
       <span class="val">\u{1F56F}${tt.food||0} \u{1F4B0}${tt.gold||0} \u{1FAA8}${tt.stone||0} \u{1F463}${tt.moveCost||0}</span>
     </div>
-    ${cell.symbol ? `<div class="field"><label>符号</label><span class="val">${cell.symbol}</span></div>` : ''}
+    ${cell.symbol ? `<div class="field"><label>符号</label><span class="val">${escapeHtml(cell.symbol)}</span></div>` : ''}
     ${cell.riverMask > 0 ? `<div class="field"><label>河流</label><span class="val">掩码: ${cell.riverMask}</span></div>` : ''}
     <div class="field"><label>描述</label>
-      <textarea rows="2" onchange="updateHexDesc(${q},${r},this.value)">${cell.description||''}</textarea>
+      <textarea rows="2" onchange="updateHexDesc(${q},${r},this.value)">${escapeHtml(cell.description||'')}</textarea>
     </div>
     ${provName ? `<div class="field"><label>所属区域</label>
-      <span class="val" style="cursor:pointer;color:var(--accent);text-decoration:underline" onclick="selectProvince('${provName}')">${provName}</span>
+      <span class="val prov-link" style="cursor:pointer;color:var(--accent);text-decoration:underline">${escapeHtml(provName)}</span>
     </div>` : '<div class="field" style="color:var(--dim)">不属于任何区域</div>'}
+    ${cell.tags && Object.keys(cell.tags).length ? `<div class="field"><label>标签</label>${Object.entries(cell.tags).map(([k,v]) => `<div class="val" style="border-bottom:1px solid var(--border);padding:1px 0">${escapeHtml(k)}：${escapeHtml(v)}</div>`).join('')}</div>` : ''}
     <div style="margin-top:12px">
       <button onclick="document.getElementById('leftPanel').style.display='none'" style="font-size:10px">关闭</button>
     </div>`;
+
+  const swatch = body.querySelector('#hexColorSwatch');
+  if (swatch) swatch.style.background = cell.color || getTerrainColor(cell.terrain);
+
+  const provLink = body.querySelector('.prov-link');
+  if (provLink) provLink.addEventListener('click', () => selectProvince(provName));
 }
 
 function updateHexDesc(q, r, val) {

@@ -125,6 +125,23 @@ function render() {
     setStatus(`渲染: ${drawn}/${hexCount} hex (${(100*drawn/hexCount)|0}%)`);
   }
 
+  // ── Pass 3: Hex icon tags (on top, from cell.tags["图标显示"] / cell.symbol) ──
+  State.ctx.font = 'bold ' + (14 / State.zoom) + 'px sans-serif';
+  State.ctx.textAlign = 'center';
+  State.ctx.textBaseline = 'middle';
+  State.ctx.lineWidth = 3 / State.zoom;
+  State.ctx.strokeStyle = '#000000';
+  State.ctx.fillStyle = '#ffffff';
+  for (const [key, cell] of entries) {
+    const icon = (cell.tags && cell.tags['图标显示']) || cell.symbol || '';
+    if (!icon) continue;
+    const [q, r] = key.split('_').map(Number);
+    const {x, y} = hexToPixel(q, r);
+    if (x < vpLeft || x > vpRight || y < vpTop || y > vpBottom) continue;
+    State.ctx.strokeText(icon, x, y);
+    State.ctx.fillText(icon, x, y);
+  }
+
   State.ctx.restore();
   renderCompressedRegionBorder();
   renderPathways();
