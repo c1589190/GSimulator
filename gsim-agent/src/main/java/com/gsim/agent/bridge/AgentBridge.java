@@ -41,7 +41,7 @@ import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.map.service.MapService;
-import java.util.Map;
+import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -66,6 +66,16 @@ import org.slf4j.LoggerFactory;
 public final class AgentBridge {
 
     private static final Logger log = LoggerFactory.getLogger(AgentBridge.class);
+
+    /**
+     * 跨消费方共享的按世界缓存（T8 修复）：非活跃世界（请求 worldId ≠ baseSupplier 当前世界）
+     * 的 WorldInformation 统一经此缓存加载。搜索工具（Main 组装的 SearchToolContext.wiSupplier）
+     * 与 worldinfo 写入工具（registerWorldInfoTools 的 wiSupplier）必须看到同一实例——
+     * 否则同一世界出现两份 WorldInformation，写入侧（write_element 原地 upsert）与读取侧
+     * （搜索/链接改写 findLink）各自持有一份，索引/linkIndex 互相不可见（F3 实机复现）。
+     */
+    private static final ConcurrentHashMap<String, WorldInformation> SHARED_WORLD_INFO_CACHE =
+            new ConcurrentHashMap<>();
 
     private AgentBridge() {}
 
@@ -117,7 +127,7 @@ public final class AgentBridge {
      * 注册 world info + node 管理工具。
      *
      * <p>worldInfoSupplier 返回 null（Bootstrap 未产出）时仅注册 WorldListTool/WorldCreateTool 并告警。
-     * wiCache/wiSupplier 逻辑与迁移前一致：按 MCP 请求的 worldId 解析 WorldInformation，
+     * wiSupplier 逻辑与迁移前一致：按 MCP 请求的 worldId 解析 WorldInformation，
      * 避免跨 world 共享导致数据污染；供应器每次调用取最新实例，节点创建/世界切换后
      * 重建的 WorldInformation 对工具可见（与迁移前动态字段读语义等价）。
      *
@@ -134,18 +144,7 @@ public final class AgentBridge {
             log.warn("WorldInformation not available, skipping world info tool registration");
             return;
         }
-        // 按 worldId 解析 WorldInformation，避免跨 world 共享导致数据污染。
-        // 所有磁盘读取统一经 WorldManager（WorldInfoBuilder.discover 的唯一入口）。
-        WorldManager worldManager = new WorldManager(ctx.worldsDir());
-        Map<String, WorldInformation> wiCache = new ConcurrentHashMap<>();
-        Supplier<WorldInformation> wiSupplier = () -> {
-            String reqWorldId = GsimRequestContext.worldId();
-            WorldInformation current = ctx.worldInfoSupplier().get();
-            if (reqWorldId != null && current != null && !reqWorldId.equals(current.worldId())) {
-                return wiCache.computeIfAbsent(reqWorldId, worldManager::loadWorld);
-            }
-            return current;
-        };
+        Supplier<WorldInformation> wiSupplier = createWorldInfoSupplier(ctx.worldInfoSupplier(), ctx.worldsDir());
 
         // Query tools
         toolRegistry.register(new QueryCheckpointTool(wiSupplier, ctx.docStore(), ctx.coreConfig()));
@@ -173,6 +172,33 @@ public final class AgentBridge {
         toolRegistry.register(new NodeCreateTool(wiSupplier, ctx.worldsDir(), ctx.onNodeChanged()));
 
         log.info("Registered 14 world info + node + world mgmt tools");
+    }
+
+    /**
+     * 创建世界信息供应器（worldinfo 工具与搜索工具共用同一按世界缓存）。
+     *
+     * <p>语义（迁移前闭包的公开化）：按 {@link GsimRequestContext#worldId()} 解析——
+     * 请求世界与 {@code baseSupplier} 当前世界一致 → 返回 base 实例（应用侧可变
+     * WorldInformation，write_element 原地更新，节点创建/世界切换后重建对工具可见）；
+     * 其他世界 → {@link #SHARED_WORLD_INFO_CACHE} 按世界缓存磁盘加载实例。共享缓存保证
+     * 多个消费方（write_element 与搜索/链接读取）对同一非活跃世界持有同一实例，
+     * 避免双实例导致索引/linkIndex 互相不可见（F3 实机复现的分裂缺陷）。
+     *
+     * @param baseSupplier 当前（活跃）世界实例供应器（可为 null——此时仅缓存路径可用）
+     * @param worldsDir    世界目录根路径（磁盘加载入口，所有读取统一经 WorldManager）
+     * @return 世界信息供应器
+     */
+    public static Supplier<WorldInformation> createWorldInfoSupplier(
+            Supplier<WorldInformation> baseSupplier, Path worldsDir) {
+        WorldManager worldManager = new WorldManager(worldsDir);
+        return () -> {
+            String reqWorldId = GsimRequestContext.worldId();
+            WorldInformation current = baseSupplier.get();
+            if (reqWorldId != null && current != null && !reqWorldId.equals(current.worldId())) {
+                return SHARED_WORLD_INFO_CACHE.computeIfAbsent(reqWorldId, worldManager::loadWorld);
+            }
+            return current;
+        };
     }
 
     /**

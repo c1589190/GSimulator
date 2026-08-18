@@ -72,7 +72,9 @@ public final class GsimSearchTool implements AgentTool {
 
     @Override
     public String name() {
-        return "gsim_search";
+        // 短注册名（MCP wire 名 = gsim_search）：ToolRegistryMcpAdapter.toRegistryName 会无条件剥离
+        // gsim_ 前缀后再查注册表，长名（gsim_search）会导致 guard 查找失败（UNKNOWN_TOOL）。
+        return "search";
     }
 
     @Override

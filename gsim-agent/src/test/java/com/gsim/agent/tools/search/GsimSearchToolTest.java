@@ -128,7 +128,7 @@ class GsimSearchToolTest {
         for (int i = 0; i + 1 < kvPairs.length; i += 2) {
             params.put(kvPairs[i], kvPairs[i + 1]);
         }
-        return tool.execute(new ToolCall("gsim_search", params));
+        return tool.execute(new ToolCall("search", params));
     }
 
     // ── 关键词模式：跨域聚合 ──
@@ -242,7 +242,7 @@ class GsimSearchToolTest {
                 new SearchToolContext(() -> newWorld(), mapService, store, registry, tmpDir, null, null));
 
         ToolResult r =
-                addrTool.execute(new ToolCall("gsim_search", Map.of("worldId", WORLD, "query", "gsimap:region:迷雾森林")));
+                addrTool.execute(new ToolCall("search", Map.of("worldId", WORLD, "query", "gsimap:region:迷雾森林")));
 
         assertTrue(r.success(), "error: " + r.error());
         assertEquals(1, r.items().size(), "items: " + r.items());
@@ -262,7 +262,7 @@ class GsimSearchToolTest {
                 new SearchToolContext(() -> newWorld(), mapService, store, registry, tmpDir, null, null));
 
         ToolResult r =
-                addrTool.execute(new ToolCall("gsim_search", Map.of("worldId", WORLD, "query", "@doc:mcp_search_doc")));
+                addrTool.execute(new ToolCall("search", Map.of("worldId", WORLD, "query", "@doc:mcp_search_doc")));
 
         assertTrue(r.success(), "error: " + r.error());
         assertEquals(1, r.items().size(), "items: " + r.items());
@@ -282,7 +282,7 @@ class GsimSearchToolTest {
                 new SearchToolContext(() -> newWorld(), mapService, store, registry, tmpDir, null, null));
 
         ToolResult r =
-                addrTool.execute(new ToolCall("gsim_search", Map.of("worldId", WORLD, "query", "gsimap:region:迷雾森林")));
+                addrTool.execute(new ToolCall("search", Map.of("worldId", WORLD, "query", "gsimap:region:迷雾森林")));
 
         assertTrue(r.success(), "error: " + r.error());
         assertFalse(r.items().isEmpty(), "回退搜索应有命中: " + r.items());
@@ -300,7 +300,7 @@ class GsimSearchToolTest {
     @Test
     @DisplayName("缺 query → fail")
     void missingQueryFails() {
-        ToolResult r = tool.execute(new ToolCall("gsim_search", Map.of("worldId", WORLD)));
+        ToolResult r = tool.execute(new ToolCall("search", Map.of("worldId", WORLD)));
         assertFalse(r.success());
         assertTrue(r.error().contains("query is required"), "error: " + r.error());
     }

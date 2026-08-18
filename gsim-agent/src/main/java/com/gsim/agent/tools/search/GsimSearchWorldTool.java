@@ -33,7 +33,9 @@ public final class GsimSearchWorldTool extends AbstractSearchTool {
 
     @Override
     public String name() {
-        return "gsim_search_world";
+        // 短注册名（MCP wire 名 = gsim_search_world）：ToolRegistryMcpAdapter.toRegistryName
+        // 会无条件剥离 gsim_ 前缀后再查注册表，长名会导致 MCP guard 查找失败。
+        return "search_world";
     }
 
     @Override
