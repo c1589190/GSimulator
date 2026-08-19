@@ -149,7 +149,8 @@ public class DispatchSubAgentTool implements AgentTool {
         }
 
         // Dynamic validation against AgentConfigStore
-        if (configStore.get(type) == null) {
+        // orchestrator 与子代理派发 enum（search/sim）一致地被排除——不可作为子代理类型派发
+        if ("orchestrator".equals(type) || configStore.get(type) == null) {
             String available = configStore.agentIds().stream()
                     .filter(id -> !"orchestrator".equals(id))
                     .collect(Collectors.joining(", "));

@@ -159,6 +159,41 @@ class DispatchSubAgentToolTest {
     }
 
     @Test
+    @DisplayName("orchestrator 类型应被显式拒绝（即使存在于 configStore）")
+    void dispatchOrchestratorTypeRejects() throws Exception {
+        // orchestrator 是内置 agent，在 configStore 中真实存在——但作为子代理类型必须被显式排除
+        Path agentsDir = tempDir.resolve("agents");
+        Files.writeString(
+                agentsDir.resolve("orchestrator.json"),
+                """
+                {
+                    "agentId": "orchestrator",
+                    "llmProvider": "base",
+                    "staticSystemPrompt": "You are the orchestrator.",
+                    "maxToolRounds": 8,
+                    "temperature": 0.3,
+                    "maxTokens": 2048,
+                    "toolFilter": { "mode": "all" }
+                }
+                """);
+        configStore.reload(agentsDir);
+
+        assertTrue(configStore.agentIds().contains("orchestrator"), "reload 后 configStore 应包含 orchestrator");
+
+        ToolCall call = new ToolCall(
+                "dispatch_sub_agent",
+                Map.of(
+                        "type", "orchestrator",
+                        "prompt", "test"));
+        ToolResult result = tool.execute(call);
+
+        assertFalse(result.success(), "orchestrator 不应被允许作为子代理派发");
+        assertTrue(result.error().contains("orchestrator"), "错误信息应包含被拒绝的 type: " + result.error());
+        assertTrue(result.error().contains("Available"), "错误信息应列出可用类型: " + result.error());
+        assertFalse(result.error().contains("Available: orchestrator"), "可用类型列表不应包含 orchestrator");
+    }
+
+    @Test
     @DisplayName("prompt 为空应拒绝")
     void emptyPromptRejects() {
         ToolCall call = new ToolCall(

@@ -78,6 +78,11 @@ public class ToolFilterEvaluator {
             return true;
         }
 
+        // read_only 模式：用真实 permission 判定（静态表未注册 gsimap_* 条目，会误过滤只读地图工具）
+        if ("read_only".equals(config.mode())) {
+            return toolPermission == AgentTool.Permission.READ;
+        }
+
         // filter config mode 放行检查
         if (!allows(config, toolName)) {
             return false;

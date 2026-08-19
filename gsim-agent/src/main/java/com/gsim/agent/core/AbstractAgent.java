@@ -593,6 +593,9 @@ public class AbstractAgent {
             sb.append("error: ")
                     .append(result.error() != null ? result.error() : "(无错误信息)")
                     .append("\n");
+            sb.append("!! 工具调用失败。你必须如实告诉用户本次查询/操作未能完成，")
+                    .append("并且不得编造任何来自该工具的数据或结果。")
+                    .append("如果后续步骤依赖此结果，请明确说明数据不可用。\n");
         } else {
             for (int i = 0; i < result.items().size(); i++) {
                 var item = result.items().get(i);
