@@ -452,25 +452,67 @@ public class MapService {
             throw new IllegalArgumentException("Hex not found: " + key);
         }
 
-        Map<String, String> merged = new LinkedHashMap<>(cell.tags());
-        if (tags != null && !tags.isEmpty()) {
-            merged.putAll(tags);
+        Map<String, MapData.HexCell> hexes = new LinkedHashMap<>(map.hexes());
+        hexes.put(key, mergeCell(cell, description, tags));
+
+        MapData updated = withHexes(map, hexes);
+        saveMap(worldId, targetNode, updated);
+        return updated;
+    }
+
+    /**
+     * Set the description and/or tags of multiple hex cells in one diff.
+     *
+     * <p>Applies the same {@code description}/{@code tags} merge semantics as
+     * {@link #setHexTags} to every hex in {@code hexKeys}. Missing hex keys are
+     * silently skipped; if <em>none</em> of the keys exist an
+     * {@link IllegalArgumentException} listing all missing keys is thrown. All
+     * updates are persisted with a single {@link #saveMap} call — the whole batch
+     * is one diff.
+     *
+     * @param worldId     the world id
+     * @param nodeId      the target node to write to (blank → active node)
+     * @param hexKeys     hex keys (e.g. {@code 0_0}) to update
+     * @param description new description, or null to keep the existing one
+     * @param tags        tags to merge (unmentioned keys preserved); null/empty → no tag change
+     * @return the updated map data
+     * @throws IllegalArgumentException if no map exists for the world, or none of the hex keys exist
+     */
+    @SuppressWarnings("deprecation")
+    public MapData setHexTagsBatch(
+            String worldId, String nodeId, Set<String> hexKeys, String description, Map<String, String> tags) {
+        // Read from the same node that will be written (active-node reads here would pollute the target node).
+        String targetNode = (nodeId == null || nodeId.isBlank()) ? readActiveNodeId(worldId) : nodeId;
+        MapData map = resolve(worldId, targetNode);
+        if (map == null) throw new IllegalArgumentException("No map data for world: " + worldId);
+
+        Set<String> missing = new LinkedHashSet<>();
+        for (String key : hexKeys) {
+            if (!map.hexes().containsKey(key)) {
+                missing.add(key);
+            }
+        }
+        if (missing.size() == hexKeys.size()) {
+            throw new IllegalArgumentException("No such hexes: " + String.join(",", missing));
         }
 
-        MapData.HexCell updatedCell = new MapData.HexCell(
-                cell.color(),
-                cell.terrain(),
-                cell.symbol(),
-                cell.symbolColor(),
-                description != null ? description : cell.description(),
-                cell.riverMask(),
-                cell.edgeTags(),
-                merged);
-
         Map<String, MapData.HexCell> hexes = new LinkedHashMap<>(map.hexes());
-        hexes.put(key, updatedCell);
+        for (String key : hexKeys) {
+            MapData.HexCell cell = map.hexes().get(key);
+            if (cell == null) {
+                continue; // silently skip missing hexes — batch stays idempotent
+            }
+            hexes.put(key, mergeCell(cell, description, tags));
+        }
 
-        MapData updated = new MapData(
+        MapData updated = withHexes(map, hexes);
+        saveMap(worldId, targetNode, updated);
+        return updated;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static MapData withHexes(MapData map, Map<String, MapData.HexCell> hexes) {
+        return new MapData(
                 map.gridSize(),
                 map.hexOrientation(),
                 Map.copyOf(hexes),
@@ -483,8 +525,27 @@ public class MapService {
                 map.compressedRegions(),
                 map.pathwayGroups(),
                 map.edges());
-        saveMap(worldId, targetNode, updated);
-        return updated;
+    }
+
+    /**
+     * Copies a hex cell preserving color/terrain/symbol/symbolColor/riverMask/edgeTags,
+     * overwriting the description only when non-null and merging tags without removing
+     * unmentioned keys.
+     */
+    private static MapData.HexCell mergeCell(MapData.HexCell cell, String description, Map<String, String> tags) {
+        Map<String, String> merged = new LinkedHashMap<>(cell.tags());
+        if (tags != null && !tags.isEmpty()) {
+            merged.putAll(tags);
+        }
+        return new MapData.HexCell(
+                cell.color(),
+                cell.terrain(),
+                cell.symbol(),
+                cell.symbolColor(),
+                description != null ? description : cell.description(),
+                cell.riverMask(),
+                cell.edgeTags(),
+                merged);
     }
 
     /**
