@@ -182,7 +182,7 @@ class Provider {
     // ═══════════════════════════════════════════════
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> buildRequestBody(LlmRequest request, boolean stream) {
+    Map<String, Object> buildRequestBody(LlmRequest request, boolean stream) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", request.model() != null ? request.model() : config.model());
         body.put("temperature", request.temperature());
@@ -223,8 +223,13 @@ class Provider {
                 m.put("name", msg.name());
             }
             // assistant 消息的 reasoning_content（DeepSeek thinking token 回传）
+            // thinking 模型（hasNativeReasoning）要求每条 assistant 消息都携带该字段；
+            // 若本轮响应无思考内容（reasoning 为空），也必须输出空串满足字段存在性校验，
+            // 否则下一轮请求报 HTTP 400: "The reasoning_content in the thinking mode must be passed back to the API"
             if (msg.reasoning() != null && !msg.reasoning().isEmpty()) {
                 m.put("reasoning_content", msg.reasoning());
+            } else if (msg.role().equals("assistant") && config.hasNativeReasoning()) {
+                m.put("reasoning_content", "");
             }
 
             msgs.add(m);

@@ -53,7 +53,8 @@ public record LlmConfig(
             thinking = jsonNodeToMap(thNode);
         }
 
-        boolean isDefault = node.path("default").asBoolean(false);
+        boolean isDefault =
+                node.path("default").asBoolean(false) || node.path("isDefault").asBoolean(false);
 
         return new LlmConfig(id, name, baseUrl, apiKey, model, temp, maxTok, extraBody, thinking, isDefault);
     }
