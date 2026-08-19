@@ -65,6 +65,19 @@ function showHexDetail(q, r) {
   title.innerHTML = `📍 (${q}, ${r})${compLabel}`;
   document.getElementById('leftPanel').style.display = 'block';
 
+  // ── 可编辑标签表单（key-value）──
+  if (!cell.tags) cell.tags = {};
+  const tagRows = Object.entries(cell.tags).map(([k, v]) => `
+      <div class="hex-tag-row" data-q="${q}" data-r="${r}" data-orig-key="${escapeAttr(k)}" style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+        <input type="text" class="hex-tag-key" placeholder="key" value="${escapeAttr(k)}" style="width:34%;flex:none;min-width:0">
+        <input type="text" class="hex-tag-value" placeholder="value" value="${escapeAttr(v == null ? '' : v)}" style="flex:1;min-width:0">
+        <button type="button" class="hex-tag-remove" title="删除标签" style="font-size:10px;flex:none">✕</button>
+      </div>`).join('');
+  const tagsField = `<div class="field"><label>标签</label>
+    <div id="hexTagRows">${tagRows}</div>
+    <button type="button" id="hexTagAdd" data-q="${q}" data-r="${r}" style="font-size:10px;margin-top:4px">+ 添加标签</button>
+  </div>`;
+
   body.innerHTML = `
     <div class="field"><label>地形</label>
       <span class="val"><span id="hexColorSwatch" style="display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:middle"></span>${escapeHtml(cell.terrain)}</span>
@@ -80,7 +93,7 @@ function showHexDetail(q, r) {
     ${provName ? `<div class="field"><label>所属区域</label>
       <span class="val prov-link" style="cursor:pointer;color:var(--accent);text-decoration:underline">${escapeHtml(provName)}</span>
     </div>` : '<div class="field" style="color:var(--dim)">不属于任何区域</div>'}
-    ${cell.tags && Object.keys(cell.tags).length ? `<div class="field"><label>标签</label>${Object.entries(cell.tags).map(([k,v]) => `<div class="val" style="border-bottom:1px solid var(--border);padding:1px 0">${escapeHtml(k)}：${escapeHtml(v)}</div>`).join('')}</div>` : ''}
+    ${tagsField}
     <div style="margin-top:12px">
       <button onclick="document.getElementById('leftPanel').style.display='none'" style="font-size:10px">关闭</button>
     </div>`;
@@ -96,6 +109,76 @@ function updateHexDesc(q, r, val) {
   const key = `${q}_${r}`;
   if (!State.mapData.hexes[key]) State.mapData.hexes[key] = {color:'#808080',terrain:'unknown'};
   State.mapData.hexes[key].description = val;
+}
+
+// ── Editable Hex Tags (key-value) ──────────────────────
+const leftBodyEl = document.getElementById('leftBody');
+leftBodyEl.addEventListener('change', e => {
+  const el = e.target;
+  const row = el.closest('.hex-tag-row');
+  if (!row) return;
+  const { q, r, origKey } = row.dataset;
+  if (el.classList.contains('hex-tag-key')) {
+    if (updateHexTagKey(q, r, origKey, el.value)) row.dataset.origKey = el.value;
+  } else if (el.classList.contains('hex-tag-value')) {
+    updateHexTagValue(q, r, origKey, el.value);
+  }
+});
+leftBodyEl.addEventListener('click', e => {
+  const addBtn = e.target.closest('#hexTagAdd');
+  if (addBtn) { addHexTag(addBtn.dataset.q, addBtn.dataset.r); return; }
+  const rmBtn = e.target.closest('.hex-tag-remove');
+  if (rmBtn) {
+    const { q, r, origKey } = rmBtn.closest('.hex-tag-row').dataset;
+    removeHexTag(q, r, origKey);
+  }
+});
+
+function updateHexTagKey(q, r, origKey, newKey) {
+  const key = `${q}_${r}`;
+  const hex = State.mapData.hexes[key];
+  if (!hex) return false;
+  if (!hex.tags) hex.tags = {};
+  if (!newKey) {
+    if (origKey === '' && hex.tags[''] !== undefined && hex.tags[''] !== '') {
+      delete hex.tags[''];
+      render();
+    }
+    return false;
+  }
+  if (newKey === origKey) return false;
+  const oldVal = hex.tags[origKey];
+  delete hex.tags[origKey];
+  hex.tags[newKey] = oldVal === undefined ? '' : oldVal;
+  render();
+  return true;
+}
+
+function updateHexTagValue(q, r, key, val) {
+  const hexKey = `${q}_${r}`;
+  const hex = State.mapData.hexes[hexKey];
+  if (!hex) return;
+  if (!hex.tags) hex.tags = {};
+  hex.tags[key] = val;
+  render();
+}
+
+function removeHexTag(q, r, key) {
+  const hexKey = `${q}_${r}`;
+  const hex = State.mapData.hexes[hexKey];
+  if (!hex || !hex.tags) return;
+  delete hex.tags[key];
+  showHexDetail(q, r);
+  render();
+}
+
+function addHexTag(q, r) {
+  const hexKey = `${q}_${r}`;
+  const hex = State.mapData.hexes[hexKey];
+  if (!hex) return;
+  if (!hex.tags) hex.tags = {};
+  if (hex.tags[''] === undefined) hex.tags[''] = '';
+  showHexDetail(q, r);
 }
 
 // ── Keyboard Shortcuts ─────────────────────────────────
@@ -154,6 +237,11 @@ async function loadLatestTexts() {
 
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Attribute-context escaping: also escapes " so user input cannot break out of value="..." / data-*="...".
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g,'&quot;');
 }
 
 // Auto-load on startup
