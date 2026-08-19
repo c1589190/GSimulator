@@ -62,12 +62,28 @@ public abstract class AbstractSearchTool implements AgentTool {
         List<SearchHit> hits = GenericSearchEngine.search(
                 entries, keywords, new SearchOptions(limit, offset, SearchOptions.SortMode.RELEVANCE));
 
-        List<ToolResult.Item> items = hits.stream()
+        List<ToolResult.Item> items = toItems(hits, worldId, effectiveNodeId);
+
+        return ToolResult.ok(name(), items);
+    }
+
+    /**
+     * 将搜索命中映射为工具结果条目（可覆写以增强 snippet）。
+     *
+     * <p>默认实现保持历史行为：title=key、path=key、
+     * {@code snippet = "type=<domain> | <hit.snippet>"}、score 透传。子类可覆写
+     * 此方法为命中附加域特定详情（如 gsimap_search_hex 追加 terrain/description/tags）。
+     *
+     * @param hits            搜索命中列表
+     * @param worldId         世界 ID（未提供且无上下文时可能为 null）
+     * @param effectiveNodeId 生效节点 ID（已解析默认值的 nodeId）
+     * @return 工具结果条目列表
+     */
+    protected List<ToolResult.Item> toItems(List<SearchHit> hits, String worldId, String effectiveNodeId) {
+        return hits.stream()
                 .map(hit -> new ToolResult.Item(
                         hit.key(), hit.key(), "type=" + domain() + " | " + hit.snippet(), hit.score()))
                 .toList();
-
-        return ToolResult.ok(name(), items);
     }
 
     /**

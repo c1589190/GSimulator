@@ -210,6 +210,9 @@ class GsimapSearchHexToolTest {
         assertEquals(KEY_TAGGED, hit.path());
         assertEquals(KEY_TAGGED, hit.title());
         assertTrue(hit.snippet().contains("煤炭资源：23662吨"), "snippet: " + hit.snippet());
+        // 增强后的 snippet：前缀保持 + 附加 hexKey 结构化详情
+        assertTrue(hit.snippet().startsWith("type=hex | "), "snippet: " + hit.snippet());
+        assertTrue(hit.snippet().contains("0_0"), "snippet: " + hit.snippet());
         assertTrue(hit.score() > 0, "score: " + hit.score());
 
         ToolResult byValue =

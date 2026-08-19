@@ -1,7 +1,12 @@
 package com.gsim.agent.tools.search;
 
+import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.search.SearchEntry;
+import com.gsim.core.search.SearchHit;
+import com.gsim.map.map.MapData;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * gsimap_search_hex — 单格（地块）域全文搜索工具。
@@ -73,5 +78,64 @@ public final class GsimapSearchHexTool extends AbstractSearchTool {
     @Override
     protected List<SearchEntry> buildEntries(String worldId, String nodeId) {
         return source.build(worldId, nodeId);
+    }
+
+    @Override
+    protected List<ToolResult.Item> toItems(List<SearchHit> hits, String worldId, String effectiveNodeId) {
+        MapData map = ctx.mapService().resolve(worldId, effectiveNodeId);
+        if (map == null) {
+            return super.toItems(hits, worldId, effectiveNodeId);
+        }
+        List<ToolResult.Item> items = new ArrayList<>(hits.size());
+        for (SearchHit hit : hits) {
+            String hexKey = hit.key().startsWith(HEX_KEY_PREFIX) ? hit.key().substring(HEX_KEY_PREFIX.length()) : null;
+            MapData.HexCell cell = hexKey != null ? map.hexes().get(hexKey) : null;
+            if (cell == null) {
+                // 语料与 resolve 不一致的边界：回退父类默认 snippet
+                return super.toItems(hits, worldId, effectiveNodeId);
+            }
+            items.add(new ToolResult.Item(hit.key(), hit.key(), enhancedSnippet(map, hexKey, cell), hit.score()));
+        }
+        return items;
+    }
+
+    /** gsimap:hex:{q}_{r} 地址前缀。 */
+    private static final String HEX_KEY_PREFIX = "gsimap:hex:";
+
+    /**
+     * 增强 snippet：{@code type=hex | <hexKey> | terrain=<地形显示名> | description=<描述> |
+     * tags={<key：value ...>}}。description 为 null 时置空串；tags 为空时省略 tags 段。
+     */
+    private static String enhancedSnippet(MapData map, String hexKey, MapData.HexCell cell) {
+        String terrainName = terrainName(map, cell);
+        String description = cell.description() != null ? cell.description() : "";
+        StringBuilder sb = new StringBuilder("type=hex | ")
+                .append(hexKey)
+                .append(" | terrain=")
+                .append(terrainName)
+                .append(" | description=")
+                .append(description);
+        String tags = tagsText(cell);
+        if (!tags.isEmpty()) {
+            sb.append(" | tags={").append(tags).append('}');
+        }
+        return sb.toString();
+    }
+
+    /** 地形显示名：优先 terrainTypes().get(terrain).name()，缺失回退 terrain 原值（同 HexSearchSource）。 */
+    private static String terrainName(MapData map, MapData.HexCell cell) {
+        MapData.TerrainType type = map.terrainTypes().get(cell.terrain());
+        return (type != null && type.name() != null && !type.name().isBlank()) ? type.name() : cell.terrain();
+    }
+
+    /** 标签文本：{@code key：value}（全角冒号）空格连接；tags 为空返回空串（同 HexSearchSource）。 */
+    private static String tagsText(MapData.HexCell cell) {
+        if (cell.tags().isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> tag : cell.tags().entrySet()) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(tag.getKey()).append('：').append(tag.getValue());
+        }
+        return sb.toString();
     }
 }

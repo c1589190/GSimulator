@@ -8,14 +8,14 @@ import com.gsim.map.service.MapService;
  * Registers all gsimap AgentTools into a ToolRegistry.
  *
  * <p>Call {@link #registerAll(ToolRegistry, MapService, SearchToolContext)} during application
- * startup to make all 25 gsimap map tools available to the agent system.
+ * startup to make all 26 gsimap map tools available to the agent system.
  */
 public final class GsimapToolRegistrar {
 
     private GsimapToolRegistrar() {}
 
     /**
-     * Register all 25 gsimap tools into the given registry.
+     * Register all 26 gsimap tools into the given registry.
      *
      * @param registry   the tool registry to register into
      * @param mapService the shared MapService instance
@@ -57,9 +57,10 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapEdgeRemoveTool(mapService));
         registry.register(new GsimapEdgeListTool(mapService));
 
-        // ── Hex tag tools (2) ─────────────────────────────────
+        // ── Hex tag tools (3) ─────────────────────────────────
         registry.register(new GsimapSetHexTool(mapService));
         registry.register(new GsimapRemoveHexTagTool(mapService));
+        registry.register(new GsimapQueryHexByTagsTool(mapService));
 
         // ── Init tools (2) ──────────────────────────────────
         registry.register(new GsimapGenerateTool(mapService));
