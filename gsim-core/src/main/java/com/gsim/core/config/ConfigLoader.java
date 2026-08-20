@@ -333,7 +333,7 @@ public class ConfigLoader {
         defaults.put("context.session.history.turns", "12");
         defaults.put("context.session.message.max_chars", "4000");
 
-        defaults.put("agent.tool_loop.max_rounds", "64");
+        defaults.put("agent.tool_loop.max_rounds", "259");
 
         // Agent ToolLoop 结果回传 — 超限时改写为 @cache 引用，落盘 staging
         defaults.put("agent.tool_loop.result_inline_max_chars", "4000");

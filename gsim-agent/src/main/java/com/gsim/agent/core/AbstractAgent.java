@@ -252,13 +252,17 @@ public class AbstractAgent {
         int consecutiveNoTool = 0;
         String finalText = null;
 
-        while (toolRound <= maxRounds) {
+        // maxRounds <= 0 表示不限制（无限轮）：循环仅靠 finish_action / 纯文本接受 / 取消终止。
+        // 日志中该上限以 ∞ 显示，便于区分"无限"与"数值上限"。
+        String maxRoundsDisplay = maxRounds <= 0 ? "∞" : String.valueOf(maxRounds);
+
+        while (maxRounds <= 0 || toolRound <= maxRounds) {
             if (cancelRequested.get()) {
-                log.info("[{}] cancelled by user at round {}/{}", agentId, toolRound, maxRounds);
+                log.info("[{}] cancelled by user at round {}/{}", agentId, toolRound, maxRoundsDisplay);
                 return AgentResult.fail(agentId, "cancelled");
             }
 
-            log.debug("[{}] round {}/{} tools={}", agentId, toolRound, maxRounds, toolDefs.size());
+            log.debug("[{}] round {}/{} tools={}", agentId, toolRound, maxRoundsDisplay, toolDefs.size());
 
             LlmRequest request =
                     new LlmRequest(null, new ArrayList<>(messages), config.temperature(), config.maxTokens(), toolDefs);
@@ -368,7 +372,7 @@ public class AbstractAgent {
                             "[{}] completed via finish_action at round {}/{} ({} tool calls)",
                             agentId,
                             toolRound,
-                            maxRounds,
+                            maxRoundsDisplay,
                             allToolCalls.size());
                     break;
                 }
@@ -392,7 +396,7 @@ public class AbstractAgent {
                         "[{}] completed with plain text at round {}/{} ({} chars)",
                         agentId,
                         toolRound,
-                        maxRounds,
+                        maxRoundsDisplay,
                         finalText != null ? finalText.length() : 0);
                 break;
             }
@@ -406,8 +410,9 @@ public class AbstractAgent {
             toolRound++;
         }
 
-        // max rounds reached
-        if (finalText == null) {
+        // max rounds reached — 仅在设置了有限上限（maxRounds > 0）时可达；maxRounds <= 0 时
+        // 循环只能通过 finish_action / 纯文本接受 / 取消退出，永远不会走到耗尽分支。
+        if (finalText == null && maxRounds > 0) {
             log.warn("[{}] aborted: max rounds ({}) reached without finish_action", agentId, maxRounds);
             return AgentResult.fail(agentId, "Agent 达到最大轮数 (" + maxRounds + ") 未完成");
         }

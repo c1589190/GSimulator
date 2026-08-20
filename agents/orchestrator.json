@@ -5,7 +5,7 @@
   "toolFilter": {
     "mode": "all"
   },
-  "maxToolRounds": 32,
+  "maxToolRounds": 259,
   "temperature": 0.3,
   "maxTokens": 2048
 }

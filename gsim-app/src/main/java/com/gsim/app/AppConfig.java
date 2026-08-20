@@ -198,8 +198,8 @@ public class AppConfig {
         this.contextSessionMessageMaxChars =
                 clamp(parseInt(result.get("context.session.message.max_chars"), 4000), 500, 20000);
 
-        // Agent ToolLoop 配置（下限 1，无上限；默认 64 与 ConfigLoader 默认一致）
-        this.agentToolLoopMaxRounds = Math.max(1, parseInt(result.get("agent.tool_loop.max_rounds"), 64));
+        // Agent ToolLoop 配置（下限 1，无上限；默认 259 与 ConfigLoader 默认一致）
+        this.agentToolLoopMaxRounds = Math.max(1, parseInt(result.get("agent.tool_loop.max_rounds"), 259));
 
         // Agent ToolLoop 结果回传与 MCP 响应限流
         this.resultInlineMaxChars = parseInt(result.get("agent.tool_loop.result_inline_max_chars"), 4000);

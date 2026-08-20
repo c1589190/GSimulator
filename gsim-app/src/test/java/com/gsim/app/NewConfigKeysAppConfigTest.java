@@ -91,18 +91,18 @@ class NewConfigKeysAppConfigTest {
     }
 
     @Test
-    @DisplayName("agent.tool_loop.max_rounds 回退默认值为 64")
-    void maxRoundsFallbackIs64() throws IOException {
+    @DisplayName("agent.tool_loop.max_rounds 回退默认值为 259")
+    void maxRoundsFallbackIs259() throws IOException {
         Path propsFile = tempDir.resolve("max-rounds.properties");
         writeFile(
                 propsFile,
                 "llm.base_url=https://api.example.com/v1\n"
                         + "llm.api_key=sk-test\n"
                         + "llm.model=m\n"
-                        + "agent.tool_loop.max_rounds=64\n");
+                        + "agent.tool_loop.max_rounds=259\n");
         ConfigLoader loader = new ConfigLoader(new String[] {"--config", propsFile.toString()});
         AppConfig config = new AppConfig(loader.load());
-        assertEquals(64, config.getAgentToolLoopMaxRounds());
+        assertEquals(259, config.getAgentToolLoopMaxRounds());
     }
 
     private static void writeFile(Path file, String content) throws IOException {

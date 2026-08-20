@@ -5,6 +5,7 @@ import com.gsim.agent.core.AgentFactory;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.tool.CollectSubAgentResultsTool;
 import com.gsim.agent.tool.DispatchSubAgentTool;
+import com.gsim.agent.tool.StopSubAgentTool;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.event.AgentProgressEvent;
@@ -47,8 +48,8 @@ public class OrchestratorAgent extends AbstractAgent {
     private final ToolPermissionConfig permissionConfig;
     private final ToolGroupManager groupManager;
 
-    /** Agent ToolLoop 最大工具轮数（默认 32，≥1，可由 setter 注入覆盖）。 */
-    private volatile int maxToolRounds = 64;
+    /** Agent ToolLoop 最大工具轮数（默认 259，≥0，0 = 不限制，可由 setter 注入覆盖）。 */
+    private volatile int maxToolRounds = 259;
 
     /** LLM 流式输出开关（由 AppConfig 注入，默认 false）。 */
     private volatile boolean streamEnabled = false;
@@ -94,7 +95,8 @@ public class OrchestratorAgent extends AbstractAgent {
                 agentFactory,
                 agentFactory.store(),
                 docCacheManager));
-        registry.register(new CollectSubAgentResultsTool(runningSubAgents, collectTimeoutSeconds));
+        registry.register(new CollectSubAgentResultsTool(runningSubAgents));
+        registry.register(new StopSubAgentTool());
     }
 
     public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
@@ -239,9 +241,9 @@ public class OrchestratorAgent extends AbstractAgent {
         this.groupManager = groupManager != null ? groupManager : new ToolGroupManager();
     }
 
-    /** 设置最大工具轮数（由调用方从 AppConfig 注入，默认 32，下限 1，无上限）。 */
+    /** 设置最大工具轮数（由调用方从 AppConfig 注入，默认 32，0 = 不限制，无上限）。 */
     public void setMaxToolRounds(int rounds) {
-        this.maxToolRounds = Math.max(1, rounds);
+        this.maxToolRounds = Math.max(0, rounds);
         log.debug("[ToolLoop] maxToolRounds={}", this.maxToolRounds);
     }
 

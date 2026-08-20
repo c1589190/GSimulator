@@ -48,7 +48,7 @@ context.session.history.turns=12
 # ── Agent Tool Loop ──
 # 主 Orchestrator 最大工具调用轮数。达到上限时 Agent 停止并报错 "达到最大轮数"。
 # 增大此值可让 Agent 有更多轮次完成复杂任务。
-agent.tool_loop.max_rounds=64
+agent.tool_loop.max_rounds=259
 # 单条工具结果喂给 LLM 的内联字符上限，超出改写为 @cache 引用并落盘 staging（默认 4000）。
 # agent.tool_loop.result_inline_max_chars=4000
 # 超限结果自动暂存（默认 true）。

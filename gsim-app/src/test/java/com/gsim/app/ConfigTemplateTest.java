@@ -59,7 +59,7 @@ class ConfigTemplateTest {
         "cli.ws.port=8712",
         "mcp.http.port=37201",
         "worlds.dir=worlds",
-        "agent.tool_loop.max_rounds=64",
+        "agent.tool_loop.max_rounds=259",
         "context.session.history.turns=12",
         "llm.stream.enabled=true"
     };
@@ -80,9 +80,9 @@ class ConfigTemplateTest {
     }
 
     @Test
-    @DisplayName("模板包含活跃默认值 agent.tool_loop.max_rounds=64")
-    void templateContainsActiveMaxRounds64() throws Exception {
-        assertTrue(readTemplate().contains("agent.tool_loop.max_rounds=64"));
+    @DisplayName("模板包含活跃默认值 agent.tool_loop.max_rounds=259")
+    void templateContainsActiveMaxRounds259() throws Exception {
+        assertTrue(readTemplate().contains("agent.tool_loop.max_rounds=259"));
     }
 
     @Test

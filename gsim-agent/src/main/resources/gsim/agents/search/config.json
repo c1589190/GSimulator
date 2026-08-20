@@ -6,7 +6,7 @@
   "toolFilter": {
     "mode": "read_only"
   },
-  "maxToolRounds": 16,
+  "maxToolRounds": 259,
   "temperature": 0.3,
   "maxTokens": 2048
 }

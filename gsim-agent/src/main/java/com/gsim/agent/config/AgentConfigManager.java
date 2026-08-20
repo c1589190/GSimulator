@@ -119,7 +119,7 @@ public class AgentConfigManager {
                 }
                 case "maxToolRounds" -> {
                     int mr = Integer.parseInt(value);
-                    if (mr < 1) throw new IllegalArgumentException("maxToolRounds must be >= 1");
+                    if (mr < 0) throw new IllegalArgumentException("maxToolRounds must be >= 0 (0 = unlimited)");
                     json.put("maxToolRounds", mr);
                 }
                 case "toolFilter" -> {
@@ -176,7 +176,7 @@ public class AgentConfigManager {
             json.put("llmProvider", body.getOrDefault("llmProvider", "base"));
             json.put("temperature", body.getOrDefault("temperature", 0.3));
             json.put("maxTokens", body.getOrDefault("maxTokens", 2048));
-            json.put("maxToolRounds", body.getOrDefault("maxToolRounds", 16));
+            json.put("maxToolRounds", body.getOrDefault("maxToolRounds", 259));
 
             String toolFilterMode = (String) body.getOrDefault("toolFilterMode", "read_only");
             if (body.containsKey("toolFilter")) {

@@ -122,7 +122,7 @@ class NewConfigKeysDefaultTest {
         assertEquals("8711", result.get("map.port"));
         assertEquals("8712", result.get("cli.ws.port"));
         assertEquals("37201", result.get("mcp.http.port"));
-        assertEquals("64", result.get("agent.tool_loop.max_rounds"));
+        assertEquals("259", result.get("agent.tool_loop.max_rounds"));
         assertEquals("worlds", result.get("worlds.dir"));
     }
 }
