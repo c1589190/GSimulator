@@ -102,7 +102,7 @@ public class ListSubAgentCachesTool implements AgentTool {
 
     @Override
     public boolean requiresWorldId() {
-        return true;
+        return false;
     }
 
     @Override

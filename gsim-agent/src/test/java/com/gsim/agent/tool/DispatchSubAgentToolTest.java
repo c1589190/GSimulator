@@ -97,19 +97,32 @@ class DispatchSubAgentToolTest {
     }
 
     @Test
-    @DisplayName("已知 agent type (sim) 通过校验，阻塞等待子代理结果")
-    void dispatchKnownTypeBlocksAndReturnsSubAgentResult() {
+    @DisplayName("已知 agent type (sim) 异步派发立即返回，不阻塞等待结果")
+    void dispatchKnownTypeReturnsImmediately() throws Exception {
         ToolCall call = new ToolCall(
                 "dispatch_sub_agent",
                 Map.of(
                         "type", "sim",
                         "prompt", "test prompt"));
+        long start = System.nanoTime();
         ToolResult result = tool.execute(call);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        // Sub-agent fails due to no real LLM, but the dispatch itself is accepted
-        // Error should be about sub-agent failure, NOT "Unknown sub-agent type"
-        if (!result.success()) {
-            assertFalse(result.error().contains("Unknown sub-agent type"), "已知 type 不应被校验拒绝: " + result.error());
+        // 异步语义：派发后立即成功返回 agentId + RUNNING，而不是等待子代理完成
+        assertTrue(result.success(), "异步派发应立即成功: " + result.error());
+        assertEquals(1, result.items().size());
+        ToolResult.Item item = result.items().get(0);
+        assertTrue(item.title().startsWith("sub_agent_dispatched: "), "title 应为派发确认而非结果: " + item.title());
+        assertTrue(item.snippet().contains("RUNNING"), "snippet 应含 RUNNING 状态: " + item.snippet());
+        assertTrue(
+                item.snippet().contains(item.title().substring("sub_agent_dispatched: ".length())),
+                "snippet 应含 agentId");
+        assertTrue(elapsedMs < 2000, "派发不应阻塞等待子代理，耗时 " + elapsedMs + "ms");
+
+        // 等待后台子代理结束（连接拒绝快速失败），避免 @TempDir 清理时其仍在写入缓存
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (runningSubAgents.values().stream().anyMatch(f -> !f.isDone()) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
         }
     }
 

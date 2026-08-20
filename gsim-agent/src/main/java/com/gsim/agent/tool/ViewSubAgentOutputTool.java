@@ -180,7 +180,7 @@ public final class ViewSubAgentOutputTool implements AgentTool {
 
     @Override
     public boolean requiresWorldId() {
-        return true;
+        return false;
     }
 
     @Override

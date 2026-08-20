@@ -302,6 +302,66 @@ public class AgentsManager {
     }
 
     /**
+     * 按 cacheId 查找对应的 Agent 实例（返回最新创建的一个）。
+     *
+     * <p>供 view_sub_agent_cache 等工具将缓存文件关联到运行时实例，
+     * 以区分"正在运行 / 已完成 / 历史缓存"。
+     *
+     * @param cacheId 对话缓存 ID
+     * @return 匹配的 AgentInstance，未找到时返回 null
+     */
+    public AgentInstance getByCacheId(String cacheId) {
+        if (cacheId == null || cacheId.isBlank()) return null;
+        AgentInstance latest = null;
+        for (AgentInstance a : instances.values()) {
+            if (!cacheId.equals(a.cacheId())) continue;
+            if (latest == null) {
+                latest = a;
+            } else if (a.createdAt() != null
+                    && (latest.createdAt() == null || a.createdAt().isAfter(latest.createdAt()))) {
+                latest = a;
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * 列出所有已完成的 Agent 实例（status==DONE），支持可选过滤。
+     *
+     * <p>供 collect_sub_agent_results 工具聚合已完成子代理结果（非阻塞）。
+     *
+     * @param configId  按配置 ID 过滤，null 表示不过滤
+     * @param agentType 按 Agent 类型（configId）过滤，null 表示不过滤
+     * @return 已完成（DONE）的 AgentInstance 列表
+     */
+    public List<AgentInstance> listDoneAgents(String configId, String agentType) {
+        return instances.values().stream()
+                .filter(a -> a.status() == AgentStatus.DONE)
+                .filter(a -> configId == null || configId.equals(a.configId()))
+                .filter(a -> agentType == null || agentType.equals(a.configId()))
+                .toList();
+    }
+
+    /**
+     * 获取 Agent 的最终执行结果（仅已完成时可用）。
+     *
+     * <p>从内存 future 读取 {@link AgentResult}（含 finalText、rounds、totalToolCalls），
+     * 未完成或实例不存在时返回 null。与 {@link #getAgentOutput} 互补：
+     * 前者返回结构化结果，后者从缓存提取最后 assistant 消息文本。
+     *
+     * @param instanceId Agent 实例 ID
+     * @return 已完成的 AgentResult，未完成/不存在时返回 null
+     */
+    public AgentResult getCompletedResult(String instanceId) {
+        AgentInstance instance = instances.get(instanceId);
+        if (instance == null) return null;
+        if (instance.status() != AgentStatus.DONE && instance.status() != AgentStatus.FAILED) return null;
+        CompletableFuture<AgentResult> future = futures.get(instanceId);
+        if (future == null) return null;
+        return future.getNow(null);
+    }
+
+    /**
      * 获取已完成 Agent 的最终输出文本。
      *
      * <p>从缓存中提取最后一条 assistant 角色的消息内容作为最终输出。

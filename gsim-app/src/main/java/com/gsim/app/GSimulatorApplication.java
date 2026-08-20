@@ -407,11 +407,27 @@ public class GSimulatorApplication {
         if (dispatchTool instanceof com.gsim.agent.tool.DispatchSubAgentTool d) {
             d.setAgentsManager(agentsManager);
         }
+        // 将 AgentsManager 注入到 collect 工具（异步结果查询）
+        var collectTool = toolRegistry.get("collect_sub_agent_results");
+        if (collectTool instanceof com.gsim.agent.tool.CollectSubAgentResultsTool c) {
+            c.setAgentsManager(agentsManager);
+        }
+        // 将 AgentsManager 注入到 stop 工具（按 agentId 停止运行中的子代理）
+        var stopTool = toolRegistry.get("stop_sub_agent");
+        if (stopTool instanceof com.gsim.agent.tool.StopSubAgentTool s) {
+            s.setAgentsManager(agentsManager);
+        }
 
         // SubAgent cache 管理工具
         toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(ctx.getCachesManager()));
         toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(ctx.getCachesManager()));
         toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(ctx.getCachesManager()));
+
+        // 将 AgentsManager 注入到 view 工具（状态标记）——必须在注册之后取实例
+        var viewCacheTool = toolRegistry.get("view_sub_agent_cache");
+        if (viewCacheTool instanceof com.gsim.agent.tool.ViewSubAgentCacheTool v) {
+            v.setAgentsManager(agentsManager);
+        }
 
         // LLM provider 列表 + 动态创建 SubAgent 配置
         toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));

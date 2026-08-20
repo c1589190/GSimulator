@@ -18,15 +18,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * dispatch_sub_agent 工具 — 创建子代理并阻塞等待结果。
+ * dispatch_sub_agent 工具 — 异步派发子代理并立即返回。
  *
  * <p>参数:
  * <ul>
@@ -35,9 +33,9 @@ import org.slf4j.LoggerFactory;
  *   <li>cacheId (可选): 要加载的已有 cache sessionId，用于续接上下文</li>
  * </ul>
  *
- * <p>派发后主 Agent 阻塞等待子代理完成（超时 120s），子代理的最终输出直接作为
- * 工具反馈返回。ESC 取消会传播到子代理，阻塞立即解除。
- * 不再需要单独调用 collect_sub_agent_results。
+ * <p>派发后立即返回（不阻塞主 Agent），子代理在后台虚拟线程中运行。
+ * 结果通过 {@code collect_sub_agent_results}（已完成结果列表）或
+ * {@code view_sub_agent_cache}（按 cacheId 查看状态与最近交互）获取。
  */
 public class DispatchSubAgentTool implements AgentTool {
 
@@ -95,13 +93,13 @@ public class DispatchSubAgentTool implements AgentTool {
     @Override
     public String description() {
         return """
-                创建子代理并阻塞等待其执行完成。
+                异步派发子代理并立即返回（不阻塞）。
                 参数:
                 - type: 子代理类型（当前可用的 agent 类型）
                 - prompt: 子代理的任务指令
                 - cacheId (可选): 要续接的已有 SubAgent cache ID
-                派发后主 Agent 会阻塞等待子代理完成（超时 120s），子代理的最终输出直接返回。
-                ESC 取消会传播到子代理。
+                派发后立即返回 agentId + status=RUNNING，子代理在后台运行。
+                结果通过 collect_sub_agent_results（已完成列表）或 view_sub_agent_cache（按 cacheId 查看状态与最近交互）获取。
                 """;
     }
 
@@ -178,74 +176,48 @@ public class DispatchSubAgentTool implements AgentTool {
         String agentId = subAgent.instanceId();
         String cacheNote = cacheId != null ? " (续接 cache: " + cacheId + ")" : "";
         log.info(
-                "[DispatchSubAgent] dispatched via AgentsManager {} (type={}, promptLen={}){}, blocking...",
+                "[DispatchSubAgent] dispatched via AgentsManager {} (type={}, promptLen={}){}, async (no wait)",
                 agentId,
                 type,
                 prompt.length(),
                 cacheNote);
 
-        try {
-            AgentResult result = agentsManager.waitForCompletion(agentId, 120_000);
-
-            if (result.success()) {
-                String text = result.finalText();
-                log.info("[DispatchSubAgent] {} completed: {} chars", agentId, text != null ? text.length() : 0);
-                return ToolResult.ok(
-                        NAME,
-                        List.of(new ToolResult.Item(
-                                "sub_agent_result: " + agentId, NAME, text != null ? text : "(空结果)", 1.0)));
-            } else {
-                log.warn("[DispatchSubAgent] {} failed: {}", agentId, result.error());
-                return ToolResult.fail(NAME, "子代理 " + agentId + " 执行失败: " + result.error());
-            }
-        } catch (Exception e) {
-            log.warn("[DispatchSubAgent] {} error: {}", agentId, e.getMessage());
-            return ToolResult.fail(NAME, "子代理 " + agentId + " 异常: " + e.getMessage());
-        }
+        // 异步派发 — 立即返回，不阻塞等待子代理完成
+        String snippet = "已派发子代理（异步，立即返回）:\n"
+                + "- agentId: " + agentId + "\n"
+                + "- configId: " + subAgent.configId() + "\n"
+                + "- cacheId: " + subAgent.cacheId() + "\n"
+                + "- status: " + subAgent.status() + "\n"
+                + "子代理正在后台运行，主 Agent 不被阻塞。\n"
+                + "结果通过 collect_sub_agent_results 或 view_sub_agent_cache 获取。";
+        return ToolResult.ok(
+                NAME, List.of(new ToolResult.Item("sub_agent_dispatched: " + agentId, NAME, snippet, 1.0)));
     }
 
     private ToolResult executeViaAgentFactory(String type, String prompt, String cacheId) {
         String parentTaskId = EventBusAgentProgressSink.getCurrentTaskId();
         String parentSessionId = EventBusAgentProgressSink.getCurrentSessionId();
 
-        // 派发子代理（异步启动）
+        // 派发子代理（异步启动，不阻塞等待）
         String agentId = agentFactory.dispatch(type, prompt, parentTaskId, parentSessionId, cacheId);
         String cacheNote = cacheId != null ? " (续接 cache: " + cacheId + ")" : "";
         log.info(
-                "[DispatchSubAgent] dispatched via AgentFactory {} (type={}, promptLen={}){}, blocking...",
+                "[DispatchSubAgent] dispatched via AgentFactory {} (type={}, promptLen={}){}, async (no wait)",
                 agentId,
                 type,
                 prompt.length(),
                 cacheNote);
 
-        // 阻塞等待子代理完成
-        CompletableFuture<AgentResult> future = agentFactory.running().get(agentId);
-        if (future == null) {
-            return ToolResult.fail(NAME, "子代理 " + agentId + " 已丢失（future 不存在）");
-        }
-
-        try {
-            AgentResult result = future.get(120, TimeUnit.SECONDS);
-
-            if (result.success()) {
-                String text = result.finalText();
-                log.info("[DispatchSubAgent] {} completed: {} chars", agentId, text != null ? text.length() : 0);
-                return ToolResult.ok(
-                        NAME,
-                        List.of(new ToolResult.Item(
-                                "sub_agent_result: " + agentId, NAME, text != null ? text : "(空结果)", 1.0)));
-            } else {
-                log.warn("[DispatchSubAgent] {} failed: {}", agentId, result.error());
-                return ToolResult.fail(NAME, "子代理 " + agentId + " 执行失败: " + result.error());
-            }
-        } catch (TimeoutException e) {
-            log.warn("[DispatchSubAgent] {} timed out after 120s, cancelling", agentId);
-            future.cancel(true);
-            return ToolResult.fail(NAME, "子代理 " + agentId + " 执行超时（120s），已取消。");
-        } catch (Exception e) {
-            log.warn("[DispatchSubAgent] {} interrupted: {}", agentId, e.getMessage());
-            return ToolResult.fail(NAME, "子代理 " + agentId + " 被中断: " + e.getMessage());
-        }
+        // 旧路径（AgentFactory.dispatch）只返回 agentId，不返回 cacheId —
+        // 可通过 list_sub_agent_caches 查询对应缓存。
+        String snippet = "已派发子代理（异步，立即返回）:\n"
+                + "- agentId: " + agentId + "\n"
+                + "- status: RUNNING\n"
+                + "- 说明: 旧路径不返回 cacheId，可通过 list_sub_agent_caches 查询缓存文件。\n"
+                + "子代理正在后台运行，主 Agent 不被阻塞。\n"
+                + "结果通过 collect_sub_agent_results 或 view_sub_agent_cache 获取。";
+        return ToolResult.ok(
+                NAME, List.of(new ToolResult.Item("sub_agent_dispatched: " + agentId, NAME, snippet, 1.0)));
     }
 
     @Override
