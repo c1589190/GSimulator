@@ -3,6 +3,7 @@ package com.gsim.agent;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentlib.tool.AgentTool;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -103,5 +104,43 @@ class ToolFilterEvaluatorTest {
         // SYSTEM > WRITE 拒绝
         assertFalse(ToolFilterEvaluator.allowsWithPermission(
                 ToolFilterConfig.ALL, "delete_world", AgentTool.Permission.SYSTEM, AgentTool.Permission.WRITE, null));
+    }
+
+    // ── custom 模式（白名单）──
+
+    @Test
+    @DisplayName("custom 空 allow 拒绝所有工具（fail-closed），仅 finish_action 经 SELF 放行")
+    void customEmptyAllowRejectsAll() {
+        assertFalse(ToolFilterEvaluator.allows(new ToolFilterConfig("custom", List.of(), List.of()), "query_node"));
+        assertFalse(ToolFilterEvaluator.allows(new ToolFilterConfig("custom", List.of(), List.of()), "write_element"));
+        assertFalse(ToolFilterEvaluator.allows(new ToolFilterConfig("custom", List.of(), List.of()), "gsimap_get_hex"));
+        assertTrue(ToolFilterEvaluator.allowsWithPermission(
+                new ToolFilterConfig("custom", List.of(), List.of()),
+                "finish_action",
+                AgentTool.Permission.SELF,
+                null,
+                null));
+    }
+
+    @Test
+    @DisplayName("custom 非空 allow 仅放行列表内工具")
+    void customAllowListOnly() {
+        ToolFilterConfig config = new ToolFilterConfig("custom", List.of("query_node"), List.of());
+        assertTrue(ToolFilterEvaluator.allows(config, "query_node"));
+        assertFalse(ToolFilterEvaluator.allows(config, "write_element"));
+    }
+
+    @Test
+    @DisplayName("custom deny 优先于 allow（黑名单命中拒绝）")
+    void customDenyOverridesAllow() {
+        ToolFilterConfig config = new ToolFilterConfig("custom", List.of("query_node"), List.of("query_node"));
+        assertFalse(ToolFilterEvaluator.allows(config, "query_node"));
+    }
+
+    @Test
+    @DisplayName("custom 空 allow + deny 仍拒绝所有（纯黑名单模式移除，fail-closed）")
+    void customEmptyAllowWithDenyRejectsAll() {
+        assertFalse(ToolFilterEvaluator.allows(
+                new ToolFilterConfig("custom", List.of(), List.of("query_node")), "query_node"));
     }
 }

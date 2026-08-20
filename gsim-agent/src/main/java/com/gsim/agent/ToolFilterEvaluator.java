@@ -40,8 +40,10 @@ public class ToolFilterEvaluator {
             }
             case "none" -> "finish_action".equals(toolName);
             case "custom" -> {
+                // custom = 白名单模式：deny 命中优先拒绝；allow 为空 → 无任何工具（fail-closed）；
+                // 仅 finish_action 经 allowsWithPermission 的 SELF 分支放行（与 none 模式一致）
                 if (deny.contains(toolName)) yield false;
-                if (allow.isEmpty()) yield true;
+                if (allow.isEmpty()) yield false; // 空 allow = 无工具（修复核心）
                 yield allow.contains(toolName);
             }
             default -> false;
