@@ -1,5 +1,6 @@
 package com.gsim.agent;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.agentlib.tool.AgentTool;
 import java.io.IOException;
@@ -52,7 +53,7 @@ public record AgentConfig(
                 "",
                 "",
                 ToolFilterConfig.ALL,
-                32,
+                259,
                 0.3,
                 2048,
                 null,
@@ -114,17 +115,19 @@ public record AgentConfig(
         }
 
         String userTemplate = node.path("userTemplate").asText("");
-        String toolMode = node.path("toolFilter").path("mode").asText("all");
-        var allow = node.path("toolFilter").path("allow");
-        var deny = node.path("toolFilter").path("deny");
-        var tfAllowList = allow.isArray()
+        JsonNode tfNode = node.path("toolFilter");
+        String toolMode =
+                tfNode.isTextual() ? tfNode.asText() : tfNode.path("mode").asText("all");
+        var allow = tfNode.isObject() ? tfNode.path("allow") : null;
+        var deny = tfNode.isObject() ? tfNode.path("deny") : null;
+        var tfAllowList = allow != null && allow.isArray()
                 ? new java.util.ArrayList<String>() {
                     {
                         for (var n : allow) add(n.asText());
                     }
                 }
                 : java.util.List.<String>of();
-        var tfDenyList = deny.isArray()
+        var tfDenyList = deny != null && deny.isArray()
                 ? new java.util.ArrayList<String>() {
                     {
                         for (var n : deny) add(n.asText());
@@ -132,7 +135,7 @@ public record AgentConfig(
                 }
                 : java.util.List.<String>of();
         var filter = new ToolFilterConfig(toolMode, tfAllowList, tfDenyList);
-        int maxRounds = node.path("maxToolRounds").asInt(32);
+        int maxRounds = node.path("maxToolRounds").asInt(259);
         double temp = node.path("temperature").asDouble(0.3);
         int maxTok = node.path("maxTokens").asInt(2048);
 
