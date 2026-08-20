@@ -14,36 +14,32 @@ import org.slf4j.LoggerFactory;
 /**
  * 文件系统缓存管理器 — {@link CachesManager} 的默认实现。
  *
- * <p>缓存存储于 {@code worlds/{worldId}/caches/} 目录下，每个 .json 文件即一个 CacheSession。
+ * <p>缓存存储于 {@code caches/} 目录下（由 {@link CacheStore#setCachesRoot} 配置），
+ * 每个 .json 文件即一个 CacheSession。
  */
 public class FileSystemCachesManager implements CachesManager {
 
     private static final Logger log = LoggerFactory.getLogger(FileSystemCachesManager.class);
 
-    private final Path worldsDir;
-
     /**
      * 构造文件系统缓存管理器。
-     *
-     * @param worldsDir 世界目录根路径，缓存放置于 {worldsDir}/../caches/
+     * 缓存根目录通过 {@link CacheStore#setCachesRoot} 在启动时配置。
      */
-    public FileSystemCachesManager(Path worldsDir) {
-        this.worldsDir = worldsDir;
+    public FileSystemCachesManager() {}
+
+    @Override
+    public List<CacheInfo> listCaches() {
+        return listCachesInternal(null);
     }
 
     @Override
-    public List<CacheInfo> listCaches(String worldId) {
-        return listCachesInternal(worldId, null);
+    public List<CacheInfo> listCaches(String agentType) {
+        return listCachesInternal(agentType);
     }
 
-    @Override
-    public List<CacheInfo> listCaches(String worldId, String agentType) {
-        return listCachesInternal(worldId, agentType);
-    }
-
-    private List<CacheInfo> listCachesInternal(String worldId, String agentType) {
+    private List<CacheInfo> listCachesInternal(String agentType) {
         List<CacheInfo> result = new ArrayList<>();
-        Path dir = CacheStore.cachesDir(worldsDir);
+        Path dir = CacheStore.cachesDir();
         if (!Files.isDirectory(dir)) return result;
 
         try (Stream<Path> files = Files.list(dir)) {
@@ -53,8 +49,6 @@ public class FileSystemCachesManager implements CachesManager {
                 try {
                     CacheInfo info = readMeta(file);
                     if (info != null) {
-                        // 按 worldId 过滤（null 表示不过滤）
-                        if (worldId != null && !worldId.equals(info.worldId())) continue;
                         // 按 agentType 过滤
                         if (agentType != null && !agentType.equals(info.agentType())) continue;
                         result.add(info);
@@ -73,34 +67,18 @@ public class FileSystemCachesManager implements CachesManager {
     }
 
     @Override
-    public CacheSession loadCache(String worldId, String sessionId) {
-        CacheSession session = CacheStore.load(worldsDir, sessionId);
-        if (session != null && worldId != null && !worldId.equals(session.worldId())) {
-            log.warn("Cache {} worldId mismatch: expected {}, got {}", sessionId, worldId, session.worldId());
-        }
-        return session;
+    public CacheSession loadCache(String sessionId) {
+        return CacheStore.load(sessionId);
     }
 
     @Override
-    public CacheSession createCache(String worldId, String agentName, String nodeId) {
-        return CacheStore.createNew(worldsDir, worldId, agentName, nodeId);
+    public CacheSession createCache(String agentName) {
+        return CacheStore.createNew(agentName);
     }
 
     @Override
-    public boolean deleteCache(String worldId, String sessionId) {
-        // 可选：验证 worldId 匹配再删除
-        if (worldId != null) {
-            CacheSession session = CacheStore.load(worldsDir, sessionId);
-            if (session != null && !worldId.equals(session.worldId())) {
-                log.warn(
-                        "Refusing to delete cache {}: worldId mismatch (expected {}, got {})",
-                        sessionId,
-                        worldId,
-                        session.worldId());
-                return false;
-            }
-        }
-        Path file = CacheStore.cacheFile(worldsDir, sessionId);
+    public boolean deleteCache(String sessionId) {
+        Path file = CacheStore.cacheFile(sessionId);
         try {
             return Files.deleteIfExists(file);
         } catch (IOException e) {
@@ -110,30 +88,23 @@ public class FileSystemCachesManager implements CachesManager {
     }
 
     @Override
-    public Optional<CacheInfo> getCacheInfo(String worldId, String sessionId) {
-        Path file = CacheStore.cacheFile(worldsDir, sessionId);
+    public Optional<CacheInfo> getCacheInfo(String sessionId) {
+        Path file = CacheStore.cacheFile(sessionId);
         if (!Files.exists(file)) return Optional.empty();
         try {
-            CacheInfo info = readMeta(file);
-            if (info != null && worldId != null && !worldId.equals(info.worldId())) {
-                return Optional.empty();
-            }
-            return Optional.ofNullable(info);
+            return Optional.ofNullable(readMeta(file));
         } catch (Exception e) {
             return Optional.empty();
         }
     }
 
-    /** 只解析顶层字段获取元信息（不加载 messages 数组）。
-     *  worldId 从文件内容中读取，不再从目录路径推断。 */
+    /** 只解析顶层字段获取元信息（不加载 messages 数组）。 */
     private CacheInfo readMeta(Path file) {
         try {
             // 使用轻量解析：只读顶层标量字段，跳过 messages
             String raw = Files.readString(file);
             String agentName = extractJsonString(raw, "agentName");
             String sessionId = extractJsonString(raw, "sessionId");
-            String fileWorldId = extractJsonString(raw, "worldId");
-            String nodeId = extractJsonString(raw, "nodeId");
             String createdAt = extractJsonString(raw, "createdAt");
             String previousSessionId = extractJsonString(raw, "previousSessionId");
             int msgCount = countMessages(raw);
@@ -141,8 +112,6 @@ public class FileSystemCachesManager implements CachesManager {
                     agentName != null ? agentName : "unknown",
                     CacheInfo.inferType(agentName),
                     sessionId != null ? sessionId : file.getFileName().toString(),
-                    fileWorldId != null ? fileWorldId : "unknown",
-                    nodeId != null ? nodeId : "n0000",
                     createdAt != null ? createdAt : "",
                     msgCount,
                     previousSessionId != null && !previousSessionId.isEmpty() ? previousSessionId : null,

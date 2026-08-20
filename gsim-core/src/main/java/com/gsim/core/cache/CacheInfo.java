@@ -5,15 +5,13 @@ import java.util.Locale;
 /**
  * Cache 元信息 — 不加载消息体的轻量级 cache 摘要。
  *
- * <p>Cache 唯一 key = (worldId, sessionId)。
+ * <p>Cache 唯一 key = sessionId。
  * 对外按 (agentType, createdAt) 编排排序。
  */
 public record CacheInfo(
         String agentName, // e.g. "Orchestrator", "sim-1", "search-3"
         String agentType, // "orchestrator", "sim", "search" (从 agentName 推断)
         String sessionId, // 文件名，如 "Orchestrator_2026-06-26T10-30-00.json"
-        String worldId,
-        String nodeId,
         String createdAt, // ISO timestamp
         int messageCount,
         String previousSessionId, // 链式缓存关联（可以为 null）
@@ -48,8 +46,6 @@ public record CacheInfo(
                 session.agentName(),
                 inferType(session.agentName()),
                 session.sessionId(),
-                session.worldId(),
-                session.nodeId(),
                 session.createdAt(),
                 session.messageCount(),
                 session.previousSessionId(),

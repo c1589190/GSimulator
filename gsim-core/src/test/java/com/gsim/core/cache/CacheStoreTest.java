@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,15 +13,20 @@ class CacheStoreTest {
     @TempDir
     Path tmpDir;
 
+    @BeforeEach
+    void configureCachesRoot() {
+        CacheStore.setCachesRoot(tmpDir);
+    }
+
     @Test
     void saveAndLoadRoundtrip() {
-        CacheSession session = CacheStore.createNew(tmpDir, "test-world", "Orchestrator", "n0000");
+        CacheSession session = CacheStore.createNew("Orchestrator");
 
         session.addMessage(Map.of("role", "system", "content", "You are a simulation engine."));
         session.addMessage(Map.of("role", "user", "content", "Hello"));
-        CacheStore.save(tmpDir, session);
+        CacheStore.save(session);
 
-        CacheSession loaded = CacheStore.load(tmpDir, session.sessionId());
+        CacheSession loaded = CacheStore.load(session.sessionId());
         assertNotNull(loaded);
         assertEquals("Orchestrator", loaded.agentName());
         assertEquals(2, loaded.messageCount());
@@ -30,29 +36,35 @@ class CacheStoreTest {
 
     @Test
     void loadMissingReturnsNull() {
-        assertNull(CacheStore.load(tmpDir, "nonexistent.json"));
+        assertNull(CacheStore.load("nonexistent.json"));
     }
 
     @Test
     void compressionChain() {
-        CacheSession old = CacheStore.createNew(tmpDir, "w", "Orchestrator", "n0002");
+        CacheSession old = CacheStore.createNew("Orchestrator");
         old.compressionNote("Summary of old session.");
 
-        CacheSession fresh = CacheStore.createNew(tmpDir, "w", "Orchestrator", "n0003");
+        CacheSession fresh = CacheStore.createNew("Orchestrator");
         fresh.previousSessionId(old.sessionId());
         fresh.compressionNote("Continuing from previous...");
 
-        CacheStore.save(tmpDir, old);
-        CacheStore.save(tmpDir, fresh);
+        CacheStore.save(old);
+        CacheStore.save(fresh);
 
-        CacheSession loaded = CacheStore.load(tmpDir, fresh.sessionId());
+        CacheSession loaded = CacheStore.load(fresh.sessionId());
         assertEquals(old.sessionId(), loaded.previousSessionId());
         assertEquals("Continuing from previous...", loaded.compressionNote());
     }
 
     @Test
     void createsCachesDirectory() {
-        CacheStore.createNew(tmpDir, "w", "Sim", "n0000");
-        assertTrue(java.nio.file.Files.exists(CacheStore.cachesDir(tmpDir)));
+        CacheStore.createNew("Sim");
+        assertTrue(java.nio.file.Files.exists(CacheStore.cachesDir()));
+    }
+
+    @Test
+    void cachesDirThrowsWhenNotConfigured() {
+        CacheStore.setCachesRoot(null);
+        assertThrows(IllegalStateException.class, CacheStore::cachesDir);
     }
 }

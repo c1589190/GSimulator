@@ -1,5 +1,6 @@
 package com.gsim.core.cache;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.util.ArrayList;
@@ -7,20 +8,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * One LLM conversation session, stored as a JSON file in worlds/{worldId}/caches/.
+ * One LLM conversation session, stored as a JSON file in the caches directory.
  * messages use raw OpenAI format: role, content, tool_calls, tool_call_id.
  */
 @JsonDeserialize
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CacheSession {
 
     @JsonProperty("agentName")
     private String agentName;
-
-    @JsonProperty("worldId")
-    private String worldId;
-
-    @JsonProperty("nodeId")
-    private String nodeId;
 
     @JsonProperty("sessionId")
     private String sessionId;
@@ -49,15 +45,11 @@ public class CacheSession {
      * 构造一个 CacheSession 实例。
      *
      * @param agentName Agent 名称
-     * @param worldId   所属世界 ID
-     * @param nodeId    当前节点 ID
      * @param sessionId 会话 ID（文件名）
      * @param createdAt 创建时间（ISO 时间戳）
      */
-    public CacheSession(String agentName, String worldId, String nodeId, String sessionId, String createdAt) {
+    public CacheSession(String agentName, String sessionId, String createdAt) {
         this.agentName = agentName;
-        this.worldId = worldId;
-        this.nodeId = nodeId;
         this.sessionId = sessionId;
         this.createdAt = createdAt;
         this.messages = new ArrayList<>();
@@ -67,14 +59,6 @@ public class CacheSession {
     // getters
     public String agentName() {
         return agentName;
-    }
-
-    public String worldId() {
-        return worldId;
-    }
-
-    public String nodeId() {
-        return nodeId;
     }
 
     public String sessionId() {
@@ -104,14 +88,6 @@ public class CacheSession {
     // setters (for Jackson)
     public void setAgentName(String v) {
         this.agentName = v;
-    }
-
-    public void setWorldId(String v) {
-        this.worldId = v;
-    }
-
-    public void setNodeId(String v) {
-        this.nodeId = v;
     }
 
     public void setSessionId(String v) {
