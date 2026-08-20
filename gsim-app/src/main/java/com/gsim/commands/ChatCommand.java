@@ -4,7 +4,6 @@ import com.gsim.agent.core.AgentResult;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.llm.LlmMessage;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +27,6 @@ public final class ChatCommand {
 
     private static final Logger log = LoggerFactory.getLogger(ChatCommand.class);
 
-    private final Path worldsDir;
-    private final Supplier<String> worldId;
     private final Supplier<CacheSession> activeCache;
     private java.util.function.Consumer<CacheSession> activeCacheSetter;
     private final java.util.function.BiFunction<String, List<LlmMessage>, AgentResult> agentRunner;
@@ -40,17 +37,13 @@ public final class ChatCommand {
     /** JLine Terminal 引用（用于非阻塞 ESC 检测，避免与 JLine 终端状态冲突）。 */
     private volatile org.jline.terminal.Terminal jlineTerminal;
 
-    public ChatCommand(Path worldsDir, Supplier<String> worldId, Supplier<CacheSession> activeCache) {
-        this(worldsDir, worldId, activeCache, null);
+    public ChatCommand(Supplier<CacheSession> activeCache) {
+        this(activeCache, null);
     }
 
     public ChatCommand(
-            Path worldsDir,
-            Supplier<String> worldId,
             Supplier<CacheSession> activeCache,
             java.util.function.BiFunction<String, List<LlmMessage>, AgentResult> agentRunner) {
-        this.worldsDir = worldsDir;
-        this.worldId = worldId;
         this.activeCache = activeCache;
         this.agentRunner = agentRunner;
     }
@@ -243,10 +236,10 @@ public final class ChatCommand {
         CacheSession old = activeCache.get();
         // Create new session with compression chain
         String summary = "(manual clear — previous session " + old.sessionId() + ")";
-        CacheSession fresh = CacheStore.createNew(worldsDir, worldId.get(), "Orchestrator", old.nodeId());
+        CacheSession fresh = CacheStore.createNew("Orchestrator");
         fresh.previousSessionId(old.sessionId());
         fresh.compressionNote(summary);
-        CacheStore.save(worldsDir, fresh);
+        CacheStore.save(fresh);
 
         // 更新活跃缓存引用，确保后续消息写入新缓存
         if (activeCacheSetter != null) {

@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -27,6 +28,11 @@ class EndToEndTest {
     @TempDir
     Path tmpDir;
 
+    @BeforeEach
+    void setUp() {
+        CacheStore.setCachesRoot(tmpDir);
+    }
+
     @Test
     void fullLifecycle() throws Exception {
         Path worldsDir = tmpDir.resolve("worlds");
@@ -35,7 +41,7 @@ class EndToEndTest {
         Files.writeString(promptsDir.resolve("OrchestratorAgent_system.md"), "System: ${worldId}, turn ${activeTurn}");
 
         // --- Bootstrap creates default world ---
-        CachesManager cachesManager = new FileSystemCachesManager(worldsDir);
+        CachesManager cachesManager = new FileSystemCachesManager();
         Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
         Bootstrap.BootstrapResult result = b.boot();
 
@@ -57,9 +63,9 @@ class EndToEndTest {
         // --- Cache ---
         CacheSession cache = result.activeCache();
         cache.addMessage(Map.of("role", "user", "content", "测试消息"));
-        CacheStore.save(worldsDir, cache);
+        CacheStore.save(cache);
 
-        CacheSession loaded = CacheStore.load(worldsDir, cache.sessionId());
+        CacheSession loaded = CacheStore.load(cache.sessionId());
         assertNotNull(loaded);
         assertEquals(1, loaded.messageCount());
     }

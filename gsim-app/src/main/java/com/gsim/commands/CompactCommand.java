@@ -7,10 +7,8 @@ import com.gsim.core.cache.CachesManager;
 import com.gsim.core.compact.CacheCompactor;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmMessage;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.function.BiFunction;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,22 +32,16 @@ public final class CompactCommand {
     private final CacheCompactor compactor;
     private final AgentProgressSink progressSink;
     private final BiFunction<String, List<LlmMessage>, AgentResult> agentRunner;
-    private final Path worldsDir;
-    private final Supplier<String> worldId;
 
     public CompactCommand(
             CachesManager cachesManager,
             CacheCompactor compactor,
             AgentProgressSink progressSink,
-            BiFunction<String, List<LlmMessage>, AgentResult> agentRunner,
-            Path worldsDir,
-            Supplier<String> worldId) {
+            BiFunction<String, List<LlmMessage>, AgentResult> agentRunner) {
         this.cachesManager = cachesManager;
         this.compactor = compactor;
         this.progressSink = progressSink;
         this.agentRunner = agentRunner;
-        this.worldsDir = worldsDir;
-        this.worldId = worldId;
     }
 
     /**
@@ -62,16 +54,14 @@ public final class CompactCommand {
             return "用法: /compact <cacheId>\n示例: /compact Orchestrator_2026-06-27T15-50-30.json";
         }
 
-        String wid = worldId.get();
-
         // 1. 加载 CacheSession
-        CacheSession session = cachesManager.loadCache(wid, cacheId);
+        CacheSession session = cachesManager.loadCache(cacheId);
         if (session == null) {
             // 尝试直接加载（可能是完整文件名）
-            session = CacheStore.load(worldsDir, cacheId);
+            session = CacheStore.load(cacheId);
         }
         if (session == null) {
-            return "Cache 未找到: " + cacheId + " (world=" + wid + ")";
+            return "Cache 未找到: " + cacheId;
         }
 
         progressSink.onProgress(com.gsim.core.event.AgentProgressEvent.publicMessage(
@@ -84,11 +74,11 @@ public final class CompactCommand {
                 "\n━━━ 压缩结果 ━━━\n" + compacted + "\n━━━━━━━━━━━━━━"));
 
         // 3. 创建新 session
-        CacheSession newSession = CacheStore.createNew(worldsDir, wid, session.agentName(), session.nodeId());
+        CacheSession newSession = CacheStore.createNew(session.agentName());
         newSession.previousSessionId(session.sessionId());
         newSession.compressionNote("compacted from " + session.sessionId() + " (" + session.messageCount()
                 + " messages → " + compacted.length() + " chars)");
-        CacheStore.save(worldsDir, newSession);
+        CacheStore.save(newSession);
 
         progressSink.onProgress(
                 com.gsim.core.event.AgentProgressEvent.publicMessage("📝 新会话: " + newSession.sessionId()));

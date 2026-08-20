@@ -84,7 +84,7 @@ public final class Bootstrap {
         // 5. Load Orchestrator cache — 仅加载指定缓存或新建
         //    不再自动选取最新缓存；调用方（Main CLI / WebUI）负责选择。
         if (selectedSessionId != null && !selectedSessionId.isBlank()) {
-            activeCache = cachesManager.loadCache(worldId, selectedSessionId);
+            activeCache = cachesManager.loadCache(selectedSessionId);
             if (activeCache == null) {
                 System.out.println("⚠️  指定的缓存不存在: " + selectedSessionId + "，将创建新缓存");
             }
@@ -92,8 +92,8 @@ public final class Bootstrap {
 
         if (activeCache == null) {
             // 新建（无指定缓存 或 加载失败）
-            activeCache = cachesManager.createCache(worldId, "Orchestrator", activeNodeId);
-            CacheStore.save(worldsDir, activeCache);
+            activeCache = cachesManager.createCache("Orchestrator");
+            CacheStore.save(activeCache);
         }
 
         return new BootstrapResult(worldId, activeNodeId, worldInfo, activeCache);

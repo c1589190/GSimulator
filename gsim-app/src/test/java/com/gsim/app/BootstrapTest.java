@@ -2,11 +2,13 @@ package com.gsim.app;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.CachesManager;
 import com.gsim.core.cache.FileSystemCachesManager;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -15,13 +17,18 @@ class BootstrapTest {
     @TempDir
     Path tmpDir;
 
+    @BeforeEach
+    void setUp() {
+        CacheStore.setCachesRoot(tmpDir);
+    }
+
     @Test
     void bootCreatesDefaultWorld() throws Exception {
         Path worldsDir = tmpDir.resolve("worlds");
         Path promptsDir = tmpDir.resolve("prompts");
         Files.createDirectories(promptsDir);
 
-        CachesManager cachesManager = new FileSystemCachesManager(worldsDir);
+        CachesManager cachesManager = new FileSystemCachesManager();
         Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
         Bootstrap.BootstrapResult result = b.boot();
 
@@ -43,7 +50,7 @@ class BootstrapTest {
         WorldIndexManager.createWorld(worldsDir, "alpha", "Alpha World");
         WorldIndexManager.createWorld(worldsDir, "zeta", "Zeta World");
 
-        CachesManager cachesManager = new FileSystemCachesManager(worldsDir);
+        CachesManager cachesManager = new FileSystemCachesManager();
         Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
         // Without explicit worldId, first world (alpha) would be picked
         // With explicit worldId, we should get zeta
@@ -62,7 +69,7 @@ class BootstrapTest {
         Path promptsDir = tmpDir.resolve("prompts");
         Files.createDirectories(promptsDir);
 
-        CachesManager cachesManager = new FileSystemCachesManager(worldsDir);
+        CachesManager cachesManager = new FileSystemCachesManager();
         Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> b.boot(null, "nonexistent"));

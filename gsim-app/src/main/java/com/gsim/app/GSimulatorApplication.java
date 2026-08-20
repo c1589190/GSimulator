@@ -384,8 +384,6 @@ public class GSimulatorApplication {
                 toolRegistry,
                 compositeSink,
                 config.getLlmModel(),
-                worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default",
                 config.subagentMaxCompleted(),
                 agentResultPolicy);
 
@@ -400,9 +398,7 @@ public class GSimulatorApplication {
                 toolRegistry,
                 compositeSink,
                 ctx.getEventBus(),
-                config.getLlmModel(),
-                worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default");
+                config.getLlmModel());
         log.info("Agent management layer initialized (Store + Manager)");
         this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory, this.docCacheManager);
 
@@ -413,14 +409,9 @@ public class GSimulatorApplication {
         }
 
         // SubAgent cache 管理工具
-        var worldIdSupplier = new java.util.function.Supplier<String>() {
-            public String get() {
-                return worldInfo != null ? worldInfo.worldId() : "default";
-            }
-        };
-        toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(ctx.getCachesManager(), worldIdSupplier));
-        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(ctx.getCachesManager(), worldIdSupplier));
-        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(ctx.getCachesManager(), worldIdSupplier));
+        toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(ctx.getCachesManager()));
 
         // LLM provider 列表 + 动态创建 SubAgent 配置
         toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));
@@ -441,12 +432,8 @@ public class GSimulatorApplication {
         this.cacheCompactor = new com.gsim.core.compact.CacheCompactor(compactLlm, 4096);
 
         // Compact Cache 工具（Agent 可调用）
-        toolRegistry.register(new com.gsim.agent.tool.CompactCacheTool(
-                ctx.getCachesManager(),
-                cacheCompactor,
-                compositeSink,
-                worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default"));
+        toolRegistry.register(
+                new com.gsim.agent.tool.CompactCacheTool(ctx.getCachesManager(), cacheCompactor, compositeSink));
     }
 
     /**
@@ -471,10 +458,9 @@ public class GSimulatorApplication {
             this.activeWorldId.set(worldId);
             ctx.setActiveRootId(worldId);
 
-            // 5. 更新缓存中的 nodeId（信息性字段，不影响对话内容）
+            // 5. 缓存不携带 world 信息（脱钩后），仅保留活跃会话
             if (this.activeCache != null) {
-                this.activeCache.setNodeId(newWi.activeNodeId());
-                com.gsim.core.cache.CacheStore.save(worldsDir, this.activeCache);
+                com.gsim.core.cache.CacheStore.save(this.activeCache);
             }
 
             log.info(
@@ -490,14 +476,13 @@ public class GSimulatorApplication {
         }
     }
 
-    /** 更新 orchestrator 的 messageSaver，使其写入当前活跃 world 的缓存目录。
-     *  使用缓存自身的 worldId 决定路径，而非外部字段，确保一致性。 */
+    /** 更新 orchestrator 的 messageSaver，使其写入当前活跃缓存。 */
     private void updateMessageSaver() {
         if (orchestrator == null) return;
         orchestrator.setMessageSaver(msg -> {
             CacheSession s = activeCache;
             if (s != null) {
-                com.gsim.core.cache.CacheStore.appendAndSave(worldsDir, s, msg.toCacheMap());
+                com.gsim.core.cache.CacheStore.appendAndSave(s, msg.toCacheMap());
             }
         });
     }
@@ -510,10 +495,7 @@ public class GSimulatorApplication {
         WorldCommand wc = new WorldCommand(worldsDir, this::switchToWorld);
         NodeCommand nc = new NodeCommand(worldsDir, () -> worldInfo, onNodeChanged);
         ChatCommand cc = new ChatCommand(
-                worldsDir,
-                () -> worldInfo != null ? worldInfo.worldId() : "default",
-                () -> activeCache,
-                (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
+                () -> activeCache, (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
         cc.setCancelCallback(orchestrator::cancel);
         cc.setJlineTerminal(adapter.getJlineTerminal());
         cc.setActiveCacheSetter(s -> {
@@ -530,9 +512,7 @@ public class GSimulatorApplication {
                     ctx.getCachesManager(),
                     cacheCompactor,
                     compositeSink,
-                    (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages),
-                    worldsDir,
-                    () -> worldInfo != null ? worldInfo.worldId() : "default");
+                    (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
             adapter.setCompactCommand(compactCommand);
 
             // Board 指令（公开展示板）
@@ -576,7 +556,7 @@ public class GSimulatorApplication {
         if (sp == null || sp.isBlank()) return;
 
         activeCache.addMessage(java.util.Map.of("role", "system", "content", sp));
-        com.gsim.core.cache.CacheStore.save(worldsDir, activeCache);
+        com.gsim.core.cache.CacheStore.save(activeCache);
         log.info("Prepended static system prompt to cache {} ({} chars)", activeCache.sessionId(), sp.length());
     }
 

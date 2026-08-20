@@ -433,8 +433,8 @@ public class ChatApiHandler implements HttpHandler {
     // ── Conversation management (Task 3) ──
 
     private void handleListConversations(HttpExchange exchange) throws IOException {
-        // 扁平缓存：列出所有 orchestrator 缓存（不按 worldId 过滤），worldId 在响应中标注
-        List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
+        // 扁平缓存：列出所有 orchestrator 缓存（不按 worldId 过滤）
+        List<CacheInfo> caches = cachesManager.listCaches("orchestrator");
         CacheSession active = activeCache.get();
         String activeSid = active != null ? active.sessionId() : null;
 
@@ -444,8 +444,6 @@ public class ChatApiHandler implements HttpHandler {
             item.put("sessionId", c.sessionId());
             item.put("agentName", c.agentName());
             item.put("agentType", c.agentType());
-            item.put("worldId", c.worldId());
-            item.put("nodeId", c.nodeId());
             item.put("createdAt", c.createdAt());
             item.put("messageCount", c.messageCount());
             item.put("isActive", c.sessionId().equals(activeSid));
@@ -462,9 +460,7 @@ public class ChatApiHandler implements HttpHandler {
         Map<String, Object> body = rawBody.isBlank() ? Map.of() : JsonUtils.fromJson(rawBody, Map.class);
         String agentName =
                 body != null ? body.getOrDefault("agentName", "Orchestrator").toString() : "Orchestrator";
-        String wid = worldId.get();
-        String nid = worldInfo.get() != null ? worldInfo.get().activeNodeId() : "n0000";
-        CacheSession session = cachesManager.createCache(wid, agentName, nid);
+        CacheSession session = cachesManager.createCache(agentName);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);
         resp.put("sessionId", session.sessionId());
@@ -473,8 +469,7 @@ public class ChatApiHandler implements HttpHandler {
     }
 
     private void handleLoadConversation(HttpExchange exchange, String sessionId) throws IOException {
-        String wid = worldId.get();
-        CacheSession session = cachesManager.loadCache(wid, sessionId);
+        CacheSession session = cachesManager.loadCache(sessionId);
         if (session == null) {
             HandlerUtils.sendJson(exchange, 404, Map.of("error", "Conversation not found: " + sessionId));
             return;
@@ -489,14 +484,13 @@ public class ChatApiHandler implements HttpHandler {
                 session.messages().stream()
                         .filter(m -> !"system".equals(m.get("role")))
                         .toList());
-        resp.put("nodeId", session.nodeId());
         resp.put("agentName", session.agentName());
         HandlerUtils.sendJson(exchange, 200, resp);
     }
 
     private void handleDeleteConversation(HttpExchange exchange, String sessionId) throws IOException {
         // 扁平缓存：不限制 worldId，按 sessionId 直接删除
-        boolean deleted = cachesManager.deleteCache(null, sessionId);
+        boolean deleted = cachesManager.deleteCache(sessionId);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", deleted);
         if (!deleted) resp.put("error", "Conversation not found");

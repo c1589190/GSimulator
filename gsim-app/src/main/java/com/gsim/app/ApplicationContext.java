@@ -72,7 +72,7 @@ public class ApplicationContext {
         this.llmManager = (LlmManager) llmProviderRegistry.getDefault();
 
         // Cache 管理器
-        this.cachesManager = new FileSystemCachesManager(config.worldsDir());
+        this.cachesManager = new FileSystemCachesManager();
 
         if (llmsResult.wasNewlyCreated()) {
             System.out.println();

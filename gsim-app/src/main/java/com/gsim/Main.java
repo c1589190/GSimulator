@@ -11,6 +11,7 @@ import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
 import com.gsim.app.mcp.DocStagingOverflowHandler;
 import com.gsim.core.cache.CacheInfo;
+import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.CachesManager;
 import com.gsim.core.cache.FileSystemCachesManager;
 import com.gsim.core.config.ConfigDoctor;
@@ -112,7 +113,9 @@ public class Main {
             }
 
             // Bootstrap
-            CachesManager cachesManager = new FileSystemCachesManager(config.worldsDir());
+            // Cache 根目录必须在任何 CacheStore 使用前配置（Bootstrap 内部会写 orchestrator cache）
+            CacheStore.setCachesRoot(config.cachesDir());
+            CachesManager cachesManager = new FileSystemCachesManager();
             Path worldsDir = config.worldsDir();
             Path promptsDir = config.promptsDir();
             Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir, cachesManager);
@@ -242,7 +245,7 @@ public class Main {
 
     /** CLI 交互：选择 Orchestrator 历史缓存或新建。 */
     private static CacheSelection selectOrchestratorCache(CachesManager cachesManager, Path worldsDir) {
-        List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
+        List<CacheInfo> caches = cachesManager.listCaches("orchestrator");
         if (caches.isEmpty()) return new CacheSelection(null, null);
 
         List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
@@ -254,12 +257,10 @@ public class Main {
         System.out.println("══════════════════════════════════════════");
         for (int i = 0; i < caches.size(); i++) {
             CacheInfo ci = caches.get(i);
-            String worldLabel = ci.worldId() != null ? ci.worldId() : "?";
             System.out.printf(
-                    "  [%d] %s  world=%s  (%d messages, %s)%n",
+                    "  [%d] %s  (%d messages, %s)%n",
                     i + 1,
                     ci.sessionId(),
-                    worldLabel,
                     ci.messageCount(),
                     ci.createdAt().substring(0, Math.min(16, ci.createdAt().length())));
         }
@@ -277,15 +278,15 @@ public class Main {
             int idx = Integer.parseInt(line) - 1;
             if (idx >= 0 && idx < caches.size()) {
                 CacheInfo chosen = caches.get(idx);
-                System.out.println("  加载缓存: " + chosen.sessionId() + " (world=" + chosen.worldId() + ")");
-                return new CacheSelection(chosen.sessionId(), chosen.worldId());
+                System.out.println("  加载缓存: " + chosen.sessionId());
+                return new CacheSelection(chosen.sessionId(), null);
             }
         } catch (Exception e) {
             // fall through
         }
         CacheInfo fallback = caches.get(0);
-        System.out.println("  输入无效，使用最新缓存 (world=" + fallback.worldId() + ")。");
-        return new CacheSelection(fallback.sessionId(), fallback.worldId());
+        System.out.println("  输入无效，使用最新缓存 " + fallback.sessionId() + "。");
+        return new CacheSelection(fallback.sessionId(), null);
     }
 
     /** 选择 world（用于新建会话时）。 */
