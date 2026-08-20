@@ -332,14 +332,18 @@ function renderProvinceHighlight() {
     if (region.name === State.selectedProvince) {
       State.canvas._boundaryHexes = State.canvas[cacheName];
     }
-    State.ctx.fillStyle = region.color;
-    State.ctx.globalAlpha = 0.8;
-    for (const b of State.canvas[cacheName]) {
-      const {x, y} = hexToPixel(b.q, b.r);
-      if (x < vl || x > vr || y < vt || y > vb) continue;
-      State.ctx.beginPath(); State.ctx.arc(x, y, 5/State.zoom, 0, Math.PI*2); State.ctx.fill();
+    // 圆点仅对选中编辑中的区域渲染（activeTag 浏览模式不画，避免缩小缩放时圆点叠成噪点）
+    const isEditing = State.selectedProvince === region.name;
+    if (isEditing) {
+      State.ctx.fillStyle = region.color;
+      State.ctx.globalAlpha = 0.8;
+      for (const b of State.canvas[cacheName]) {
+        const {x, y} = hexToPixel(b.q, b.r);
+        if (x < vl || x > vr || y < vt || y > vb) continue;
+        State.ctx.beginPath(); State.ctx.arc(x, y, 5/State.zoom, 0, Math.PI*2); State.ctx.fill();
+      }
+      State.ctx.globalAlpha = 1;
     }
-    State.ctx.globalAlpha = 1;
 
     // ── Region name label ──
     if (State.showRegionNames && phexes.length > 0) {
