@@ -31,7 +31,7 @@ public class UpdateSubAgentConfigTool implements AgentTool {
 
     private static final Logger log = LoggerFactory.getLogger(UpdateSubAgentConfigTool.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Set<String> VALID_TOOL_FILTERS = Set.of("all", "read_only", "custom");
+    private static final Set<String> VALID_TOOL_FILTERS = Set.of("all", "read_only", "custom", "none");
 
     private final Path agentsDir;
     private final AgentConfigStore configStore;
@@ -70,7 +70,8 @@ public class UpdateSubAgentConfigTool implements AgentTool {
                         "tool_filter",
                                 Map.of(
                                         "type", "string",
-                                        "description", "（可选）工具访问模式: \"read_only\"、\"all\"、\"custom\"。不提供则不修改。"),
+                                        "description",
+                                                "（可选）工具访问模式: \"read_only\"（只读工具）、\"all\"（所有工具）、\"custom\"（自定义列表）、\"none\"（无任何工具，仅 finish_action）。不提供则不修改。"),
                         "temperature",
                                 Map.of(
                                         "type", "number",
@@ -126,7 +127,7 @@ public class UpdateSubAgentConfigTool implements AgentTool {
 
         // 校验可选参数
         if (!toolFilter.isEmpty() && !VALID_TOOL_FILTERS.contains(toolFilter)) {
-            return ToolResult.fail(NAME, "tool_filter 无效: '" + toolFilter + "'。可选: all, read_only, custom");
+            return ToolResult.fail(NAME, "tool_filter 无效: '" + toolFilter + "'。可选: all, read_only, custom, none");
         }
         if (!temperatureStr.isEmpty()) {
             double t = parseDouble(temperatureStr, -1);
@@ -140,7 +141,7 @@ public class UpdateSubAgentConfigTool implements AgentTool {
         }
         if (!maxToolRoundsStr.isEmpty()) {
             int mr = parseInt(maxToolRoundsStr, -1);
-            if (mr < 1) return ToolResult.fail(NAME, "max_tool_rounds 必须 >= 1");
+            if (mr < 0) return ToolResult.fail(NAME, "max_tool_rounds 必须 >= 0（0 = 不限制）");
         }
 
         // 至少有一个字段被修改
@@ -199,7 +200,7 @@ public class UpdateSubAgentConfigTool implements AgentTool {
             if (!maxToolRoundsStr.isEmpty()) {
                 int newMr = Integer.parseInt(maxToolRoundsStr);
                 int oldMr =
-                        config.containsKey("maxToolRounds") ? ((Number) config.get("maxToolRounds")).intValue() : 16;
+                        config.containsKey("maxToolRounds") ? ((Number) config.get("maxToolRounds")).intValue() : 259;
                 config.put("maxToolRounds", newMr);
                 changes.put("max_tool_rounds", oldMr + " → " + newMr);
             }

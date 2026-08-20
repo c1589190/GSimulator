@@ -31,7 +31,7 @@ public class CreateSubAgentConfigTool implements AgentTool {
     private static final Logger log = LoggerFactory.getLogger(CreateSubAgentConfigTool.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Set<String> BUILTIN_AGENTS = Set.of("orchestrator", "sim", "search");
-    private static final Set<String> VALID_TOOL_FILTERS = Set.of("all", "read_only", "custom");
+    private static final Set<String> VALID_TOOL_FILTERS = Set.of("all", "read_only", "custom", "none");
 
     private final Path agentsDir;
     private final AgentConfigStore configStore;
@@ -83,7 +83,7 @@ public class CreateSubAgentConfigTool implements AgentTool {
                                         "string",
                                         "description",
                                         "工具访问模式: \"read_only\"（只读工具）, \"all\"（所有工具）, "
-                                                + "\"custom\"（自定义列表）。默认 \"read_only\"。"),
+                                                + "\"custom\"（自定义列表）, \"none\"（无任何工具，仅 finish_action）。默认 \"read_only\"。"),
                         "temperature",
                                 Map.of(
                                         "type", "number",
@@ -95,7 +95,7 @@ public class CreateSubAgentConfigTool implements AgentTool {
                         "max_tool_rounds",
                                 Map.of(
                                         "type", "integer",
-                                        "description", "最大工具调用轮数。默认 16。")),
+                                        "description", "最大工具调用轮数。默认 259。")),
                 List.of("agent_id", "llm_provider", "system_prompt"));
     }
 
@@ -107,7 +107,7 @@ public class CreateSubAgentConfigTool implements AgentTool {
         String toolFilter = call.param("tool_filter", "read_only").trim();
         double temperature = parseDouble(call.param("temperature", "0.3"), 0.3);
         int maxTokens = parseInt(call.param("max_tokens", "2048"), 2048);
-        int maxToolRounds = parseInt(call.param("max_tool_rounds", "16"), 16);
+        int maxToolRounds = parseInt(call.param("max_tool_rounds", "259"), 259);
 
         // 参数校验
         if (agentId.isEmpty()) {
@@ -127,7 +127,7 @@ public class CreateSubAgentConfigTool implements AgentTool {
             return ToolResult.fail(NAME, "system_prompt 不能为空");
         }
         if (!VALID_TOOL_FILTERS.contains(toolFilter)) {
-            return ToolResult.fail(NAME, "tool_filter 无效: '" + toolFilter + "'。可选: all, read_only, custom");
+            return ToolResult.fail(NAME, "tool_filter 无效: '" + toolFilter + "'。可选: all, read_only, custom, none");
         }
 
         try {
