@@ -71,10 +71,9 @@ public class AgentCacheStore {
 
     // ── 列表 ──
 
-    /** 列出所有缓存（按 createdAt 降序），支持按 worldId 和 agentType 过滤。 */
-    public List<CacheInfo> list(String worldId, String agentType) {
+    /** 列出所有缓存（按 createdAt 降序），支持按 agentType 过滤。 */
+    public List<CacheInfo> list(String agentType) {
         return index.values().stream()
-                .filter(c -> worldId == null || worldId.equals(c.worldId()))
                 .filter(c -> agentType == null || agentType.equals(c.agentType()))
                 .sorted(Comparator.comparing(CacheInfo::createdAt).reversed())
                 .toList();
@@ -86,7 +85,7 @@ public class AgentCacheStore {
      * @return 所有缓存的元信息列表，按 createdAt 降序排列
      */
     public List<CacheInfo> list() {
-        return list(null, null);
+        return list(null);
     }
 
     // ── 读取 ──
@@ -129,16 +128,14 @@ public class AgentCacheStore {
     /**
      * 创建新对话缓存，自动注入 Agent 配置中的系统提示词作为首条消息。
      *
-     * @param worldId  所属 World ID
      * @param configId Agent 配置 ID（用于提取系统提示词）
-     * @param nodeId   关联节点 ID
      * @return 新建的 CacheSession（已持久化）
      */
-    public CacheSession create(String worldId, String configId, String nodeId) {
+    public CacheSession create(String configId) {
         String now = Instant.now().toString();
         String sessionId = configId + "_" + now.replace(":", "-").substring(0, 19) + ".json";
 
-        CacheSession session = new CacheSession(configId, worldId, nodeId, sessionId, now);
+        CacheSession session = new CacheSession(configId, sessionId, now);
 
         // 自动注入系统提示词
         var config = configStore.get(configId);
@@ -152,7 +149,7 @@ public class AgentCacheStore {
         save(session);
         CacheInfo info = CacheInfo.fromSession(session);
         index.put(sessionId, info);
-        log.info("Created agent cache: {} (config={}, world={})", sessionId, configId, worldId);
+        log.info("Created agent cache: {} (config={})", sessionId, configId);
         return session;
     }
 
@@ -239,8 +236,6 @@ public class AgentCacheStore {
             String raw = Files.readString(file);
             String agentName = extractJsonString(raw, "agentName");
             String sessionId = extractJsonString(raw, "sessionId");
-            String worldId = extractJsonString(raw, "worldId");
-            String nodeId = extractJsonString(raw, "nodeId");
             String createdAt = extractJsonString(raw, "createdAt");
             String previousSessionId = extractJsonString(raw, "previousSessionId");
             int msgCount = countMessages(raw);
@@ -252,8 +247,6 @@ public class AgentCacheStore {
                     agentName != null ? agentName : "unknown",
                     CacheInfo.inferType(agentName),
                     sessionId != null ? sessionId : file.getFileName().toString(),
-                    worldId != null ? worldId : "unknown",
-                    nodeId != null ? nodeId : "n0000",
                     createdAt != null ? createdAt : "",
                     msgCount,
                     previousSessionId,

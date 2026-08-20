@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.core.cache.CacheStore;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
@@ -29,6 +30,8 @@ class AgentFactoryMaxCompletedConfigTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        CacheStore.setCachesRoot(tempDir);
+
         Path agentsDir = tempDir.resolve("agents");
         java.nio.file.Files.createDirectories(agentsDir);
         java.nio.file.Files.writeString(
@@ -52,15 +55,8 @@ class AgentFactoryMaxCompletedConfigTest {
         llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", new LlmManager(provConfig));
 
-        factory = new AgentFactory(
-                configStore,
-                llmRegistry,
-                new ToolRegistry(),
-                AgentProgressSink.NOOP,
-                "test-model",
-                tempDir,
-                () -> "test-world",
-                2);
+        factory =
+                new AgentFactory(configStore, llmRegistry, new ToolRegistry(), AgentProgressSink.NOOP, "test-model", 2);
     }
 
     /** Wait for all running futures to settle (fail quickly: no real LLM). */
@@ -87,14 +83,8 @@ class AgentFactoryMaxCompletedConfigTest {
     @Test
     @DisplayName("默认构造保留 maxCompleted=100")
     void defaultConstructorKeepsMaxCompleted() {
-        var defaultFactory = new AgentFactory(
-                configStore,
-                llmRegistry,
-                new ToolRegistry(),
-                AgentProgressSink.NOOP,
-                "test-model",
-                tempDir,
-                () -> "test-world");
+        var defaultFactory =
+                new AgentFactory(configStore, llmRegistry, new ToolRegistry(), AgentProgressSink.NOOP, "test-model");
 
         assertNotNull(defaultFactory);
         assertTrue(defaultFactory.completed().isEmpty());

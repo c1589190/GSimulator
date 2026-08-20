@@ -8,6 +8,7 @@ import com.gsim.agent.core.AgentResult;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.core.cache.CacheStore;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
@@ -36,6 +37,8 @@ class DispatchSubAgentToolTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        CacheStore.setCachesRoot(tempDir);
+
         // Write sim config
         Path agentsDir = tempDir.resolve("agents");
         Files.createDirectories(agentsDir);
@@ -78,8 +81,8 @@ class DispatchSubAgentToolTest {
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", llm);
         ToolRegistry tools = new ToolRegistry();
-        AgentFactory agentFactory = new AgentFactory(
-                configStore, llmRegistry, tools, AgentProgressSink.NOOP, "test-model", tempDir, () -> "test-world");
+        AgentFactory agentFactory =
+                new AgentFactory(configStore, llmRegistry, tools, AgentProgressSink.NOOP, "test-model");
 
         tool = new DispatchSubAgentTool(
                 llm,

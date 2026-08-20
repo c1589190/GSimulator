@@ -16,7 +16,6 @@ import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmMessage;
 import com.gsim.core.llm.LlmProvider;
 import com.gsim.core.llm.LlmProviderRegistry;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,8 +53,6 @@ public class AgentsManager {
     private final AgentProgressSink rootSink;
     private final EventBus eventBus;
     private final String model;
-    private final Path worldsDir;
-    private final Supplier<String> worldIdSupplier;
 
     private final AtomicInteger counter = new AtomicInteger(0);
     private final Map<String, AgentInstance> instances = new ConcurrentHashMap<>();
@@ -73,8 +69,6 @@ public class AgentsManager {
      * @param rootSink         根级 Agent 进度监听器
      * @param eventBus         全局事件总线
      * @param model            默认 LLM 模型名
-     * @param worldsDir        世界数据根目录
-     * @param worldIdSupplier  当前世界 ID 提供者
      */
     public AgentsManager(
             AgentConfigStore configStore,
@@ -83,9 +77,7 @@ public class AgentsManager {
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             EventBus eventBus,
-            String model,
-            Path worldsDir,
-            Supplier<String> worldIdSupplier) {
+            String model) {
         this.configStore = configStore;
         this.cacheStore = cacheStore;
         this.llmRegistry = llmRegistry;
@@ -93,8 +85,6 @@ public class AgentsManager {
         this.rootSink = rootSink;
         this.eventBus = eventBus;
         this.model = model;
-        this.worldsDir = worldsDir;
-        this.worldIdSupplier = worldIdSupplier;
     }
 
     // ══════════════════════════════════════════
@@ -115,7 +105,6 @@ public class AgentsManager {
         String instanceId = configId + "-" + id;
         String sessionId = "agent-" + instanceId;
         String taskId = "task-" + instanceId;
-        String wid = worldIdSupplier.get();
 
         // 获取或创建缓存
         CacheSession resolvedCache = null;
@@ -126,7 +115,7 @@ public class AgentsManager {
             if (cacheId != null && !cacheId.isBlank()) {
                 log.warn("Cache not found: {}, creating new", cacheId);
             }
-            resolvedCache = cacheStore.create(wid, configId, "n0000");
+            resolvedCache = cacheStore.create(configId);
         }
         final CacheSession cache = resolvedCache;
         final String resolvedCacheId = cache.sessionId();

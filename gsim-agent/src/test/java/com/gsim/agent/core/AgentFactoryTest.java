@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.core.cache.CacheStore;
 import com.gsim.core.event.AgentProgressEvent;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
@@ -29,6 +30,8 @@ class AgentFactoryTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        CacheStore.setCachesRoot(tempDir);
+
         // Write sim config to temp agents dir
         Path agentsDir = tempDir.resolve("agents");
         java.nio.file.Files.createDirectories(agentsDir);
@@ -73,8 +76,7 @@ class AgentFactoryTest {
 
         ToolRegistry tools = new ToolRegistry();
 
-        factory = new AgentFactory(
-                configStore, llmRegistry, tools, capturingSink, "test-model", tempDir, () -> "test-world");
+        factory = new AgentFactory(configStore, llmRegistry, tools, capturingSink, "test-model");
     }
 
     /** Wait for all running futures to settle (fail quickly: no real LLM). */
@@ -119,6 +121,7 @@ class AgentFactoryTest {
         // First dispatch should still be "sim-1"
         String id = factory.dispatch("sim", "test", "t1", "s1");
         assertTrue(id.endsWith("-1") || factory.running().size() == 1, "create 不应消费 dispatch 的 counter");
+        awaitRunning();
     }
 
     @Test

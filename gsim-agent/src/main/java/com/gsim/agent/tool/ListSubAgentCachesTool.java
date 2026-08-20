@@ -10,7 +10,6 @@ import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * list_sub_agent_caches 工具 — 列出所有 SubAgent（sim/search）的缓存历史。
@@ -27,11 +26,9 @@ public class ListSubAgentCachesTool implements AgentTool {
     public static final String NAME = "list_sub_agent_caches";
 
     private final CachesManager cachesManager;
-    private final Supplier<String> worldIdSupplier;
 
-    public ListSubAgentCachesTool(CachesManager cachesManager, Supplier<String> worldIdSupplier) {
+    public ListSubAgentCachesTool(CachesManager cachesManager) {
         this.cachesManager = cachesManager;
-        this.worldIdSupplier = worldIdSupplier;
     }
 
     @Override
@@ -64,16 +61,15 @@ public class ListSubAgentCachesTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = worldIdSupplier.get();
         String type = call.param("type", "").trim().toLowerCase(Locale.ROOT);
         if (type.isEmpty()) type = null;
 
         List<CacheInfo> caches;
         if (type != null) {
-            caches = cachesManager.listCaches(worldId, type);
+            caches = cachesManager.listCaches(type);
         } else {
             // 列出 sim + search 的并集
-            caches = cachesManager.listCaches(worldId);
+            caches = cachesManager.listCaches();
             caches = caches.stream()
                     .filter(ci -> "sim".equals(ci.agentType()) || "search".equals(ci.agentType()))
                     .toList();

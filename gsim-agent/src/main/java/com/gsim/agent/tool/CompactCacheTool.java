@@ -10,10 +10,8 @@ import com.gsim.core.cache.CachesManager;
 import com.gsim.core.compact.CacheCompactor;
 import com.gsim.core.event.AgentProgressEvent;
 import com.gsim.core.event.AgentProgressSink;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,20 +35,11 @@ public final class CompactCacheTool implements AgentTool {
     private final CachesManager cachesManager;
     private final CacheCompactor compactor;
     private final AgentProgressSink progressSink;
-    private final Path worldsDir;
-    private final Supplier<String> worldId;
 
-    public CompactCacheTool(
-            CachesManager cachesManager,
-            CacheCompactor compactor,
-            AgentProgressSink progressSink,
-            Path worldsDir,
-            Supplier<String> worldId) {
+    public CompactCacheTool(CachesManager cachesManager, CacheCompactor compactor, AgentProgressSink progressSink) {
         this.cachesManager = cachesManager;
         this.compactor = compactor;
         this.progressSink = progressSink;
-        this.worldsDir = worldsDir;
-        this.worldId = worldId;
     }
 
     @Override
@@ -81,17 +70,15 @@ public final class CompactCacheTool implements AgentTool {
         String cacheId = call.param("cacheId", "").trim();
         if (cacheId.isEmpty()) return ToolResult.fail(name(), "cacheId 不能为空");
 
-        String wid = worldId.get();
-
         // 验证是 SubAgent cache
         if (!isSubAgentCache(cacheId)) {
             return ToolResult.fail(name(), "只能压缩 SubAgent 的 cache（文件名需以 sim- 或 search- 开头，当前: " + cacheId + "）");
         }
 
         // 加载
-        CacheSession session = cachesManager.loadCache(wid, cacheId);
+        CacheSession session = cachesManager.loadCache(cacheId);
         if (session == null) {
-            session = CacheStore.load(worldsDir, cacheId);
+            session = CacheStore.load(cacheId);
         }
         if (session == null) {
             return ToolResult.fail(name(), "Cache 未找到: " + cacheId);
@@ -104,11 +91,11 @@ public final class CompactCacheTool implements AgentTool {
         String compacted = compactor.compact(session, progressSink);
 
         // 创建新 session
-        CacheSession newSession = CacheStore.createNew(worldsDir, wid, session.agentName(), session.nodeId());
+        CacheSession newSession = CacheStore.createNew(session.agentName());
         newSession.previousSessionId(session.sessionId());
         newSession.compressionNote("compacted by compact_cache from " + session.sessionId() + " ("
                 + session.messageCount() + " msgs → " + compacted.length() + " chars)");
-        CacheStore.save(worldsDir, newSession);
+        CacheStore.save(newSession);
 
         // 返回压缩文本 + 新 cacheId
         String snippet = "压缩摘要:\n" + compacted

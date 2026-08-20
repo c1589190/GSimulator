@@ -9,7 +9,6 @@ import com.gsim.core.cache.CachesManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * 滑动窗口读取 SubAgent 的对话输出 — 解决子Agent结果被截断的问题。
@@ -20,11 +19,9 @@ import java.util.function.Supplier;
 public final class ViewSubAgentOutputTool implements AgentTool {
 
     private final CachesManager cachesManager;
-    private final Supplier<String> worldId;
 
-    public ViewSubAgentOutputTool(CachesManager cachesManager, Supplier<String> worldId) {
+    public ViewSubAgentOutputTool(CachesManager cachesManager) {
         this.cachesManager = cachesManager;
-        this.worldId = worldId;
     }
 
     @Override
@@ -64,16 +61,15 @@ public final class ViewSubAgentOutputTool implements AgentTool {
         String cacheId = call.param("cacheId", "").trim();
         if (cacheId.isEmpty()) return ToolResult.fail(name(), "cacheId 不能为空");
 
-        String wid = worldId.get();
-        CacheSession session = cachesManager.loadCache(wid, cacheId);
+        CacheSession session = cachesManager.loadCache(cacheId);
         if (session == null) {
-            return ToolResult.fail(name(), "Cache 未找到: " + cacheId + " (world=" + wid + ")");
+            return ToolResult.fail(name(), "Cache 未找到: " + cacheId);
         }
 
         // 检查是否有更新的同类型缓存（强制只读最新输出）
         String agentType = extractAgentType(session.agentName());
         if (agentType != null) {
-            var cacheList = cachesManager.listCaches(wid, agentType);
+            var cacheList = cachesManager.listCaches(agentType);
             if (!cacheList.isEmpty()) {
                 var latest = cacheList.get(0); // listCaches 已按 createdAt 降序
                 if (!latest.sessionId().equals(cacheId)) {

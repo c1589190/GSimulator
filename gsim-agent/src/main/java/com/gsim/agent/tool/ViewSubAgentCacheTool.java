@@ -10,7 +10,6 @@ import com.gsim.core.cache.CachesManager;
 import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * view_sub_agent_cache 工具 — 查看指定 SubAgent 缓存的对话摘要。
@@ -27,11 +26,9 @@ public class ViewSubAgentCacheTool implements AgentTool {
     public static final String NAME = "view_sub_agent_cache";
 
     private final CachesManager cachesManager;
-    private final Supplier<String> worldIdSupplier;
 
-    public ViewSubAgentCacheTool(CachesManager cachesManager, Supplier<String> worldIdSupplier) {
+    public ViewSubAgentCacheTool(CachesManager cachesManager) {
         this.cachesManager = cachesManager;
-        this.worldIdSupplier = worldIdSupplier;
     }
 
     @Override
@@ -62,14 +59,13 @@ public class ViewSubAgentCacheTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = worldIdSupplier.get();
         String cacheId = call.param("cacheId", "").trim();
 
         if (cacheId.isEmpty()) {
             return ToolResult.fail(NAME, "cacheId 不能为空");
         }
 
-        CacheSession session = cachesManager.loadCache(worldId, cacheId);
+        CacheSession session = cachesManager.loadCache(cacheId);
         if (session == null) {
             return ToolResult.fail(NAME, "缓存不存在: " + cacheId);
         }

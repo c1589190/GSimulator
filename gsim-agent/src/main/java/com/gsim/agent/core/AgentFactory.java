@@ -11,7 +11,6 @@ import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmMessage;
 import com.gsim.core.llm.LlmProvider;
 import com.gsim.core.llm.LlmProviderRegistry;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,44 +48,33 @@ public class AgentFactory {
     /** 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）。 */
     private final AbstractAgent.ToolResultPolicy resultPolicy;
 
-    /** Cache 文件输出目录（worlds/<worldId>/caches/）。 */
-    private final Path worldsDir;
-    /** 当前 worldId 提供者（运行时可能切换 world）。 */
-    private final java.util.function.Supplier<String> worldIdSupplier;
-
     /**
      * 创建 AgentFactory 实例。
      *
-     * @param configStore    Agent 配置存储
-     * @param llmRegistry    LLM provider 注册表
-     * @param allTools       全局工具注册表
-     * @param rootSink       根进度事件接收器
-     * @param model          默认模型名称
-     * @param worldsDir      Cache 文件输出目录
-     * @param worldIdSupplier 当前 worldId 提供者
+     * @param configStore Agent 配置存储
+     * @param llmRegistry LLM provider 注册表
+     * @param allTools    全局工具注册表
+     * @param rootSink    根进度事件接收器
+     * @param model       默认模型名称
      */
     public AgentFactory(
             AgentConfigStore configStore,
             LlmProviderRegistry llmRegistry,
             ToolRegistry allTools,
             AgentProgressSink rootSink,
-            String model,
-            Path worldsDir,
-            java.util.function.Supplier<String> worldIdSupplier) {
-        this(configStore, llmRegistry, allTools, rootSink, model, worldsDir, worldIdSupplier, 100);
+            String model) {
+        this(configStore, llmRegistry, allTools, rootSink, model, 100);
     }
 
     /**
      * 创建 AgentFactory 实例。
      *
-     * @param configStore    Agent 配置存储
-     * @param llmRegistry    LLM provider 注册表
-     * @param allTools       全局工具注册表
-     * @param rootSink       根进度事件接收器
-     * @param model          默认模型名称
-     * @param worldsDir      Cache 文件输出目录
-     * @param worldIdSupplier 当前 worldId 提供者
-     * @param maxCompleted   已完成结果缓存上限（FIFO 淘汰）
+     * @param configStore  Agent 配置存储
+     * @param llmRegistry  LLM provider 注册表
+     * @param allTools     全局工具注册表
+     * @param rootSink     根进度事件接收器
+     * @param model        默认模型名称
+     * @param maxCompleted 已完成结果缓存上限（FIFO 淘汰）
      */
     public AgentFactory(
             AgentConfigStore configStore,
@@ -94,24 +82,20 @@ public class AgentFactory {
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             String model,
-            Path worldsDir,
-            java.util.function.Supplier<String> worldIdSupplier,
             int maxCompleted) {
-        this(configStore, llmRegistry, allTools, rootSink, model, worldsDir, worldIdSupplier, maxCompleted, null);
+        this(configStore, llmRegistry, allTools, rootSink, model, maxCompleted, null);
     }
 
     /**
      * 创建 AgentFactory 实例。
      *
-     * @param configStore    Agent 配置存储
-     * @param llmRegistry    LLM provider 注册表
-     * @param allTools       全局工具注册表
-     * @param rootSink       根进度事件接收器
-     * @param model          默认模型名称
-     * @param worldsDir      Cache 文件输出目录
-     * @param worldIdSupplier 当前 worldId 提供者
-     * @param maxCompleted   已完成结果缓存上限（FIFO 淘汰）
-     * @param resultPolicy   工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）
+     * @param configStore  Agent 配置存储
+     * @param llmRegistry  LLM provider 注册表
+     * @param allTools     全局工具注册表
+     * @param rootSink     根进度事件接收器
+     * @param model        默认模型名称
+     * @param maxCompleted 已完成结果缓存上限（FIFO 淘汰）
+     * @param resultPolicy 工具结果反馈策略（null = 遗留行为：截断到 500，不暂存）
      */
     public AgentFactory(
             AgentConfigStore configStore,
@@ -119,8 +103,6 @@ public class AgentFactory {
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             String model,
-            Path worldsDir,
-            java.util.function.Supplier<String> worldIdSupplier,
             int maxCompleted,
             AbstractAgent.ToolResultPolicy resultPolicy) {
         this.configStore = configStore;
@@ -129,8 +111,6 @@ public class AgentFactory {
         this.allTools = allTools;
         this.rootSink = rootSink;
         this.model = model;
-        this.worldsDir = worldsDir;
-        this.worldIdSupplier = worldIdSupplier;
         this.maxCompleted = maxCompleted;
         this.resultPolicy = resultPolicy;
     }
@@ -191,7 +171,6 @@ public class AgentFactory {
     public String dispatch(String type, String prompt, String taskId, String sessionId, String cacheId) {
         int id = counter.incrementAndGet();
         String instanceId = type + "-" + id;
-        String wid = worldIdSupplier.get();
 
         AbstractAgent agent = create(type, prompt, null);
         // Replace the rootSink from create() with a properly tagged sink
@@ -205,23 +184,23 @@ public class AgentFactory {
         List<LlmMessage> priorMessages = List.of();
 
         if (cacheId != null && !cacheId.isBlank()) {
-            subCache = CacheStore.load(worldsDir, cacheId);
+            subCache = CacheStore.load(cacheId);
             if (subCache != null) {
                 log.info("[AgentFactory] reusing cache {} for {}", cacheId, instanceId);
                 // 将历史消息转换为 LlmMessage 列表
                 priorMessages = cacheMessagesToLlm(subCache);
             } else {
                 log.warn("[AgentFactory] cache not found: {}, creating new", cacheId);
-                subCache = CacheStore.createNew(worldsDir, wid, instanceId, "n0000");
+                subCache = CacheStore.createNew(instanceId);
             }
         } else {
-            subCache = CacheStore.createNew(worldsDir, wid, instanceId, "n0000");
+            subCache = CacheStore.createNew(instanceId);
         }
 
         // 设置 write-through 持久化
         final CacheSession cacheRef = subCache;
         agent.setMessageSaver(msg -> {
-            CacheStore.appendAndSave(worldsDir, cacheRef, msg.toCacheMap());
+            CacheStore.appendAndSave(cacheRef, msg.toCacheMap());
         });
 
         CompletableFuture<AgentResult> f = new CompletableFuture<>();
