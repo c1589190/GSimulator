@@ -1,22 +1,26 @@
 package com.gsim;
 
+import com.gsim.agent.bridge.AgentBridge;
+import com.gsim.agent.tools.search.SearchToolContext;
+import com.gsim.agentlib.mcp.McpHttpServer;
+import com.gsim.agentlib.mcp.McpResponseConfig;
+import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
+import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
-import com.gsim.cache.CacheInfo;
-import com.gsim.cache.CachesManager;
-import com.gsim.cache.FileSystemCachesManager;
-import com.gsim.config.ConfigDoctor;
-import com.gsim.config.ConfigLoader;
-import com.gsim.config.ConfigWizard;
-import com.gsim.mcp.GsimMcpServer;
-import com.gsim.mcp.McpTransport;
-import com.gsim.mcp.StdioMcpTransport;
-import com.gsim.tool.ToolRegistry;
-import com.gsimap.http.GsimapHttpServer;
-import com.gsimap.service.MapService;
-import com.gsimap.tool.GsimapToolRegistrar;
-import java.io.PrintStream;
+import com.gsim.app.mcp.DocStagingOverflowHandler;
+import com.gsim.core.cache.CacheInfo;
+import com.gsim.core.cache.CacheStore;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.cache.FileSystemCachesManager;
+import com.gsim.core.config.ConfigDoctor;
+import com.gsim.core.config.ConfigLoader;
+import com.gsim.core.config.ConfigSnapshot;
+import com.gsim.core.config.ConfigWizard;
+import com.gsim.core.worldinfo.loader.WorldManager;
+import com.gsim.map.http.GsimapHttpServer;
+import com.gsim.map.service.MapService;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Scanner;
@@ -26,15 +30,18 @@ import java.util.Scanner;
  *
  * <p>启动模式：
  * <ul>
- *   <li><b>默认</b> — CLI REPL + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
- *   <li><b>--no-cli</b> — MCP stdio + Web GUI(8710) + Map UI(8711) + CLI WS(8712)</li>
+ *   <li><b>默认</b> — CLI REPL + Web GUI + Map UI + CLI WS</li>
+ *   <li><b>--no-cli</b> — MCP HTTP + Web GUI + Map UI + CLI WS</li>
  * </ul>
+ *
+ * <p>服务端口统一由 gsim.properties 配置（webui.port / map.port /
+ * cli.ws.port / mcp.http.port），默认分别为 8710 / 8711 / 8712 / 37201。
  *
  * <p>启动流程（三阶段）：
  * <ol>
  *   <li>Phase 1: 配置加载 — CLI 参数 → ConfigLoader → AppConfig → Bootstrap</li>
  *   <li>Phase 2: 应用组装 — GSimulatorApplication + MapService + HTTP 服务器</li>
- *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP stdio（阻塞主线程）</li>
+ *   <li>Phase 3: 传输启动 — CLI REPL 或 MCP HTTP（阻塞主线程）</li>
  * </ol>
  */
 public class Main {
@@ -43,11 +50,6 @@ public class Main {
      * 程序入口点。
      */
     public static void main(String[] args) {
-        // Save original stdout BEFORE any redirection.
-        // In --no-cli mode, System.out is redirected to stderr for the entire
-        // JVM lifetime. MCP transport uses this saved reference for clean JSON-RPC.
-        final PrintStream originalStdout = System.out;
-
         try {
             // ── Phase 1: 配置加载 ─────────────────────────────
 
@@ -55,25 +57,34 @@ public class Main {
             ConfigLoader.CliArgs cliArgs = loader.getCliArgs();
             boolean noCli = cliArgs.noCli();
 
-            // --no-cli: permanently redirect System.out → System.err
-            // Any accidental System.out.println() will not corrupt the MCP protocol.
-            if (noCli) {
-                System.setOut(System.err);
-            }
-
             // --help
             if (cliArgs.help()) {
                 printUsage();
                 return;
             }
 
-            // 加载配置
+            // 加载配置；首次运行（无任何配置文件）时自动生成 gsim.properties 模板，
+            // 端口等配置随后可直接在文件中编辑。
             ConfigLoader.ConfigResult configResult = loader.load();
+            if (configResult.configPath() == null) {
+                ensureConfigTemplate(Path.of("gsim.properties").toAbsolutePath());
+            }
             AppConfig config = new AppConfig(configResult);
 
             // --doctor
             if (cliArgs.doctor()) {
-                String report = ConfigDoctor.diagnose(config);
+                String report = ConfigDoctor.diagnose(new ConfigSnapshot(
+                        config.getConfigPath(),
+                        config.isLlmConfigured(),
+                        config.getLlmBaseUrl(),
+                        config.getLlmApiKey(),
+                        config.getLlmModel(),
+                        config.getLlmTimeoutSeconds(),
+                        config.maskedApiKey(),
+                        config.getDataDir(),
+                        config.getImportDir(),
+                        config.getOutputDir(),
+                        config.getLogDir()));
                 System.out.println(report);
                 return;
             }
@@ -102,7 +113,9 @@ public class Main {
             }
 
             // Bootstrap
-            CachesManager cachesManager = new FileSystemCachesManager(config.worldsDir());
+            // Cache 根目录必须在任何 CacheStore 使用前配置（Bootstrap 内部会写 orchestrator cache）
+            CacheStore.setCachesRoot(config.cachesDir());
+            CachesManager cachesManager = new FileSystemCachesManager();
             Path worldsDir = config.worldsDir();
             Path promptsDir = config.promptsDir();
             Bootstrap bootstrap = new Bootstrap(worldsDir, promptsDir, cachesManager);
@@ -135,14 +148,32 @@ public class Main {
             GSimulatorApplication app = new GSimulatorApplication(config, bootResult, !noCli);
 
             // 地图服务 + 工具注册
-            MapService mapService = new MapService(config.worldsDir());
+            MapService mapService = new MapService(config.worldsDir(), config.mapConfig());
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
-            GsimapToolRegistrar.registerAll(toolRegistry, mapService);
 
-            // Map HTTP 服务器 (port 8711) — 始终启动
-            int gsimapPort = Integer.parseInt(
-                    System.getProperty("gsimap.port", System.getenv().getOrDefault("GSIMAP_PORT", "8711")));
-            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService);
+            // 领域搜索上下文（T8 接线）—— wiSupplier 经 AgentBridge.createWorldInfoSupplier 构造：
+            // 与 registerWorldInfoTools 的 worldinfo 工具共享同一按世界缓存（write_element 的
+            // 原地更新对搜索工具可见，避免同一世界双实例分裂）；活跃世界取应用侧最新实例。
+            SearchToolContext searchCtx = new SearchToolContext(
+                    AgentBridge.createWorldInfoSupplier(app.getWorldInfoSupplier(), config.worldsDir()),
+                    mapService,
+                    app.getContext().getDocStore(config.docsDir()),
+                    app.getContext().getResolverRegistry(),
+                    config.worldsDir(),
+                    config.getImportDir(),
+                    config.cachesDir());
+
+            AgentBridge.registerMapTools(toolRegistry, mapService, searchCtx);
+
+            // gsimap: 前缀引用解析器（依赖 MapService）注册进统一 ResolverRegistry（resolve_ref/text_edit 即刻可用）
+            app.getContext().getResolverRegistry().register(new com.gsim.agent.tools.map.GsimapResolver(mapService));
+
+            // 领域搜索工具（T8 独占接线）：4 个细化搜索工具 + gsim_search 聚合器
+            AgentBridge.registerSearchTools(toolRegistry, searchCtx);
+
+            // Map HTTP 服务器（map.port，默认 8711）— 始终启动
+            int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());
+            GsimapHttpServer gsimapServer = new GsimapHttpServer(gsimapPort, mapService, config.mapConfig());
             gsimapServer.start();
             System.err.println("[BOOT] Map UI: http://127.0.0.1:" + gsimapPort);
 
@@ -153,22 +184,40 @@ public class Main {
             // ── Phase 3: 传输启动 ─────────────────────────────
 
             if (noCli) {
-                // MCP mode: use SAVED original stdout for clean JSON-RPC
-                McpTransport transport = new StdioMcpTransport(System.in, originalStdout);
-                GsimMcpServer mcpServer = new GsimMcpServer(toolRegistry, app.getActiveWorldIdSupplier(), transport);
+                // MCP HTTP mode: start Streamable HTTP MCP server（mcp.http.port，默认 37201）
+                int mcpPort = Integer.getInteger("mcp.http.port", config.getMcpHttpPort());
+                McpResponseConfig mcpResponseConfig = new McpResponseConfig(
+                        config.mcpResponseDefaultPageSize(),
+                        config.mcpResponseMaxPageSize(),
+                        config.mcpResponseMaxJsonBytes(),
+                        config.mcpResponseSnippetMaxChars(),
+                        config.mcpResponseOverflowStagingEnabled());
+                // 溢出暂存 handler：超限 snippet 暂存为 docs/tmp 文档并返回 docId；未启用时传 null（走截断）
+                ToolResultOverflowHandler overflowHandler = config.mcpResponseOverflowStagingEnabled()
+                        ? new DocStagingOverflowHandler(
+                                app.getContext().getDocStore(config.docsDir()),
+                                config.mcpResponseOverflowStagingThreshold(),
+                                "mcp_")
+                        : null;
+                McpHttpServer mcpHttpServer =
+                        new McpHttpServer(toolRegistry, mcpPort, mcpResponseConfig, overflowHandler);
+                mcpHttpServer.start();
 
-                // Shutdown hook: clean up HTTP servers when MCP loop exits
                 Runtime.getRuntime()
                         .addShutdownHook(new Thread(
                                 () -> {
                                     System.err.println("[MCP] Shutting down...");
+                                    mcpHttpServer.stop();
                                     gsimapServer.stop();
                                     app.stop();
                                 },
                                 "mcp-shutdown"));
 
-                System.err.println("[MCP] READY — listening on stdio");
-                mcpServer.start(); // blocks on stdin
+                System.err.println("[MCP-HTTP] READY — http://127.0.0.1:" + mcpPort + "/mcp");
+                System.err.println("[MCP-HTTP] Health: http://127.0.0.1:" + mcpPort + "/health");
+
+                // Block until shutdown (wait for server socket to close)
+                Thread.currentThread().join();
             } else {
                 // CLI mode: start interactive REPL (blocks until exit)
                 app.startCliRepl();
@@ -181,16 +230,28 @@ public class Main {
         }
     }
 
+    /** 首次运行时写入 gsim.properties 模板（已存在不覆盖）。 */
+    private static void ensureConfigTemplate(Path target) throws java.io.IOException {
+        if (java.nio.file.Files.exists(target)) return;
+        try (java.io.InputStream in = Main.class.getResourceAsStream("/gsim/config/gsim.properties.template")) {
+            if (in == null) {
+                throw new java.io.IOException("classpath 模板缺失: /gsim/config/gsim.properties.template");
+            }
+            java.nio.file.Files.copy(in, target);
+        }
+        System.err.println("[BOOT] 已生成配置模板: " + target);
+    }
+
     /** 缓存选择结果：sessionId + worldId 配对。 */
     private record CacheSelection(String sessionId, String worldId) {}
 
     /** CLI 交互：选择 Orchestrator 历史缓存或新建。 */
     private static CacheSelection selectOrchestratorCache(CachesManager cachesManager, Path worldsDir) {
-        List<CacheInfo> caches = cachesManager.listCaches(null, "orchestrator");
+        List<CacheInfo> caches = cachesManager.listCaches("orchestrator");
         if (caches.isEmpty()) return new CacheSelection(null, null);
 
-        List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
-                com.gsim.worldinfo.loader.WorldIndexManager.listWorlds(worldsDir);
+        List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds =
+                new WorldManager(worldsDir).listWorlds();
 
         System.out.println();
         System.out.println("══════════════════════════════════════════");
@@ -198,12 +259,10 @@ public class Main {
         System.out.println("══════════════════════════════════════════");
         for (int i = 0; i < caches.size(); i++) {
             CacheInfo ci = caches.get(i);
-            String worldLabel = ci.worldId() != null ? ci.worldId() : "?";
             System.out.printf(
-                    "  [%d] %s  world=%s  (%d messages, %s)%n",
+                    "  [%d] %s  (%d messages, %s)%n",
                     i + 1,
                     ci.sessionId(),
-                    worldLabel,
                     ci.messageCount(),
                     ci.createdAt().substring(0, Math.min(16, ci.createdAt().length())));
         }
@@ -221,20 +280,20 @@ public class Main {
             int idx = Integer.parseInt(line) - 1;
             if (idx >= 0 && idx < caches.size()) {
                 CacheInfo chosen = caches.get(idx);
-                System.out.println("  加载缓存: " + chosen.sessionId() + " (world=" + chosen.worldId() + ")");
-                return new CacheSelection(chosen.sessionId(), chosen.worldId());
+                System.out.println("  加载缓存: " + chosen.sessionId());
+                return new CacheSelection(chosen.sessionId(), null);
             }
         } catch (Exception e) {
             // fall through
         }
         CacheInfo fallback = caches.get(0);
-        System.out.println("  输入无效，使用最新缓存 (world=" + fallback.worldId() + ")。");
-        return new CacheSelection(fallback.sessionId(), fallback.worldId());
+        System.out.println("  输入无效，使用最新缓存 " + fallback.sessionId() + "。");
+        return new CacheSelection(fallback.sessionId(), null);
     }
 
     /** 选择 world（用于新建会话时）。 */
     private static String selectWorldForNewSession(
-            Scanner scanner, List<com.gsim.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
+            Scanner scanner, List<com.gsim.core.worldinfo.loader.WorldIndexManager.WorldEntry> worlds) {
         if (worlds.isEmpty()) return "default";
         if (worlds.size() == 1) return worlds.get(0).id();
 
@@ -260,21 +319,22 @@ public class Main {
     private static void printUsage() {
         System.out.println("GSimulator — 多 Agent 推演工作流引擎");
         System.out.println();
-        System.out.println("用法: java -jar GSimulator.jar [选项]");
+        System.out.println("用法: java -jar gsim-app/target/gsim-app-*.jar [选项]");
         System.out.println();
-        System.out.println("默认启动 CLI REPL + Web GUI(8710) + Map UI(8711)");
+        System.out.println("默认启动 CLI REPL + Web GUI + Map UI + CLI WS");
         System.out.println();
         System.out.println("选项:");
         System.out.println("  --config <path>    使用指定的配置文件");
-        System.out.println("  --no-cli           无 CLI 模式：MCP stdio + Web GUI(8710) + Map(8711)");
+        System.out.println("  --no-cli           无 CLI 模式：MCP HTTP + Web GUI + Map UI + CLI WS");
         System.out.println("  --init-config      启动配置向导并退出");
         System.out.println("  --doctor           运行配置诊断并退出");
         System.out.println("  --no-wizard        跳过首次运行配置向导");
         System.out.println("  --help             显示此帮助信息");
         System.out.println();
-        System.out.println("API 配置环境变量:");
-        System.out.println("  API_HOST=127.0.0.1");
-        System.out.println("  API_PORT=8710");
-        System.out.println("  API_ENABLED=true");
+        System.out.println("服务端口在 gsim.properties 中配置：");
+        System.out.println("  webui.port=8710     Web UI");
+        System.out.println("  map.port=8711       Map UI");
+        System.out.println("  cli.ws.port=8712    CLI WebSocket");
+        System.out.println("  mcp.http.port=37201  MCP HTTP (JSON-RPC 2.0)");
     }
 }

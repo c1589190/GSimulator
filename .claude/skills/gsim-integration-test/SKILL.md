@@ -109,11 +109,16 @@ cp gsim-lib/target/spotbugsXml.xml config/spotbugs/gsim-lib-baseline.xml
 
 ### Phase 3: World & Node CRUD
 
-测试 world_create → world_switch → node_create → node_switch → node_list(tree) → node_goto_parent(根节点应报错) → world_switch(default)。
+测试 world_create → node_status(根节点) → node_create(parentNodeId 必填) → node_list(tree) → 缺 worldId 校验 → 清理。
+
+> 注意：MCP 工具集不含 `world_switch` / `node_switch` / `node_goto_parent` / `world_delete`。
+> world/node 导航通过在每个调用中显式传 `worldId` / `nodeId` 参数实现；测试 world 清理需手动删除 `worlds/<worldId>/` 目录。
 
 ### Phase 4: GSimap 地图
 
 测试 generate → create_region → list_regions → get_hex → query_radius → get_neighbors → add/remove hex → render_text → get_distance → query_by_address → merge_regions → rename_region → 缺 worldId 校验。
+
+> 注意：对全新 world（无 GSim node）直接 `gsimap_generate` 后即可查询地图数据（2026-08-01 修复，之前需先建 node）。
 
 ### Phase 4b: GSimap Edge Pathway（边连通系统）
 
@@ -129,11 +134,17 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 
 ### Phase 7: SubAgent & 权限
 
-测试 list_llm_providers → agent_config_list → create_sub_agent_config → dispatch_sub_agent → list_sub_agent_caches → activate_tool_groups → update/delete agent config → 验证工具组激活。
+测试 list_llm_providers → agent_config_list → create_sub_agent_config → dispatch_sub_agent → list_sub_agent_caches → update_sub_agent_config → agent_config_delete → 缺参校验。
+
+> 注意：`activate_tool_groups` 工具已不存在于 MCP 工具集（工具组激活改为 AgentConfig 配置管理）。
+> 工具映射：`update_agent_config` → `update_sub_agent_config`（参数 `agent_id`）；`delete_agent_config` → `agent_config_delete`（参数 `configId`）。
 
 ### Phase 8: 错误处理 & 边界
 
 测试缺 worldId 校验(×5) → 无效参数(×5) → 边界值(×5) → 不存在 world → 不需要 worldId 的工具验证(×4) → _context 字段检查(×3)。
+
+> _context 规范：含 worldId/address/nodeId 三键（nodeId 可为 null）。`world_list` 等无世界上下文
+> 的列表工具只含 `address` 属预期行为；`node_status` 等节点工具必须含 `nodeId`（2026-08-01 修复）。
 
 每个子 Agent 独立汇报 PASS/FAIL 列表。
 
@@ -167,11 +178,13 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 
 ## 测试数据命名
 
-- World: `mcp_test_{{YYYYMMDD}}`
-- Doc: `mcp_test_{{a/b/c}}`
-- Checkpoint: `test_chars`
-- Region: `测试国A` / `测试国B`
-- Agent: `mcp_tester`
+各 Phase 使用独立前缀避免并行执行时的数据竞争：
+
+- World: `mcp_test_{{YYYYMMDD}}_p{{N}}`（如 `mcp_test_20260724_p3`，每 Phase 独立 world）
+- Doc: `mcp_test_p{{N}}_{{a/b/c}}`（如 `mcp_test_p6_a`，每 Phase 独立 doc）
+- Checkpoint: `test_p{{N}}_cp`（如 `test_p5_cp`）
+- Region: `P{{N}}测试区`（如 `P4测试区`）
+- Agent: `mcp_tester_p{{N}}`（如 `mcp_tester_p7`）
 
 ## 关键约束
 
@@ -180,10 +193,12 @@ Doc 工具不需要 worldId。测试 create(×3) → list → search → read �
 3. **Doc/Import/Agent配置/Search 不需要 worldId**
 4. **GSimap/WorldInfo/Node/SubAgent缓存 需要 worldId**
 5. **成功响应必须含 `_context: {worldId, address, nodeId}`**
-6. **测试结束后清理** — 删除测试 doc/region/world
+6. **测试结束后清理** — 删除测试 doc/region/world/agent config
 7. **不要假设当前 active world** — 每个 Agent 先调 world_list 确认
 8. **不要跳过错误测试** — 缺 worldId、无效参数、不存在 ID 也必须覆盖
-9. **重大变更必须同步文档** — 新增/删除 MCP 工具、修改数据模型、变更模块边界、废弃旧 API 时，必须更新 `docs/` 下的对应文档（详见下方文档同步规则）
+9. **各 Phase 互不干涉** — 每个 Phase 使用独立 worldId/docId/region/agent config，禁止两个 Phase 共享可写资源。并行执行时共享资源会导致竞态条件和不确定的测试结果
+10. **编译不过先写报告** — mvn verify 编译失败不阻断功能测试。测试 Agent 遇编译错误时记录具体错误信息，由后续统一修复。功能测试独立于代码门禁运行
+11. **重大变更必须同步文档** — 新增/删除 MCP 工具、修改数据模型、变更模块边界、废弃旧 API 时，必须更新 `docs/` 下的对应文档（详见下方文档同步规则）
 
 ## 文档同步规则
 

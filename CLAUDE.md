@@ -4,7 +4,21 @@
 
 GSimulator 是一个基于 Java 21 + Maven 的多 Agent 推演工作流引擎，服务于"文游 / 架空历史 / 玩家行动推演"场景。它不是普通聊天机器人，而是一个可审计、可回放、可扩展的回合制推演系统。
 
-支持 CLI REPL（JLine）、HTTP API + SSE 流式事件输出、Web UI（Javalin 内嵌静态服务）。
+支持 CLI REPL（JLine）、HTTP API + SSE 流式事件输出、Web UI（WebUiServer，JDK 内嵌 HttpServer，端口 8710）。
+
+## 模块结构（五模块）
+
+Maven 多模块（依赖方向自底向上）：
+
+| 模块 | 职责 |
+|------|------|
+| `gsim-agentlib` | AgentTool 协议 + ToolRegistry + MCP 适配层 — 零业务依赖，可独立打包复用 |
+| `gsim-core` | 纯业务核心：世界管理（WorldInfo）、文档（Doc）、LLM、缓存、会话、事件、配置等 |
+| `gsim-map` | Hex 地图服务：地图数据、地形编辑、HTTP API、Map UI（依赖 core） |
+| `gsim-agent` | Agent 运行时（ToolLoop/Orchestrator/SubAgent）+ 全部工具实现 + 桥接注册层（依赖 agentlib + core + map） |
+| `gsim-app` | 主入口 + 应用组装 + 交互壳（CLI/WebUI），打 fat JAR（依赖全部四个） |
+
+**依赖方向禁令（终态）**：core 不得依赖 agent/agentlib/map；map 不得依赖 agent/agentlib；agent 不得被 core/map 反向依赖（判定方式：源码 import 零命中 + pom 无依赖边）。
 
 ## 架构原则
 
@@ -19,60 +33,73 @@ GSimulator 是一个基于 Java 21 + Maven 的多 Agent 推演工作流引擎，
 ## Package 说明
 
 ```
-com.gsim
-├── app/               — 应用启动（GSimulatorApplication）、依赖注入
-├── agent/             — Agent 核心系统
-│   ├── core/          — AbstractAgent（统一 ToolLoop）、AgentConfig、AgentFactory、
-│   │                     AgentResult、AgentRound、ToolFilterConfig
-│   ├── config/        — AgentConfigStore（JSON 加载）、AgentConfigManager（运行时 CRUD）
-│   └── tool/          — Agent 管理工具（dispatch_sub_agent、collect_sub_agent_results、
-│                         activate_tool_groups、view_sub_agent_cache 等 11 个工具）
-├── api/               — HTTP API 层（Javalin 路由、SSE）
-│   ├── handlers/      — 19 个 API handler（Status、Tasks、Command、StreamCommand、
-│   │                     Config、Compact、Experiences、Help、Import、LogsOutputs、
-│   │                     Messages、Pins、Players、Roots、Save、Skills、Tools、Where）
-│   └── dto/           — API 请求/响应 DTO
-├── cache/             — SubAgent 对话缓存（CacheSession、CacheStore、CachesManager）
-├── commands/          — CLI 命令实现（AgentCommand、ChatCommand、CompactCommand、
-│                         LlmCommand、NodeCommand、WorldCommand）
-├── compact/           — 缓存压缩（摘要生成）
-├── config/            — AppConfig（gsim.properties + 环境变量）
-├── crawler/           — 联网搜索和网页抓取基础设施
-├── event/             — 统一事件系统（EventBus、GSimEvent、ConsoleEventSink、SseEventSink）
-├── importdata/        — 资料导入管道（数据模型）
-├── importing/         — 导入工具实现（import_document_list/read/search）
-│   └── tool/          — 导入工具 AgentTool 封装
-├── interaction/       — 交互层（CLI REPL、CommandParser、ConsoleInteractionAdapter）
-├── llm/               — LLM 客户端统一封装
-│   │                     LlmManager（统一入口）、LlmProviderRegistry（多 provider）、
-│   │                     LlmCall（异步提交）、StreamPool（流式缓冲）、
-│   │                     LlmConfigManager（provider 配置管理）、
-│   │                     JsonLlmService（OpenAI-compatible HTTP 实现）
-├── output/            — 输出格式化（Markdown / JSON / Console）
-├── prompt/            — Prompt 模板管理（PromptManager、PromptTemplate）
-│                         注：当前 PromptManager 为轻量实现，实际 prompt 内容存储在
-│                         resources/gsim/prompts/*.md 和 Agent config JSON 中
-├── resource/          — 资源文件管理（ResourceManager）
-├── root/              — Root Workspace 管理（根节点初始化、bootstrap）
-├── session/           — Session 管理（SessionPool、SessionNode、SessionPoolBridge）
-├── tool/              — 工具系统基础（AgentTool 接口、ToolRegistry、ToolCall、ToolResult）
-├── util/              — 工具类（ID 生成、JSON、日志脱敏）
-├── webimport/         — 网页抓取管道（URL → HTML → txt → import）
-│                         含 MediaWiki API 客户端、HTML 提取、限速器
-├── webui/             — Web UI（Javalin 内嵌静态服务）
-│   ├── handlers/      — Web UI 专用 API handler
-│   └── (resources)    — 前端静态文件（app.js、chat-renderer.js、session-ws.js 等）
-└── worldinfo/         — WorldInfo 结构化元素存储
-    ├── loader/        — NodeLoader、StateManager（持久化）
-    └── tool/          — WorldInfo 工具（query_node/checkpoint/keyword/element、
-                          write_element、create_checkpoint、node_* 等 14 个工具）
+gsim-agentlib（零业务依赖，可独立打包复用）
+├── com.gsim.agentlib.tool/   — AgentTool 协议（AgentTool/ToolCall/ToolResult/ToolRegistry/ToolExecutionGuard）
+├── com.gsim.agentlib.mcp/    — MCP 框架（AbstractMcpServer/McpHttpServer/StdioMcpTransport/
+│                                ToolRegistryMcpAdapter/GsimRequestContext/ToolDef 等）
+└── com.gsim.agentlib.util/   — JsonUtils（agentlib 内部副本）
+
+gsim-core（纯业务，零兄弟模块依赖）
+├── com.gsim.core.worldinfo/  — WorldInfo 结构化元素存储（WorldInformation/Checkpoint/Element/loader/）
+├── com.gsim.core.doc/        — 文档管理（DocStore/DocCacheManager/Document/DocType）
+├── com.gsim.core.session/    — Session 管理（SessionPool/SessionNode/SessionPoolBridge）
+├── com.gsim.core.importing/  — 导入服务（ImportDocumentService）
+├── com.gsim.core.cache/      — SubAgent 对话缓存（CacheSession/CacheStore/CachesManager）
+├── com.gsim.core.compact/    — 缓存压缩（摘要生成）
+├── com.gsim.core.llm/        — LLM 客户端统一封装（LlmManager/LlmProviderRegistry/StreamPool/LlmConfigManager）
+├── com.gsim.core.event/      — 统一事件系统（EventBus/GSimEvent/ConsoleEventSink/SseEventSink）
+├── com.gsim.core.config/     — 配置系统（ConfigLoader/ConfigDoctor/ConfigWizard/CoreConfig）
+├── com.gsim.core.skill/      — SkillIndex 语义索引
+├── com.gsim.core.embedding/  — EmbeddingClient
+├── com.gsim.core.ref/        — 引用解析（RefResolver + InlineRefResolver：内嵌 @doc:/@import: 引用展开）
+├── com.gsim.core.text/       — TextEditor
+├── com.gsim.core.webimport/  — MediaWikiApiClient（仅此一个类）
+└── com.gsim.core.util/       — 工具类（IdGenerator/LogSanitizer/JsonUtils core 副本）
+
+gsim-agent（Agent 运行时 + 全部工具实现 + MCP 组装）
+├── com.gsim.agent            — 运行时根包（AgentConfig/AgentConfigStore/OrchestratorAgent/
+│                                ToolExecutionPolicy/ToolGroup/ToolGroupManager/ToolCallExtractor 等）
+├── com.gsim.agent.core/      — AbstractAgent（统一 ToolLoop）、AgentFactory、AgentResult、AgentRound
+├── com.gsim.agent.config/    — AgentConfigManager（运行时 CRUD）
+├── com.gsim.agent.management/— AgentsManager、AgentCacheStore
+├── com.gsim.agent.tool/      — Agent 管理工具（dispatch_sub_agent、collect_sub_agent_results、
+│                                activate_tool_groups、finish_action、view_sub_agent_cache 等 12 个）
+├── com.gsim.agent.tools/     — 工具实现
+│   ├── worldinfo/            — WorldInfo 工具（query_* / write_element / create_checkpoint /
+│   │                            node_* / world_* / attachment_*，共 15 个已注册）
+│   ├── doc/                  — 文档工具（doc_list/read/create/write/search/index/crop/template/delete）
+│   ├── importing/            — 导入工具（import_document_list/read/search）
+│   ├── cache/                — SubAgent 缓存工具（list_sub_agent_caches 等）
+│   ├── search/               — 搜索工具（wiki_search/mediawiki_search）
+│   ├── ref/                  — ResolveRefTool
+│   ├── text/                 — TextEditTool
+│   └── map/                  — 地图工具（gsimap_* 协议名，经 GsimapToolRegistrar 注册）
+├── com.gsim.agent.mcp/       — GsimMcpServer（MCP 服务组装）
+└── com.gsim.agent.bridge/    — AgentBridge + CoreToolContext/WorldInfoToolContext
+                                （core/map 业务能力 → AgentTool 的桥接注册层）
+
+gsim-map（Hex 地图服务，依赖 core）
+├── com.gsim.map.config/      — 地图配置
+├── com.gsim.map.map/         — 地图数据模型（MapData/Region/Province 等）
+├── com.gsim.map.service/     — MapService、TerrainCanvas 等业务服务
+└── com.gsim.map.http/        — GsimapHttpServer（Map UI 端口 8711）
+
+gsim-app（主入口 + 组装 + 交互壳）
+├── com.gsim.Main             — 主入口（默认 CLI REPL；--no-cli 为 MCP HTTP 37201）
+├── com.gsim.app/             — 应用启动（GSimulatorApplication）、依赖注入（Bootstrap/AppConfig/ApplicationContext）
+├── com.gsim.commands/        — CLI 命令实现（AgentCommand/BoardCommand/ChatCommand/CompactCommand/
+│                                LlmCommand/NodeCommand/WorldCommand）
+├── com.gsim.interaction/     — 交互层（CLI REPL、CommandParser、ConsoleInteractionAdapter）
+└── com.gsim.webui/           — Web UI + HTTP API 层（WebUiServer：JDK 内嵌 HttpServer，端口 8710）
+    ├── handlers/             — 7 个 handler（Agent/Chat/Llm/Timeline/World/Page/Static + HandlerUtils）
+    └── (resources)           — 前端静态文件（app.js、chat-renderer.js、session-ws.js 等）
 ```
 
 ### 已废弃/不存在的包
 
 以下包在旧版 CLAUDE.md 中列出但实际不存在（功能已被其他模块替代）：
-- `campaign/` → 被 `worldinfo/` + `root/` + `session/SessionNode` 替代
-- `task/` → 任务管理分散在 `api/handlers/TasksApiHandler` 和 `session/` 中
+- `campaign/` → 被 `worldinfo/` + `session/SessionNode` 替代
+- `task/` → 任务跟踪由事件系统承载（`event/GSimEvent` 的 `taskId`）
 - `timeline/` → 未实现
 - `world/` → 被 `worldinfo/` 替代
 - `storage/` → 持久化由各模块自行管理（WorldInfo JSON 文件、Cache 文件、Doc 文件）
@@ -80,31 +107,48 @@ com.gsim
 
 ## 运行命令
 
+模块：`gsim-agentlib`（协议 + MCP 框架）、`gsim-core`（纯业务核心）、`gsim-map`（地图服务）、`gsim-agent`（Agent 运行时 + 工具实现 + 桥接注册）、`gsim-app`（CLI/启动入口，打 fat JAR）。
+
 ```bash
-# 构建
-mvn package -DskipTests
+# 构建（始终 clean 避免增量编译陷阱）
+mvn clean package -DskipTests
 
-# 运行（默认 CLI 模式）
-java -jar target/GSimulator.jar
+# 构建指定模块及其依赖（示例：core/agent/app）
+mvn -pl gsim-core,gsim-agent,gsim-app -am clean test
 
-# 仅 HTTP API
-java -jar target/GSimulator.jar --http
+# 运行（默认模式：CLI REPL + Web GUI(8710) + Map UI(8711)）
+java -jar gsim-app/target/gsim-app-*.jar
 
-# CLI + HTTP API
-java -jar target/GSimulator.jar --cli --http
+# 运行 MCP 模式（--no-cli：MCP HTTP 服务 37201 + Web GUI(8710) + Map UI(8711)）
+java -jar gsim-app/target/gsim-app-*.jar --no-cli
 
-# 测试
-mvn test
+# 测试（始终 clean 避免增量编译陷阱）
+mvn clean test
 
-# 首次启动前清理 data/ 以验证自动初始化
-rm -rf data/ && java -jar target/GSimulator.jar
+# 完整质量门（始终 clean 避免增量编译陷阱）
+mvn clean verify --batch-mode
+
+# 首次启动前清理运行时数据以验证自动初始化（只影响 worlds/ caches/ logs/ llms.json）
+rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-*.jar
 ```
 
 ## 配置系统
 
-### 应用配置（gsim.properties）
+配置分三层，职责清晰：
+- **单一 properties 主链** — `gsim.properties`（`--config <path>` 可指定其他位置），经 `ConfigLoader` 统一加载（classpath 内置默认 → 外部文件 → 环境变量 `GSIM_*` 覆盖）。应用 / 核心 / 地图 / 导入 / 溢出暂存等全部配置键（含 `core.doc.*`、`mcp.response.*`、`map.*`）均在此主链。
+- **`llms.json`** — LLM provider 配置（baseUrl / key / model / temperature 等），支持运行时热更新。
+- **`agents/*.json`** — Agent 配置（系统提示词、工具权限、轮数上限等），经 `AgentConfigStore` 加载，支持运行时热更新。
 
-配置文件位于 `data/gsim.properties`（自动生成，可通过环境变量覆盖）：
+### 应用配置主链（gsim.properties）
+
+配置文件与数据布局（实际状态）：
+
+- `gsim.properties` — 应用配置（AppConfig），位于当前工作目录（CWD）或 `--config <path>` 指定路径，可通过环境变量覆盖
+- `llms.json` — LLM provider 配置（baseDir，即应用工作目录）
+- `agents/*.json` — Agent 配置（baseDir）
+- `worlds/` — 世界数据（baseDir）
+
+注：`data/` 目录布局（`data/gsim.properties` 等）为历史文档错误（实际仅存 JLine 历史），Phase 3 将迁移到统一 `config/` 目录。
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
@@ -115,10 +159,13 @@ rm -rf data/ && java -jar target/GSimulator.jar
 | `api.enabled` | false | 是否启用 HTTP API |
 | `llm.default_provider` | base | 默认 LLM provider ID |
 | `agent.max_tool_rounds` | 64 | Agent ToolLoop 最大轮数 |
+| `mcp.response.overflow_staging.enabled` | true | MCP 响应超限自动暂存开关 |
+| `mcp.response.overflow_staging.threshold` | 500 | MCP 响应溢出暂存触发阈值（snippet 字符数超过即暂存为 TMP 文档） |
+| `core.doc.query.staging.threshold` | 3000 | `query_*` 返回元素暂存阈值（元素值字符数超过即暂存为 TMP 文档，返回 docId 供 `doc_read` 读取） |
 
 ### LLM Provider 配置
 
-Provider 配置存储在 `data/llms.json`（自动生成模板），支持多个 provider：
+Provider 配置存储在 `llms.json`（baseDir，自动生成模板），支持多个 provider：
 
 ```json
 {
@@ -149,7 +196,7 @@ Provider 配置可通过 CLI（`/llm` 命令）和 HTTP API 运行时管理。
 
 ### 架构概览
 
-Agent 系统的核心是 **ToolLoop** 模式 — LLM 在循环中调用工具，直到显式调用 `finish_action` 结束。
+Agent 系统的核心是 **ToolLoop** 模式 — LLM 在循环中调用工具，直到显式调用 `finish_action` 结束。live ToolLoop 唯一入口：`AbstractAgent.executeToolLoop()`（Phase 1 已删除 OrchestratorAgent 中的 runToolLoop/runSimToolLoop 死循环）。
 
 ```
 用户输入 → AbstractAgent.executeToolLoop()
@@ -172,7 +219,7 @@ Agent 系统的核心是 **ToolLoop** 模式 — LLM 在循环中调用工具，
 | `sim` | maxRounds=16, temp=0.5 | read_only（只读+控制） | 推演叙事生成 |
 | `search` | maxRounds=16, temp=0.3 | read_only（只读+控制） | 多源资料搜索 |
 
-可通过 `data/agents/*.json` 添加自定义 Agent 类型。
+可通过 `agents/*.json` 添加自定义 Agent 类型。
 
 ### Agent 配置（AgentConfig）
 
@@ -196,17 +243,17 @@ Agent 系统的核心是 **ToolLoop** 模式 — LLM 在循环中调用工具，
 
 | 类 | 职责 |
 |----|------|
-| `AbstractAgent` | 统一 ToolLoop 基类（~500 行），子类通过钩子扩展 |
-| `OrchestratorAgent` | 主协调者（~1460 行），覆盖权限门禁、工具组管理、流式处理、finish_action 验证 |
+| `AbstractAgent` | 统一 ToolLoop 基类（655 行），子类通过钩子扩展 |
+| `OrchestratorAgent` | 主协调者（405 行，Phase 1 已删 runToolLoop/runSimToolLoop 死循环），覆盖权限门禁、工具组管理、流式处理、finish_action 验证 |
 | `AgentFactory` | 根据 AgentConfig 创建实例，管理 SubAgent 生命周期（派发/收集/取消） |
-| `AgentConfigStore` | 从 `data/agents/*.json` 加载配置（含 classpath fallback），支持 reload |
+| `AgentConfigStore` | 从 `agents/*.json` 加载配置（含 classpath fallback），支持 reload |
 | `AgentConfigManager` | 运行时 CRUD（list/get/update field），原子写入 + 自动 reload |
 
 ### SubAgent 机制
 
 - Orchestrator 通过 `dispatch_sub_agent` 工具派发 SubAgent
 - SubAgent 在虚拟线程中**同步阻塞**执行（120s 超时），结果直接作为工具反馈返回
-- 每个 SubAgent 自动保存对话缓存到 `data/worlds/{worldId}/caches/`
+- 每个 SubAgent 自动保存对话缓存到 `worlds/{worldId}/caches/`
 - 支持 `cacheId` 参数续接之前的 SubAgent 上下文
 - ESC 取消会传播到所有运行中的 SubAgent
 
@@ -243,9 +290,10 @@ public interface AgentTool {
 | 工具组 key | 说明 | 成员工具 |
 |-----------|------|---------|
 | `world_info` | WorldInfo 元素读写 | query_node, query_checkpoint, query_keyword, query_element, write_element, create_checkpoint |
-| `node_mgmt` | 节点管理 | node_list, node_status, node_create, node_switch, node_goto_parent |
+| `node_mgmt` | 节点管理 | node_list, node_status, node_create |
 | `import_doc` | 导入文档浏览 | import_document_list, import_document_read, import_document_search |
 | `search` | 多源搜索 | wiki_search, mediawiki_search |
+| `docs` | 文档管理 | doc_list, doc_read, doc_create, doc_write, doc_search, doc_index, doc_crop, doc_template |
 默认工具（无需激活）：finish_action, activate_tool_groups, dispatch_sub_agent, collect_sub_agent_results, 以及 SubAgent 缓存管理和 World/Doc 基础工具。
 
 ### 工具调用提取
@@ -267,16 +315,23 @@ public interface AgentTool {
 - 禁止 `{key=value}` 伪造工具输出（MODEL_FAKE_TOOL_RESULT 检测）
 - 验证失败 → 打回 LLM 重写，不消耗额外轮次配额
 
+### 文档系统（Doc）
+
+- 存储布局：`docs/{type}/{id}.md`（DocStore 管理）；docId 支持嵌套路径（`^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$`，如 `story/ch1/scene3`）
+- DocType 共 9 种：character / skill / world_state / template / context / rule / board / **tmp** / other（`tmp` 为暂存类型，`write_element` 大文本暂存使用）
+- 内嵌引用（`InlineRefResolver`，`com.gsim.core.ref`）：文本中 `@doc:"docId"` / `@import:"docId"` 原位展开为文档全文；未解析的引用原样保留并记录（不抛异常，供回传 LLM 修正）；无引号形态（`@doc:xxx`）视为普通文本
+- `@cache:` 虚拟文档引用：**消费端保留**（doc_read / doc_write / doc_create / doc_crop / text_edit 等可引用 `@cache:id` 读取缓存全文）；**写入端已停用**（doc_read 等不再自动产出 `@cache:id` 引用）
+
 ## WorldInfo / Node 系统
 
 ### 概念模型
 
-- **Root** — 一个独立世界观/剧本。`data/worlds/{worldId}/` 下的完整数据目录
+- **Root** — 一个独立世界观/剧本。`worlds/{worldId}/` 下的完整数据目录
 - **Node（节点）** — 分支链上的一个回合/状态快照。从 n0000（根节点）开始，通过 `node_create` 延伸
 - **Checkpoint（检查点）** — 节点内的分类容器（如 `worldview`、`characters`、`factions`、`player.*`）
 - **Element（信息单元）** — `nodeId:checkpointId:key` 寻址的键值对，支持 tags、links、type 元数据
 
-### 核心工具（14 个）
+### 核心工具（15 个，WorldInfo 工具）
 
 | 工具 | 分类 | 用途 |
 |------|------|------|
@@ -284,20 +339,25 @@ public interface AgentTool {
 | `query_checkpoint` | READ | 查看检查点在整条链上的历史（支持 `player.*` 通配） |
 | `query_keyword` | READ | 全文关键词搜索（支持分页、按 checkpointId 过滤） |
 | `query_element` | READ | 按 ref 精确查询单个元素（含 links 解析） |
-| `write_element` | MUTATING | 写入/更新元素（默认 upsert，mode=append 追加） |
+| `query_by_tag` | READ | 按 tag 索引查询元素 |
+| `query_address` | READ | 解析通用地址（`gsimap:*` → 地图实体、`nodeId:checkpointId:key` → 元素等） |
+| `write_element` | MUTATING | 写入/更新元素（默认 upsert，mode=append 追加；value 超阈值 → 暂存 docs/tmp/ 并返回 @doc: 地址） |
 | `create_checkpoint` | MUTATING | 显式创建检查点（带 label/type 元数据） |
+| `attachment_write` | MUTATING | 写入绑定到节点的附件文件（`nXXXX_{key}.json`） |
+| `attachment_read` | READ | 读取绑定到节点的附件文件 |
 | `node_list` | READ | 列出当前链所有节点（flat/tree） |
 | `node_status` | READ | 当前活跃节点详情 |
 | `node_create` | MUTATING | 创建子节点并自动切换（必填 worldTime） |
-| `node_switch` | MUTATING | 切换到链内已有节点 |
-| `node_goto_parent` | MUTATING | 返回父节点 |
 | `world_list` | READ | 列出所有 World |
 | `world_create` | MUTATING | 创建新 World |
-| `world_switch` | MUTATING | 切换活跃 World |
+
+**write_element 长度无限制**：value 全文直接写入信息单元，不做阈值暂存（写入多少取决于调用方输入）。value 支持 `@cache:id` 引用解析与 `@doc:"docId"` / `@import:"file"` 内嵌引用展开；引用无法解析时拒绝（`[@DOC_REF_FAILED]`）。
+
+**query 侧大文本暂存（DocStaging 共享机制）**：`query_element` 及 `query_checkpoint`/`query_node`/`query_by_tag`（detail=true）/`query_address`（tag 分支）返回的元素值超过 `core.doc.query.staging.threshold`（默认 3000 字符）时，不内联返回全文，而是暂存为 TMP 文档（`docs/tmp/wstg_query_*.md`）并在 snippet 返回暂存提示 + docId，调用方用 `doc_read(docId=...)` 读取全文；item.path 保持元素 ref 不变。内容去重：同前缀下 content 完全相同的文档复用同一 docId，不产生重复文件。暂存失败（IO/冲突）降级为内联返回原文。查询暂存阈值可在 `gsim.properties` 主链调整（`core.doc.query.staging.threshold`）。
 
 ## 缓存系统（Cache）
 
-SubAgent 对话缓存存储在 `data/worlds/{worldId}/caches/` 下，每个缓存文件为 JSON 格式：
+SubAgent 对话缓存存储在 `worlds/{worldId}/caches/` 下，每个缓存文件为 JSON 格式：
 
 - `CacheSession` — 缓存数据模型（sessionId、messages 列表）
 - `CacheStore` — 文件读写（load、createNew、appendAndSave）
@@ -310,35 +370,22 @@ SubAgent 对话缓存存储在 `data/worlds/{worldId}/caches/` 下，每个缓�
 
 ### 启动方式
 
-```bash
-java -jar target/GSimulator.jar --http          # 仅 HTTP API
-java -jar target/GSimulator.jar --cli --http    # CLI + HTTP API
-```
+HTTP 层由 `webui/` 的 `WebUiServer`（JDK 内嵌 `HttpServer`）提供，端口 8710（`webui.port`），随应用启动常驻；Map UI 端口 8711（gsim-map 模块），MCP HTTP 端口 37201（`--no-cli` 模式）。
 
 ### API 列表
 
-实际实现的 handler（`api/handlers/` 下 19 个文件）：
+实际实现的 handler（`webui/handlers/` 下 7 个 + HandlerUtils）：
 
 | Handler | 说明 |
 |---------|------|
-| `StatusApiHandler` | GET /api/status — 应用状态 |
-| `TasksApiHandler` | POST/GET /api/tasks — 任务创建/列表/状态/取消 |
-| `CommandApiHandler` | POST /api/command — 执行 CLI 命令 |
-| `StreamCommandHandler` | POST /api/command/stream — SSE 流式命令 |
-| `ConfigApiHandler` | GET/POST /api/config — 配置管理 |
-| `CompactApiHandler` | POST /api/compact — 缓存压缩 |
-| `ExperiencesApiHandler` | GET/POST /api/experiences — 经验管理 |
-| `HelpApiHandler` | GET /api/help — 帮助信息 |
-| `ImportApiHandler` | POST /api/import — 资料导入 |
-| `LogsOutputsApiHandler` | GET /api/logs /api/outputs — 日志/输出 |
-| `MessagesApiHandler` | GET/POST /api/messages — 消息管理 |
-| `PinsApiHandler` | GET/POST /api/pins — 固定信息 |
-| `PlayersApiHandler` | GET/POST /api/players — 玩家管理 |
-| `RootsApiHandler` | GET/POST /api/roots — Root 管理 |
-| `SaveApiHandler` | POST /api/save — 保存 |
-| `SkillsApiHandler` | GET/POST /api/skills — Skill 管理（兼容保留，实际委托 DocStore） |
-| `ToolsApiHandler` | GET /api/tools — 工具列表 |
-| `WhereApiHandler` | GET /api/where — 当前位置/上下文 |
+| `AgentApiHandler` | Agent 配置管理（列表/详情/更新字段/reload） |
+| `ChatApiHandler` | 聊天（发送/取消/状态/会话/节点摘要/上传） |
+| `LlmApiHandler` | LLM provider 配置管理（列表/详情/更新/连通性测试） |
+| `TimelineApiHandler` | 时间线数据（data、nodes、node、activate 端点） |
+| `WorldApiHandler` | 世界 CRUD + 世界文件读写 |
+| `PageHandler` | HTML 页面（/chat、/timeline 等） |
+| `StaticHandler` | 前端静态资源（/static/） |
+| `HandlerUtils` | 公共请求/响应处理工具（非 handler） |
 
 ### SSE 流式事件
 
@@ -368,7 +415,7 @@ data: {"sessionId":"...","taskId":"...","type":"...","..."}
 
 ## Web UI
 
-Web UI 通过 Javalin 内嵌静态服务提供：
+Web UI 由 `WebUiServer`（JDK 内嵌 `HttpServer`，端口 8710）提供：
 - 前端：原生 JS（`app.js`、`chat-renderer.js`、`session-ws.js`、`client-cache.js`、`message-store.js`）
 - 模板：`webui/templates/` 下的 HTML 片段
 - WebSocket 连接：`session-ws.js` 管理实时通信
@@ -385,11 +432,7 @@ Web UI 通过 Javalin 内嵌静态服务提供：
   - `search/system.md` + `search/user.md` — SearchAgent prompt
 - `resources/gsim/agents/*/config.json` — `staticSystemPrompt` 字段内嵌完整系统提示词（生产环境使用此版本）
 
-### PromptManager
-
-`PromptManager` 为轻量实现，支持 `{{variable}}` 模板变量替换。实际 prompt 渲染在 `AgentConfig.renderUserPrompt()` 中完成。不再使用 FreeMarker。
-
-注：`PromptManager.loadAll()` 当前为占位实现，prompt 直接从 AgentConfig JSON 加载。
+注：`PromptManager` 类已随 `prompt/` 包删除（Phase 1），prompt 内容直接从 AgentConfig JSON 加载。
 
 ## 禁止事项
 
@@ -405,12 +448,23 @@ Web UI 通过 Javalin 内嵌静态服务提供：
 
 ## 提交前检查清单
 
-- 手动验收产生的测试残留文件（`data/worlds/default/input.md`、`data/worlds/default/branches/` 等）需 `git checkout` 恢复或 `rm` 清理
+- 手动验收产生的测试残留文件（`worlds/default/input.md`、`worlds/default/branches/` 等）需 `git checkout` 恢复或 `rm` 清理
 - `data/` 目录下的运行时文件不在版本控制中（已 gitignore `caches/`）
-- 首次或测试启动前 `rm -rf data/` 验证自动初始化
+- 首次或测试启动前 `rm -rf worlds/ caches/ logs/ llms.json` 验证自动初始化
 
 ## 测试
 
-- 75 个测试文件，覆盖 agent、api、cache、config、event、importing、interaction、llm、prompt、root、session、tool、util、webimport、worldinfo
+- 测试数（按模块分布；本计划新增内嵌引用/暂存/核心配置测试，（`mvn clean verify` surefire 实测））：
+  - gsim-core：185
+  - gsim-agent：190
+  - gsim-agentlib：32
+  - gsim-map：16
+  - gsim-app：54
+- 覆盖包（按模块）：
+  - gsim-core：`com.gsim.core.*`（cache/event/importing/llm/session/util/webimport/worldinfo/ref/config/doc 等）
+  - gsim-agent：`com.gsim.agent.*`（运行时 + tools.* + mcp）；`prompt/`、`root/` 仅存治理类测试
+  - gsim-agentlib：`com.gsim.agentlib.mcp`
+  - gsim-map：`com.gsim.map.service`
+  - gsim-app：`app`、`interaction`、`integration` + `com.gsim.core.config`
 - 使用 `FakeLlmManager` 实现离线测试
-- 测试运行：`mvn test`
+- 测试运行：`mvn test`（根聚合 `mvn clean test`）

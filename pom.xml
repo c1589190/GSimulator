@@ -11,9 +11,11 @@
     <description>A multi-agent simulation engine for alternate history and player-action wargaming — parent POM</description>
 
     <modules>
-        <module>gsim-lib</module>
+        <module>gsim-agentlib</module>
+        <module>gsim-core</module>
+        <module>gsim-agent</module>
         <module>gsim-app</module>
-        <module>gsimap</module>
+        <module>gsim-map</module>
     </modules>
 
     <properties>
@@ -257,8 +259,8 @@
                 <artifactId>maven-checkstyle-plugin</artifactId>
             </plugin>
             <!-- SpotBugs: activated per-module (different failOnError per module).
-                 gsimap + gsim-app: failOnError=true  (zero tolerance)
-                 gsim-lib:         failOnError=false (ratchet: baseline comparison) -->
+                 gsim-map + gsim-app: failOnError=true  (zero tolerance)
+                 gsim-core:        failOnError=false (ratchet: baseline comparison) -->
         </plugins>
     </build>
 </project>

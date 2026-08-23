@@ -14,8 +14,8 @@ GSimulator exposes 70+ tools via **MCP (Model Context Protocol)** over stdio:
 
 | Concept | Description |
 |---------|-------------|
-| **World** | Self-contained narrative scenario. Contains nodes, checkpoints, elements. Managed via `world_list` / `world_create` / `world_switch`. |
-| **Node** | Turn or snapshot in a branch chain. `n0000` is the root node. Managed via `node_list` / `node_status` / `node_create` / `node_switch` / `node_goto_parent`. |
+| **World** | Self-contained narrative scenario. Contains nodes, checkpoints, elements. Managed via `world_list` / `world_create`. |
+| **Node** | Turn or snapshot in a branch chain. `n0000` is the root node. Managed via `node_list` / `node_status` / `node_create`. |
 | **Checkpoint** | Named category container (e.g. `worldview`, `characters`, `factions`, `player.*`). Managed via `query_checkpoint` / `create_checkpoint`. |
 | **Element** | Key-value pair stored in a checkpoint. Addressed as `nodeId:checkpointId:key`. Managed via `query_element` / `write_element` / `query_keyword`. |
 | **Document** | Reference materials (.txt / .md). Managed via `doc_list` / `doc_read` / `doc_create` / `doc_write` / `doc_search`. |
@@ -60,12 +60,9 @@ Use `resolve_ref` to resolve any `@` reference. Use `text_edit` for the text edi
 |------|---------|
 | `gsim_world_list` | List all worlds |
 | `gsim_world_create` | Create new world |
-| `gsim_world_switch` | Switch active world |
 | `gsim_node_status` | Current active node |
 | `gsim_node_list` | List nodes (flat or tree) |
 | `gsim_node_create` | Create child node (advance turn) |
-| `gsim_node_switch` | Switch to another node |
-| `gsim_node_goto_parent` | Return to parent node |
 
 ### WorldInfo Elements
 | Tool | Purpose |
@@ -127,8 +124,8 @@ Use `resolve_ref` to resolve any `@` reference. Use `text_edit` for the text edi
 
 - All writes persist to disk immediately — no rollback.
 - Node navigation affects `@world` reference resolution.
-- Gsimap tools require the gsimap module to be loaded.
-- The gsimap HTTP map editor is available at `http://127.0.0.1:8711`.
+- Gsimap tools require the map service (gsim-map module) to be loaded.
+- The map UI (gsim-map) is available at `http://127.0.0.1:8711`.
 
 ## Further Reading
 

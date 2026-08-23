@@ -2,7 +2,7 @@
   "mcpServers": {
     "gsimap": {
       "command": "./gsimap-mcp.sh",
-      "description": "Gsimap + GSim MCP server — hex map tools (23 gsimap_*) + world/node/checkpoint management (49 gsim_*) — 72 tools total"
+      "description": "GSimulator MCP — 66 tools: world/node/checkpoint/map/doc/agent management (HTTP bridge)"
     }
   }
 }

@@ -1,0 +1,78 @@
+package com.gsim.app;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import com.gsim.core.cache.CacheStore;
+import com.gsim.core.cache.CachesManager;
+import com.gsim.core.cache.FileSystemCachesManager;
+import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class BootstrapTest {
+
+    @TempDir
+    Path tmpDir;
+
+    @BeforeEach
+    void setUp() {
+        CacheStore.setCachesRoot(tmpDir);
+    }
+
+    @Test
+    void bootCreatesDefaultWorld() throws Exception {
+        Path worldsDir = tmpDir.resolve("worlds");
+        Path promptsDir = tmpDir.resolve("prompts");
+        Files.createDirectories(promptsDir);
+
+        CachesManager cachesManager = new FileSystemCachesManager();
+        Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
+        Bootstrap.BootstrapResult result = b.boot();
+
+        assertEquals("default", result.worldId());
+        assertEquals("n0000", result.activeNodeId());
+        assertNotNull(result.worldInfo());
+        assertNotNull(result.activeCache());
+        // System prompt is injected dynamically at runtime (not cached)
+        assertEquals(0, result.activeCache().messageCount());
+    }
+
+    @Test
+    void bootWithExplicitWorldId() throws Exception {
+        Path worldsDir = tmpDir.resolve("worlds");
+        Path promptsDir = tmpDir.resolve("prompts");
+        Files.createDirectories(promptsDir);
+
+        // Create two worlds to verify we can pick the second one
+        WorldIndexManager.createWorld(worldsDir, "alpha", "Alpha World");
+        WorldIndexManager.createWorld(worldsDir, "zeta", "Zeta World");
+
+        CachesManager cachesManager = new FileSystemCachesManager();
+        Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
+        // Without explicit worldId, first world (alpha) would be picked
+        // With explicit worldId, we should get zeta
+        Bootstrap.BootstrapResult result = b.boot(null, "zeta");
+
+        assertEquals("zeta", result.worldId());
+        assertEquals("n0000", result.activeNodeId());
+        assertNotNull(result.worldInfo());
+        assertNotNull(result.activeCache());
+        assertEquals(0, result.activeCache().messageCount());
+    }
+
+    @Test
+    void bootNonexistentWorldThrows() throws Exception {
+        Path worldsDir = tmpDir.resolve("worlds");
+        Path promptsDir = tmpDir.resolve("prompts");
+        Files.createDirectories(promptsDir);
+
+        CachesManager cachesManager = new FileSystemCachesManager();
+        Bootstrap b = new Bootstrap(worldsDir, promptsDir, cachesManager);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> b.boot(null, "nonexistent"));
+        assertTrue(ex.getMessage().contains("nonexistent"));
+    }
+}

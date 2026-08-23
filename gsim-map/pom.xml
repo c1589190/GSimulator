@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gsim</groupId>
+        <artifactId>GSimulator</artifactId>
+        <version>0.1.0-Alpha260723</version>
+    </parent>
+
+    <artifactId>gsim-map</artifactId>
+    <packaging>jar</packaging>
+
+    <name>GSim Map</name>
+    <description>Hex 地图服务 — 挂载在 GSim 世界功能上的 Map 服务（地图数据、地形编辑、HTTP API、地图 UI）</description>
+
+    <dependencies>
+        <!-- GSimulator core (WorldInfo, Doc, LLM, Cache) -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- JSON serialization (direct dependency — also transitively from gsim-core) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- SpotBugs annotations for @SuppressFBWarnings -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.2</version>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+            <!-- SpotBugs: zero tolerance for new module -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <failOnError>true</failOnError>
+                    <includeTests>false</includeTests>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
