@@ -212,8 +212,6 @@ public class GSimulatorApplication {
         // CoreConfig 从 ConfigLoader 主链构造：AppConfig 已解析 core.doc.* 键，此处取其类型化值
         this.coreConfig = com.gsim.core.config.CoreConfig.from(
                 java.util.Map.of(
-                        com.gsim.core.config.CoreConfig.STAGING_THRESHOLD,
-                        String.valueOf(config.stagingThreshold()),
                         com.gsim.core.config.CoreConfig.QUERY_STAGING_THRESHOLD,
                         String.valueOf(config.queryStagingThreshold())),
                 java.util.Map.of());

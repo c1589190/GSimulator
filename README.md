@@ -87,7 +87,7 @@ Claude Desktop 等 MCP 客户端可通过 stdio→HTTP 桥接接入，命令为 
 | `mcp.response.default_page_size` | 20 | MCP 列表分页默认页大小 |
 | `mcp.response.max_page_size` | 100 | MCP 列表分页最大页大小 |
 | `mcp.response.overflow_staging.enabled` | true | MCP 响应超限自动暂存开关 |
-| `core.doc.staging.threshold` | 500 | `write_element` 大文本暂存阈值（value 字符数超过即暂存） |
+| `mcp.response.overflow_staging.threshold` | 500 | MCP 响应溢出暂存触发阈值（snippet 字符数超过即暂存为 TMP 文档） |
 | `core.doc.query.staging.threshold` | 3000 | `query_*` 返回元素暂存阈值（字符数超过即暂存为 TMP 文档，返回 docId） |
 | `core.doc.tmp.max_age_hours` | 168 | TMP 文档最大保留时长（小时），启动/暂存前自动清扫 |
 | `core.doc.tmp.cleanup_enabled` | true | TMP 文档自动清扫开关 |

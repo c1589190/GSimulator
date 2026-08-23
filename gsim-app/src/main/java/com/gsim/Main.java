@@ -195,7 +195,9 @@ public class Main {
                 // 溢出暂存 handler：超限 snippet 暂存为 docs/tmp 文档并返回 docId；未启用时传 null（走截断）
                 ToolResultOverflowHandler overflowHandler = config.mcpResponseOverflowStagingEnabled()
                         ? new DocStagingOverflowHandler(
-                                app.getContext().getDocStore(config.docsDir()), config.stagingThreshold(), "mcp_")
+                                app.getContext().getDocStore(config.docsDir()),
+                                config.mcpResponseOverflowStagingThreshold(),
+                                "mcp_")
                         : null;
                 McpHttpServer mcpHttpServer =
                         new McpHttpServer(toolRegistry, mcpPort, mcpResponseConfig, overflowHandler);

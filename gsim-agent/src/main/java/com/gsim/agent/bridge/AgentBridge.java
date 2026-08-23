@@ -159,9 +159,7 @@ public final class AgentBridge {
                 wiSupplier,
                 ctx.worldsDir(),
                 ctx.docCacheManager(),
-                ctx.docStore(),
-                ctx.inlineRefResolver(),
-                ctx.coreConfig()));
+                ctx.inlineRefResolver()));
         toolRegistry.register(new CreateCheckpointTool(wiSupplier, ctx.worldsDir()));
         toolRegistry.register(new AttachmentWriteTool(ctx.worldsDir(), wiSupplier));
         toolRegistry.register(new AttachmentReadTool(ctx.worldsDir(), wiSupplier));

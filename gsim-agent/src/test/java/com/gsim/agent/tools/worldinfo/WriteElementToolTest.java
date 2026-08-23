@@ -4,10 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocStore;
 import com.gsim.core.doc.DocType;
-import com.gsim.core.doc.Document;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.*;
@@ -54,7 +52,7 @@ class WriteElementToolTest {
     }
 
     private WriteElementTool tool() {
-        return new WriteElementTool(() -> wi, tmpDir, null, docStore, resolver, CoreConfig.load());
+        return new WriteElementTool(() -> wi, tmpDir, null, resolver);
     }
 
     @Test
@@ -131,33 +129,24 @@ class WriteElementToolTest {
     }
 
     @Test
-    void oversizedValueIsStagedToDocInsteadOfWriting() {
-        String big = "灾".repeat(501);
+    void longValueWritesDirectlyWithoutStaging() {
+        String big = "灾".repeat(5000);
         var tool = tool();
         ToolResult r = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
 
         assertTrue(r.success());
-        String message = r.items().get(0).snippet();
-        assertTrue(message.contains("wstg_write_"));
-        assertTrue(message.contains("@doc:\""));
+        assertFalse(r.items().get(0).snippet().contains("暂存"));
+        assertFalse(r.items().get(0).path().startsWith("wstg_"));
 
-        // 未写入 world
-        assertTrue(wi.checkpointHistory("worldview").isEmpty());
-
-        // docs/tmp/ 下存在 wstg_*.md，DocStore 中 get 该 docId 内容 = value
-        String docId = r.items().get(0).path();
-        assertTrue(docId.startsWith("wstg_write_"));
-        assertTrue(Files.exists(tmpDir.resolve("docs").resolve("tmp").resolve(docId + ".md")));
-        Document doc = docStore.get(docId);
-        assertNotNull(doc);
-        assertEquals(DocType.TMP, doc.type());
-        assertEquals("n0000:worldview:大事件", doc.title());
-        assertEquals(big, doc.content());
+        List<ElementRef> history = wi.checkpointHistory("worldview");
+        assertEquals(1, history.size());
+        assertEquals(big, history.get(0).element().value());
+        assertFalse(Files.exists(tmpDir.resolve("docs").resolve("tmp")));
     }
 
     @Test
-    void valueWithinThresholdWritesDirectly() {
-        String value = "中".repeat(500);
+    void longValueWritesDirectly() {
+        String value = "中".repeat(5000);
         var tool = tool();
         ToolResult r = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:长文", "value", value)));
 
@@ -165,26 +154,6 @@ class WriteElementToolTest {
         List<ElementRef> history = wi.checkpointHistory("worldview");
         assertEquals(1, history.size());
         assertEquals(value, history.get(0).element().value());
-    }
-
-    @Test
-    void thresholdBoundaryExact500Writes501Stages() {
-        var tool = tool();
-
-        // 恰 500 字符 → 直接写入
-        String atLimit = "字".repeat(500);
-        ToolResult r1 =
-                tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界一", "value", atLimit)));
-        assertTrue(r1.success());
-        assertEquals(1, wi.checkpointHistory("worldview").size());
-
-        // 501 字符 → 暂存
-        String over = "字".repeat(501);
-        ToolResult r2 =
-                tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:边界二", "value", over)));
-        assertTrue(r2.success());
-        assertTrue(r2.items().get(0).path().startsWith("wstg_write_"));
-        assertEquals(1, wi.checkpointHistory("worldview").size()); // 未写入
     }
 
     @Test
@@ -208,27 +177,6 @@ class WriteElementToolTest {
         assertFalse(r.success());
         assertTrue(r.error().contains("[@DOC_REF_FAILED]"));
         assertTrue(wi.checkpointHistory("worldview").isEmpty());
-    }
-
-    @Test
-    void stagedDocCanBeCommittedInSecondCall() {
-        String big = "灾".repeat(501);
-        var tool = tool();
-
-        // 第一次调用：超阈值 → 暂存
-        ToolResult r1 = tool.execute(new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", big)));
-        assertTrue(r1.success());
-        String docId = r1.items().get(0).path();
-        assertTrue(docId.startsWith("wstg_write_"));
-        assertTrue(wi.checkpointHistory("worldview").isEmpty());
-
-        // 第二次调用：@doc: 引用暂存文档 → 正常写入全文
-        ToolResult r2 = tool.execute(
-                new ToolCall("write_element", Map.of("ref", "n0000:worldview:大事件", "value", "@doc:\"" + docId + "\"")));
-        assertTrue(r2.success());
-        List<ElementRef> history = wi.checkpointHistory("worldview");
-        assertEquals(1, history.size());
-        assertEquals(big, history.get(0).element().value());
     }
 
     @Test

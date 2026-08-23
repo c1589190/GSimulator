@@ -74,10 +74,10 @@ agent.tool_loop.max_rounds=259
 # mcp.response.max_page_size=100
 # 超出上限时自动暂存（默认 true）。
 # mcp.response.overflow_staging.enabled=true
+# 暂存触发阈值：snippet 超过该字符数即暂存为 TMP doc（默认 500）。
+# mcp.response.overflow_staging.threshold=500
 
 # ── 文档暂存与临时目录清理 ──
-# 写入元素时超过该字符数即暂存为 TMP doc（默认 500）。
-# core.doc.staging.threshold=500
 # 查询结果暂存阈值（默认 3000）。
 # core.doc.query.staging.threshold=3000
 # TMP doc 最长保留时间（小时，默认 168 = 7 天）。

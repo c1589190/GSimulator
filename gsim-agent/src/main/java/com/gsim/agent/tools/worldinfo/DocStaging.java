@@ -12,10 +12,10 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 大文本暂存 helper — write_element 与 query_* 工具共用。
+ * 大文本暂存 helper — query_* 工具与 MCP 溢出暂存共用。
  *
  * <p>超过阈值的内容不内联存储/返回，而是暂存为 TMP 文档（docs/tmp/{docId}.md），
- * 返回 docId 供调用方通过 {@code gsim_doc_read} 读取全文或 {@code @doc:} 引用二次提交。
+ * 返回 docId 供调用方通过 {@code gsim_doc_read} 读取全文。
  *
  * <p>内容去重：同 docId 前缀下 content 完全相同的已有 TMP 文档直接复用，
  * 反复暂存相同内容不会产生重复文件；内容不同则新建（docId 带时间戳+随机，保证唯一）。
@@ -30,7 +30,7 @@ public final class DocStaging {
      * 将超长内容暂存为 TMP 文档并返回 docId。
      *
      * @param docStore    文档存储（必须已 init）
-     * @param docIdPrefix docId 前缀（如 {@code wstg_write_} / {@code wstg_query_}），同时是去重范围
+     * @param docIdPrefix docId 前缀（如 {@code wstg_query_} / {@code mcp_}），同时是去重范围
      * @param title       文档标题（信息单元地址，如 {@code n0000:worldview:大事件}）
      * @param content     暂存内容
      * @return docId（去重命中时返回已有文档 ID）
@@ -47,7 +47,7 @@ public final class DocStaging {
      * 清扫失败（IO）不影响本次暂存。去重范围 = {@code docIdPrefix} 前缀。
      *
      * @param docStore       文档存储（必须已 init）
-     * @param docIdPrefix    docId 前缀（如 {@code wstg_write_} / {@code wstg_query_}），同时是去重范围
+     * @param docIdPrefix    docId 前缀（如 {@code wstg_query_} / {@code mcp_}），同时是去重范围
      * @param title          文档标题（信息单元地址）
      * @param content        暂存内容
      * @param cleanupEnabled 是否在暂存前清扫过期 TMP 文档

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocStore;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.ref.InlineRefResolver;
@@ -58,7 +57,7 @@ class WriteElementToolLinksTest {
     }
 
     private WriteElementTool tool() {
-        return new WriteElementTool(() -> wi, tmpDir, null, docStore, resolver, CoreConfig.load());
+        return new WriteElementTool(() -> wi, tmpDir, null, resolver);
     }
 
     // -- happy path --

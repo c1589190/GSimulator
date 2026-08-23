@@ -6,7 +6,6 @@ import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agent.tools.worldinfo.WriteElementTool;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocStore;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.ref.InlineRefResolver;
@@ -105,9 +104,7 @@ class GsimapRenameRegionToolTest {
                 () -> wi,
                 tmpDir,
                 null,
-                docStore,
-                new InlineRefResolver(docStore, new ImportDocumentService(importDir)),
-                CoreConfig.load());
+                new InlineRefResolver(docStore, new ImportDocumentService(importDir)));
     }
 
     private void writeElement(String nodeId, String key, String value, String links) throws IOException {

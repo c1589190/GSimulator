@@ -4,15 +4,12 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.config.CoreConfig;
 import com.gsim.core.doc.DocCacheManager;
-import com.gsim.core.doc.DocStore;
 import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -39,8 +36,7 @@ import org.slf4j.LoggerFactory;
  * {@code @doc:"docId"} / {@code @import:"file"} 内嵌引用，写入前展开为文档全文，
  * 引用无法解析时调用失败（[@DOC_REF_FAILED]）。
  *
- * <p>value 长度超过 {@code core.doc.staging.threshold}（默认 500）时不直接写入，
- * 而是暂存为 TMP 文档（docs/tmp/）并返回 {@code @doc:} 地址，供后续调用二次提交。
+ * <p>value 长度不做限制 — 写入多少取决于调用方（Agent）能输入多少，全文直接写入元素。
  * links 应使用相同的 {@code nodeId:checkpointId:key} 格式以便交叉引用。
  */
 public final class WriteElementTool implements AgentTool {
@@ -50,23 +46,17 @@ public final class WriteElementTool implements AgentTool {
     private final Supplier<WorldInformation> worldInfo;
     private final Path worldsDir;
     private final DocCacheManager cacheManager;
-    private final DocStore docStore;
     private final InlineRefResolver inlineRefResolver;
-    private final CoreConfig coreConfig;
 
     public WriteElementTool(
             Supplier<WorldInformation> worldInfo,
             Path worldsDir,
             DocCacheManager cacheManager,
-            DocStore docStore,
-            InlineRefResolver inlineRefResolver,
-            CoreConfig coreConfig) {
+            InlineRefResolver inlineRefResolver) {
         this.worldInfo = worldInfo;
         this.worldsDir = worldsDir;
         this.cacheManager = cacheManager;
-        this.docStore = docStore;
         this.inlineRefResolver = inlineRefResolver;
-        this.coreConfig = coreConfig;
     }
 
     @Override
@@ -136,12 +126,6 @@ public final class WriteElementTool implements AgentTool {
         // 解析 @cache: 引用
         if (cacheManager != null) {
             value = cacheManager.resolve(value);
-        }
-
-        // 阈值检查（@cache: 展开后、@doc: 展开前）：超过阈值 → 暂存 docs 引导二次提交
-        int threshold = coreConfig.getInt(CoreConfig.STAGING_THRESHOLD, 500);
-        if (value.length() > threshold) {
-            return stageToDoc(nodeId, checkpointId, key, value);
         }
 
         // 内嵌引用解析：@doc:"id" / @import:"file" 展开为全文，未解析则失败
@@ -279,27 +263,6 @@ public final class WriteElementTool implements AgentTool {
             log.info("Lazy-loaded node {} from disk into WorldInformation", nodeId);
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("Failed to load node " + nodeId + " from disk: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 大文本暂存 — 将超过阈值的 value 写入 docs/tmp/ 下的 TMP 文档并返回 {@code @doc:} 地址。
-     * 内容去重：相同内容复用已有暂存文档；docId 冲突（极低概率）时重试一次，仍冲突则返回失败。
-     */
-    private ToolResult stageToDoc(String nodeId, String checkpointId, String key, String value) {
-        try {
-            String title = nodeId + ":" + checkpointId + ":" + key; // 信息单元地址
-            String docId = DocStaging.stage(docStore, "wstg_write_", title, value);
-            log.warn("[WriteElement] value {} chars > threshold, staged to doc {}", value.length(), docId);
-            return ToolResult.ok(
-                    name(),
-                    List.of(new ToolResult.Item(
-                            "内容已暂存为文档（" + value.length() + " 字符，超过阈值）",
-                            docId,
-                            "请在后续调用中使用 write_element(value=\"@doc:\"" + docId + "\") 提交到信息单元 " + title,
-                            1.0)));
-        } catch (IOException e) {
-            return ToolResult.fail(name(), "[STAGING_FAILED] 暂存失败: " + e.getMessage());
         }
     }
 }

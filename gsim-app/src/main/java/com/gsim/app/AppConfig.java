@@ -74,8 +74,8 @@ public class AppConfig {
     private final int mcpResponseMaxPageSize;
     /** MCP 响应溢出时是否启用 doc staging（默认 true）。 */
     private final boolean mcpResponseOverflowStagingEnabled;
-    /** core doc staging 阈值（默认 500）。 */
-    private final int stagingThreshold;
+    /** MCP 响应溢出暂存触发阈值（snippet 字符数，默认 500）。 */
+    private final int mcpResponseOverflowStagingThreshold;
     /** core doc query staging 阈值（默认 3000）。 */
     private final int queryStagingThreshold;
     /** TMP 文档最大保留时长（小时，默认 168）。 */
@@ -210,9 +210,10 @@ public class AppConfig {
         this.mcpResponseMaxPageSize = parseInt(result.get("mcp.response.max_page_size"), 100);
         this.mcpResponseOverflowStagingEnabled =
                 parseBoolean(result.get("mcp.response.overflow_staging.enabled"), true);
+        this.mcpResponseOverflowStagingThreshold =
+                parseInt(result.get("mcp.response.overflow_staging.threshold"), 500);
 
         // 文档暂存与临时目录清理
-        this.stagingThreshold = parseInt(result.get("core.doc.staging.threshold"), 500);
         this.queryStagingThreshold = parseInt(result.get("core.doc.query.staging.threshold"), 3000);
         this.tmpMaxAgeHours = parseInt(result.get("core.doc.tmp.max_age_hours"), 168);
         this.tmpCleanupEnabled = parseBoolean(result.get("core.doc.tmp.cleanup_enabled"), true);
@@ -492,14 +493,14 @@ public class AppConfig {
         return mcpResponseOverflowStagingEnabled;
     }
 
-    /** core doc staging 阈值（默认 500）。 */
-    public int stagingThreshold() {
-        return stagingThreshold;
-    }
-
     /** core doc query staging 阈值（默认 3000）。 */
     public int queryStagingThreshold() {
         return queryStagingThreshold;
+    }
+
+    /** MCP 响应溢出暂存触发阈值（snippet 字符数，默认 500）。 */
+    public int mcpResponseOverflowStagingThreshold() {
+        return mcpResponseOverflowStagingThreshold;
     }
 
     /** TMP 文档最大保留时长（小时，默认 168）。 */

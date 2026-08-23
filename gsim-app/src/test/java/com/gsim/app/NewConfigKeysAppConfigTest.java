@@ -36,9 +36,9 @@ class NewConfigKeysAppConfigTest {
         assertEquals(20, config.mcpResponseDefaultPageSize());
         assertEquals(100, config.mcpResponseMaxPageSize());
         assertTrue(config.mcpResponseOverflowStagingEnabled());
+        assertEquals(500, config.mcpResponseOverflowStagingThreshold());
 
         // 文档暂存与临时目录清理
-        assertEquals(500, config.stagingThreshold());
         assertEquals(3000, config.queryStagingThreshold());
         assertEquals(168, config.tmpMaxAgeHours());
         assertTrue(config.tmpCleanupEnabled());

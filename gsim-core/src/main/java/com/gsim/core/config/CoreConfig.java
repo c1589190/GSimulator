@@ -11,7 +11,6 @@ import java.util.Map;
  * （classpath 资源已删除，返回空值视图，{@code getInt} 落到调用方默认参数）。
  */
 public final class CoreConfig {
-    public static final String STAGING_THRESHOLD = "core.doc.staging.threshold";
     public static final String QUERY_STAGING_THRESHOLD = "core.doc.query.staging.threshold";
     private final Map<String, String> values;
     private final Map<String, String> defaults;

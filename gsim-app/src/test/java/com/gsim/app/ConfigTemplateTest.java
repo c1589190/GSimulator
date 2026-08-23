@@ -27,7 +27,7 @@ class ConfigTemplateTest {
         "mcp.response.default_page_size",
         "mcp.response.max_page_size",
         "mcp.response.overflow_staging.enabled",
-        "core.doc.staging.threshold",
+        "mcp.response.overflow_staging.threshold",
         "core.doc.query.staging.threshold",
         "core.doc.tmp.max_age_hours",
         "core.doc.tmp.cleanup_enabled",

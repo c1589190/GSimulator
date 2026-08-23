@@ -278,7 +278,7 @@ public class ConfigLoader {
             case "GSIM_MCP_RESPONSE_DEFAULT_PAGE_SIZE" -> "mcp.response.default_page_size";
             case "GSIM_MCP_RESPONSE_MAX_PAGE_SIZE" -> "mcp.response.max_page_size";
             case "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED" -> "mcp.response.overflow_staging.enabled";
-            case "GSIM_CORE_DOC_STAGING_THRESHOLD" -> "core.doc.staging.threshold";
+            case "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_THRESHOLD" -> "mcp.response.overflow_staging.threshold";
             case "GSIM_CORE_DOC_QUERY_STAGING_THRESHOLD" -> "core.doc.query.staging.threshold";
             case "GSIM_CORE_DOC_TMP_MAX_AGE_HOURS" -> "core.doc.tmp.max_age_hours";
             case "GSIM_CORE_DOC_TMP_CLEANUP_ENABLED" -> "core.doc.tmp.cleanup_enabled";
@@ -345,9 +345,9 @@ public class ConfigLoader {
         defaults.put("mcp.response.default_page_size", "20");
         defaults.put("mcp.response.max_page_size", "100");
         defaults.put("mcp.response.overflow_staging.enabled", "true");
+        defaults.put("mcp.response.overflow_staging.threshold", "500");
 
         // 文档暂存与临时目录清理
-        defaults.put("core.doc.staging.threshold", "500");
         defaults.put("core.doc.query.staging.threshold", "3000");
         defaults.put("core.doc.tmp.max_age_hours", "168");
         defaults.put("core.doc.tmp.cleanup_enabled", "true");

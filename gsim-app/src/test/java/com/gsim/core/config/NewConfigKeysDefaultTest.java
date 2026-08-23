@@ -26,7 +26,7 @@ class NewConfigKeysDefaultTest {
         EXPECTED_DEFAULTS.put("mcp.response.default_page_size", "20");
         EXPECTED_DEFAULTS.put("mcp.response.max_page_size", "100");
         EXPECTED_DEFAULTS.put("mcp.response.overflow_staging.enabled", "true");
-        EXPECTED_DEFAULTS.put("core.doc.staging.threshold", "500");
+        EXPECTED_DEFAULTS.put("mcp.response.overflow_staging.threshold", "500");
         EXPECTED_DEFAULTS.put("core.doc.query.staging.threshold", "3000");
         EXPECTED_DEFAULTS.put("core.doc.tmp.max_age_hours", "168");
         EXPECTED_DEFAULTS.put("core.doc.tmp.cleanup_enabled", "true");
@@ -64,7 +64,8 @@ class NewConfigKeysDefaultTest {
         EXPECTED_ENV_MAPPINGS.put("GSIM_MCP_RESPONSE_MAX_PAGE_SIZE", "mcp.response.max_page_size");
         EXPECTED_ENV_MAPPINGS.put(
                 "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED", "mcp.response.overflow_staging.enabled");
-        EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_STAGING_THRESHOLD", "core.doc.staging.threshold");
+        EXPECTED_ENV_MAPPINGS.put(
+                "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_THRESHOLD", "mcp.response.overflow_staging.threshold");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_QUERY_STAGING_THRESHOLD", "core.doc.query.staging.threshold");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_TMP_MAX_AGE_HOURS", "core.doc.tmp.max_age_hours");
         EXPECTED_ENV_MAPPINGS.put("GSIM_CORE_DOC_TMP_CLEANUP_ENABLED", "core.doc.tmp.cleanup_enabled");

@@ -159,7 +159,8 @@ rm -rf worlds/ caches/ logs/ llms.json && java -jar gsim-app/target/gsim-app-*.j
 | `api.enabled` | false | 是否启用 HTTP API |
 | `llm.default_provider` | base | 默认 LLM provider ID |
 | `agent.max_tool_rounds` | 64 | Agent ToolLoop 最大轮数 |
-| `core.doc.staging.threshold` | 500 | `write_element` 大文本暂存阈值（value 字符数超过即暂存） |
+| `mcp.response.overflow_staging.enabled` | true | MCP 响应超限自动暂存开关 |
+| `mcp.response.overflow_staging.threshold` | 500 | MCP 响应溢出暂存触发阈值（snippet 字符数超过即暂存为 TMP 文档） |
 | `core.doc.query.staging.threshold` | 3000 | `query_*` 返回元素暂存阈值（元素值字符数超过即暂存为 TMP 文档，返回 docId 供 `doc_read` 读取） |
 
 ### LLM Provider 配置
@@ -350,9 +351,9 @@ public interface AgentTool {
 | `world_list` | READ | 列出所有 World |
 | `world_create` | MUTATING | 创建新 World |
 
-**write_element 大文本暂存**：value 长度超过 `core.doc.staging.threshold`（默认 500 字符）时**不直接写入**，而是暂存为 TMP 文档（`docs/tmp/wstg_write_*.md`，DocType.TMP），返回暂存 docId 并引导二次提交 `write_element(value="@doc:\"wstg_write_xxx\"")` — 经 InlineRefResolver 展开全文后写入信息单元；引用无法解析时拒绝（`[@DOC_REF_FAILED]`）。
+**write_element 长度无限制**：value 全文直接写入信息单元，不做阈值暂存（写入多少取决于调用方输入）。value 支持 `@cache:id` 引用解析与 `@doc:"docId"` / `@import:"file"` 内嵌引用展开；引用无法解析时拒绝（`[@DOC_REF_FAILED]`）。
 
-**query 侧大文本暂存（DocStaging 共享机制）**：`query_element` 及 `query_checkpoint`/`query_node`/`query_by_tag`（detail=true）/`query_address`（tag 分支）返回的元素值超过 `core.doc.query.staging.threshold`（默认 3000 字符）时，不内联返回全文，而是暂存为 TMP 文档（`docs/tmp/wstg_query_*.md`）并在 snippet 返回暂存提示 + docId，调用方用 `doc_read(docId=...)` 读取全文；item.path 保持元素 ref 不变。内容去重：同前缀（`wstg_write_`/`wstg_query_` 各自独立）下 content 完全相同的文档复用同一 docId，不产生重复文件。暂存失败（IO/冲突）降级为内联返回原文。写入/暂存阈值均可在 `gsim.properties` 主链调整（`core.doc.staging.threshold` / `core.doc.query.staging.threshold`）。
+**query 侧大文本暂存（DocStaging 共享机制）**：`query_element` 及 `query_checkpoint`/`query_node`/`query_by_tag`（detail=true）/`query_address`（tag 分支）返回的元素值超过 `core.doc.query.staging.threshold`（默认 3000 字符）时，不内联返回全文，而是暂存为 TMP 文档（`docs/tmp/wstg_query_*.md`）并在 snippet 返回暂存提示 + docId，调用方用 `doc_read(docId=...)` 读取全文；item.path 保持元素 ref 不变。内容去重：同前缀下 content 完全相同的文档复用同一 docId，不产生重复文件。暂存失败（IO/冲突）降级为内联返回原文。查询暂存阈值可在 `gsim.properties` 主链调整（`core.doc.query.staging.threshold`）。
 
 ## 缓存系统（Cache）
 
