@@ -95,7 +95,22 @@ public class CreateSubAgentConfigTool implements AgentTool {
                         "max_tool_rounds",
                                 Map.of(
                                         "type", "integer",
-                                        "description", "最大工具调用轮数。默认 259。")),
+                                        "description", "最大工具调用轮数。默认 259。"),
+                        "query_scope_match",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）查询范围组合模式: \"and\"（tag 与地址都须满足）、\"or\"（满足其一）。传空字符串或其它值则不启用限制。"),
+                        "query_tag_allowlist",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）允许查询的 tag 白名单，JSON 字符串数组（如 [\"军事\",\"外交\"]）或逗号分隔。不提供则不限制 tag。"),
+                        "query_address_allowlist",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）允许查询的地址白名单（nodeId:checkpointId:key），JSON 字符串数组或逗号分隔。不提供则不限制地址。")),
                 List.of("agent_id", "llm_provider", "system_prompt"));
     }
 
@@ -108,6 +123,9 @@ public class CreateSubAgentConfigTool implements AgentTool {
         double temperature = parseDouble(call.param("temperature", "0.3"), 0.3);
         int maxTokens = parseInt(call.param("max_tokens", "2048"), 2048);
         int maxToolRounds = parseInt(call.param("max_tool_rounds", "259"), 259);
+        String queryScopeMatch = call.param("query_scope_match", "").trim();
+        String queryTagAllowlist = call.param("query_tag_allowlist", "").trim();
+        String queryAddressAllowlist = call.param("query_address_allowlist", "").trim();
 
         // 参数校验
         if (agentId.isEmpty()) {
@@ -128,6 +146,9 @@ public class CreateSubAgentConfigTool implements AgentTool {
         }
         if (!VALID_TOOL_FILTERS.contains(toolFilter)) {
             return ToolResult.fail(NAME, "tool_filter 无效: '" + toolFilter + "'。可选: all, read_only, custom, none");
+        }
+        if (!queryScopeMatch.isEmpty() && !"and".equals(queryScopeMatch) && !"or".equals(queryScopeMatch)) {
+            return ToolResult.fail(NAME, "query_scope_match 无效: '" + queryScopeMatch + "'。仅支持: and, or（或留空不启用）");
         }
 
         try {
@@ -150,6 +171,13 @@ public class CreateSubAgentConfigTool implements AgentTool {
             config.put("maxToolRounds", maxToolRounds);
             config.put("temperature", temperature);
             config.put("maxTokens", maxTokens);
+            if (!queryScopeMatch.isEmpty() || !queryTagAllowlist.isEmpty() || !queryAddressAllowlist.isEmpty()) {
+                Map<String, Object> scope = new LinkedHashMap<>();
+                scope.put("match", queryScopeMatch);
+                scope.put("tagAllowlist", parseList(queryTagAllowlist));
+                scope.put("addressAllowlist", parseList(queryAddressAllowlist));
+                config.put("queryScope", scope);
+            }
             // 不包含 systemPromptTemplate, systemPrompt, userTemplate
 
             String json = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(config);
@@ -199,6 +227,31 @@ public class CreateSubAgentConfigTool implements AgentTool {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    private static java.util.List<String> parseList(String raw) {
+        if (raw == null) return List.of();
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) return List.of();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                Object parsed = MAPPER.readValue(trimmed, Object.class);
+                if (parsed instanceof java.util.Collection<?> c) {
+                    java.util.List<String> result = new java.util.ArrayList<>();
+                    for (Object o : c) {
+                        if (o != null) result.add(String.valueOf(o));
+                    }
+                    return result;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        java.util.List<String> result = new java.util.ArrayList<>();
+        for (String part : trimmed.split(",")) {
+            String cleaned = part.trim();
+            if (!cleaned.isEmpty()) result.add(cleaned);
+        }
+        return result;
     }
 
     @Override

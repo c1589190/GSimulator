@@ -54,20 +54,22 @@ public class ListAgentConfigTool implements AgentTool {
         }
 
         StringBuilder sb = new StringBuilder("## Agent 配置列表\n\n");
-        sb.append("| # | configId | llmProvider | 工具模式 | maxRounds | temperature | maxTokens |\n");
-        sb.append("|---|----------|-------------|----------|-----------|-------------|-----------|\n");
+        sb.append("| # | configId | llmProvider | 工具模式 | maxRounds | temperature | maxTokens | queryScope |\n");
+        sb.append("|---|----------|-------------|----------|-----------|-------------|-----------|------------|\n");
         int idx = 1;
         for (AgentConfig cfg : all.values()) {
             String toolMode = cfg.toolFilter() != null ? cfg.toolFilter().mode() : "all";
+            String scopeDesc = cfg.queryScope() != null ? cfg.queryScope().toSafeString() : "未配置";
             sb.append(String.format(
-                    "| %d | `%s` | %s | %s | %d | %.1f | %d |\n",
+                    "| %d | `%s` | %s | %s | %d | %.1f | %d | %s |\n",
                     idx++,
                     cfg.agentId(),
                     cfg.llmProvider() != null ? cfg.llmProvider() : "base",
                     toolMode,
                     cfg.maxToolRounds(),
                     cfg.temperature(),
-                    cfg.maxTokens()));
+                    cfg.maxTokens(),
+                    scopeDesc));
         }
 
         return ToolResult.ok(NAME, List.of(new ToolResult.Item("config_list", NAME, sb.toString(), 1.0)));

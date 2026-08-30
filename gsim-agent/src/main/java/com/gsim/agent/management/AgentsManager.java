@@ -53,6 +53,7 @@ public class AgentsManager {
     private final AgentProgressSink rootSink;
     private final EventBus eventBus;
     private final String model;
+    private final AbstractAgent.ToolResultPolicy resultPolicy;
 
     private final AtomicInteger counter = new AtomicInteger(0);
     private final Map<String, AgentInstance> instances = new ConcurrentHashMap<>();
@@ -77,7 +78,8 @@ public class AgentsManager {
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             EventBus eventBus,
-            String model) {
+            String model,
+            AbstractAgent.ToolResultPolicy resultPolicy) {
         this.configStore = configStore;
         this.cacheStore = cacheStore;
         this.llmRegistry = llmRegistry;
@@ -85,6 +87,7 @@ public class AgentsManager {
         this.rootSink = rootSink;
         this.eventBus = eventBus;
         this.model = model;
+        this.resultPolicy = resultPolicy;
     }
 
     // ══════════════════════════════════════════
@@ -145,7 +148,7 @@ public class AgentsManager {
         }
 
         LlmProvider provider = llmRegistry.get(config.llmProvider());
-        AbstractAgent agent = new AbstractAgent(config, (LlmManager) provider, allTools, rootSink, model);
+        AbstractAgent agent = new AbstractAgent(config, (LlmManager) provider, allTools, rootSink, model, resultPolicy);
         agent.setAgentId(instanceId);
         agent.setMessageSaver(msg -> cacheStore.appendMessage(resolvedCacheId, msg.toCacheMap()));
 

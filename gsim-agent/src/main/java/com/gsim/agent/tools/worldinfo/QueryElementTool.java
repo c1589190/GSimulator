@@ -146,6 +146,16 @@ public final class QueryElementTool implements AgentTool {
         List<ToolResult.Item> items = new ArrayList<>();
         String unifiedId = nodeId + ":" + checkpointId + ":" + key;
 
+        // Query scope gate: deny access to elements outside the agent's allowed range
+        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        if (!scope.allows(nodeId, checkpointId, key, found.tags())) {
+            if (com.gsim.agent.QueryScope.isInternal(found.tags())) {
+                return ToolResult.fail(name(), "元素 '" + unifiedId + "' 为 internal 数据，禁止查询");
+            }
+            return ToolResult.fail(name(), "元素 '" + unifiedId + "' 不在当前 Agent 的查询权限范围内（queryScope 限制）");
+        }
+
         // Main result
         String value = found.value();
         int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
@@ -170,9 +180,17 @@ public final class QueryElementTool implements AgentTool {
                 try {
                     ElementRef resolved = resolveRef(wi, link, nodeId);
                     if (resolved != null) {
-                        String snippet = resolved.element().value();
-                        if (snippet.length() > 80) snippet = snippet.substring(0, 80) + "...";
-                        linkPreview.append("  → ").append(snippet.replace("\n", " "));
+                        if (!scope.allows(
+                                resolved.nodeId(),
+                                resolved.checkpointId(),
+                                resolved.element().key(),
+                                resolved.element().tags())) {
+                            linkPreview.append("  → (out of scope)");
+                        } else {
+                            String snippet = resolved.element().value();
+                            if (snippet.length() > 80) snippet = snippet.substring(0, 80) + "...";
+                            linkPreview.append("  → ").append(snippet.replace("\n", " "));
+                        }
                     } else {
                         // Fallback: route through query_address for cross-module addresses
                         String fallback = resolveViaAddressRouter(link);

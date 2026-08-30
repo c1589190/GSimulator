@@ -108,8 +108,6 @@ public class MapWebUIHandler implements HttpHandler {
                 handleNodes(exchange, sub);
             } else if (sub.endsWith("/pathway-groups")) {
                 handlePathwayGroups(exchange, sub, params);
-            } else if (sub.endsWith("/river-path")) {
-                handleRiverPath(exchange, sub, params);
             } else if (sub.endsWith("/generate")) {
                 handleGenerate(exchange, sub, params);
             } else if (sub.contains("/contour")) {
@@ -410,17 +408,6 @@ public class MapWebUIHandler implements HttpHandler {
             log.error("Decompress-at failed", e);
             sendError(exchange, 500, "Decompress failed: " + e.getMessage());
         }
-    }
-
-    // ── GET /api/map/{worldId}/river-path?q=&r=&node= ────
-
-    private void handleRiverPath(HttpExchange exchange, String sub, Map<String, String> params) throws IOException {
-        String worldId = sub.substring(1, sub.indexOf("/river-path"));
-        String nodeId = params.get("node");
-        int q = Integer.parseInt(params.getOrDefault("q", "0"));
-        int r = Integer.parseInt(params.getOrDefault("r", "0"));
-        List<String> path = mapService.findRiverPath(worldId, nodeId, q, r);
-        sendJson(exchange, 200, Map.of("source", Map.of("q", q, "r", r), "path", path, "length", path.size()));
     }
 
     // ── POST /api/map/{worldId}/generate ─────────────────

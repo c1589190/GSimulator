@@ -42,6 +42,22 @@ class LlmConfigTimeoutTest {
         assertTrue(pc.supportsForcedToolChoice());
     }
 
+    @Test
+    @DisplayName("DeepSeek reasoning 模型即使 thinking=null 也视为 hasNativeReasoning")
+    void deepSeekModelIsReasoningEvenWithoutThinkingConfig() {
+        LlmConfig cfg = new LlmConfig(
+                "v4", "DeepSeek v4", "https://api.deepseek.com", "key", "deepseek-v4-pro", 1.0, 8192, null, null, true);
+        assertTrue(cfg.toProviderConfig(120).hasNativeReasoning());
+    }
+
+    @Test
+    @DisplayName("非 DeepSeek 模型且 thinking=null 不视为 hasNativeReasoning")
+    void plainModelNotReasoningWhenNoThinkingConfig() {
+        LlmConfig cfg = new LlmConfig(
+                "plain", "Plain", "https://api.example.com", "key", "gpt-4o", 0.3, 4096, null, null, true);
+        assertFalse(cfg.toProviderConfig(120).hasNativeReasoning());
+    }
+
     private static LlmConfig sampleConfig() {
         return new LlmConfig(
                 "test",

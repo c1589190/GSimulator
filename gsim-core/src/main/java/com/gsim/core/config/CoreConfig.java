@@ -12,6 +12,7 @@ import java.util.Map;
  */
 public final class CoreConfig {
     public static final String QUERY_STAGING_THRESHOLD = "core.doc.query.staging.threshold";
+    public static final String CACHE_STAGING_THRESHOLD = "agent.subagent.cache.staging.threshold";
     private final Map<String, String> values;
     private final Map<String, String> defaults;
 

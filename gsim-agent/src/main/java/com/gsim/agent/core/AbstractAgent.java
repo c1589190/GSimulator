@@ -3,6 +3,7 @@ package com.gsim.agent.core;
 import com.gsim.agent.AgentConfig;
 import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
 import com.gsim.agent.ParsedToolCall;
+import com.gsim.agent.QueryScopeContext;
 import com.gsim.agent.ToolCallExtractor;
 import com.gsim.agent.ToolFilterEvaluator;
 import com.gsim.agent.tools.worldinfo.DocStaging;
@@ -319,7 +320,13 @@ public class AbstractAgent {
                             AgentProgressEvent.toolSelected(toolRound, maxRounds, parsed.tool(), paramsSummary));
 
                     ToolCall call = new ToolCall(parsed.tool(), parsed.args());
-                    ToolResult result = allTools.call(call);
+                    QueryScopeContext.set(config.queryScope());
+                    ToolResult result;
+                    try {
+                        result = allTools.call(call);
+                    } finally {
+                        QueryScopeContext.clear();
+                    }
                     roundToolCalls.add(new ToolCallRecord(parsed.tool(), parsed.args(), result));
 
                     // 进度事件

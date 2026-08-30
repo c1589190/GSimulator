@@ -1,5 +1,7 @@
 package com.gsim.agent.tools.search;
 
+import com.gsim.agent.QueryScope;
+import com.gsim.agent.QueryScopeContext;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
@@ -39,6 +41,9 @@ final class WorldSearchSource {
         WorldInformation wi = ctx.wiSupplier().get();
         List<NodeSnapshot> nodes = branchUpTo(wi, effectiveNodeId);
 
+        QueryScope scope = QueryScopeContext.get();
+        if (scope == null) scope = QueryScope.none();
+
         List<SearchEntry> entries = new ArrayList<>();
         for (NodeSnapshot node : nodes) {
             for (Map.Entry<String, Checkpoint> cpEntry : node.checkpoints().entrySet()) {
@@ -49,6 +54,9 @@ final class WorldSearchSource {
                 }
                 Checkpoint checkpoint = cpEntry.getValue();
                 for (Element element : checkpoint.elements()) {
+                    if (!scope.allows(node.nodeId(), cpEntry.getKey(), element.key(), element.tags())) {
+                        continue;
+                    }
                     String text = element.value() + " " + String.join(" ", element.tags());
                     String key = node.nodeId() + ":" + cpEntry.getKey() + ":" + element.key();
                     entries.add(new SearchEntry(text, key, node.turn()));

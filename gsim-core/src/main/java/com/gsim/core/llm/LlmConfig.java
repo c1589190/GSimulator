@@ -65,6 +65,7 @@ public record LlmConfig(
      * @param timeoutSeconds LLM 请求超时（秒），由调用方从配置（llm.timeout_seconds）传入
      */
     public ProviderConfig toProviderConfig(int timeoutSeconds) {
+        boolean reasoning = thinking != null || isReasoningModel(model);
         return new ProviderConfig(
                 name,
                 baseUrl,
@@ -73,9 +74,16 @@ public record LlmConfig(
                 defaultTemperature,
                 timeoutSeconds,
                 true, // supportsForcedToolChoice
-                thinking != null, // hasNativeReasoning (heuristic: if thinking config present, provider may support it)
+                reasoning, // hasNativeReasoning: config thinking 字段或 reasoning 模型名判定
                 extraBody,
                 thinking);
+    }
+
+    /** DeepSeek v4 系列等原生返回 reasoning_content 的模型，即使未配 thinking 也视为思考模式。 */
+    private static boolean isReasoningModel(String model) {
+        if (model == null) return false;
+        String m = model.toLowerCase(java.util.Locale.ROOT);
+        return m.contains("deepseek-v4") || m.contains("deepseek-r1") || m.contains("deepseek-reasoner");
     }
 
     /**

@@ -51,7 +51,8 @@ public class UpdateSubAgentConfigTool implements AgentTool {
         return "更新一个已有 SubAgent 的配置。仅修改调用中显式提供的字段，"
                 + "未提供的字段保持原值不变。修改后在下次 dispatch 时生效。"
                 + "可更新字段：system_prompt（核心指令文本）、temperature、max_tokens、"
-                + "max_tool_rounds、tool_filter、llm_provider。";
+                + "max_tool_rounds、tool_filter、llm_provider、query_scope_match、"
+                + "query_tag_allowlist、query_address_allowlist。";
     }
 
     @Override
@@ -87,7 +88,22 @@ public class UpdateSubAgentConfigTool implements AgentTool {
                         "llm_provider",
                                 Map.of(
                                         "type", "string",
-                                        "description", "（可选）LLM provider ID（对应 llms.json 中的 id）。不提供则不修改。")),
+                                        "description", "（可选）LLM provider ID（对应 llms.json 中的 id）。不提供则不修改。"),
+                        "query_scope_match",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）查询范围组合模式: \"and\"（tag 与地址都须满足）、\"or\"（满足其一）。传空字符串或其它值则移除限制（全放行）。不提供则不修改。"),
+                        "query_tag_allowlist",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）允许查询的 tag 白名单，JSON 字符串数组（如 [\"军事\",\"外交\"]）或逗号分隔。传空字符串/[] 则清空。不提供则不修改。"),
+                        "query_address_allowlist",
+                                Map.of(
+                                        "type", "string",
+                                        "description",
+                                                "（可选）允许查询的地址白名单（nodeId:checkpointId:key），JSON 字符串数组或逗号分隔。传空字符串/[] 则清空。不提供则不修改。")),
                 List.of("agent_id"));
     }
 
@@ -100,6 +116,9 @@ public class UpdateSubAgentConfigTool implements AgentTool {
         String maxTokensStr = call.param("max_tokens", "").trim();
         String maxToolRoundsStr = call.param("max_tool_rounds", "").trim();
         String llmProvider = call.param("llm_provider", "").trim();
+        String queryScopeMatch = call.param("query_scope_match", "").trim();
+        String queryTagAllowlist = call.param("query_tag_allowlist", "").trim();
+        String queryAddressAllowlist = call.param("query_address_allowlist", "").trim();
 
         // 参数校验
         if (agentId.isEmpty()) {
@@ -150,10 +169,13 @@ public class UpdateSubAgentConfigTool implements AgentTool {
                 && temperatureStr.isEmpty()
                 && maxTokensStr.isEmpty()
                 && maxToolRoundsStr.isEmpty()
-                && llmProvider.isEmpty()) {
+                && llmProvider.isEmpty()
+                && queryScopeMatch.isEmpty()
+                && queryTagAllowlist.isEmpty()
+                && queryAddressAllowlist.isEmpty()) {
             return ToolResult.fail(
                     NAME,
-                    "至少需要提供一个要更新的字段。可选: system_prompt, tool_filter, temperature, max_tokens, max_tool_rounds, llm_provider");
+                    "至少需要提供一个要更新的字段。可选: system_prompt, tool_filter, temperature, max_tokens, max_tool_rounds, llm_provider, query_scope_match, query_tag_allowlist, query_address_allowlist");
         }
 
         try {
@@ -203,6 +225,38 @@ public class UpdateSubAgentConfigTool implements AgentTool {
                         config.containsKey("maxToolRounds") ? ((Number) config.get("maxToolRounds")).intValue() : 259;
                 config.put("maxToolRounds", newMr);
                 changes.put("max_tool_rounds", oldMr + " → " + newMr);
+            }
+            if (!queryScopeMatch.isEmpty() || !queryTagAllowlist.isEmpty() || !queryAddressAllowlist.isEmpty()) {
+                Object existingScope = config.get("queryScope");
+                Map<String, Object> scope = new LinkedHashMap<>();
+                if (existingScope instanceof Map<?, ?> m) {
+                    for (var e : m.entrySet()) {
+                        scope.put(String.valueOf(e.getKey()), e.getValue());
+                    }
+                }
+                if (!queryScopeMatch.isEmpty()) {
+                    scope.put("match", queryScopeMatch);
+                }
+                if (!queryTagAllowlist.isEmpty()) {
+                    scope.put("tagAllowlist", parseListParam(queryTagAllowlist));
+                }
+                if (!queryAddressAllowlist.isEmpty()) {
+                    scope.put("addressAllowlist", parseListParam(queryAddressAllowlist));
+                }
+                String matchVal = scope.get("match") instanceof String s ? s : "";
+                java.util.List<?> tags = scope.get("tagAllowlist") instanceof java.util.List<?> l ? l : List.of();
+                java.util.List<?> addrs = scope.get("addressAllowlist") instanceof java.util.List<?> l ? l : List.of();
+                boolean scopeEnabled =
+                        ("and".equals(matchVal) || "or".equals(matchVal)) && (!tags.isEmpty() || !addrs.isEmpty());
+                if (scopeEnabled) {
+                    config.put("queryScope", scope);
+                    changes.put(
+                            "query_scope",
+                            "match=" + matchVal + ", tags=" + tags.size() + ", addresses=" + addrs.size());
+                } else if (config.containsKey("queryScope")) {
+                    config.remove("queryScope");
+                    changes.put("query_scope", "已移除（不限）");
+                }
             }
 
             // 写回文件（原子写入：temp → validate → move → reload）
@@ -265,6 +319,32 @@ public class UpdateSubAgentConfigTool implements AgentTool {
         if (s == null) return "(null)";
         if (s.length() <= 60) return s;
         return s.substring(0, 57) + "...";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<String> parseListParam(String raw) {
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) return List.of();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                Object parsed = MAPPER.readValue(trimmed, Object.class);
+                if (parsed instanceof java.util.Collection<?> c) {
+                    java.util.List<String> result = new java.util.ArrayList<>();
+                    for (Object o : c) {
+                        if (o != null) result.add(String.valueOf(o));
+                    }
+                    return result;
+                }
+            } catch (Exception ignored) {
+                // fall through to comma-split
+            }
+        }
+        java.util.List<String> result = new java.util.ArrayList<>();
+        for (String part : trimmed.split(",")) {
+            String cleaned = part.trim();
+            if (!cleaned.isEmpty()) result.add(cleaned);
+        }
+        return result;
     }
 
     private static double parseDouble(String s, double def) {

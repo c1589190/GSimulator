@@ -28,6 +28,7 @@ import java.util.Map;
  * @param maxPermission             SubAgent 最大权限等级（null = 不限制，默认 READ）
  * @param allowList                 SubAgent 白名单工具，始终放行（null/empty = 无白名单）
  * @param defaultActiveToolGroups   创建时默认激活的工具组 key 列表
+ * @param queryScope                查询范围限制（null = 不限制），按 tag/地址白名单约束查询工具
  */
 public record AgentConfig(
         String agentId,
@@ -41,7 +42,8 @@ public record AgentConfig(
         int maxTokens,
         AgentTool.Permission maxPermission,
         java.util.List<String> allowList,
-        java.util.List<String> defaultActiveToolGroups) {
+        java.util.List<String> defaultActiveToolGroups,
+        QueryScope queryScope) {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** 默认主 Agent 配置 */
@@ -58,7 +60,8 @@ public record AgentConfig(
                 2048,
                 null,
                 null,
-                java.util.List.of());
+                java.util.List.of(),
+                null);
     }
 
     // ---- 兼容工厂方法 ----
@@ -84,7 +87,8 @@ public record AgentConfig(
                 maxTokens,
                 null,
                 null,
-                java.util.List.of());
+                java.util.List.of(),
+                null);
     }
 
     // ---- 加载方法 ----
@@ -170,6 +174,30 @@ public record AgentConfig(
                 }
                 : java.util.List.<String>of();
 
+        // queryScope: { match, tagAllowlist, addressAllowlist }
+        QueryScope queryScope = null;
+        JsonNode qsNode = node.path("queryScope");
+        if (qsNode.isObject() && !qsNode.isEmpty()) {
+            String qsMatch = qsNode.path("match").asText("");
+            var qsTags = qsNode.path("tagAllowlist");
+            var qsAddrs = qsNode.path("addressAllowlist");
+            java.util.List<String> tags = qsTags.isArray()
+                    ? new java.util.ArrayList<String>() {
+                        {
+                            for (var n : qsTags) add(n.asText());
+                        }
+                    }
+                    : java.util.List.<String>of();
+            java.util.List<String> addrs = qsAddrs.isArray()
+                    ? new java.util.ArrayList<String>() {
+                        {
+                            for (var n : qsAddrs) add(n.asText());
+                        }
+                    }
+                    : java.util.List.<String>of();
+            queryScope = new QueryScope(qsMatch, tags, addrs);
+        }
+
         return new AgentConfig(
                 agentId,
                 llmProvider,
@@ -182,7 +210,8 @@ public record AgentConfig(
                 maxTok,
                 maxPerm,
                 allowList,
-                defaultActiveToolGroups);
+                defaultActiveToolGroups,
+                queryScope);
     }
 
     // ---- 工具方法 ----

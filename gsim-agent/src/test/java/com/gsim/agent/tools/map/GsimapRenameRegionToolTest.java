@@ -101,10 +101,7 @@ class GsimapRenameRegionToolTest {
         Path importDir = tmpDir.resolve("import");
         Files.createDirectories(importDir);
         return new WriteElementTool(
-                () -> wi,
-                tmpDir,
-                null,
-                new InlineRefResolver(docStore, new ImportDocumentService(importDir)));
+                () -> wi, tmpDir, null, new InlineRefResolver(docStore, new ImportDocumentService(importDir)));
     }
 
     private void writeElement(String nodeId, String key, String value, String links) throws IOException {

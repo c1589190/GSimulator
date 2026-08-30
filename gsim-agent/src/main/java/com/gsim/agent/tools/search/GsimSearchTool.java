@@ -11,6 +11,9 @@ import com.gsim.core.search.GenericSearchEngine;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.search.SearchHit;
 import com.gsim.core.search.SearchOptions;
+import com.gsim.core.worldinfo.Checkpoint;
+import com.gsim.core.worldinfo.Element;
+import com.gsim.core.worldinfo.NodeSnapshot;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -174,6 +177,15 @@ public final class GsimSearchTool implements AgentTool {
             ResolverContext rctx =
                     ResolverContext.of(ctx.worldsDir(), worldId, ctx.importDir(), ctx.docStore(), ctx.cacheDir());
             ResolvedRef ref = registry.resolve(query, rctx);
+            // 世界元素地址：应用 scope gate（含 internal 硬规则）。
+            // 其他源（doc/cache/import/gsimap）不适用元素级 tag 门控。
+            if ("world".equals(ref.source())) {
+                com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
+                if (scope == null) scope = com.gsim.agent.QueryScope.none();
+                if (!isWorldRefAllowed(scope, ref.id())) {
+                    return ToolResult.fail(name(), "地址 '" + query + "' 不在当前 Agent 的查询权限范围内");
+                }
+            }
             String snippet = ref.title() != null ? ref.title() : "";
             if (ref.content() != null && !ref.content().isBlank()) {
                 String preview = ref.content().length() > SNIPPET_CONTENT_MAX
@@ -186,6 +198,31 @@ public final class GsimSearchTool implements AgentTool {
             // 未知引用（IllegalArgumentException）/上下文缺失（IllegalStateException/NPE）→ 关键词模式兜底
             return null;
         }
+    }
+
+    /**
+     * 世界元素地址（{@code ref.id()} 形如 {@code nodeId:cpId:key}）的 scope 判定。
+     *
+     * <p>地址模式经 {@link ResolverRegistry} 解析返回的 {@link ResolvedRef}
+     * 只含 content，不含元素 {@code tags}。要应用 internal 硬规则与 tag 白名单，
+     * 需回溯到源元素取 tags。解析失败时保守放行（保持地址模式既有行为）。
+     */
+    private boolean isWorldRefAllowed(com.gsim.agent.QueryScope scope, String worldRefId) {
+        String[] parts = worldRefId.split(":", 3);
+        if (parts.length != 3) return true;
+        String nodeId = parts[0], cpId = parts[1], key = parts[2];
+        var wi = ctx.wiSupplier() != null ? ctx.wiSupplier().get() : null;
+        if (wi == null) return true;
+        NodeSnapshot node = wi.nodeById(nodeId);
+        if (node == null) return true;
+        Checkpoint cp = node.checkpoint(cpId);
+        if (cp == null) return true;
+        for (Element el : cp.elements()) {
+            if (key.equals(el.key())) {
+                return scope.allows(nodeId, cpId, key, el.tags());
+            }
+        }
+        return true;
     }
 
     /**

@@ -740,116 +740,92 @@ public class MapService {
         return result;
     }
 
-    // ── Pathfinding ────────────────────────────────────────
+    // ── Pathway connectivity trace ─────────────────────────
 
     /**
-     * Find the minimum-cost path from a source hex to the nearest water hex (or map edge).
-     * Uses Dijkstra with terrain moveCost as edge weight.
-     * Falls back to A* with hex-distance heuristic to water.
+     * Trace the connectivity chains of a pathway type across the whole map.
+     *
+     * <p>Builds an undirected graph from every edge tagged with {@code type},
+     * then decomposes it into simple chains. A chain is a maximal sequence of
+     * nodes connected through degree-2 interior nodes; a chain is cut at each
+     * branch point (a node whose degree for this type is &gt;= 3) and stops at
+     * endpoints (degree != 2). Fully-closed cycles (every node degree 2) are
+     * emitted as a chain that ends where it starts.
+     *
      * @param worldId the world identifier
-     * @param nodeId the node identifier
-     * @param fromQ starting hex axial q coordinate
-     * @param fromR starting hex axial r coordinate
-     * @return list of hex keys forming the path to the nearest water hex, or empty list if none found
+     * @param type    the pathway group id to trace (e.g. "river", "road")
+     * @return list of chains; each chain is an ordered list of {@code q_r} hex keys
      */
-    public List<String> findRiverPath(String worldId, String nodeId, int fromQ, int fromR) {
-        MapData map = resolve(worldId, nodeId != null ? nodeId : "n0000");
-        String startKey = MapData.hexKey(fromQ, fromR);
-        log.info(
-                "findRiverPath: world={} node={} start={} hexes={}",
-                worldId,
-                nodeId,
-                startKey,
-                map.hexes().size());
+    public List<List<String>> tracePathway(String worldId, String type) {
+        MapData map = resolveActive(worldId);
+        if (map == null || type == null || type.isBlank()) return List.of();
+        return traceChains(map, type);
+    }
 
-        // Priority queue: [fCost, gCost, q, r]
-        var pq = new java.util.PriorityQueue<int[]>(java.util.Comparator.comparingInt(a -> a[0]));
-        var cameFrom = new java.util.HashMap<String, String>();
-        var gCost = new java.util.HashMap<String, Integer>();
-        gCost.put(startKey, 0);
+    static List<List<String>> traceChains(MapData map, String type) {
+        Map<String, Set<String>> adj = new LinkedHashMap<>();
+        for (var entry : map.edges().entrySet()) {
+            if (!entry.getValue().containsKey(type)) continue;
+            int[] c = MapData.parseEdgeKey(entry.getKey());
+            String a = MapData.hexKey(c[0], c[1]);
+            String b = MapData.hexKey(c[2], c[3]);
+            adj.computeIfAbsent(a, k -> new LinkedHashSet<>()).add(b);
+            adj.computeIfAbsent(b, k -> new LinkedHashSet<>()).add(a);
+        }
+        if (adj.isEmpty()) return List.of();
 
-        // A* heuristic: estimated distance to nearest water
-        int h = estimateWaterDistance(map, fromQ, fromR);
-        pq.add(new int[] {h, 0, fromQ, fromR});
+        Set<String> usedEdges = new HashSet<>();
+        List<List<String>> chains = new ArrayList<>();
 
-        int[][] dirs = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
-        String targetKey = null;
-        int iter = 0;
-        int maxIter = 5000;
-
-        while (!pq.isEmpty() && iter++ < maxIter) {
-            int[] cur = pq.poll();
-            int g = cur[1];
-            int q = cur[2];
-            int r = cur[3];
-            String curKey = MapData.hexKey(q, r);
-
-            if (g > gCost.getOrDefault(curKey, Integer.MAX_VALUE)) continue;
-
-            // Check if this is water (goal)
-            MapData.HexCell cell = map.hexes().get(curKey);
-            if (cell != null && "water".equals(cell.terrain())) {
-                targetKey = curKey;
-                break;
-            }
-
-            for (int[] d : dirs) {
-                int nq = q + d[0];
-                int nr = r + d[1];
-                String nk = MapData.hexKey(nq, nr);
-                MapData.HexCell nc = map.hexes().get(nk);
-                if (nc == null) continue; // don't expand into void
-                int moveCost = map.terrainTypes().containsKey(nc.terrain())
-                        ? map.terrainTypes().get(nc.terrain()).moveCost()
-                        : 2;
-                int ng = g + moveCost;
-                if (ng < gCost.getOrDefault(nk, Integer.MAX_VALUE)) {
-                    gCost.put(nk, ng);
-                    cameFrom.put(nk, curKey);
-                    int nh = estimateWaterDistance(map, nq, nr);
-                    pq.add(new int[] {ng + nh, ng, nq, nr});
+        for (String node : adj.keySet()) {
+            int deg = adj.get(node).size();
+            if (deg == 2) continue;
+            for (String nb : adj.get(node)) {
+                if (usedEdges.add(undirectedKey(node, nb))) {
+                    chains.add(traceChain(adj, usedEdges, node, nb));
                 }
             }
         }
 
-        if (targetKey == null) {
-            log.warn("findRiverPath: no path found from {}", startKey);
-            return List.of();
+        for (String node : adj.keySet()) {
+            for (String nb : adj.get(node)) {
+                if (usedEdges.add(undirectedKey(node, nb))) {
+                    chains.add(traceChain(adj, usedEdges, node, nb));
+                }
+            }
         }
+        return chains;
+    }
 
-        log.info("findRiverPath: found target={} after {} iters", targetKey, iter);
-
-        // Reconstruct path
-        var path = new java.util.ArrayList<String>();
-        String k = targetKey;
-        while (k != null) {
-            path.add(k);
-            k = cameFrom.get(k);
+    private static List<String> traceChain(
+            Map<String, Set<String>> adj, Set<String> usedEdges, String start, String through) {
+        List<String> path = new ArrayList<>();
+        path.add(start);
+        path.add(through);
+        String prev = start;
+        String cur = through;
+        while (!cur.equals(start)) {
+            int deg = adj.getOrDefault(cur, Set.of()).size();
+            if (deg != 2) break;
+            String next = null;
+            for (String cand : adj.get(cur)) {
+                if (cand.equals(prev)) continue;
+                if (!usedEdges.contains(undirectedKey(cur, cand))) {
+                    next = cand;
+                    break;
+                }
+            }
+            if (next == null) break;
+            usedEdges.add(undirectedKey(cur, next));
+            path.add(next);
+            prev = cur;
+            cur = next;
         }
-        java.util.Collections.reverse(path);
         return path;
     }
 
-    private int estimateWaterDistance(MapData map, int q, int r) {
-        // Spiral ring search for nearest water hex (capped at 20)
-        int maxR = 20;
-        int[][] dirs = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
-        for (int radius = 1; radius <= maxR; radius++) {
-            // Start at NW corner of the ring (direction 4)
-            int cq = q + dirs[4][0] * radius;
-            int cr = r + dirs[4][1] * radius;
-            for (int d = 0; d < 6; d++) {
-                for (int step = 0; step < radius; step++) {
-                    String key = MapData.hexKey(cq, cr);
-                    MapData.HexCell cell = map.hexes().get(key);
-                    if (cell == null) return radius;
-                    if ("water".equals(cell.terrain())) return radius;
-                    cq += dirs[d][0];
-                    cr += dirs[d][1];
-                }
-            }
-        }
-        return maxR;
+    private static String undirectedKey(String a, String b) {
+        return a.compareTo(b) <= 0 ? a + "|" + b : b + "|" + a;
     }
 
     // ── Contour ────────────────────────────────────────────

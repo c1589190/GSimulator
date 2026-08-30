@@ -31,7 +31,7 @@ public final class GsimapToolRegistrar {
         registry.register(new GsimapQueryRadiusTool(mapService));
         registry.register(new GsimapRenderTextTool(mapService));
         registry.register(new GsimapGetCitiesTool(mapService));
-        registry.register(new GsimapFindRiverPathTool(mapService));
+        registry.register(new GsimapEdgeTraceTool(mapService));
         registry.register(new GsimapListRegionsTool(mapService));
         registry.register(new GsimapGetDistanceTool(mapService));
 

@@ -213,7 +213,9 @@ public class GSimulatorApplication {
         this.coreConfig = com.gsim.core.config.CoreConfig.from(
                 java.util.Map.of(
                         com.gsim.core.config.CoreConfig.QUERY_STAGING_THRESHOLD,
-                        String.valueOf(config.queryStagingThreshold())),
+                        String.valueOf(config.queryStagingThreshold()),
+                        com.gsim.core.config.CoreConfig.CACHE_STAGING_THRESHOLD,
+                        String.valueOf(config.cacheStagingThreshold())),
                 java.util.Map.of());
         this.inlineRefResolver = new com.gsim.core.ref.InlineRefResolver(docStore, importDocService);
 
@@ -396,7 +398,8 @@ public class GSimulatorApplication {
                 toolRegistry,
                 compositeSink,
                 ctx.getEventBus(),
-                config.getLlmModel());
+                config.getLlmModel(),
+                agentResultPolicy);
         log.info("Agent management layer initialized (Store + Manager)");
         this.orchestrator.registerSubAgentTools(toolRegistry, this.agentFactory, this.docCacheManager);
 
@@ -418,8 +421,11 @@ public class GSimulatorApplication {
 
         // SubAgent cache 管理工具
         toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(ctx.getCachesManager()));
-        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(
+                ctx.getCachesManager(), ctx.getDocStore(config.docsDir()), coreConfig));
         toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agent.tool.QuerySubAgentCacheTool(
+                ctx.getCachesManager(), ctx.getDocStore(config.docsDir()), coreConfig));
 
         // 将 AgentsManager 注入到 view 工具（状态标记）——必须在注册之后取实例
         var viewCacheTool = toolRegistry.get("view_sub_agent_cache");

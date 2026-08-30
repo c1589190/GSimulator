@@ -136,6 +136,6 @@ class GsimapRenderTextToolTest {
     void invalidModeFails() {
         ToolResult result = renderAt(Map.of("mode", "bogus"));
         assertFalse(result.success());
-        assertTrue(result.error().contains("terrain, region, or tag"), "error: " + result.error());
+        assertTrue(result.error().contains("terrain, region, tag, or pathway"), "error: " + result.error());
     }
 }

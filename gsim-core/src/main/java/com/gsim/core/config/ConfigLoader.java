@@ -280,6 +280,7 @@ public class ConfigLoader {
             case "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_ENABLED" -> "mcp.response.overflow_staging.enabled";
             case "GSIM_MCP_RESPONSE_OVERFLOW_STAGING_THRESHOLD" -> "mcp.response.overflow_staging.threshold";
             case "GSIM_CORE_DOC_QUERY_STAGING_THRESHOLD" -> "core.doc.query.staging.threshold";
+            case "GSIM_AGENT_SUBAGENT_CACHE_STAGING_THRESHOLD" -> "agent.subagent.cache.staging.threshold";
             case "GSIM_CORE_DOC_TMP_MAX_AGE_HOURS" -> "core.doc.tmp.max_age_hours";
             case "GSIM_CORE_DOC_TMP_CLEANUP_ENABLED" -> "core.doc.tmp.cleanup_enabled";
             case "GSIM_DOCS_DIR" -> "docs.dir";
@@ -351,6 +352,7 @@ public class ConfigLoader {
         defaults.put("core.doc.query.staging.threshold", "3000");
         defaults.put("core.doc.tmp.max_age_hours", "168");
         defaults.put("core.doc.tmp.cleanup_enabled", "true");
+        defaults.put("agent.subagent.cache.staging.threshold", "3000");
 
         // 目录与知识库（空串 = 未设置，下游解析为 worldsDir 同级目录）
         defaults.put("docs.dir", "");

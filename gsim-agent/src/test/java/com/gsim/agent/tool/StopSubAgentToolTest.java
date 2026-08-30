@@ -105,7 +105,8 @@ class StopSubAgentToolTest {
                 new com.gsim.agentlib.tool.ToolRegistry(),
                 AgentProgressSink.NOOP,
                 new EventBus(),
-                "test-model");
+                "test-model",
+                new com.gsim.agent.core.AbstractAgent.ToolResultPolicy(500, false, null, ""));
 
         stopTool = new StopSubAgentTool();
         stopTool.setAgentsManager(agentsManager);

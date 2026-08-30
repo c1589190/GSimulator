@@ -3,6 +3,7 @@ package com.gsim.map.service;
 import com.gsim.map.map.MapData;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -390,6 +391,64 @@ public final class TerrainTextRenderer {
      */
     public static String legendTagPresence(String tagKey) {
         return "  # = 有标签 " + tagKey + "\n  · = 无标签 " + tagKey + "\n";
+    }
+
+    /**
+     * Renders the hexes within {@code radius} steps of center marking presence
+     * of a pathway (edge) type: {@code #} when the hex is an endpoint of any edge
+     * tagged {@code type}, {@code ·} otherwise. Empty positions render as spaces.
+     *
+     * @param type the pathway group id to check for (e.g. "river", "road")
+     * @return the rendered text block
+     */
+    public static String renderPathwayPresence(MapData map, int cq, int cr, int radius, String type) {
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("type must not be blank");
+        }
+
+        Set<String> hasType = new HashSet<>();
+        for (var entry : map.edges().entrySet()) {
+            if (!entry.getValue().containsKey(type)) continue;
+            int[] c = MapData.parseEdgeKey(entry.getKey());
+            hasType.add(MapData.hexKey(c[0], c[1]));
+            hasType.add(MapData.hexKey(c[2], c[3]));
+        }
+
+        int diameter = 2 * radius + 1;
+        String[][] grid = new String[diameter][diameter];
+
+        int minR = cr + radius;
+        int maxR = cr - radius;
+
+        for (int dr = -radius; dr <= radius; dr++) {
+            int r = cr + dr;
+            int ri = dr + radius;
+            for (int dq = -radius; dq <= radius; dq++) {
+                int ds = -dq - dr;
+                if (Math.abs(dq) + Math.abs(dr) + Math.abs(ds) > 2 * radius) continue;
+
+                int q = cq + dq;
+                int qi = dq + radius;
+                MapData.HexCell cell = map.hexes().get(MapData.hexKey(q, r));
+                if (cell != null) {
+                    grid[ri][qi] = hasType.contains(MapData.hexKey(q, r)) ? "#" : "·";
+                    if (r < minR) minR = r;
+                    if (r > maxR) maxR = r;
+                }
+            }
+        }
+
+        if (minR > maxR) return "(no hexes in range)";
+
+        return renderGridRows(grid, cq, cr, radius, minR, maxR);
+    }
+
+    /**
+     * Returns the pathway-presence legend: {@code # = 有通路 <type>} and
+     * {@code · = 无通路 <type>}.
+     */
+    public static String legendPathwayPresence(String type) {
+        return "  # = 有通路 " + type + "\n  · = 无通路 " + type + "\n";
     }
 
     /**

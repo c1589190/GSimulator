@@ -97,6 +97,9 @@ public final class QueryCheckpointTool implements AgentTool {
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
+        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        refs = scope.filterRefs(refs);
         List<ToolResult.Item> items = refs.stream()
                 .map(r -> {
                     String value = r.element().value();

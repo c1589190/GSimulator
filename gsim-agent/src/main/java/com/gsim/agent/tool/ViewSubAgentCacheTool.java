@@ -3,6 +3,7 @@ package com.gsim.agent.tool;
 import com.gsim.agent.AgentInstance;
 import com.gsim.agent.core.AgentResult;
 import com.gsim.agent.management.AgentsManager;
+import com.gsim.agent.tools.worldinfo.DocStaging;
 import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
@@ -10,6 +11,8 @@ import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.cache.CacheInfo;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CachesManager;
+import com.gsim.core.config.CoreConfig;
+import com.gsim.core.doc.DocStore;
 import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Map;
@@ -31,10 +34,18 @@ public class ViewSubAgentCacheTool implements AgentTool {
     public static final String NAME = "view_sub_agent_cache";
 
     private final CachesManager cachesManager;
+    private final DocStore docStore;
+    private final CoreConfig coreConfig;
     private volatile AgentsManager agentsManager;
 
     public ViewSubAgentCacheTool(CachesManager cachesManager) {
+        this(cachesManager, null, null);
+    }
+
+    public ViewSubAgentCacheTool(CachesManager cachesManager, DocStore docStore, CoreConfig coreConfig) {
         this.cachesManager = cachesManager;
+        this.docStore = docStore;
+        this.coreConfig = coreConfig;
     }
 
     /**
@@ -102,29 +113,27 @@ public class ViewSubAgentCacheTool implements AgentTool {
             sb.append("- **前序缓存**: `").append(info.previousSessionId()).append("`\n");
         }
 
-        // 显示首次 user 消息
-        sb.append("\n### 首次用户输入\n\n");
-        String firstUser = findFirstUserMessage(messages);
-        if (firstUser != null) {
-            sb.append("> ").append(truncate(firstUser, 500)).append("\n");
-        } else {
-            sb.append("*（无用户消息）*\n");
-        }
-
-        // 显示最后几条交互
-        sb.append("\n### 最近交互（最后 3 条）\n\n");
+        // 完整断点：逐条展示全部非 system 消息，单条超过缓存暂存阈值则暂存为 TMP 文档
+        int threshold = coreConfig != null ? coreConfig.getInt(CoreConfig.CACHE_STAGING_THRESHOLD, 3000) : 3000;
+        sb.append("\n### 完整对话\n\n");
         int shown = 0;
-        for (int i = messages.size() - 1; i >= 0 && shown < 3; i--) {
+        for (int i = 0; i < messages.size(); i++) {
             Map<String, Object> msg = messages.get(i);
             String role = (String) msg.getOrDefault("role", "?");
             String content = (String) msg.getOrDefault("content", "");
-            if ("system".equals(role)) continue; // 跳过 system prompt
-            sb.append("**")
-                    .append(role)
-                    .append("**: ")
-                    .append(truncate(content, 300))
-                    .append("\n\n");
+            if ("system".equals(role)) continue;
+            sb.append("**[").append(i).append("] ").append(role).append("**:\n");
+            if (content.length() > threshold && docStore != null) {
+                String title = cacheId + "#" + i + " (" + role + ")";
+                sb.append(DocStaging.stageOrInline(docStore, "subagentcache_view_", title, content))
+                        .append("\n\n");
+            } else {
+                sb.append(content).append("\n\n");
+            }
             shown++;
+        }
+        if (shown == 0) {
+            sb.append("*（无对话消息）*\n");
         }
 
         if (info.messageCount() > 0) {
@@ -173,15 +182,6 @@ public class ViewSubAgentCacheTool implements AgentTool {
             case CANCELLED -> sb.append("⏹ 已取消\n");
             default -> sb.append("📄 历史缓存\n");
         }
-    }
-
-    private static String findFirstUserMessage(List<Map<String, Object>> messages) {
-        for (Map<String, Object> msg : messages) {
-            if ("user".equals(msg.getOrDefault("role", ""))) {
-                return (String) msg.getOrDefault("content", "");
-            }
-        }
-        return null;
     }
 
     private static String truncate(String text, int maxLen) {

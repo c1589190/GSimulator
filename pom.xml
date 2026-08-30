@@ -135,6 +135,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.2</version>
+                    <configuration>
+                        <!-- 每个测试类独立 fork JVM：隔离启动真实 Agent 运行时测试（Dispatch/Stop 等）的
+                             后台线程残留，避免其占用共享 JVM 中 @TempDir 目录导致后续测试 teardown 删除失败 -->
+                        <reuseForks>false</reuseForks>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>

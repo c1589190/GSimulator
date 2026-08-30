@@ -120,6 +120,11 @@ class Provider {
 
             if (!response.isSuccessful()) {
                 String errBody = response.body() != null ? response.body().string() : "";
+                log.error(
+                        "[LLM] stream HTTP {} from {}: {}",
+                        response.code(),
+                        request.model() != null ? request.model() : config.model(),
+                        errBody);
                 if (isContextLengthError(errBody)) {
                     pool.onError("CONTEXT_LENGTH_EXCEEDED:" + errBody);
                 } else {

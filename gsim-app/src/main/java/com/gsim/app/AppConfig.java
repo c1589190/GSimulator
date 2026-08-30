@@ -78,6 +78,8 @@ public class AppConfig {
     private final int mcpResponseOverflowStagingThreshold;
     /** core doc query staging 阈值（默认 3000）。 */
     private final int queryStagingThreshold;
+    /** subagent cache staging 阈值（默认 3000）。 */
+    private final int cacheStagingThreshold;
     /** TMP 文档最大保留时长（小时，默认 168）。 */
     private final int tmpMaxAgeHours;
     /** TMP 文档启动清扫开关（默认 true）。 */
@@ -215,6 +217,7 @@ public class AppConfig {
 
         // 文档暂存与临时目录清理
         this.queryStagingThreshold = parseInt(result.get("core.doc.query.staging.threshold"), 3000);
+        this.cacheStagingThreshold = parseInt(result.get("agent.subagent.cache.staging.threshold"), 3000);
         this.tmpMaxAgeHours = parseInt(result.get("core.doc.tmp.max_age_hours"), 168);
         this.tmpCleanupEnabled = parseBoolean(result.get("core.doc.tmp.cleanup_enabled"), true);
         // docs.dir / caches.dir：空串=未设置，回退 worldsDir 同级目录
@@ -496,6 +499,10 @@ public class AppConfig {
     /** core doc query staging 阈值（默认 3000）。 */
     public int queryStagingThreshold() {
         return queryStagingThreshold;
+    }
+
+    public int cacheStagingThreshold() {
+        return cacheStagingThreshold;
     }
 
     /** MCP 响应溢出暂存触发阈值（snippet 字符数，默认 500）。 */

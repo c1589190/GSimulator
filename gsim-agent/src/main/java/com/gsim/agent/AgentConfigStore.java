@@ -225,6 +225,24 @@ public class AgentConfigStore {
                     config.toolFilter().deny() != null ? config.toolFilter().deny() : List.of());
             jsonMap.put("toolFilter", tf);
         }
+        // Serialize queryScope if present
+        if (config.queryScope() != null) {
+            Map<String, Object> qs = new LinkedHashMap<>();
+            qs.put(
+                    "match",
+                    config.queryScope().match() != null ? config.queryScope().match() : "");
+            qs.put(
+                    "tagAllowlist",
+                    config.queryScope().tagAllowlist() != null
+                            ? config.queryScope().tagAllowlist()
+                            : List.of());
+            qs.put(
+                    "addressAllowlist",
+                    config.queryScope().addressAllowlist() != null
+                            ? config.queryScope().addressAllowlist()
+                            : List.of());
+            jsonMap.put("queryScope", qs);
+        }
         String json = new com.fasterxml.jackson.databind.ObjectMapper()
                 .writerWithDefaultPrettyPrinter()
                 .writeValueAsString(jsonMap);

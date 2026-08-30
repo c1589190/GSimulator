@@ -122,7 +122,14 @@ class AsyncSubAgentToolsTest {
         agentCacheStore.init();
 
         agentsManager = new AgentsManager(
-                configStore, agentCacheStore, llmRegistry, tools, AgentProgressSink.NOOP, new EventBus(), "test-model");
+                configStore,
+                agentCacheStore,
+                llmRegistry,
+                tools,
+                AgentProgressSink.NOOP,
+                new EventBus(),
+                "test-model",
+                new com.gsim.agent.core.AbstractAgent.ToolResultPolicy(500, false, null, ""));
 
         CachesManager cachesManager = new FileSystemCachesManager();
 
@@ -256,7 +263,7 @@ class AsyncSubAgentToolsTest {
         assertTrue(result.success(), "查看运行中缓存应成功: " + result.error());
         String snippet = result.items().get(0).snippet();
         assertTrue(snippet.contains("🔄 运行中"), "应标记运行中: " + snippet);
-        assertTrue(snippet.contains("最近交互（最后 3 条）"), "运行中应保留最后 3 条交互: " + snippet);
+        assertTrue(snippet.contains("完整对话"), "运行中应展示完整对话: " + snippet);
 
         release.countDown();
         awaitDone(inst.instanceId());

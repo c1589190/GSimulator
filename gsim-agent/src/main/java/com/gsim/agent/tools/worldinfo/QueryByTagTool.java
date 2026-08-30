@@ -69,6 +69,12 @@ public final class QueryByTagTool implements AgentTool {
 
         int total = refs.size();
 
+        // Query scope gate: filter out elements outside the agent's allowed range
+        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        refs = scope.filterRefs(refs);
+        total = refs.size();
+
         // Apply pagination
         List<ElementRef> page = refs.stream().skip(offset).limit(limit).toList();
 

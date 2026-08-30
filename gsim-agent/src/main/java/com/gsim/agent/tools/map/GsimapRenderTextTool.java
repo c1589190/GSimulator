@@ -191,7 +191,42 @@ public class GsimapRenderTextTool extends AbstractGsimapTool {
                                 sb.toString(),
                                 1.0)));
             }
-            default -> ToolResult.fail(name(), "mode must be terrain, region, or tag, got: " + mode);
+            case "pathway" -> {
+                String type = call.param("type");
+                if (type == null || type.isBlank()) {
+                    yield ToolResult.fail(name(), "type is required for mode=pathway");
+                }
+                String textMap = TerrainTextRenderer.renderPathwayPresence(map, cq, cr, radius, type);
+                String legend = TerrainTextRenderer.legendPathwayPresence(type);
+
+                StringBuilder sb = new StringBuilder();
+                sb.append("## Pathway Map: ")
+                        .append(type)
+                        .append(" center (")
+                        .append(cq)
+                        .append(",")
+                        .append(cr)
+                        .append("), radius ")
+                        .append(radius)
+                        .append("\n\n");
+
+                sb.append("### Legend\n\n");
+                sb.append(legend);
+                sb.append("\n### Map\n\n");
+                sb.append("```\n");
+                sb.append(textMap);
+                if (!textMap.endsWith("\n")) sb.append('\n');
+                sb.append("```\n");
+
+                yield ToolResult.ok(
+                        name(),
+                        List.of(new ToolResult.Item(
+                                "Center (" + cq + "," + cr + "), radius=" + radius + ", mode=pathway",
+                                worldId + ":" + nodeId,
+                                sb.toString(),
+                                1.0)));
+            }
+            default -> ToolResult.fail(name(), "mode must be terrain, region, tag, or pathway, got: " + mode);
         };
     }
 
@@ -245,7 +280,7 @@ public class GsimapRenderTextTool extends AbstractGsimapTool {
                 Map.of(
                         "type", "string",
                         "description",
-                                "Render mode: terrain (default, existing), region (render provinces grouped by region), tag (render hex tag presence). Default: terrain"));
+                                "Render mode: terrain (default, existing), region (render provinces grouped by region), tag (render hex tag presence), pathway (mark hexes that have a given pathway type edge). Default: terrain"));
         props.put(
                 "tag",
                 Map.of(
@@ -257,6 +292,12 @@ public class GsimapRenderTextTool extends AbstractGsimapTool {
                 Map.of(
                         "type", "string",
                         "description", "Tag mode only: the hex tag key to check presence for"));
+        props.put(
+                "type",
+                Map.of(
+                        "type", "string",
+                        "description",
+                                "Pathway mode only: the pathway group id to mark presence for (e.g. 'river', 'road')"));
         return Map.of("type", "object", "properties", props, "required", List.of("worldId", "q", "r", "radius"));
     }
 

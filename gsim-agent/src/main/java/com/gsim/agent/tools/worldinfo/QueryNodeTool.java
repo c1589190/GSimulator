@@ -59,11 +59,16 @@ public final class QueryNodeTool implements AgentTool {
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
+        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agent.QueryScope.none();
         List<ToolResult.Item> items = new java.util.ArrayList<>();
         for (var entry : node.checkpoints().entrySet()) {
             String cpId = entry.getKey();
             var cp = entry.getValue();
             for (var el : cp.elements()) {
+                if (!scope.allows(nodeId, cpId, el.key(), el.tags())) {
+                    continue;
+                }
                 String value = el.value();
                 if (!detail && value != null && value.length() > 200) {
                     value = value.substring(0, 200) + "... (truncated, use detail=true for full content)";
