@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gsim</groupId>
+        <artifactId>GSimulator</artifactId>
+        <version>0.1.0-Alpha260723</version>
+    </parent>
+
+    <artifactId>gsim-agentsmanager</artifactId>
+    <packaging>jar</packaging>
+
+    <name>GSim AgentsManager</name>
+    <description>成型 Agent 服务 — Agent 运行时(ToolLoop/Orchestrator/SubAgent) + 工具协议(ToolRegistry/AgentTool) + 工具注册中心 + 引用解析 + Agent 缓存。零 gsim-core 依赖（B 方案），可独立打包供外部程序复用。</description>
+
+    <dependencies>
+        <!-- docslib: 文档/文本缓存/JsonUtils (@doc:/@tmp:/@cache: 依赖) -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-docslib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- JSON -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- SLF4J -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- JLine (CLI 交互壳用) -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+        </dependency>
+
+        <!-- 与兄弟模块一致的注解依赖；防御性补齐 -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.2</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- JUnit 5 (test) -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- SpotBugs: 新模块零容忍 -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <failOnError>true</failOnError>
+                    <includeTests>false</includeTests>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
