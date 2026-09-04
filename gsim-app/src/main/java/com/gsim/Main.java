@@ -161,7 +161,7 @@ public class Main {
                     app.getContext().getResolverRegistry(),
                     config.worldsDir(),
                     config.getImportDir(),
-                    config.cachesDir());
+                    config.docsDir().resolve("tmp"));
 
             AgentBridge.registerMapTools(toolRegistry, mapService, searchCtx);
 

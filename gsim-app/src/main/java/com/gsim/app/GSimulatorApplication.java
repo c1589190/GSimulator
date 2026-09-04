@@ -120,10 +120,12 @@ public class GSimulatorApplication {
                 : null;
 
         // DocCacheManager（doc 工具与 worldinfo 工具共用，需提前创建）
+        // @cache:/@tmp: 合并读 docs/tmp/（T4），并迁移旧 .cache/*.txt
         Path docsDir = config.docsDir();
-        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve("tmp"));
         try {
             this.docCacheManager.init();
+            this.docCacheManager.migrateFromLegacy();
         } catch (java.io.IOException e) {
             log.warn("Failed to init DocCacheManager: {}", e.getMessage());
         }
@@ -149,7 +151,7 @@ public class GSimulatorApplication {
                 config.getImportDir(), config.importDocMaxFullReadChars(), config.importDocDefaultLimit());
 
         // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
-        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve("tmp"));
         try {
             this.docCacheManager.init();
         } catch (java.io.IOException e) {

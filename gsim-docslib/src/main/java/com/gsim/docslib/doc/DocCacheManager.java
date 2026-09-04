@@ -32,13 +32,14 @@ public class DocCacheManager {
     private static final Logger log = LoggerFactory.getLogger(DocCacheManager.class);
 
     public static final String CACHE_PREFIX = "@cache:";
+    public static final String TMP_PREFIX = "@tmp:";
 
     private final Path cacheDir;
 
     /**
      * 创建缓存管理器实例。
      *
-     * @param cacheDir 缓存文件存储目录
+     * @param cacheDir 缓存文件存储目录（合并后为 docs/tmp/）
      */
     public DocCacheManager(Path cacheDir) {
         this.cacheDir = cacheDir;
@@ -83,90 +84,147 @@ public class DocCacheManager {
     /**
      * 按 cacheId 读取缓存内容。
      *
+     * <p>优先读 {@code cacheDir}（合并后 docs/tmp/）；未命中时回退读旧目录
+     * {@code cacheDir.getParent()/.cache/}（兼容历史 @cache: 引用）。
+     *
      * @param cacheId 缓存 ID
      * @return 文件内容，不存在返回 null
      */
     public String get(String cacheId) {
         Path file = cacheDir.resolve(cacheId + ".txt");
-        if (!Files.isRegularFile(file)) {
-            log.warn("[DocCache] cache not found: {}", cacheId);
-            return null;
+        if (Files.isRegularFile(file)) {
+            try {
+                return Files.readString(file);
+            } catch (IOException e) {
+                log.warn("[DocCache] failed to read cache {}: {}", cacheId, e.getMessage());
+                return null;
+            }
         }
-        try {
-            return Files.readString(file);
-        } catch (IOException e) {
-            log.warn("[DocCache] failed to read cache {}: {}", cacheId, e.getMessage());
-            return null;
+        // 回退：旧 .cache 目录（与 docs/tmp 同级的 .cache）
+        Path legacy = legacyCacheDir().resolve(cacheId + ".txt");
+        if (Files.isRegularFile(legacy)) {
+            try {
+                return Files.readString(legacy);
+            } catch (IOException e) {
+                log.warn("[DocCache] failed to read legacy cache {}: {}", cacheId, e.getMessage());
+                return null;
+            }
         }
+        log.warn("[DocCache] cache not found: {}", cacheId);
+        return null;
+    }
+
+    /** 旧目录：{@code <docs>/tmp} 的同级 {@code <docs>/.cache}（由装配方传 cacheDir=docs/tmp 派生）。 */
+    private Path legacyCacheDir() {
+        Path parent = cacheDir.getParent();
+        return parent != null ? parent.resolve(".cache") : cacheDir;
     }
 
     /**
-     * 尝试将 @cache:{id} 解析为文档内容。
-     * 扫描 rawDocId 中任意位置的 @cache:{id} 引用，解析后返回缓存全文。
-     * 返回 null 表示不含有效 @cache: 引用。
+     * 迁移旧 {@code docs/.cache/*.txt} 到 {@code docs/tmp/}（幂等：目标已存在则跳过）。
+     *
+     * @return 迁移的文件数量
+     * @throws IOException 文件系统操作失败时抛出
+     */
+    public int migrateFromLegacy() throws IOException {
+        Path legacy = legacyCacheDir();
+        if (!Files.isDirectory(legacy)) return 0;
+        init();
+        int count = 0;
+        try (Stream<Path> files = Files.list(legacy)) {
+            for (Path file : files.toList()) {
+                if (!file.getFileName().toString().endsWith(".txt")) continue;
+                Path target = cacheDir.resolve(file.getFileName().toString());
+                if (Files.exists(target)) continue;
+                Files.move(file, target);
+                count++;
+            }
+        } catch (IOException e) {
+            log.warn("[DocCache] migration failed: {}", e.getMessage());
+            throw e;
+        }
+        if (count > 0) log.info("[DocCache] migrated {} legacy caches to {}", count, cacheDir);
+        return count;
+    }
+
+    /**
+     * 尝试将 {@code @cache:{id}} / {@code @tmp:{id}} 解析为文档内容。
+     * 扫描 rawDocId 中任意位置的引用，解析后返回缓存全文。
+     * 返回 null 表示不含有效引用。
      * 用于任何接受 docId 参数的工具 — 直接调用此方法即可透明支持虚拟缓存文档。
      *
-     * @param rawDocId 原始文档 ID，可能包含 @cache: 前缀引用
-     * @return 缓存中的完整文档内容；不含有效 @cache: 引用时返回 null
+     * @param rawDocId 原始文档 ID，可能包含 @cache:/@tmp: 前缀引用
+     * @return 缓存中的完整文档内容；不含有效引用时返回 null
      */
     public String resolveDocId(String rawDocId) {
         if (rawDocId == null || rawDocId.isBlank()) return null;
         String trimmed = rawDocId.trim();
 
-        // 如果整个 docId 就是 @cache:xxx → 直接返回全文
-        if (trimmed.startsWith(CACHE_PREFIX)) {
-            String cacheId = trimmed.substring(CACHE_PREFIX.length()).trim();
+        // 如果整个 docId 就是 @cache:xxx / @tmp:xxx → 直接返回全文
+        String wholePrefix = matchPrefix(trimmed);
+        if (wholePrefix != null) {
+            String cacheId = trimmed.substring(wholePrefix.length()).trim();
             if (!cacheId.isEmpty()) {
                 String cached = get(cacheId);
                 if (cached != null) return cached;
             }
         }
 
-        // 扫描 docId 中内嵌的 @cache:xxx 引用
-        int pos = 0;
-        while ((pos = trimmed.indexOf(CACHE_PREFIX, pos)) >= 0) {
-            int idStart = pos + CACHE_PREFIX.length();
-            int idEnd = idStart;
-            while (idEnd < trimmed.length()
-                    && !Character.isWhitespace(trimmed.charAt(idEnd))
-                    && trimmed.charAt(idEnd) != ','
-                    && trimmed.charAt(idEnd) != ';') {
-                idEnd++;
+        // 扫描 docId 中内嵌的 @cache:xxx / @tmp:xxx 引用
+        for (String prefix : new String[] {CACHE_PREFIX, TMP_PREFIX}) {
+            int pos = 0;
+            while ((pos = trimmed.indexOf(prefix, pos)) >= 0) {
+                int idStart = pos + prefix.length();
+                int idEnd = idStart;
+                while (idEnd < trimmed.length()
+                        && !Character.isWhitespace(trimmed.charAt(idEnd))
+                        && trimmed.charAt(idEnd) != ','
+                        && trimmed.charAt(idEnd) != ';') {
+                    idEnd++;
+                }
+                if (idEnd > idStart) {
+                    String cacheId = trimmed.substring(idStart, idEnd);
+                    String cached = get(cacheId);
+                    if (cached != null) return cached;
+                }
+                pos = idEnd;
             }
-            if (idEnd > idStart) {
-                String cacheId = trimmed.substring(idStart, idEnd);
-                String cached = get(cacheId);
-                if (cached != null) return cached;
-            }
-            pos = idEnd;
         }
         return null;
     }
 
+    /** 返回文本开头匹配的前缀（@cache:/@tmp:），无匹配返回 null。 */
+    private static String matchPrefix(String text) {
+        if (text.startsWith(CACHE_PREFIX)) return CACHE_PREFIX;
+        if (text.startsWith(TMP_PREFIX)) return TMP_PREFIX;
+        return null;
+    }
+
     /**
-     * 解析文本中的 @cache: 引用。
+     * 解析文本中的 {@code @cache:} / {@code @tmp:} 引用。
      * <ul>
-     *   <li>整个文本以 @cache:{id} 开头 → 替换为缓存全文</li>
-     *   <li>文本中含 @cache:{id} → 替换为缓存全文</li>
+     *   <li>整个文本以 {@code @cache:{id}} 或 {@code @tmp:{id}} 开头 → 替换为缓存全文</li>
+     *   <li>文本中含引用 → 替换为缓存全文</li>
      *   <li>无引用 → 原样返回</li>
      * </ul>
      *
-     * @param text 可能包含 @cache: 引用的原始文本
-     * @return 替换 @cache: 引用后的完整文本；无引用时原样返回
+     * @param text 可能包含 @cache:/@tmp: 引用的原始文本
+     * @return 替换引用后的完整文本；无引用时原样返回
      */
     public String resolve(String text) {
         if (text == null || text.isBlank()) return text;
 
-        // 整个文本就是 @cache:xxx → 完整替换
+        // 整个文本就是 @cache:xxx / @tmp:xxx → 完整替换
         String trimmed = text.trim();
-        if (trimmed.startsWith(CACHE_PREFIX)) {
+        String wholePrefix = matchPrefix(trimmed);
+        if (wholePrefix != null) {
             // 提取 ID（去掉前缀，取到空格、逗号、分号、句号或行尾）
-            String rest = trimmed.substring(CACHE_PREFIX.length()).trim();
+            String rest = trimmed.substring(wholePrefix.length()).trim();
             // 取第一个分隔符之前的部分作为 cacheId
             String cacheId = rest.split("[\\s,;。\n]", 2)[0];
             String cached = get(cacheId);
             if (cached != null && !cached.isBlank()) {
-                // 如果 @cache: 后面还有附加文本，追加到缓存内容后
+                // 如果引用后面还有附加文本，追加到缓存内容后
                 String suffix = rest.substring(cacheId.length()).trim();
                 if (!suffix.isEmpty()) {
                     cached = cached + "\n" + suffix;
@@ -178,13 +236,14 @@ public class DocCacheManager {
             return text;
         }
 
-        // 文本中包含 @cache:xxx → 替换
-        if (text.contains(CACHE_PREFIX)) {
+        // 文本中包含 @cache:xxx / @tmp:xxx → 替换
+        for (String prefix : new String[] {CACHE_PREFIX, TMP_PREFIX}) {
+            if (!text.contains(prefix)) continue;
             String result = text;
             int pos = 0;
-            while ((pos = result.indexOf(CACHE_PREFIX, pos)) >= 0) {
+            while ((pos = result.indexOf(prefix, pos)) >= 0) {
                 int start = pos;
-                int end = start + CACHE_PREFIX.length();
+                int end = start + prefix.length();
                 while (end < result.length()
                         && !Character.isWhitespace(result.charAt(end))
                         && result.charAt(end) != ','
@@ -193,9 +252,9 @@ public class DocCacheManager {
                         && result.charAt(end) != '\n') {
                     end++;
                 }
-                String cacheId = result.substring(start + CACHE_PREFIX.length(), end);
+                String cacheId = result.substring(start + prefix.length(), end);
                 if (cacheId.isEmpty()) {
-                    pos = end; // 跳过无有效 ID 的 @cache: 文本
+                    pos = end; // 跳过无有效 ID 的引用文本
                     continue;
                 }
                 String cached = get(cacheId);
