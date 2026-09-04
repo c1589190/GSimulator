@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.agent.tools.search.StatusTool;
-import com.gsim.agent.tools.worldinfo.WorldListTool;
+import com.gsim.core.tools.search.StatusTool;
+import com.gsim.core.tools.worldinfo.WorldListTool;
 import com.gsim.agentsmanager.mcp.AbstractMcpServer;
 import com.gsim.agentsmanager.mcp.CompositeMcpToolRegistry;
 import com.gsim.agentsmanager.mcp.McpToolRegistry;

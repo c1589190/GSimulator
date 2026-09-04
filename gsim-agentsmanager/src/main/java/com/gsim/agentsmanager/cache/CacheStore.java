@@ -10,7 +10,6 @@ import java.util.Map;
 /**
  * Reads and writes CacheSession JSON files.
  */
-@Deprecated // B方案: Caches JSON 已迁 agentsmanager.cache, 静态 API 保留兼容
 public final class CacheStore {
 
     private CacheStore() {}

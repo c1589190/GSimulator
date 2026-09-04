@@ -1,4 +1,4 @@
-package com.gsim.agent.tools.worldinfo;
+package com.gsim.core.tools.worldinfo;
 
 import static org.junit.jupiter.api.Assertions.*;
 

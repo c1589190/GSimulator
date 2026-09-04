@@ -1,11 +1,11 @@
-package com.gsim.agent.tools.worldinfo;
+package com.gsim.core.tools.worldinfo;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.config.CoreConfig;
+import com.gsim.agentsmanager.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;

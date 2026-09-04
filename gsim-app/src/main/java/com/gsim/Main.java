@@ -1,7 +1,5 @@
 package com.gsim;
 
-import com.gsim.agent.tools.search.SearchToolContext;
-import com.gsim.agentsmanager.bridge.AgentBridge;
 import com.gsim.agentsmanager.cache.CacheInfo;
 import com.gsim.agentsmanager.cache.CacheStore;
 import com.gsim.agentsmanager.cache.CachesManager;
@@ -18,6 +16,7 @@ import com.gsim.core.config.ConfigDoctor;
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.config.ConfigSnapshot;
 import com.gsim.core.config.ConfigWizard;
+import com.gsim.core.tools.search.SearchToolContext;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.map.http.GsimapHttpServer;
 import com.gsim.map.service.MapService;
@@ -151,25 +150,26 @@ public class Main {
             MapService mapService = new MapService(config.worldsDir(), config.mapConfig());
             ToolRegistry toolRegistry = app.getContext().getToolRegistry();
 
-            // 领域搜索上下文（T8 接线）—— wiSupplier 经 AgentBridge.createWorldInfoSupplier 构造：
+            // 领域搜索上下文（T8 接线）—— wiSupplier 经 CoreModuleTools.createWorldInfoSupplier 构造：
             // 与 registerWorldInfoTools 的 worldinfo 工具共享同一按世界缓存（write_element 的
             // 原地更新对搜索工具可见，避免同一世界双实例分裂）；活跃世界取应用侧最新实例。
             SearchToolContext searchCtx = new SearchToolContext(
-                    AgentBridge.createWorldInfoSupplier(app.getWorldInfoSupplier(), config.worldsDir()),
-                    mapService,
+                    com.gsim.core.tools.bridge.CoreModuleTools.createWorldInfoSupplier(
+                            app.getWorldInfoSupplier(), config.worldsDir()),
                     app.getContext().getDocStore(config.docsDir()),
                     app.getContext().getResolverRegistry(),
                     config.worldsDir(),
                     config.getImportDir(),
                     config.docsDir().resolve("tmp"));
 
-            AgentBridge.registerMapTools(toolRegistry, mapService, searchCtx);
+            // 地图工具注册（gsim-map 模块自注册，T13）
+            com.gsim.map.tools.map.GsimapToolRegistrar.registerAll(toolRegistry, mapService, searchCtx);
 
             // gsimap: 前缀引用解析器（依赖 MapService）注册进统一 ResolverRegistry（resolve_ref/text_edit 即刻可用）
-            app.getContext().getResolverRegistry().register(new com.gsim.agent.tools.map.GsimapResolver(mapService));
+            app.getContext().getResolverRegistry().register(new com.gsim.map.tools.map.GsimapResolver(mapService));
 
-            // 领域搜索工具（T8 独占接线）：4 个细化搜索工具 + gsim_search 聚合器
-            AgentBridge.registerSearchTools(toolRegistry, searchCtx);
+            // 领域搜索工具（T8 独占接线）：世界/文档域（core）+ 地图域（map）
+            com.gsim.core.tools.bridge.CoreModuleTools.registerSearchTools(toolRegistry, searchCtx);
 
             // Map HTTP 服务器（map.port，默认 8711）— 始终启动
             int gsimapPort = Integer.getInteger("gsimap.port", config.getMapPort());

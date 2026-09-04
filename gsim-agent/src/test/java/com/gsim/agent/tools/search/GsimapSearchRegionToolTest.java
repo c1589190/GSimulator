@@ -1,4 +1,4 @@
-package com.gsim.agent.tools.search;
+package com.gsim.core.tools.search;
 
 import static org.junit.jupiter.api.Assertions.*;
 

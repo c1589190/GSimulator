@@ -1,5 +1,7 @@
 package com.gsim.core.event;
 
+import com.gsim.agentsmanager.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 

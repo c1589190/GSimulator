@@ -1,16 +1,16 @@
 package com.gsim.app;
 
 import com.gsim.agentsmanager.OrchestratorAgent;
-import com.gsim.agentsmanager.bridge.AgentBridge;
-import com.gsim.agentsmanager.bridge.CoreToolContext;
-import com.gsim.agentsmanager.bridge.WorldInfoToolContext;
+import com.gsim.agentsmanager.cache.CacheSession;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.core.tools.bridge.CoreModuleTools;
+import com.gsim.core.tools.bridge.CoreToolContext;
+import com.gsim.core.tools.bridge.WorldInfoToolContext;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.interaction.ConsoleInteractionAdapter;
@@ -43,7 +43,7 @@ public class GSimulatorApplication {
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
     private com.gsim.docslib.doc.DocCacheManager docCacheManager;
-    private com.gsim.core.config.CoreConfig coreConfig;
+    private com.gsim.agentsmanager.config.CoreConfig coreConfig;
     private com.gsim.agentsmanager.ref.InlineRefResolver inlineRefResolver;
     private final WorldManager worldManager;
 
@@ -210,24 +210,25 @@ public class GSimulatorApplication {
 
         // ── CoreConfig（主链视图）+ 内嵌引用解析器（write_element 阈值/引用展开用）──
         // CoreConfig 从 ConfigLoader 主链构造：AppConfig 已解析 core.doc.* 键，此处取其类型化值
-        this.coreConfig = com.gsim.core.config.CoreConfig.from(
+        this.coreConfig = com.gsim.agentsmanager.config.CoreConfig.from(
                 java.util.Map.of(
-                        com.gsim.core.config.CoreConfig.QUERY_STAGING_THRESHOLD,
+                        com.gsim.agentsmanager.config.CoreConfig.QUERY_STAGING_THRESHOLD,
                         String.valueOf(config.queryStagingThreshold()),
-                        com.gsim.core.config.CoreConfig.CACHE_STAGING_THRESHOLD,
+                        com.gsim.agentsmanager.config.CoreConfig.CACHE_STAGING_THRESHOLD,
                         String.valueOf(config.cacheStagingThreshold())),
                 java.util.Map.of());
         this.inlineRefResolver = new com.gsim.agentsmanager.ref.InlineRefResolver(docStore, importDocService);
 
         // 统一引用解析注册中心（内置 @doc/@cache/@import；@world/裸引用 由 core 的 WorldResolvers 注册；gsimap: 由 Main 注册）
-        com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry = com.gsim.agentsmanager.ref.ResolverRegistry.createWithBuiltins();
+        com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry =
+                com.gsim.agentsmanager.ref.ResolverRegistry.createWithBuiltins();
         // B 方案依赖反转：core 实现 @world:/裸引用 解析，装配时注册
         resolverRegistry.register(new com.gsim.core.ref.WorldResolvers.WorldRefResolver());
         resolverRegistry.register(new com.gsim.core.ref.WorldResolvers.BareRefResolver());
         ctx.setResolverRegistry(resolverRegistry);
 
-        // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
-        AgentBridge.registerCoreTools(
+        // 注册核心工具（Import/知识库/ref/text_edit —— core）+ 纯文档工具（doc —— agentsmanager）
+        CoreModuleTools.registerCoreTools(
                 toolRegistry,
                 new CoreToolContext(
                         worldsDir,
@@ -241,6 +242,8 @@ public class GSimulatorApplication {
                         activeWorldId::get,
                         compositeSink,
                         resolverRegistry));
+        com.gsim.agentsmanager.tools.doc.DocModuleTools.registerDocTools(
+                toolRegistry, docStore, docCacheManager, compositeSink);
 
         // 注册 Agent 工具（仅 agent 模式）
         if (agentEnabled) {
@@ -265,9 +268,9 @@ public class GSimulatorApplication {
             }
         };
 
-        // 注册 world info + node 管理工具 —— 经 gsim-agent 桥接层
+        // 注册 world info + node 管理工具 —— gsim-core 模块自注册
         // worldInfo 为可变字段，以 () -> worldInfo 惰性供应，节点创建/世界切换重建后对工具可见（与迁移前 this.worldInfo 动态读语义等价）
-        AgentBridge.registerWorldInfoTools(
+        CoreModuleTools.registerWorldInfoTools(
                 toolRegistry,
                 new WorldInfoToolContext(
                         worldsDir,
@@ -316,7 +319,8 @@ public class GSimulatorApplication {
 
             // LlmApiHandler + AgentApiHandler — 配置管理
             var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
-                    new com.gsim.agentsmanager.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds()),
+                    new com.gsim.agentsmanager.llm.LlmConfigManager(
+                            config.getLlmsPath(), config.getLlmTimeoutSeconds()),
                     ctx.getLlmProviderRegistry());
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
@@ -372,7 +376,7 @@ public class GSimulatorApplication {
         adapter.setStreamEnabled(config.isLlmStreamEnabled());
 
         // MediaWiki search (Wikipedia + any MediaWiki site)
-        toolRegistry.register(new com.gsim.agent.tools.search.MediaWikiSearchTool(config.wikiUrl()));
+        toolRegistry.register(new com.gsim.core.tools.search.MediaWikiSearchTool(config.wikiUrl()));
 
         // Agent control flow tools
         toolRegistry.register(new com.gsim.agentsmanager.tool.FinishActionTool());
@@ -383,7 +387,7 @@ public class GSimulatorApplication {
         agentConfigStore.reload(config.agentsDir());
         this.agentFactory = new com.gsim.agentsmanager.core.AgentFactory(
                 agentConfigStore,
-                ctx.getLlmProviderRegistry(),
+                ctx.getLlmManager(),
                 toolRegistry,
                 compositeSink,
                 config.getLlmModel(),
@@ -438,10 +442,13 @@ public class GSimulatorApplication {
 
         // LLM provider 列表 + 动态创建 SubAgent 配置
         toolRegistry.register(new com.gsim.agentsmanager.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));
-        toolRegistry.register(new com.gsim.agentsmanager.tool.CreateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
-        toolRegistry.register(new com.gsim.agentsmanager.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
+        toolRegistry.register(
+                new com.gsim.agentsmanager.tool.CreateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
+        toolRegistry.register(
+                new com.gsim.agentsmanager.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
         toolRegistry.register(new com.gsim.agentsmanager.tool.ListAgentConfigTool(agentConfigStore));
-        toolRegistry.register(new com.gsim.agentsmanager.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
+        toolRegistry.register(
+                new com.gsim.agentsmanager.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
     }
 
     /**
@@ -516,10 +523,9 @@ public class GSimulatorApplication {
 
         // Board 指令（公开展示板）
         var boardDocsDir = config.docsDir();
-            var boardDocStore = ctx.getDocStore(boardDocsDir);
-            var boardCommand = new com.gsim.commands.BoardCommand(boardDocStore, worldInfo);
-            adapter.setBoardCommand(boardCommand);
-        }
+        var boardDocStore = ctx.getDocStore(boardDocsDir);
+        var boardCommand = new com.gsim.commands.BoardCommand(boardDocStore, worldInfo);
+        adapter.setBoardCommand(boardCommand);
         adapter.setNewCommands(wc, nc, cc);
 
         // Expose commands to ApplicationContext for WebUI handlers
@@ -530,7 +536,8 @@ public class GSimulatorApplication {
         // LLM + Agent config management commands
         var llmConfigManager =
                 new com.gsim.agentsmanager.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds());
-        var agentConfigManager = new com.gsim.agentsmanager.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
+        var agentConfigManager =
+                new com.gsim.agentsmanager.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);
         adapter.setConfigCommands(llmCmd, agentCmd);

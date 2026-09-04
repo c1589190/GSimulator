@@ -7,7 +7,7 @@ import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.agentsmanager.cache.CacheSession;
 import com.gsim.agentsmanager.cache.CacheStore;
 import com.gsim.agentsmanager.cache.FileSystemCachesManager;
-import com.gsim.core.config.CoreConfig;
+import com.gsim.agentsmanager.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Path;
 import java.util.Map;

@@ -1,8 +1,8 @@
-package com.gsim.agent.tools.search;
+package com.gsim.core.tools.search;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.tools.map.GsimapResolver;
+import com.gsim.map.tools.map.GsimapResolver;
 import com.gsim.agentsmanager.mcp.GsimRequestContext;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;

@@ -1,7 +1,5 @@
 package com.gsim.app;
 
-import com.gsim.agent.tools.search.LocalFileSearchService;
-import com.gsim.agent.tools.search.WikiSearchTool;
 import com.gsim.agentsmanager.cache.CachesManager;
 import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.agentsmanager.event.EventBus;
@@ -16,6 +14,8 @@ import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
 import com.gsim.core.event.ConsoleEventSink;
 import com.gsim.core.session.SessionPool;
+import com.gsim.core.tools.search.LocalFileSearchService;
+import com.gsim.core.tools.search.WikiSearchTool;
 import com.gsim.core.util.TimeProvider;
 import com.gsim.interaction.InteractionContext;
 import com.gsim.interaction.InteractionManager;

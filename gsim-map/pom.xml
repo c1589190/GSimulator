@@ -21,6 +21,18 @@
             <artifactId>gsim-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- agentsmanager: AgentTool/ToolRegistry 契约 (地图工具实现) -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-agentsmanager</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- docslib: DocStore (地图搜索工具用) -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-docslib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- JSON serialization (direct dependency — also transitively from gsim-core) -->
         <dependency>

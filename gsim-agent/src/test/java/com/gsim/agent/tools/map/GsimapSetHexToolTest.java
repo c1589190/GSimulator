@@ -1,4 +1,4 @@
-package com.gsim.agent.tools.map;
+package com.gsim.map.tools.map;
 
 import static org.junit.jupiter.api.Assertions.*;
 

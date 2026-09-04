@@ -1,9 +1,9 @@
-package com.gsim.agent.tools.map;
+package com.gsim.map.tools.map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.tools.search.SearchToolContext;
-import com.gsim.agent.tools.worldinfo.WriteElementTool;
+import com.gsim.core.tools.search.SearchToolContext;
+import com.gsim.core.tools.worldinfo.WriteElementTool;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
