@@ -1,9 +1,9 @@
 package com.gsim.webui.handlers;
 
 import com.gsim.commands.ChatCommand;
-import com.gsim.core.cache.CacheInfo;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CachesManager;
+import com.gsim.agentsmanager.cache.CacheInfo;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CachesManager;
 import com.gsim.core.session.NodeStatus;
 import com.gsim.core.session.NodeType;
 import com.gsim.core.session.SessionNode;

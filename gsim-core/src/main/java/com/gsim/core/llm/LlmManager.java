@@ -1,5 +1,10 @@
 package com.gsim.core.llm;
 
+import com.gsim.agentsmanager.llm.LlmCall;
+import com.gsim.agentsmanager.llm.LlmClient;
+import com.gsim.agentsmanager.llm.LlmRequest;
+import com.gsim.agentsmanager.llm.LlmResult;
+import com.gsim.agentsmanager.llm.StreamPool;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,7 +31,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>线程安全。支持多 Agent 并发调用。
  */
-public class LlmManager implements LlmProvider {
+public class LlmManager implements LlmProvider, LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(LlmManager.class);
 

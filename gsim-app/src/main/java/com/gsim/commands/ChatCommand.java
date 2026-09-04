@@ -1,9 +1,9 @@
 package com.gsim.commands;
 
 import com.gsim.agentsmanager.core.AgentResult;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.llm.LlmMessage;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.llm.LlmMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

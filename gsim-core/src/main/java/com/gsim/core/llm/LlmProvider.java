@@ -1,5 +1,9 @@
 package com.gsim.core.llm;
 
+import com.gsim.agentsmanager.llm.LlmCall;
+import com.gsim.agentsmanager.llm.LlmRequest;
+import com.gsim.agentsmanager.llm.LlmResult;
+
 /**
  * LLM Provider 接口 — Agent 与 LLM 之间的抽象入口。
  *

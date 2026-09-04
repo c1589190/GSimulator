@@ -10,7 +10,7 @@ import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;
 import com.gsim.commands.NodeCommand;
 import com.gsim.commands.WorldCommand;
-import com.gsim.core.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheSession;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import com.gsim.interaction.ConsoleInteractionAdapter;
@@ -100,7 +100,7 @@ public class GSimulatorApplication {
 
         // 初始化 Cache 根目录（peer to worldsDir）
         Path cachesRoot = config.cachesDir();
-        com.gsim.core.cache.CacheStore.setCachesRoot(cachesRoot);
+        com.gsim.agentsmanager.cache.CacheStore.setCachesRoot(cachesRoot);
         // 迁移旧缓存（如有）
         Path oldCachesDir = worldsDir.resolve("default").resolve("caches");
         Path newCachesDir = cachesRoot.resolve("default");
@@ -482,7 +482,7 @@ public class GSimulatorApplication {
 
             // 5. 缓存不携带 world 信息（脱钩后），仅保留活跃会话
             if (this.activeCache != null) {
-                com.gsim.core.cache.CacheStore.save(this.activeCache);
+                com.gsim.agentsmanager.cache.CacheStore.save(this.activeCache);
             }
 
             log.info(
@@ -504,7 +504,7 @@ public class GSimulatorApplication {
         orchestrator.setMessageSaver(msg -> {
             CacheSession s = activeCache;
             if (s != null) {
-                com.gsim.core.cache.CacheStore.appendAndSave(s, msg.toCacheMap());
+                com.gsim.agentsmanager.cache.CacheStore.appendAndSave(s, msg.toCacheMap());
             }
         });
     }
@@ -578,7 +578,7 @@ public class GSimulatorApplication {
         if (sp == null || sp.isBlank()) return;
 
         activeCache.addMessage(java.util.Map.of("role", "system", "content", sp));
-        com.gsim.core.cache.CacheStore.save(activeCache);
+        com.gsim.agentsmanager.cache.CacheStore.save(activeCache);
         log.info("Prepended static system prompt to cache {} ({} chars)", activeCache.sessionId(), sp.length());
     }
 

@@ -21,6 +21,12 @@
             <artifactId>gsim-docslib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- GSimulator agentsmanager (LlmClient/LlmCall/LlmMessage 等契约, B 方案依赖反转: core 实现 LlmClient) -->
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-agentsmanager</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- Jackson -->
         <dependency>

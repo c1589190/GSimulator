@@ -1,8 +1,8 @@
 package com.gsim.app;
 
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.cache.CachesManager;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.cache.CachesManager;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import com.gsim.core.worldinfo.loader.WorldManager;

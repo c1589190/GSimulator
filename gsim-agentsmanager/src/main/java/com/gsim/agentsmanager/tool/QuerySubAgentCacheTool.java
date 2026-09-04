@@ -1,16 +1,13 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.docslib.staging.DocStaging;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.cache.CacheInfo;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CachesManager;
+import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.cache.CacheInfo;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CachesManager;
 import com.gsim.core.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
-import com.gsim.core.llm.ToolDef;
+import com.gsim.docslib.staging.DocStaging;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

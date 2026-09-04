@@ -1,26 +1,26 @@
 package com.gsim.agentsmanager.core;
 
-import com.gsim.agent.AgentConfig;
-import com.gsim.agent.OrchestratorAgent.ToolCallRecord;
-import com.gsim.agent.ParsedToolCall;
-import com.gsim.agent.QueryScopeContext;
-import com.gsim.agent.ToolCallExtractor;
-import com.gsim.agent.ToolFilterEvaluator;
-import com.gsim.docslib.staging.DocStaging;
+import com.gsim.agentsmanager.AgentConfig;
+import com.gsim.agentsmanager.OrchestratorAgent.ToolCallRecord;
+import com.gsim.agentsmanager.ParsedToolCall;
+import com.gsim.agentsmanager.QueryScopeContext;
+import com.gsim.agentsmanager.ToolCallExtractor;
+import com.gsim.agentsmanager.ToolFilterEvaluator;
+import com.gsim.agentsmanager.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.LlmCall;
+import com.gsim.agentsmanager.llm.LlmClient;
+import com.gsim.agentsmanager.llm.LlmMessage;
+import com.gsim.agentsmanager.llm.LlmRequest;
+import com.gsim.agentsmanager.llm.LlmResult;
+import com.gsim.agentsmanager.llm.LlmToolCall;
+import com.gsim.agentsmanager.llm.StreamPool;
+import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
-import com.gsim.core.event.AgentProgressEvent;
-import com.gsim.core.event.AgentProgressSink;
-import com.gsim.core.llm.LlmCall;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmMessage;
-import com.gsim.core.llm.LlmRequest;
-import com.gsim.core.llm.LlmResult;
-import com.gsim.core.llm.LlmToolCall;
-import com.gsim.core.llm.StreamPool;
-import com.gsim.core.llm.ToolDef;
+import com.gsim.docslib.staging.DocStaging;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,7 +68,7 @@ public class AbstractAgent {
 
     protected String agentId;
     protected final AgentConfig config;
-    protected final LlmManager llm;
+    protected final LlmClient llm;
     protected final ToolRegistry allTools;
     protected final String model;
     protected final AtomicBoolean cancelRequested = new AtomicBoolean(false);
@@ -117,7 +117,7 @@ public class AbstractAgent {
      * @param model        默认模型名称
      */
     public AbstractAgent(
-            AgentConfig config, LlmManager llm, ToolRegistry allTools, AgentProgressSink progressSink, String model) {
+            AgentConfig config, LlmClient llm, ToolRegistry allTools, AgentProgressSink progressSink, String model) {
         this(config, llm, allTools, progressSink, model, null);
     }
 
@@ -133,7 +133,7 @@ public class AbstractAgent {
      */
     public AbstractAgent(
             AgentConfig config,
-            LlmManager llm,
+            LlmClient llm,
             ToolRegistry allTools,
             AgentProgressSink progressSink,
             String model,
@@ -509,7 +509,7 @@ public class AbstractAgent {
     /**
      * 调用 LLM 并流式处理响应。
      *
-     * <p>通过 {@link LlmManager#submit} 异步提交请求，
+     * <p>通过 {@link LlmClient#submit} 异步提交请求，
      * 使用 {@link StreamPool} 轮询获取流式内容并触发进度事件。
      *
      * @param request LLM 请求（含消息列表、工具定义、温度等参数）

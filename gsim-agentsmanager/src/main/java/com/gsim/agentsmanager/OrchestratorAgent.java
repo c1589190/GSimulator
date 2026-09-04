@@ -1,21 +1,21 @@
 package com.gsim.agentsmanager;
 
-import com.gsim.agent.core.AbstractAgent;
-import com.gsim.agent.core.AgentFactory;
-import com.gsim.agent.core.AgentResult;
-import com.gsim.agent.tool.CollectSubAgentResultsTool;
-import com.gsim.agent.tool.DispatchSubAgentTool;
-import com.gsim.agent.tool.StopSubAgentTool;
+import com.gsim.agentsmanager.core.AbstractAgent;
+import com.gsim.agentsmanager.core.AgentFactory;
+import com.gsim.agentsmanager.core.AgentResult;
+import com.gsim.agentsmanager.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.LlmCall;
+import com.gsim.agentsmanager.llm.LlmClient;
+import com.gsim.agentsmanager.llm.LlmMessage;
+import com.gsim.agentsmanager.llm.LlmRequest;
+import com.gsim.agentsmanager.llm.LlmResult;
+import com.gsim.agentsmanager.llm.StreamPool;
+import com.gsim.agentsmanager.tool.CollectSubAgentResultsTool;
+import com.gsim.agentsmanager.tool.DispatchSubAgentTool;
+import com.gsim.agentsmanager.tool.StopSubAgentTool;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.event.AgentProgressEvent;
-import com.gsim.core.event.AgentProgressSink;
-import com.gsim.core.llm.LlmCall;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmMessage;
-import com.gsim.core.llm.LlmRequest;
-import com.gsim.core.llm.LlmResult;
-import com.gsim.core.llm.StreamPool;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +38,7 @@ public class OrchestratorAgent extends AbstractAgent {
 
     private static final Logger log = LoggerFactory.getLogger(OrchestratorAgent.class);
 
-    private final LlmManager llmManager;
+    private final LlmClient llmManager;
     private final ToolRegistry toolRegistry;
     private final String model;
     private final AgentProgressSink progressSink;
@@ -99,17 +99,17 @@ public class OrchestratorAgent extends AbstractAgent {
         registry.register(new StopSubAgentTool());
     }
 
-    public OrchestratorAgent(LlmManager llmManager, ToolRegistry toolRegistry, String model) {
+    public OrchestratorAgent(LlmClient llmManager, ToolRegistry toolRegistry, String model) {
         this(llmManager, toolRegistry, model, AgentProgressSink.NOOP);
     }
 
     public OrchestratorAgent(
-            LlmManager llmManager, ToolRegistry toolRegistry, String model, AgentProgressSink progressSink) {
+            LlmClient llmManager, ToolRegistry toolRegistry, String model, AgentProgressSink progressSink) {
         this(llmManager, toolRegistry, model, progressSink, null);
     }
 
     public OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -127,7 +127,7 @@ public class OrchestratorAgent extends AbstractAgent {
     }
 
     public OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -147,7 +147,7 @@ public class OrchestratorAgent extends AbstractAgent {
     }
 
     public OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -168,7 +168,7 @@ public class OrchestratorAgent extends AbstractAgent {
     }
 
     OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -190,7 +190,7 @@ public class OrchestratorAgent extends AbstractAgent {
     }
 
     OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -213,7 +213,7 @@ public class OrchestratorAgent extends AbstractAgent {
     }
 
     OrchestratorAgent(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,
@@ -325,11 +325,11 @@ public class OrchestratorAgent extends AbstractAgent {
     /**
      * 调用 LLM — 根据 streamEnabled 配置选择流式或非流式路径。
      *
-     * <p>流式路径：通过 {@link LlmManager#submit} 异步提交，轮询 {@link StreamPool}
+     * <p>流式路径：通过 {@link LlmClient#submit} 异步提交，轮询 {@link StreamPool}
      * 同时将 delta 作为 {@link AgentProgressEvent} 发送给 progressSink（CLI 灰框预览）。
      * 流式结束后通过 {@link LlmCall#await} 获取完整 {@link LlmResult}，语义与 chat() 完全一致。
      *
-     * <p>非流式路径：直接调用 {@link LlmManager#chat}。
+     * <p>非流式路径：直接调用 {@link LlmClient#chat}。
      */
     protected LlmResult callLlm(LlmRequest request) {
         int requestTools = request.tools() != null ? request.tools().size() : 0;

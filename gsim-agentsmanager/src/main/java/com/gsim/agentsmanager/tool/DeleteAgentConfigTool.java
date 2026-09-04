@@ -1,11 +1,8 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agent.AgentConfigStore;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.AgentConfigStore;
+import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.llm.ToolDef;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;

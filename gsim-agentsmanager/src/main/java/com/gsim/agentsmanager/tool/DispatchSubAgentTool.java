@@ -1,18 +1,14 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agent.AgentConfigStore;
-import com.gsim.agent.AgentInstance;
-import com.gsim.agent.EventBusAgentProgressSink;
-import com.gsim.agent.core.AgentFactory;
-import com.gsim.agent.core.AgentResult;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.AgentConfigStore;
+import com.gsim.agentsmanager.AgentInstance;
+import com.gsim.agentsmanager.EventBusAgentProgressSink;
+import com.gsim.agentsmanager.core.AgentFactory;
+import com.gsim.agentsmanager.core.AgentResult;
+import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolRegistry;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.ToolDef;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +48,7 @@ public class DispatchSubAgentTool implements AgentTool {
     private final AgentFactory agentFactory;
     private final AgentConfigStore configStore;
     private final com.gsim.docslib.doc.DocCacheManager docCacheManager;
-    private volatile com.gsim.agent.management.AgentsManager agentsManager;
+    private volatile com.gsim.agentsmanager.management.AgentsManager agentsManager;
 
     public DispatchSubAgentTool(
             LlmManager llmManager,
@@ -81,7 +77,7 @@ public class DispatchSubAgentTool implements AgentTool {
      *
      * @param am AgentsManager 实例，负责创建、运行和等待 Agent 完成
      */
-    public void setAgentsManager(com.gsim.agent.management.AgentsManager am) {
+    public void setAgentsManager(com.gsim.agentsmanager.management.AgentsManager am) {
         this.agentsManager = am;
     }
 

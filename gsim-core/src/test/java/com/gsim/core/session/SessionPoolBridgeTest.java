@@ -2,7 +2,7 @@ package com.gsim.core.session;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressEvent;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

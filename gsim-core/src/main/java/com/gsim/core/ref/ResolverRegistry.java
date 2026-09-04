@@ -1,6 +1,5 @@
 package com.gsim.core.ref;
 
-import com.gsim.docslib.doc.Document;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.importing.ImportDocumentService.ImportDocumentReadResult;
 import com.gsim.core.ref.RefResolver.ResolvedRef;
@@ -9,6 +8,7 @@ import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
 import com.gsim.core.worldinfo.loader.WorldManager;
+import com.gsim.docslib.doc.Document;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;

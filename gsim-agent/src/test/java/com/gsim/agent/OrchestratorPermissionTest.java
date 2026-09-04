@@ -3,7 +3,7 @@ package com.gsim.agent;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentsmanager.tool.ToolRegistry;
-import com.gsim.core.event.AgentProgressSink;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

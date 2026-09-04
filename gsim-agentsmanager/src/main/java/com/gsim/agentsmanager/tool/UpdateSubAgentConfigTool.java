@@ -1,13 +1,10 @@
 package com.gsim.agentsmanager.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.agent.AgentConfig;
-import com.gsim.agent.AgentConfigStore;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.AgentConfig;
+import com.gsim.agentsmanager.AgentConfigStore;
+import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.llm.ToolDef;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;

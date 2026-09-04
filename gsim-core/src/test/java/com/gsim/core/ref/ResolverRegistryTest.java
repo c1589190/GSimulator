@@ -2,12 +2,12 @@ package com.gsim.core.ref;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.loader.NodeLoader;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
+import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;

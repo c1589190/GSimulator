@@ -1,4 +1,4 @@
-package com.gsim.core.cache;
+package com.gsim.agentsmanager.cache;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;

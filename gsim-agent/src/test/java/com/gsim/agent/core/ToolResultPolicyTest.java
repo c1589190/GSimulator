@@ -9,7 +9,7 @@ import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.docslib.doc.DocType;
 import com.gsim.docslib.doc.Document;
-import com.gsim.core.event.AgentProgressSink;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.ProviderConfig;
 import java.io.IOException;

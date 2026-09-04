@@ -1,4 +1,4 @@
-package com.gsim.core.event;
+package com.gsim.agentsmanager.event;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

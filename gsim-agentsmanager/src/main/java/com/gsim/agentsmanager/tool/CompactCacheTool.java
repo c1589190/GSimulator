@@ -1,15 +1,12 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.cache.CachesManager;
+import com.gsim.agentsmanager.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.cache.CachesManager;
 import com.gsim.core.compact.CacheCompactor;
-import com.gsim.core.event.AgentProgressEvent;
-import com.gsim.core.event.AgentProgressSink;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;

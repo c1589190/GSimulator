@@ -1,10 +1,5 @@
 package com.gsim.agentsmanager.mcp;
 
-import com.gsim.agentsmanager.mcp.AbstractMcpServer;
-import com.gsim.agentsmanager.mcp.McpTransport;
-import com.gsim.agentsmanager.mcp.StdioMcpTransport;
-import com.gsim.agentsmanager.mcp.ToolDef;
-import com.gsim.agentsmanager.mcp.ToolRegistryMcpAdapter;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 
 /**

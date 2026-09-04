@@ -1,12 +1,9 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agent.ToolGroup;
-import com.gsim.agent.ToolGroupManager;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.ToolGroup;
+import com.gsim.agentsmanager.ToolGroupManager;
+import com.gsim.agentsmanager.cache.ToolGroupEvent;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.cache.ToolGroupEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -76,7 +73,7 @@ public class ActivateToolGroupsTool implements AgentTool {
                         "description",
                         "要激活的工具组 key 列表，JSON 字符串数组格式，如 \"[\\\"player_action\\\","
                                 + "\\\"knowledge\\\"]\"。不要传入不存在的组 key。"));
-        return com.gsim.core.llm.ToolDef.strictSchema(props, java.util.List.of("groups"));
+        return com.gsim.agentsmanager.llm.ToolDef.strictSchema(props, java.util.List.of("groups"));
     }
 
     @Override

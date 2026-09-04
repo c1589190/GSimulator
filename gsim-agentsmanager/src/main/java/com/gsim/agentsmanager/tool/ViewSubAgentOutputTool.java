@@ -1,11 +1,8 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CachesManager;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CachesManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

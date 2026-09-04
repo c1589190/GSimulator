@@ -1,4 +1,4 @@
-package com.gsim.core.cache;
+package com.gsim.agentsmanager.cache;
 
 import static org.junit.jupiter.api.Assertions.*;
 

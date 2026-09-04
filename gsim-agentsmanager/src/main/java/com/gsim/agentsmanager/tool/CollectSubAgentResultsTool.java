@@ -1,13 +1,10 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agent.AgentInstance;
-import com.gsim.agent.core.AgentResult;
-import com.gsim.agent.management.AgentsManager;
-import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.AgentInstance;
+import com.gsim.agentsmanager.core.AgentResult;
+import com.gsim.agentsmanager.llm.ToolDef;
+import com.gsim.agentsmanager.management.AgentsManager;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.llm.ToolDef;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

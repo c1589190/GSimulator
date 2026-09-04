@@ -4,7 +4,7 @@ import com.gsim.agentsmanager.tool.AgentTool;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.llm.ToolDef;
+import com.gsim.agentsmanager.llm.ToolDef;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

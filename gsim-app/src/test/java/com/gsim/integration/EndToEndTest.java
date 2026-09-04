@@ -3,10 +3,10 @@ package com.gsim.integration;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.app.Bootstrap;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.cache.CachesManager;
-import com.gsim.core.cache.FileSystemCachesManager;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.cache.CachesManager;
+import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;

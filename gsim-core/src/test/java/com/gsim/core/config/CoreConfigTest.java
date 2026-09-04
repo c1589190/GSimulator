@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 /** CoreConfig 主链视图（from 工厂）默认值 / 覆盖 / 回退行为测试。 */
 class CoreConfigTest {
 
-    private static final Map<String, String> DEFAULTS =
-            Map.of(CoreConfig.QUERY_STAGING_THRESHOLD, "3000");
+    private static final Map<String, String> DEFAULTS = Map.of(CoreConfig.QUERY_STAGING_THRESHOLD, "3000");
 
     @Test
     void fromWithDefaultsOnlyReturnsDefaultThresholds() {

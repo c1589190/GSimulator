@@ -1,4 +1,4 @@
-package com.gsim.core.llm;
+package com.gsim.agentsmanager.llm;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;

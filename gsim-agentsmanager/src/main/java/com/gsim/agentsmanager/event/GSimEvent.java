@@ -1,4 +1,4 @@
-package com.gsim.core.event;
+package com.gsim.agentsmanager.event;
 
 import java.time.Instant;
 import java.util.Collections;

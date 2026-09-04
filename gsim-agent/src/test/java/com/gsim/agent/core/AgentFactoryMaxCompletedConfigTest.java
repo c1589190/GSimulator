@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentsmanager.AgentConfigStore;
 import com.gsim.agentsmanager.tool.ToolRegistry;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.event.AgentProgressSink;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import com.gsim.core.llm.LlmManager;
 import com.gsim.core.llm.LlmProviderRegistry;
 import com.gsim.core.llm.ProviderConfig;

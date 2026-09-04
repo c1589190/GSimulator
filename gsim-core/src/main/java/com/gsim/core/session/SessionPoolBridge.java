@@ -1,7 +1,7 @@
 package com.gsim.core.session;
 
-import com.gsim.core.event.AgentProgressEvent;
-import com.gsim.core.event.AgentProgressSink;
+import com.gsim.agentsmanager.event.AgentProgressEvent;
+import com.gsim.agentsmanager.event.AgentProgressSink;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

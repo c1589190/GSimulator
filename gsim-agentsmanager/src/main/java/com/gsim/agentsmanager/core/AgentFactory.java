@@ -1,16 +1,13 @@
 package com.gsim.agentsmanager.core;
 
-import com.gsim.agent.AgentConfig;
-import com.gsim.agent.AgentConfigStore;
-import com.gsim.agent.TaggedAgentProgressSink;
+import com.gsim.agentsmanager.AgentConfig;
+import com.gsim.agentsmanager.AgentConfigStore;
+import com.gsim.agentsmanager.TaggedAgentProgressSink;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.LlmMessage;
 import com.gsim.agentsmanager.tool.ToolRegistry;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.event.AgentProgressSink;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmMessage;
-import com.gsim.core.llm.LlmProvider;
-import com.gsim.core.llm.LlmProviderRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +28,7 @@ public class AgentFactory {
     private static final Logger log = LoggerFactory.getLogger(AgentFactory.class);
 
     private final AgentConfigStore configStore;
-    private final LlmProviderRegistry llmRegistry;
+    private final LlmClient llmClient;
     private final LlmManager llm; // 向后兼容：默认 provider
     private final ToolRegistry allTools;
     private final AgentProgressSink rootSink;
@@ -59,11 +56,11 @@ public class AgentFactory {
      */
     public AgentFactory(
             AgentConfigStore configStore,
-            LlmProviderRegistry llmRegistry,
+            LlmClient llmClient,
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             String model) {
-        this(configStore, llmRegistry, allTools, rootSink, model, 100);
+        this(configStore, llmClient, allTools, rootSink, model, 100);
     }
 
     /**
@@ -78,12 +75,12 @@ public class AgentFactory {
      */
     public AgentFactory(
             AgentConfigStore configStore,
-            LlmProviderRegistry llmRegistry,
+            LlmClient llmClient,
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             String model,
             int maxCompleted) {
-        this(configStore, llmRegistry, allTools, rootSink, model, maxCompleted, null);
+        this(configStore, llmClient, allTools, rootSink, model, maxCompleted, null);
     }
 
     /**
@@ -99,15 +96,15 @@ public class AgentFactory {
      */
     public AgentFactory(
             AgentConfigStore configStore,
-            LlmProviderRegistry llmRegistry,
+            LlmClient llmClient,
             ToolRegistry allTools,
             AgentProgressSink rootSink,
             String model,
             int maxCompleted,
             AbstractAgent.ToolResultPolicy resultPolicy) {
         this.configStore = configStore;
-        this.llmRegistry = llmRegistry;
-        this.llm = (LlmManager) llmRegistry.getDefault();
+        this.llmClient = llmClient;
+        this.llm = llmClient;
         this.allTools = allTools;
         this.rootSink = rootSink;
         this.model = model;
@@ -140,10 +137,8 @@ public class AgentFactory {
         // 直接使用原始 config（系统提示词已是静态完整内容）
         AgentConfig fullConfig = config;
 
-        // 按 Agent 配置选择 LLM provider
-        LlmProvider agentLlm = llmRegistry.get(config.llmProvider());
-        // 使用 rootSink — 调用方可随后 replaceProgressSink()
-        return new AbstractAgent(fullConfig, (LlmManager) agentLlm, allTools, rootSink, model, resultPolicy);
+        // 使用注入的默认 LLM client — 使用 rootSink，调用方可随后 replaceProgressSink()
+        return new AbstractAgent(fullConfig, llmClient, allTools, rootSink, model, resultPolicy);
     }
 
     /**

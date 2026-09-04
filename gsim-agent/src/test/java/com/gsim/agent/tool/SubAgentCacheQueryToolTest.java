@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.cache.CacheSession;
-import com.gsim.core.cache.CacheStore;
-import com.gsim.core.cache.FileSystemCachesManager;
+import com.gsim.agentsmanager.cache.CacheSession;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.core.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Path;

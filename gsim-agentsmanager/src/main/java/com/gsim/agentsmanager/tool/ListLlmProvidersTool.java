@@ -1,9 +1,6 @@
 package com.gsim.agentsmanager.tool;
 
-import com.gsim.agentsmanager.tool.AgentTool;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.agentsmanager.tool.ToolCall;
-import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.llm.LlmProvider;
 import com.gsim.core.llm.LlmProviderRegistry;
 import com.gsim.core.llm.ProviderConfig;
@@ -38,7 +35,7 @@ public class ListLlmProvidersTool implements AgentTool {
 
     @Override
     public Map<String, Object> getParameters() {
-        return com.gsim.core.llm.ToolDef.strictSchema(Map.of(), List.of());
+        return com.gsim.agentsmanager.llm.ToolDef.strictSchema(Map.of(), List.of());
     }
 
     @Override

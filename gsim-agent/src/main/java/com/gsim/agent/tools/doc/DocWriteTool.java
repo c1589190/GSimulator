@@ -17,7 +17,7 @@ public final class DocWriteTool implements AgentTool {
 
     private final DocStore store;
     private final com.gsim.docslib.doc.DocCacheManager cacheManager;
-    private final com.gsim.core.event.AgentProgressSink progressSink;
+    private final com.gsim.agentsmanager.event.AgentProgressSink progressSink;
 
     /**
      * 创建文档写入工具实例。
@@ -29,7 +29,7 @@ public final class DocWriteTool implements AgentTool {
     public DocWriteTool(
             DocStore store,
             com.gsim.docslib.doc.DocCacheManager cacheManager,
-            com.gsim.core.event.AgentProgressSink progressSink) {
+            com.gsim.agentsmanager.event.AgentProgressSink progressSink) {
         this.store = store;
         this.cacheManager = cacheManager;
         this.progressSink = progressSink;
@@ -132,7 +132,7 @@ public final class DocWriteTool implements AgentTool {
             if (isBoard) {
                 String boardTitle = !newTitle.isEmpty() ? newTitle : (old != null ? old.title() : docId);
                 progressSink.onProgress(
-                        com.gsim.core.event.AgentProgressEvent.publicMessage("\n📋 " + boardTitle + "\n" + content));
+                        com.gsim.agentsmanager.event.AgentProgressEvent.publicMessage("\n📋 " + boardTitle + "\n" + content));
             }
 
             // 同时更新元数据
