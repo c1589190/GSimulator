@@ -42,8 +42,6 @@ public class GSimulatorApplication {
     private WorldCommand worldCommand;
     private NodeCommand nodeCommand;
     private ChatCommand chatCommand;
-    private com.gsim.core.compact.CacheCompactor cacheCompactor;
-    private com.gsim.commands.CompactCommand compactCommand;
     private com.gsim.docslib.doc.DocCacheManager docCacheManager;
     private com.gsim.core.config.CoreConfig coreConfig;
     private com.gsim.agentsmanager.ref.InlineRefResolver inlineRefResolver;
@@ -221,8 +219,11 @@ public class GSimulatorApplication {
                 java.util.Map.of());
         this.inlineRefResolver = new com.gsim.agentsmanager.ref.InlineRefResolver(docStore, importDocService);
 
-        // 统一引用解析注册中心（内置 @world/@doc/@cache/@import/裸引用；gsimap: 由 Main 在 MapService 就绪后注册进同一实例）
+        // 统一引用解析注册中心（内置 @doc/@cache/@import；@world/裸引用 由 core 的 WorldResolvers 注册；gsimap: 由 Main 注册）
         com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry = com.gsim.agentsmanager.ref.ResolverRegistry.createWithBuiltins();
+        // B 方案依赖反转：core 实现 @world:/裸引用 解析，装配时注册
+        resolverRegistry.register(new com.gsim.core.ref.WorldResolvers.WorldRefResolver());
+        resolverRegistry.register(new com.gsim.core.ref.WorldResolvers.BareRefResolver());
         ctx.setResolverRegistry(resolverRegistry);
 
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
@@ -441,21 +442,6 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agentsmanager.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
         toolRegistry.register(new com.gsim.agentsmanager.tool.ListAgentConfigTool(agentConfigStore));
         toolRegistry.register(new com.gsim.agentsmanager.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
-
-        // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
-        var compactProvider = ctx.getLlmProviderRegistry().get("compact");
-        var compactLlm = (compactProvider instanceof com.gsim.agentsmanager.llm.LlmManager m) ? m : null;
-        if (compactLlm != null) {
-            log.info("Using compact LLM provider: id={}", compactLlm.providerId());
-        } else {
-            compactLlm = ctx.getLlmManager();
-            log.info("No 'compact' provider in llms.json, using default LLM for compaction");
-        }
-        this.cacheCompactor = new com.gsim.core.compact.CacheCompactor(compactLlm, 4096);
-
-        // Compact Cache 工具（Agent 可调用）
-        toolRegistry.register(
-                new com.gsim.agentsmanager.tool.CompactCacheTool(ctx.getCachesManager(), cacheCompactor, compositeSink));
     }
 
     /**
@@ -528,17 +514,8 @@ public class GSimulatorApplication {
         this.nodeCommand = nc;
         this.chatCommand = cc;
 
-        // Compact command（如果 cacheCompactor 可用）
-        if (cacheCompactor != null) {
-            this.compactCommand = new com.gsim.commands.CompactCommand(
-                    ctx.getCachesManager(),
-                    cacheCompactor,
-                    compositeSink,
-                    (userInput, priorMessages) -> orchestrator.run(userInput, priorMessages));
-            adapter.setCompactCommand(compactCommand);
-
-            // Board 指令（公开展示板）
-            var boardDocsDir = config.docsDir();
+        // Board 指令（公开展示板）
+        var boardDocsDir = config.docsDir();
             var boardDocStore = ctx.getDocStore(boardDocsDir);
             var boardCommand = new com.gsim.commands.BoardCommand(boardDocStore, worldInfo);
             adapter.setBoardCommand(boardCommand);

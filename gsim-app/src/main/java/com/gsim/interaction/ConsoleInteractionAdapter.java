@@ -51,7 +51,6 @@ public class ConsoleInteractionAdapter {
     private ChatCommand chatCommand;
     private LlmCommand llmCommand;
     private AgentCommand agentCommand;
-    private com.gsim.commands.CompactCommand compactCommand;
     private com.gsim.commands.BoardCommand boardCommand;
 
     private LineReader lineReader;
@@ -111,10 +110,6 @@ public class ConsoleInteractionAdapter {
     public void setConfigCommands(LlmCommand llmCommand, AgentCommand agentCommand) {
         this.llmCommand = llmCommand;
         this.agentCommand = agentCommand;
-    }
-
-    public void setCompactCommand(com.gsim.commands.CompactCommand cmd) {
-        this.compactCommand = cmd;
     }
 
     public void setBoardCommand(com.gsim.commands.BoardCommand cmd) {
@@ -286,16 +281,6 @@ public class ConsoleInteractionAdapter {
                     return;
                 }
                 String text = llmCommand.execute(args);
-                displayResult(InteractionResult.ok(text));
-            }
-            case "compact" -> {
-                if (compactCommand == null) {
-                    out.println("Compact command not available.");
-                    out.println();
-                    return;
-                }
-                String cacheId = args.isEmpty() ? "" : args.get(0);
-                String text = compactCommand.execute(cacheId);
                 displayResult(InteractionResult.ok(text));
             }
             case "agent" -> {

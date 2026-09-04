@@ -86,6 +86,9 @@ class ResolverRegistryTest {
         docStore.init();
 
         registry = ResolverRegistry.createWithBuiltins();
+        // B 方案：@world:/裸引用 由 core 的 WorldResolvers 实现，装配时注册（T11）
+        registry.register(new com.gsim.core.ref.WorldResolvers.WorldRefResolver());
+        registry.register(new com.gsim.core.ref.WorldResolvers.BareRefResolver());
     }
 
     private ResolverContext ctx(String worldId) {

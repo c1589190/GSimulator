@@ -1,7 +1,11 @@
 package com.gsim;
 
-import com.gsim.agentsmanager.bridge.AgentBridge;
 import com.gsim.agent.tools.search.SearchToolContext;
+import com.gsim.agentsmanager.bridge.AgentBridge;
+import com.gsim.agentsmanager.cache.CacheInfo;
+import com.gsim.agentsmanager.cache.CacheStore;
+import com.gsim.agentsmanager.cache.CachesManager;
+import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.agentsmanager.mcp.McpHttpServer;
 import com.gsim.agentsmanager.mcp.McpResponseConfig;
 import com.gsim.agentsmanager.mcp.ToolResultOverflowHandler;
@@ -10,10 +14,6 @@ import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;
 import com.gsim.app.mcp.DocStagingOverflowHandler;
-import com.gsim.agentsmanager.cache.CacheInfo;
-import com.gsim.agentsmanager.cache.CacheStore;
-import com.gsim.agentsmanager.cache.CachesManager;
-import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.core.config.ConfigDoctor;
 import com.gsim.core.config.ConfigLoader;
 import com.gsim.core.config.ConfigSnapshot;

@@ -212,8 +212,7 @@ public class AppConfig {
         this.mcpResponseMaxPageSize = parseInt(result.get("mcp.response.max_page_size"), 100);
         this.mcpResponseOverflowStagingEnabled =
                 parseBoolean(result.get("mcp.response.overflow_staging.enabled"), true);
-        this.mcpResponseOverflowStagingThreshold =
-                parseInt(result.get("mcp.response.overflow_staging.threshold"), 500);
+        this.mcpResponseOverflowStagingThreshold = parseInt(result.get("mcp.response.overflow_staging.threshold"), 500);
 
         // 文档暂存与临时目录清理
         this.queryStagingThreshold = parseInt(result.get("core.doc.query.staging.threshold"), 3000);
