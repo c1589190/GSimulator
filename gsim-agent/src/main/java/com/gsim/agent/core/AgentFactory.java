@@ -3,7 +3,7 @@ package com.gsim.agent.core;
 import com.gsim.agent.AgentConfig;
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.agent.TaggedAgentProgressSink;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.event.AgentProgressSink;

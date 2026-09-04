@@ -2,7 +2,7 @@ package com.gsim.agent.bridge;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.mcp.GsimRequestContext;
+import com.gsim.agentsmanager.mcp.GsimRequestContext;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;

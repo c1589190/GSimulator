@@ -2,8 +2,8 @@ package com.gsim.agent.tools.search;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;

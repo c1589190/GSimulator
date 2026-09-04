@@ -6,13 +6,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsim.agent.tools.search.StatusTool;
 import com.gsim.agent.tools.worldinfo.WorldListTool;
-import com.gsim.agentlib.mcp.AbstractMcpServer;
-import com.gsim.agentlib.mcp.CompositeMcpToolRegistry;
-import com.gsim.agentlib.mcp.McpToolRegistry;
-import com.gsim.agentlib.mcp.ToolDef;
-import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
-import com.gsim.agentlib.mcp.UnknownToolException;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.mcp.AbstractMcpServer;
+import com.gsim.agentsmanager.mcp.CompositeMcpToolRegistry;
+import com.gsim.agentsmanager.mcp.McpToolRegistry;
+import com.gsim.agentsmanager.mcp.ToolDef;
+import com.gsim.agentsmanager.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentsmanager.mcp.UnknownToolException;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * 集成测试：模拟外部项目使用 gsim-agentlib（经 gsim-agent）作为 MCP 依赖。
+ * 集成测试：模拟外部项目使用 gsim-agentsmanager（经 gsim-agent）作为 MCP 依赖。
  *
  * <p>验证外部项目可以：
  * <ul>

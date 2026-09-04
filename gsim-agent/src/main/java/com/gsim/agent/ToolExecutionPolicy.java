@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool;
 
 /**
  * 工具执行前门禁 — 基于 AgentTool.permission() 进行路由和权限验证。

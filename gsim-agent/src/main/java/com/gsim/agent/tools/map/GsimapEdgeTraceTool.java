@@ -1,8 +1,8 @@
 package com.gsim.agent.tools.map;
 
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.map.service.MapService;
 import java.util.LinkedHashMap;
 import java.util.List;

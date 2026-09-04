@@ -2,8 +2,8 @@ package com.gsim.agent.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.FileSystemCachesManager;

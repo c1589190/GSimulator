@@ -2,8 +2,8 @@ package com.gsim.agent.tools.map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.ref.ResolverContext;
 import com.gsim.core.ref.ResolverRegistry;
 import com.gsim.docslib.util.JsonUtils;

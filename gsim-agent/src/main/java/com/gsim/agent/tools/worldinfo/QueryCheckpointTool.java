@@ -1,10 +1,10 @@
 package com.gsim.agent.tools.worldinfo;
 
 import com.gsim.docslib.staging.DocStaging;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;

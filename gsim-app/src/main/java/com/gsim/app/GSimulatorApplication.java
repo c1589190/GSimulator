@@ -4,7 +4,7 @@ import com.gsim.agent.OrchestratorAgent;
 import com.gsim.agent.bridge.AgentBridge;
 import com.gsim.agent.bridge.CoreToolContext;
 import com.gsim.agent.bridge.WorldInfoToolContext;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;

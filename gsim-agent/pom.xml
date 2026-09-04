@@ -22,7 +22,7 @@
         </dependency>
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsim-agentlib</artifactId>
+            <artifactId>gsim-agentsmanager</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

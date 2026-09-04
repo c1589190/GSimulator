@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfig;
 import com.gsim.agent.core.AbstractAgent.ToolResultPolicy;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.docslib.doc.DocType;
 import com.gsim.docslib.doc.Document;

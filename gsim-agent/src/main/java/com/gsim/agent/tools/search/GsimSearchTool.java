@@ -1,9 +1,9 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.agentlib.mcp.GsimRequestContext;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.mcp.GsimRequestContext;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.ref.RefResolver.ResolvedRef;
 import com.gsim.core.ref.ResolverContext;
 import com.gsim.core.ref.ResolverRegistry;

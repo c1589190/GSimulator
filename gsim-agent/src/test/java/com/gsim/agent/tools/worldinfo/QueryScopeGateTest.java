@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.QueryScope;
 import com.gsim.agent.QueryScopeContext;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.config.CoreConfig;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;

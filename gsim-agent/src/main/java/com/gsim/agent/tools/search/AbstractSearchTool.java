@@ -1,9 +1,9 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.agentlib.mcp.GsimRequestContext;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.mcp.GsimRequestContext;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.search.GenericSearchEngine;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.search.SearchHit;

@@ -4,11 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.AgentConfig;
 import com.gsim.agent.ToolFilterConfig;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmCall;
 import com.gsim.core.llm.LlmManager;

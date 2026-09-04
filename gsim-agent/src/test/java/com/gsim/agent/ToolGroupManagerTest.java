@@ -2,10 +2,10 @@ package com.gsim.agent;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolResult;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;

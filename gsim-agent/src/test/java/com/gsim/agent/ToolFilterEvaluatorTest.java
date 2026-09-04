@@ -2,7 +2,7 @@ package com.gsim.agent;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -7,8 +7,8 @@ import com.gsim.agent.AgentInstance;
 import com.gsim.agent.AgentStatus;
 import com.gsim.agent.management.AgentCacheStore;
 import com.gsim.agent.management.AgentsManager;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.event.EventBus;
@@ -102,7 +102,7 @@ class StopSubAgentToolTest {
                 configStore,
                 agentCacheStore,
                 llmRegistry,
-                new com.gsim.agentlib.tool.ToolRegistry(),
+                new com.gsim.agentsmanager.tool.ToolRegistry(),
                 AgentProgressSink.NOOP,
                 new EventBus(),
                 "test-model",

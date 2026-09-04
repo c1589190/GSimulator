@@ -32,7 +32,7 @@
         </dependency>
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsim-agentlib</artifactId>
+            <artifactId>gsim-agentsmanager</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -70,7 +70,7 @@
         <plugins>
             <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-app-baseline.xml（2026-08-13 重建，70 个 issue）；
                  app 模块承载迁移代码（GSimulatorApplication 等），与 core/agent 一致的 baseline 对比模式（failOnError=false）；
-                 零容忍（failOnError=true）留给 gsim-agentlib/gsim-map。 -->
+                 零容忍（failOnError=true）留给 gsim-agentsmanager/gsim-map。 -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>

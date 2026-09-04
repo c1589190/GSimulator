@@ -1,6 +1,6 @@
 package com.gsim.interaction;
 
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.core.llm.LlmManager;
 

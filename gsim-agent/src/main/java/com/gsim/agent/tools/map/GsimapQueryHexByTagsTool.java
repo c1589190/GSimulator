@@ -1,9 +1,9 @@
 package com.gsim.agent.tools.map;
 
-import com.gsim.agentlib.mcp.GsimRequestContext;
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.mcp.GsimRequestContext;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.util.JsonUtils;
 import com.gsim.map.map.MapData;
 import com.gsim.map.service.MapService;

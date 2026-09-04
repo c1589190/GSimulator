@@ -1,6 +1,6 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.search.SearchHit;
 import com.gsim.map.map.MapData;

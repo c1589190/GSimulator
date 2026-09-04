@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.agentlib.mcp.McpResponseConfig;
-import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.mcp.McpResponseConfig;
+import com.gsim.agentsmanager.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -1,7 +1,7 @@
 package com.gsim.agent.tools.map;
 
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.util.JsonUtils;
 import com.gsim.map.map.MapData;
 import com.gsim.map.service.MapService;

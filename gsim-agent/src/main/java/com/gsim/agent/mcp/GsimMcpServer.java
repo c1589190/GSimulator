@@ -1,18 +1,18 @@
 package com.gsim.agent.mcp;
 
-import com.gsim.agentlib.mcp.AbstractMcpServer;
-import com.gsim.agentlib.mcp.McpTransport;
-import com.gsim.agentlib.mcp.StdioMcpTransport;
-import com.gsim.agentlib.mcp.ToolDef;
-import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.mcp.AbstractMcpServer;
+import com.gsim.agentsmanager.mcp.McpTransport;
+import com.gsim.agentsmanager.mcp.StdioMcpTransport;
+import com.gsim.agentsmanager.mcp.ToolDef;
+import com.gsim.agentsmanager.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 
 /**
  * GSimulator MCP (Model Context Protocol) JSON-RPC 2.0 server over stdio.
  *
  * <p>Extends {@link AbstractMcpServer} and uses {@link ToolRegistry} as the
  * single source of truth for all tool definitions. Tools are exposed via the
- * {@link ToolRegistryMcpAdapter} which maps {@link com.gsim.agentlib.tool.AgentTool}
+ * {@link ToolRegistryMcpAdapter} which maps {@link com.gsim.agentsmanager.tool.AgentTool}
  * instances to MCP {@link ToolDef} entries automatically.
  *
  * <h3>Usage</h3>

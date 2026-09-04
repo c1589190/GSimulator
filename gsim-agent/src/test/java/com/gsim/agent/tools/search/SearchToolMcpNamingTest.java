@@ -2,11 +2,11 @@ package com.gsim.agent.tools.search;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agentlib.mcp.ToolDef;
-import com.gsim.agentlib.mcp.ToolRegistryMcpAdapter;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.ToolRegistry;
-import com.gsim.agentlib.util.JsonUtils;
+import com.gsim.agentsmanager.mcp.ToolDef;
+import com.gsim.agentsmanager.mcp.ToolRegistryMcpAdapter;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.ToolRegistry;
+import com.gsim.agentsmanager.util.JsonUtils;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

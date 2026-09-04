@@ -2,10 +2,10 @@ package com.gsim;
 
 import com.gsim.agent.bridge.AgentBridge;
 import com.gsim.agent.tools.search.SearchToolContext;
-import com.gsim.agentlib.mcp.McpHttpServer;
-import com.gsim.agentlib.mcp.McpResponseConfig;
-import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.mcp.McpHttpServer;
+import com.gsim.agentsmanager.mcp.McpResponseConfig;
+import com.gsim.agentsmanager.mcp.ToolResultOverflowHandler;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.app.AppConfig;
 import com.gsim.app.Bootstrap;
 import com.gsim.app.GSimulatorApplication;

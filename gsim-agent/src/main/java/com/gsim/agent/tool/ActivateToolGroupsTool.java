@@ -2,10 +2,10 @@ package com.gsim.agent.tool;
 
 import com.gsim.agent.ToolGroup;
 import com.gsim.agent.ToolGroupManager;
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.core.cache.ToolGroupEvent;
 import java.util.ArrayList;
 import java.util.List;

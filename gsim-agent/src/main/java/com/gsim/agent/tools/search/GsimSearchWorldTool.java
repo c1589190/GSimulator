@@ -1,6 +1,6 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.agentlib.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.core.search.SearchEntry;
 import java.util.List;
 import java.util.Map;

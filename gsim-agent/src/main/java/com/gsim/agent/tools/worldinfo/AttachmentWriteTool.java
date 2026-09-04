@@ -1,9 +1,9 @@
 package com.gsim.agent.tools.worldinfo;
 
-import com.gsim.agentlib.tool.AgentTool;
-import com.gsim.agentlib.tool.AgentTool.Permission;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.NodeLoader;
@@ -49,7 +49,7 @@ public final class AttachmentWriteTool implements AgentTool {
 
     @Override
     public ToolResult execute(ToolCall call) {
-        String worldId = com.gsim.agentlib.mcp.GsimRequestContext.worldId();
+        String worldId = com.gsim.agentsmanager.mcp.GsimRequestContext.worldId();
         if (worldId == null) {
             worldId = call.param("worldId");
         }

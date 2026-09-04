@@ -1,7 +1,7 @@
 package com.gsim.agent.tools.map;
 
 import com.gsim.agent.tools.search.SearchToolContext;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.map.service.MapService;
 
 /**

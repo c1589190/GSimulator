@@ -2,7 +2,7 @@ package com.gsim.app;
 
 import com.gsim.agent.tools.search.LocalFileSearchService;
 import com.gsim.agent.tools.search.WikiSearchTool;
-import com.gsim.agentlib.tool.ToolRegistry;
+import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
 import com.gsim.commands.LlmCommand;

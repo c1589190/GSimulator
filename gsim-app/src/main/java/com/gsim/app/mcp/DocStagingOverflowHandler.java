@@ -1,8 +1,8 @@
 package com.gsim.app.mcp;
 
 import com.gsim.docslib.staging.DocStaging;
-import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.mcp.ToolResultOverflowHandler;
+import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;

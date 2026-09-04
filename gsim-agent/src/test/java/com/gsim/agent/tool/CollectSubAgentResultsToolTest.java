@@ -3,8 +3,8 @@ package com.gsim.agent.tool;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agent.core.AgentResult;
-import com.gsim.agentlib.tool.ToolCall;
-import com.gsim.agentlib.tool.ToolResult;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
