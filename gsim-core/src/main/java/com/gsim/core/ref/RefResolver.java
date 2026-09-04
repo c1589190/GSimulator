@@ -1,6 +1,6 @@
 package com.gsim.core.ref;
 
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Path;
 
 /**

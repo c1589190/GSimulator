@@ -4,9 +4,9 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocCacheManager;
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.DocCacheManager;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.Document;
 import java.util.List;
 import java.util.Map;
 

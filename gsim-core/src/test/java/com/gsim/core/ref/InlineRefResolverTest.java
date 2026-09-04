@@ -2,7 +2,7 @@ package com.gsim.core.ref;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.importing.ImportDocumentService;
 import java.nio.file.Files;
 import java.nio.file.Path;

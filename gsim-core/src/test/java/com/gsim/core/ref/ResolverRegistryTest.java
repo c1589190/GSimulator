@@ -2,7 +2,7 @@ package com.gsim.core.ref;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;

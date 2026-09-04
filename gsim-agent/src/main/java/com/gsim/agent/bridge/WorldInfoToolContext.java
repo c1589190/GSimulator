@@ -1,8 +1,8 @@
 package com.gsim.agent.bridge;
 
 import com.gsim.core.config.CoreConfig;
-import com.gsim.core.doc.DocCacheManager;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocCacheManager;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.nio.file.Path;

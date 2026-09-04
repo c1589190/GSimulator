@@ -8,7 +8,7 @@ import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.core.config.CoreConfig;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;

@@ -6,7 +6,7 @@ import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agent.tools.worldinfo.WriteElementTool;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.Checkpoint;

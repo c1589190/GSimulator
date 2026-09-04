@@ -1,4 +1,4 @@
-package com.gsim.core.doc;
+package com.gsim.docslib.doc;
 
 /**
  * 文档类型 — 统一管理所有 Agent 可读写的文本资产。

@@ -35,6 +35,11 @@
             <artifactId>gsim-agentlib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-docslib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- 交互壳直接依赖（app/commands/interaction/webui 迁入后不再经 core 传递） -->
         <dependency>
             <groupId>org.jline</groupId>

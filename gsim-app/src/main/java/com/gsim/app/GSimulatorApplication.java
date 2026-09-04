@@ -44,7 +44,7 @@ public class GSimulatorApplication {
     private ChatCommand chatCommand;
     private com.gsim.core.compact.CacheCompactor cacheCompactor;
     private com.gsim.commands.CompactCommand compactCommand;
-    private com.gsim.core.doc.DocCacheManager docCacheManager;
+    private com.gsim.docslib.doc.DocCacheManager docCacheManager;
     private com.gsim.core.config.CoreConfig coreConfig;
     private com.gsim.core.ref.InlineRefResolver inlineRefResolver;
     private final WorldManager worldManager;
@@ -121,7 +121,7 @@ public class GSimulatorApplication {
 
         // DocCacheManager（doc 工具与 worldinfo 工具共用，需提前创建）
         Path docsDir = config.docsDir();
-        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve(".cache"));
         try {
             this.docCacheManager.init();
         } catch (java.io.IOException e) {
@@ -149,7 +149,7 @@ public class GSimulatorApplication {
                 config.getImportDir(), config.importDocMaxFullReadChars(), config.importDocDefaultLimit());
 
         // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
-        this.docCacheManager = new com.gsim.core.doc.DocCacheManager(docsDir.resolve(".cache"));
+        this.docCacheManager = new com.gsim.docslib.doc.DocCacheManager(docsDir.resolve(".cache"));
         try {
             this.docCacheManager.init();
         } catch (java.io.IOException e) {
@@ -176,7 +176,7 @@ public class GSimulatorApplication {
                             new String(guideResource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     docStore.create(
                             "agent-api-guide",
-                            com.gsim.core.doc.DocType.OTHER,
+                            com.gsim.docslib.doc.DocType.OTHER,
                             "Agent API 引导手册",
                             guideContent,
                             java.util.List.of("guide", "api", "agent"));
@@ -190,7 +190,7 @@ public class GSimulatorApplication {
         if (config.tmpCleanupEnabled()) {
             try {
                 int removed = docStore.deleteByTypeOlderThan(
-                        com.gsim.core.doc.DocType.TMP,
+                        com.gsim.docslib.doc.DocType.TMP,
                         java.time.Instant.now().minus(java.time.Duration.ofHours(config.tmpMaxAgeHours())));
                 log.info(
                         "TMP doc GC: startup sweep removed {} stale staging docs (max age {}h)",

@@ -33,7 +33,7 @@ import java.util.function.Supplier;
 public record SearchToolContext(
         Supplier<WorldInformation> wiSupplier,
         com.gsim.map.service.MapService mapService,
-        com.gsim.core.doc.DocStore docStore,
+        com.gsim.docslib.doc.DocStore docStore,
         com.gsim.core.ref.ResolverRegistry registry,
         Path worldsDir,
         Path importDir,
@@ -47,7 +47,7 @@ public record SearchToolContext(
     public SearchToolContext(
             Supplier<WorldInformation> wiSupplier,
             com.gsim.map.service.MapService mapService,
-            com.gsim.core.doc.DocStore docStore,
+            com.gsim.docslib.doc.DocStore docStore,
             com.gsim.core.ref.ResolverRegistry registry) {
         this(wiSupplier, mapService, docStore, registry, null, null, null);
     }

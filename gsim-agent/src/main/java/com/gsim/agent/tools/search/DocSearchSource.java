@@ -1,8 +1,8 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.DocType;
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.DocType;
+import com.gsim.docslib.doc.Document;
 import com.gsim.core.search.SearchEntry;
 import java.util.ArrayList;
 import java.util.List;

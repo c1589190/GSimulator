@@ -1,6 +1,6 @@
 package com.gsim.core.ref;
 
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.worldinfo.loader.WorldManager;
 import java.nio.file.Path;
 import java.util.Objects;

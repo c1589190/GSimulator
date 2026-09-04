@@ -4,9 +4,9 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.DocType;
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.DocType;
+import com.gsim.docslib.doc.Document;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +21,7 @@ public final class DocTemplateTool implements AgentTool {
 
     private static final String TEMPLATE_BASE = "gsim/templates/";
     private final DocStore store;
-    private final com.gsim.core.doc.DocCacheManager cacheManager;
+    private final com.gsim.docslib.doc.DocCacheManager cacheManager;
 
     /**
      * 创建文档模板工具实例。
@@ -29,7 +29,7 @@ public final class DocTemplateTool implements AgentTool {
      * @param store         文档存储
      * @param cacheManager  文档缓存管理器
      */
-    public DocTemplateTool(DocStore store, com.gsim.core.doc.DocCacheManager cacheManager) {
+    public DocTemplateTool(DocStore store, com.gsim.docslib.doc.DocCacheManager cacheManager) {
         this.store = store;
         this.cacheManager = cacheManager;
     }

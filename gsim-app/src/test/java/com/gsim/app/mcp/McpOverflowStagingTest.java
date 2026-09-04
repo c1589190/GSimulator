@@ -10,7 +10,7 @@ import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;

@@ -1,8 +1,8 @@
 package com.gsim.commands;
 
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.DocType;
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.DocType;
+import com.gsim.docslib.doc.Document;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.io.IOException;
 import java.util.List;

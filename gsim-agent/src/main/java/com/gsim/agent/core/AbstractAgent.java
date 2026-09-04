@@ -10,7 +10,7 @@ import com.gsim.agent.tools.worldinfo.DocStaging;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.event.AgentProgressEvent;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.llm.LlmCall;

@@ -8,7 +8,7 @@ import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.FileSystemCachesManager;
 import com.gsim.core.config.CoreConfig;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Path;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;

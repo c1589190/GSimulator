@@ -25,6 +25,11 @@
             <artifactId>gsim-agentlib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.gsim</groupId>
+            <artifactId>gsim-docslib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- 地图工具（com.gsim.agent.tools.map.*）依赖 gsim-map 业务层（MapService/MapData 等） -->
         <dependency>
             <groupId>com.gsim</groupId>

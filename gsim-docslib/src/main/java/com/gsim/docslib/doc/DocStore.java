@@ -1,4 +1,4 @@
-package com.gsim.core.doc;
+package com.gsim.docslib.doc;
 
 import java.io.IOException;
 import java.nio.file.Files;

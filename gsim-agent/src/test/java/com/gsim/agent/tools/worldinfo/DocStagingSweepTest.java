@@ -2,9 +2,9 @@ package com.gsim.agent.tools.worldinfo;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.DocType;
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.DocType;
+import com.gsim.docslib.doc.Document;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

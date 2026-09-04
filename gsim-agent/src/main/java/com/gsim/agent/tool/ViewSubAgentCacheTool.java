@@ -12,7 +12,7 @@ import com.gsim.core.cache.CacheInfo;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CachesManager;
 import com.gsim.core.config.CoreConfig;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.llm.ToolDef;
 import java.util.List;
 import java.util.Map;

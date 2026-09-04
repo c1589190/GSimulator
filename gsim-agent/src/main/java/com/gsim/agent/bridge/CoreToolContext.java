@@ -1,7 +1,7 @@
 package com.gsim.agent.bridge;
 
-import com.gsim.core.doc.DocCacheManager;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocCacheManager;
+import com.gsim.docslib.doc.DocStore;
 import com.gsim.core.embedding.EmbeddingClient;
 import com.gsim.core.event.AgentProgressSink;
 import com.gsim.core.importing.ImportDocumentService;

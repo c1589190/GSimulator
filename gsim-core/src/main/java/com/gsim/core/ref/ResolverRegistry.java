@@ -1,6 +1,6 @@
 package com.gsim.core.ref;
 
-import com.gsim.core.doc.Document;
+import com.gsim.docslib.doc.Document;
 import com.gsim.core.importing.ImportDocumentService;
 import com.gsim.core.importing.ImportDocumentService.ImportDocumentReadResult;
 import com.gsim.core.ref.RefResolver.ResolvedRef;

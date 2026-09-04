@@ -3,8 +3,8 @@ package com.gsim.app;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.core.config.ConfigLoader;
-import com.gsim.core.doc.DocStore;
-import com.gsim.core.doc.DocType;
+import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.doc.DocType;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;

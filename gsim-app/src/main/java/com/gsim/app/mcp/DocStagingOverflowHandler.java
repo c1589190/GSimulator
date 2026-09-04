@@ -3,7 +3,7 @@ package com.gsim.app.mcp;
 import com.gsim.agent.tools.worldinfo.DocStaging;
 import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.doc.DocStore;
+import com.gsim.docslib.doc.DocStore;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.util.ArrayList;
