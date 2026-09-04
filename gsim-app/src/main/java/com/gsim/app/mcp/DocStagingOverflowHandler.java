@@ -1,6 +1,6 @@
 package com.gsim.app.mcp;
 
-import com.gsim.agent.tools.worldinfo.DocStaging;
+import com.gsim.docslib.staging.DocStaging;
 import com.gsim.agentlib.mcp.ToolResultOverflowHandler;
 import com.gsim.agentlib.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;

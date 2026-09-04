@@ -3,7 +3,7 @@ package com.gsim.agent.tools.map;
 import com.gsim.core.ref.RefResolver.ResolvedRef;
 import com.gsim.core.ref.Resolver;
 import com.gsim.core.ref.ResolverContext;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.map.map.MapData;
 import com.gsim.map.service.MapService;
 import java.util.LinkedHashMap;

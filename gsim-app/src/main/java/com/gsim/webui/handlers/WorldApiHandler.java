@@ -1,6 +1,6 @@
 package com.gsim.webui.handlers;
 
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import com.gsim.core.worldinfo.loader.WorldManager;

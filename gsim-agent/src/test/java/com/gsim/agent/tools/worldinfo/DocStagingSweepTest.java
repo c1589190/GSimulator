@@ -1,5 +1,6 @@
 package com.gsim.agent.tools.worldinfo;
 
+import com.gsim.docslib.staging.DocStaging;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.docslib.doc.DocStore;

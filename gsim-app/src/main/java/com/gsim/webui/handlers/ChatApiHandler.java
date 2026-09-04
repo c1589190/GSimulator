@@ -8,7 +8,7 @@ import com.gsim.core.session.NodeStatus;
 import com.gsim.core.session.NodeType;
 import com.gsim.core.session.SessionNode;
 import com.gsim.core.session.SessionPool;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.webui.TemplateRenderer;
 import com.sun.net.httpserver.HttpExchange;

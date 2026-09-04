@@ -1,6 +1,6 @@
 package com.gsim.core.worldinfo.loader;
 
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import java.io.IOException;

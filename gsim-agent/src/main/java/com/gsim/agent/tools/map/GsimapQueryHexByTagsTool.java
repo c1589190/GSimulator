@@ -4,7 +4,7 @@ import com.gsim.agentlib.mcp.GsimRequestContext;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.map.map.MapData;
 import com.gsim.map.service.MapService;
 import java.util.ArrayList;

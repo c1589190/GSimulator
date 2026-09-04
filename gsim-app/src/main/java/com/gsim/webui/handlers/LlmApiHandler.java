@@ -2,7 +2,7 @@ package com.gsim.webui.handlers;
 
 import com.gsim.core.llm.LlmConfigManager;
 import com.gsim.core.llm.LlmProviderRegistry;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;

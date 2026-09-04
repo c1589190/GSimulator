@@ -1,4 +1,4 @@
-package com.gsim.agent.tools.worldinfo;
+package com.gsim.docslib.staging;
 
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.docslib.doc.DocType;

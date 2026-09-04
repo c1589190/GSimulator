@@ -1,7 +1,7 @@
 package com.gsim.webui.handlers;
 
 import com.gsim.core.util.IdGenerator;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.core.worldinfo.loader.ActiveStateManager;

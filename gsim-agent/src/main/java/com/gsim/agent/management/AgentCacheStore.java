@@ -3,7 +3,7 @@ package com.gsim.agent.management;
 import com.gsim.agent.AgentConfigStore;
 import com.gsim.core.cache.CacheInfo;
 import com.gsim.core.cache.CacheSession;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

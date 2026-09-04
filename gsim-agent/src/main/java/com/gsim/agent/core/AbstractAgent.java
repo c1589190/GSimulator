@@ -6,7 +6,7 @@ import com.gsim.agent.ParsedToolCall;
 import com.gsim.agent.QueryScopeContext;
 import com.gsim.agent.ToolCallExtractor;
 import com.gsim.agent.ToolFilterEvaluator;
-import com.gsim.agent.tools.worldinfo.DocStaging;
+import com.gsim.docslib.staging.DocStaging;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolRegistry;
 import com.gsim.agentlib.tool.ToolResult;

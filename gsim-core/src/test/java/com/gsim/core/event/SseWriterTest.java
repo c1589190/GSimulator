@@ -2,7 +2,7 @@ package com.gsim.core.event;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

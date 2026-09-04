@@ -1,5 +1,6 @@
 package com.gsim.agent.tools.worldinfo;
 
+import com.gsim.docslib.staging.DocStaging;
 import com.gsim.agentlib.tool.AgentTool;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;

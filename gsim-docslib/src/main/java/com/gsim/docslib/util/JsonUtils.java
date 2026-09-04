@@ -1,4 +1,4 @@
-package com.gsim.core.util;
+package com.gsim.docslib.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;

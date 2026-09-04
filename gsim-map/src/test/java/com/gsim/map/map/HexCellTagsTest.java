@@ -2,7 +2,7 @@ package com.gsim.map.map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;

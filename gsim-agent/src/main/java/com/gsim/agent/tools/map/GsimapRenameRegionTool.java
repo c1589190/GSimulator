@@ -4,7 +4,7 @@ import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agentlib.tool.AgentTool.Permission;
 import com.gsim.agentlib.tool.ToolCall;
 import com.gsim.agentlib.tool.ToolResult;
-import com.gsim.core.util.JsonUtils;
+import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.ElementRef;
 import com.gsim.core.worldinfo.NodeSnapshot;
