@@ -1,7 +1,7 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.agent.QueryScope;
-import com.gsim.agent.QueryScopeContext;
+import com.gsim.agentsmanager.QueryScope;
+import com.gsim.agentsmanager.QueryScopeContext;
 import com.gsim.core.search.SearchEntry;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;

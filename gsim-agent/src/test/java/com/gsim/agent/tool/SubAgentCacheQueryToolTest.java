@@ -1,4 +1,4 @@
-package com.gsim.agent.tool;
+package com.gsim.agentsmanager.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 

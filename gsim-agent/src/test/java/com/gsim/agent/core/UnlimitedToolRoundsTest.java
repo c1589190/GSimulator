@@ -1,9 +1,9 @@
-package com.gsim.agent.core;
+package com.gsim.agentsmanager.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.AgentConfig;
-import com.gsim.agent.ToolFilterConfig;
+import com.gsim.agentsmanager.AgentConfig;
+import com.gsim.agentsmanager.ToolFilterConfig;
 import com.gsim.agentsmanager.tool.AgentTool;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
 import com.gsim.agentsmanager.tool.ToolCall;

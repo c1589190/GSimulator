@@ -1,9 +1,9 @@
 package com.gsim.app;
 
-import com.gsim.agent.OrchestratorAgent;
-import com.gsim.agent.bridge.AgentBridge;
-import com.gsim.agent.bridge.CoreToolContext;
-import com.gsim.agent.bridge.WorldInfoToolContext;
+import com.gsim.agentsmanager.OrchestratorAgent;
+import com.gsim.agentsmanager.bridge.AgentBridge;
+import com.gsim.agentsmanager.bridge.CoreToolContext;
+import com.gsim.agentsmanager.bridge.WorldInfoToolContext;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.commands.AgentCommand;
 import com.gsim.commands.ChatCommand;
@@ -32,7 +32,7 @@ public class GSimulatorApplication {
     private final com.gsim.webui.WebUiServer webUiServer;
     private com.gsim.webui.CliWebSocketServer cliWsServer;
     private com.gsim.core.event.CompositeAgentProgressSink compositeSink;
-    private com.gsim.agent.core.AgentFactory agentFactory;
+    private com.gsim.agentsmanager.core.AgentFactory agentFactory;
 
     // -- Bootstrap result wiring --
     private OrchestratorAgent orchestrator;
@@ -135,9 +135,9 @@ public class GSimulatorApplication {
         if (agentEnabled) {
             var jlineTerminal = adapter.getJlineTerminal();
             var cliProgressSink = jlineTerminal != null
-                    ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
-                    : new com.gsim.agent.CliAgentProgressSink(System.out, true);
-            var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
+                    ? com.gsim.agentsmanager.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
+                    : new com.gsim.agentsmanager.CliAgentProgressSink(System.out, true);
+            var eventBusSink = new com.gsim.agentsmanager.EventBusAgentProgressSink(ctx.getEventBus());
             this.compositeSink = new com.gsim.core.event.CompositeAgentProgressSink(
                     cliProgressSink, eventBusSink, sessionPoolBridge);
         } else {
@@ -320,7 +320,7 @@ public class GSimulatorApplication {
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
             var agentApiHandler = new com.gsim.webui.handlers.AgentApiHandler(
-                    new com.gsim.agent.config.AgentConfigManager(agentFactory.store(), config.agentsDir()));
+                    new com.gsim.agentsmanager.config.AgentConfigManager(agentFactory.store(), config.agentsDir()));
             webUiServer.registerHandler("/api/agents", agentApiHandler);
 
             var worldApiHandler = new com.gsim.webui.handlers.WorldApiHandler(
@@ -336,18 +336,18 @@ public class GSimulatorApplication {
         // Use JLine terminal output for proper scroll/cursor coordination
         var jlineTerminal = adapter.getJlineTerminal();
         var cliProgressSink = jlineTerminal != null
-                ? com.gsim.agent.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
-                : new com.gsim.agent.CliAgentProgressSink(System.out, true);
-        var eventBusSink = new com.gsim.agent.EventBusAgentProgressSink(ctx.getEventBus());
+                ? com.gsim.agentsmanager.CliAgentProgressSink.fromJlineTerminal(jlineTerminal)
+                : new com.gsim.agentsmanager.CliAgentProgressSink(System.out, true);
+        var eventBusSink = new com.gsim.agentsmanager.EventBusAgentProgressSink(ctx.getEventBus());
         var sessionPoolBridge = new com.gsim.core.session.SessionPoolBridge(ctx.getSessionPool(), "default");
         this.compositeSink =
                 new com.gsim.core.event.CompositeAgentProgressSink(cliProgressSink, eventBusSink, sessionPoolBridge);
 
         // Tool group manager
-        var toolGroupManager = new com.gsim.agent.ToolGroupManager();
+        var toolGroupManager = new com.gsim.agentsmanager.ToolGroupManager();
 
         // 工具结果反馈策略：超限 snippet 暂存为 TMP 文档（docStore 同 docs 工具组实例）
-        var agentResultPolicy = new com.gsim.agent.core.AbstractAgent.ToolResultPolicy(
+        var agentResultPolicy = new com.gsim.agentsmanager.core.AbstractAgent.ToolResultPolicy(
                 config.resultInlineMaxChars(),
                 config.resultStagingEnabled(),
                 ctx.getDocStore(config.docsDir()),
@@ -360,8 +360,8 @@ public class GSimulatorApplication {
                 config.getLlmModel(),
                 compositeSink,
                 !interactive
-                        ? new com.gsim.agent.AutoApprovePermissionGate()
-                        : new com.gsim.agent.CliToolPermissionGate(),
+                        ? new com.gsim.agentsmanager.AutoApprovePermissionGate()
+                        : new com.gsim.agentsmanager.CliToolPermissionGate(),
                 toolGroupManager,
                 agentResultPolicy);
         this.orchestrator.setMaxToolRounds(config.getAgentToolLoopMaxRounds());
@@ -374,13 +374,13 @@ public class GSimulatorApplication {
         toolRegistry.register(new com.gsim.agent.tools.search.MediaWikiSearchTool(config.wikiUrl()));
 
         // Agent control flow tools
-        toolRegistry.register(new com.gsim.agent.tool.FinishActionTool());
-        toolRegistry.register(new com.gsim.agent.tool.ActivateToolGroupsTool(toolGroupManager));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.FinishActionTool());
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ActivateToolGroupsTool(toolGroupManager));
 
         // Sub-agent tools — 从 agents/ 目录加载配置
-        var agentConfigStore = new com.gsim.agent.AgentConfigStore();
+        var agentConfigStore = new com.gsim.agentsmanager.AgentConfigStore();
         agentConfigStore.reload(config.agentsDir());
-        this.agentFactory = new com.gsim.agent.core.AgentFactory(
+        this.agentFactory = new com.gsim.agentsmanager.core.AgentFactory(
                 agentConfigStore,
                 ctx.getLlmProviderRegistry(),
                 toolRegistry,
@@ -391,9 +391,9 @@ public class GSimulatorApplication {
 
         // ── Agent 管理层（仿 World/Docs 体系：Store → Manager → HTTP API）──
         Path cachesBaseDir = config.cachesDir();
-        var agentCacheStore = new com.gsim.agent.management.AgentCacheStore(cachesBaseDir, agentConfigStore);
+        var agentCacheStore = new com.gsim.agentsmanager.management.AgentCacheStore(cachesBaseDir, agentConfigStore);
         agentCacheStore.init();
-        var agentsManager = new com.gsim.agent.management.AgentsManager(
+        var agentsManager = new com.gsim.agentsmanager.management.AgentsManager(
                 agentConfigStore,
                 agentCacheStore,
                 ctx.getLlmProviderRegistry(),
@@ -407,40 +407,40 @@ public class GSimulatorApplication {
 
         // 将 AgentsManager 注入到 DispatchSubAgentTool（新路径优先）
         var dispatchTool = toolRegistry.get("dispatch_sub_agent");
-        if (dispatchTool instanceof com.gsim.agent.tool.DispatchSubAgentTool d) {
+        if (dispatchTool instanceof com.gsim.agentsmanager.tool.DispatchSubAgentTool d) {
             d.setAgentsManager(agentsManager);
         }
         // 将 AgentsManager 注入到 collect 工具（异步结果查询）
         var collectTool = toolRegistry.get("collect_sub_agent_results");
-        if (collectTool instanceof com.gsim.agent.tool.CollectSubAgentResultsTool c) {
+        if (collectTool instanceof com.gsim.agentsmanager.tool.CollectSubAgentResultsTool c) {
             c.setAgentsManager(agentsManager);
         }
         // 将 AgentsManager 注入到 stop 工具（按 agentId 停止运行中的子代理）
         var stopTool = toolRegistry.get("stop_sub_agent");
-        if (stopTool instanceof com.gsim.agent.tool.StopSubAgentTool s) {
+        if (stopTool instanceof com.gsim.agentsmanager.tool.StopSubAgentTool s) {
             s.setAgentsManager(agentsManager);
         }
 
         // SubAgent cache 管理工具
-        toolRegistry.register(new com.gsim.agent.tool.ListSubAgentCachesTool(ctx.getCachesManager()));
-        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentCacheTool(
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ListSubAgentCachesTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ViewSubAgentCacheTool(
                 ctx.getCachesManager(), ctx.getDocStore(config.docsDir()), coreConfig));
-        toolRegistry.register(new com.gsim.agent.tool.ViewSubAgentOutputTool(ctx.getCachesManager()));
-        toolRegistry.register(new com.gsim.agent.tool.QuerySubAgentCacheTool(
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ViewSubAgentOutputTool(ctx.getCachesManager()));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.QuerySubAgentCacheTool(
                 ctx.getCachesManager(), ctx.getDocStore(config.docsDir()), coreConfig));
 
         // 将 AgentsManager 注入到 view 工具（状态标记）——必须在注册之后取实例
         var viewCacheTool = toolRegistry.get("view_sub_agent_cache");
-        if (viewCacheTool instanceof com.gsim.agent.tool.ViewSubAgentCacheTool v) {
+        if (viewCacheTool instanceof com.gsim.agentsmanager.tool.ViewSubAgentCacheTool v) {
             v.setAgentsManager(agentsManager);
         }
 
         // LLM provider 列表 + 动态创建 SubAgent 配置
-        toolRegistry.register(new com.gsim.agent.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));
-        toolRegistry.register(new com.gsim.agent.tool.CreateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
-        toolRegistry.register(new com.gsim.agent.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
-        toolRegistry.register(new com.gsim.agent.tool.ListAgentConfigTool(agentConfigStore));
-        toolRegistry.register(new com.gsim.agent.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ListLlmProvidersTool(ctx.getLlmProviderRegistry()));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.CreateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.UpdateSubAgentConfigTool(config.agentsDir(), agentConfigStore));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.ListAgentConfigTool(agentConfigStore));
+        toolRegistry.register(new com.gsim.agentsmanager.tool.DeleteAgentConfigTool(agentConfigStore, config.agentsDir()));
 
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
@@ -455,7 +455,7 @@ public class GSimulatorApplication {
 
         // Compact Cache 工具（Agent 可调用）
         toolRegistry.register(
-                new com.gsim.agent.tool.CompactCacheTool(ctx.getCachesManager(), cacheCompactor, compositeSink));
+                new com.gsim.agentsmanager.tool.CompactCacheTool(ctx.getCachesManager(), cacheCompactor, compositeSink));
     }
 
     /**
@@ -553,7 +553,7 @@ public class GSimulatorApplication {
         // LLM + Agent config management commands
         var llmConfigManager =
                 new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds());
-        var agentConfigManager = new com.gsim.agent.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
+        var agentConfigManager = new com.gsim.agentsmanager.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);
         adapter.setConfigCommands(llmCmd, agentCmd);

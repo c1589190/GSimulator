@@ -1,6 +1,6 @@
 package com.gsim.agent;
 
-import static com.gsim.agent.OrchestratorAgent.isMeaningfulAssistantContent;
+import static com.gsim.agentsmanager.OrchestratorAgent.isMeaningfulAssistantContent;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.DisplayName;

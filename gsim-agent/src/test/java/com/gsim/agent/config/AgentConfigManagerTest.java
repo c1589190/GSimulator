@@ -1,8 +1,8 @@
-package com.gsim.agent.config;
+package com.gsim.agentsmanager.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.AgentConfigStore;
+import com.gsim.agentsmanager.AgentConfigStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;

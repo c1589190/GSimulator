@@ -1,6 +1,6 @@
 package com.gsim;
 
-import com.gsim.agent.bridge.AgentBridge;
+import com.gsim.agentsmanager.bridge.AgentBridge;
 import com.gsim.agent.tools.search.SearchToolContext;
 import com.gsim.agentsmanager.mcp.McpHttpServer;
 import com.gsim.agentsmanager.mcp.McpResponseConfig;

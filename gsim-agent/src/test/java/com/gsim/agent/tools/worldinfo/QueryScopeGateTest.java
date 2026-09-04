@@ -2,8 +2,8 @@ package com.gsim.agent.tools.worldinfo;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.QueryScope;
-import com.gsim.agent.QueryScopeContext;
+import com.gsim.agentsmanager.QueryScope;
+import com.gsim.agentsmanager.QueryScopeContext;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.tool.ToolResult;

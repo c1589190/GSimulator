@@ -1,4 +1,4 @@
-package com.gsim.agent.bridge;
+package com.gsim.agentsmanager.bridge;
 
 import static org.junit.jupiter.api.Assertions.*;
 

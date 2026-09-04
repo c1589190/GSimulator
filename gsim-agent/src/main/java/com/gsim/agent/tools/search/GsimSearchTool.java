@@ -180,8 +180,8 @@ public final class GsimSearchTool implements AgentTool {
             // 世界元素地址：应用 scope gate（含 internal 硬规则）。
             // 其他源（doc/cache/import/gsimap）不适用元素级 tag 门控。
             if ("world".equals(ref.source())) {
-                com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
-                if (scope == null) scope = com.gsim.agent.QueryScope.none();
+                com.gsim.agentsmanager.QueryScope scope = com.gsim.agentsmanager.QueryScopeContext.get();
+                if (scope == null) scope = com.gsim.agentsmanager.QueryScope.none();
                 if (!isWorldRefAllowed(scope, ref.id())) {
                     return ToolResult.fail(name(), "地址 '" + query + "' 不在当前 Agent 的查询权限范围内");
                 }
@@ -207,7 +207,7 @@ public final class GsimSearchTool implements AgentTool {
      * 只含 content，不含元素 {@code tags}。要应用 internal 硬规则与 tag 白名单，
      * 需回溯到源元素取 tags。解析失败时保守放行（保持地址模式既有行为）。
      */
-    private boolean isWorldRefAllowed(com.gsim.agent.QueryScope scope, String worldRefId) {
+    private boolean isWorldRefAllowed(com.gsim.agentsmanager.QueryScope scope, String worldRefId) {
         String[] parts = worldRefId.split(":", 3);
         if (parts.length != 3) return true;
         String nodeId = parts[0], cpId = parts[1], key = parts[2];

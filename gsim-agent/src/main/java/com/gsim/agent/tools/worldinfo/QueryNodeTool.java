@@ -60,8 +60,8 @@ public final class QueryNodeTool implements AgentTool {
 
         boolean detail = "true".equalsIgnoreCase(call.param("detail"));
         int threshold = coreConfig.getInt(CoreConfig.QUERY_STAGING_THRESHOLD, 3000);
-        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
-        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        com.gsim.agentsmanager.QueryScope scope = com.gsim.agentsmanager.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agentsmanager.QueryScope.none();
         List<ToolResult.Item> items = new java.util.ArrayList<>();
         for (var entry : node.checkpoints().entrySet()) {
             String cpId = entry.getKey();

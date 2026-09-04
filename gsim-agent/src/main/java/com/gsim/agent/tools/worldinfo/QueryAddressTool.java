@@ -95,8 +95,8 @@ public final class QueryAddressTool implements AgentTool {
         // Route 3: plain text → tag lookup
         WorldInformation wi = worldInfo.get();
         List<ElementRef> refs = wi.byTag(address);
-        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
-        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        com.gsim.agentsmanager.QueryScope scope = com.gsim.agentsmanager.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agentsmanager.QueryScope.none();
         refs = scope.filterRefs(refs);
 
         if (refs.isEmpty()) {

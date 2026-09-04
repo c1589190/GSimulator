@@ -1,0 +1,190 @@
+package com.gsim.agentsmanager.tool;
+
+import com.gsim.agentsmanager.tool.AgentTool;
+import com.gsim.agentsmanager.tool.AgentTool.Permission;
+import com.gsim.agentsmanager.tool.ToolCall;
+import com.gsim.agentsmanager.tool.ToolResult;
+import com.gsim.core.cache.CacheSession;
+import com.gsim.core.cache.CachesManager;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 滑动窗口读取 SubAgent 的对话输出 — 解决子Agent结果被截断的问题。
+ *
+ * <p>按 assistant 消息（含 tool_calls）分段，支持 offset/limit 分页读取。
+ * 主 Agent 可多次调用，逐段读取子Agent的完整推理过程和工具调用。
+ */
+public final class ViewSubAgentOutputTool implements AgentTool {
+
+    private final CachesManager cachesManager;
+
+    public ViewSubAgentOutputTool(CachesManager cachesManager) {
+        this.cachesManager = cachesManager;
+    }
+
+    @Override
+    public String name() {
+        return "view_sub_agent_output";
+    }
+
+    @Override
+    public String description() {
+        return "分页读取 SubAgent 的完整对话输出（assistant 消息和工具调用），解决输出被截断的问题。"
+                + "参数: cacheId (SubAgent cache 文件名, 必填), "
+                + "offset (起始消息序号, 默认0), "
+                + "limit (返回消息数, 默认50, 最大200)。"
+                + "每次调用返回一段消息，通过增大 offset 来滑动窗口。";
+    }
+
+    @Override
+    public Map<String, Object> getParameters() {
+        return Map.of(
+                "type", "object",
+                "properties",
+                        Map.of(
+                                "cacheId",
+                                        Map.of(
+                                                "type",
+                                                "string",
+                                                "description",
+                                                "SubAgent cache 文件名（如 sim-1_2026-...json）"),
+                                "offset", Map.of("type", "integer", "description", "起始消息序号（0-based），默认 0"),
+                                "limit", Map.of("type", "integer", "description", "返回消息数，默认 50，最大 200")),
+                "required", List.of("cacheId"));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public ToolResult execute(ToolCall call) {
+        String cacheId = call.param("cacheId", "").trim();
+        if (cacheId.isEmpty()) return ToolResult.fail(name(), "cacheId 不能为空");
+
+        CacheSession session = cachesManager.loadCache(cacheId);
+        if (session == null) {
+            return ToolResult.fail(name(), "Cache 未找到: " + cacheId);
+        }
+
+        // 检查是否有更新的同类型缓存（强制只读最新输出）
+        String agentType = extractAgentType(session.agentName());
+        if (agentType != null) {
+            var cacheList = cachesManager.listCaches(agentType);
+            if (!cacheList.isEmpty()) {
+                var latest = cacheList.get(0); // listCaches 已按 createdAt 降序
+                if (!latest.sessionId().equals(cacheId)) {
+                    return ToolResult.fail(
+                            name(),
+                            "此缓存已过期。该 SubAgent 有更新的输出: "
+                                    + latest.sessionId() + " (created " + latest.createdAt() + ")。"
+                                    + "请用新的 cacheId 重新调用。");
+                }
+            }
+        }
+
+        int offset = Math.max(0, parseInt(call.param("offset"), 0));
+        int limit = Math.min(Math.max(1, parseInt(call.param("limit"), 50)), 200);
+
+        List<Map<String, Object>> messages = session.messages();
+
+        // 筛选 assistant + tool 消息（排除 system），构建消息列表
+        List<OutputSegment> segments = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            Map<String, Object> msg = messages.get(i);
+            String role = (String) msg.getOrDefault("role", "");
+            if ("system".equals(role)) continue;
+
+            String content = (String) msg.get("content");
+            List<String> toolNames = new ArrayList<>();
+            Object tcObj = msg.get("tool_calls");
+            if (tcObj instanceof List<?> tcList) {
+                for (Object tc : tcList) {
+                    if (tc instanceof Map<?, ?> tcMap) {
+                        Map<String, Object> fn = (Map<String, Object>) tcMap.get("function");
+                        if (fn != null) toolNames.add((String) fn.get("name"));
+                    }
+                }
+            }
+
+            if (content != null || !toolNames.isEmpty()) {
+                segments.add(new OutputSegment(i, role, content, toolNames));
+            }
+        }
+
+        int total = segments.size();
+        int start = Math.min(offset, total);
+        int end = Math.min(start + limit, total);
+
+        if (start >= total) {
+            return ToolResult.ok(
+                    name(),
+                    List.of(new ToolResult.Item(
+                            "output end", cacheId, "已到末尾。总消息段: " + total + "，请求 offset=" + offset, 0)));
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < end; i++) {
+            OutputSegment seg = segments.get(i);
+            sb.append("[").append(seg.index).append("] ").append(seg.role);
+            if (!seg.toolNames.isEmpty()) {
+                sb.append(" → ").append(seg.toolNames);
+            }
+            sb.append("\n");
+            if (seg.content != null) {
+                sb.append(seg.content);
+                if (!seg.content.endsWith("\n")) sb.append("\n");
+            }
+            sb.append("\n");
+        }
+
+        String title = cacheId + " messages " + start + "-" + (end - 1) + " / " + total;
+        String snippet = sb.toString();
+        boolean hasMore = end < total;
+        String footer = "\n[总消息段: " + total + "]" + (hasMore ? " [还有更多: offset=" + end + "]" : " [已到末尾]");
+
+        return ToolResult.ok(
+                name(), List.of(new ToolResult.Item(title, cacheId, snippet + footer, hasMore ? 0.5 : 1.0)));
+    }
+
+    private record OutputSegment(int index, String role, String content, List<String> toolNames) {}
+
+    /**
+     * 从 agentName 中提取 SubAgent 类型前缀。
+     *
+     * <p>例如 {@code "sim-1"} → {@code "sim"}，{@code "search-2"} → {@code "search"}。
+     * 对于自定义 agent（如 {@code "zhangxiaoming-1"}），取第一个 {@code -} 之前的部分。
+     * 非标准格式直接返回原 agentName。
+     *
+     * @param agentName agent 名称字符串
+     * @return 类型前缀，如 {@code "sim"}、{@code "search"}；{@code null} 入参返回 {@code null}
+     */
+    static String extractAgentType(String agentName) {
+        if (agentName == null) return null;
+        if (agentName.matches("^(sim|search)-\\d+.*")) {
+            return agentName.replaceAll("^(sim|search)-\\d+.*", "$1");
+        }
+        // 自定义 agent（如 zhangxiaoming-1）→ 取第一个 - 之前的部分
+        int dash = agentName.indexOf('-');
+        if (dash > 0) return agentName.substring(0, dash);
+        return agentName;
+    }
+
+    private static int parseInt(String s, int def) {
+        if (s == null || s.isBlank()) return def;
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    @Override
+    public boolean requiresWorldId() {
+        return false;
+    }
+
+    @Override
+    public Permission permission() {
+        return Permission.READ;
+    }
+}

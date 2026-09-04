@@ -1,8 +1,8 @@
-package com.gsim.agent.tool;
+package com.gsim.agentsmanager.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.core.AgentResult;
+import com.gsim.agentsmanager.core.AgentResult;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
 import java.util.HashMap;

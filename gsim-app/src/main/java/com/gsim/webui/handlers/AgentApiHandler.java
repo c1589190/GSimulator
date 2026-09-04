@@ -1,6 +1,6 @@
 package com.gsim.webui.handlers;
 
-import com.gsim.agent.config.AgentConfigManager;
+import com.gsim.agentsmanager.config.AgentConfigManager;
 import com.gsim.docslib.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;

@@ -1,4 +1,4 @@
-package com.gsim.agent.mcp;
+package com.gsim.agentsmanager.mcp;
 
 import static org.junit.jupiter.api.Assertions.*;
 

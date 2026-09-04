@@ -148,10 +148,10 @@ public final class QueryElementTool implements AgentTool {
         String unifiedId = nodeId + ":" + checkpointId + ":" + key;
 
         // Query scope gate: deny access to elements outside the agent's allowed range
-        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
-        if (scope == null) scope = com.gsim.agent.QueryScope.none();
+        com.gsim.agentsmanager.QueryScope scope = com.gsim.agentsmanager.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agentsmanager.QueryScope.none();
         if (!scope.allows(nodeId, checkpointId, key, found.tags())) {
-            if (com.gsim.agent.QueryScope.isInternal(found.tags())) {
+            if (com.gsim.agentsmanager.QueryScope.isInternal(found.tags())) {
                 return ToolResult.fail(name(), "元素 '" + unifiedId + "' 为 internal 数据，禁止查询");
             }
             return ToolResult.fail(name(), "元素 '" + unifiedId + "' 不在当前 Agent 的查询权限范围内（queryScope 限制）");

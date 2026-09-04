@@ -2,7 +2,7 @@ package com.gsim.agent;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.agent.tool.FinishActionTool;
+import com.gsim.agentsmanager.tool.FinishActionTool;
 import com.gsim.core.llm.ToolDef;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;

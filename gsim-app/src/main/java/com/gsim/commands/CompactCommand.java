@@ -1,6 +1,6 @@
 package com.gsim.commands;
 
-import com.gsim.agent.core.AgentResult;
+import com.gsim.agentsmanager.core.AgentResult;
 import com.gsim.core.cache.CacheSession;
 import com.gsim.core.cache.CacheStore;
 import com.gsim.core.cache.CachesManager;

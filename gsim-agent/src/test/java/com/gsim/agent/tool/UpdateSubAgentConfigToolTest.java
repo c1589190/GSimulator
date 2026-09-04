@@ -1,10 +1,10 @@
-package com.gsim.agent.tool;
+package com.gsim.agentsmanager.tool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gsim.agent.AgentConfigStore;
+import com.gsim.agentsmanager.AgentConfigStore;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
 import java.nio.file.Files;

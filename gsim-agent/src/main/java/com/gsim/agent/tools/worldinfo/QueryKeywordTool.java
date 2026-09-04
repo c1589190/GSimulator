@@ -55,9 +55,9 @@ public final class QueryKeywordTool implements AgentTool {
         KeywordIndex.SearchResult result = wi.keywordIndex().search(keywords, limit, offset, checkpointId);
 
         java.util.List<KeywordIndex.SearchHit> hits = result.items();
-        com.gsim.agent.QueryScope scope = com.gsim.agent.QueryScopeContext.get();
-        if (scope == null) scope = com.gsim.agent.QueryScope.none();
-        final com.gsim.agent.QueryScope finalScope = scope;
+        com.gsim.agentsmanager.QueryScope scope = com.gsim.agentsmanager.QueryScopeContext.get();
+        if (scope == null) scope = com.gsim.agentsmanager.QueryScope.none();
+        final com.gsim.agentsmanager.QueryScope finalScope = scope;
         hits = hits.stream().filter(h -> finalScope.allows(h.elementRef())).toList();
 
         List<ToolResult.Item> items = hits.stream()

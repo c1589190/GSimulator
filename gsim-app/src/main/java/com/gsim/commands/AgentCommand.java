@@ -1,6 +1,6 @@
 package com.gsim.commands;
 
-import com.gsim.agent.config.AgentConfigManager;
+import com.gsim.agentsmanager.config.AgentConfigManager;
 import java.util.List;
 import java.util.Map;
 
