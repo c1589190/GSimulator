@@ -71,6 +71,9 @@ public final class NodeCreateTool implements AgentTool {
         }
 
         WorldInformation wi = worldInfo.get();
+        if (wi == null) {
+            return ToolResult.fail("node_create", "世界不存在或未加载：无法创建节点");
+        }
         String worldId = call.param("worldId");
         if (worldId == null || worldId.isBlank()) {
             return ToolResult.fail("node_create", "[WORLD_ID_REQUIRED] worldId is required");

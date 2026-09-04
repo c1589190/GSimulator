@@ -53,6 +53,9 @@ public final class QueryNodeTool implements AgentTool {
         }
 
         WorldInformation wi = worldInfo.get();
+        if (wi == null) {
+            return ToolResult.fail("query_node", "世界不存在或未加载：无法查询节点");
+        }
         NodeSnapshot node = wi.nodeById(nodeId);
         if (node == null) {
             return ToolResult.fail("query_node", "Unknown node: " + nodeId);

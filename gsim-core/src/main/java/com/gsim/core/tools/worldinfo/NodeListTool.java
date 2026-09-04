@@ -48,6 +48,9 @@ public final class NodeListTool implements AgentTool {
         String mode = call.param("mode");
         String referenceNodeId = call.param("nodeId");
         WorldInformation wi = worldInfo.get();
+        if (wi == null) {
+            return ToolResult.fail(name(), "世界不存在或未加载：无法列出节点");
+        }
         String activeId = referenceNodeId != null ? referenceNodeId : "";
 
         List<ToolResult.Item> items = new ArrayList<>();

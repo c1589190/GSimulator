@@ -62,6 +62,9 @@ public final class CreateCheckpointTool implements AgentTool {
         }
 
         WorldInformation wi = worldInfo.get();
+        if (wi == null) {
+            return ToolResult.fail(name(), "世界不存在或未加载：无法创建检查点");
+        }
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
             nodeId = call.param("nodeId");

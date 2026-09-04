@@ -41,6 +41,9 @@ public final class NodeStatusTool implements AgentTool {
     @Override
     public ToolResult execute(ToolCall call) {
         WorldInformation wi = worldInfo.get();
+        if (wi == null) {
+            return ToolResult.fail(name(), "世界不存在或未加载：无法查询节点状态");
+        }
         String nodeId = call.param("nodeId");
         if (nodeId == null || nodeId.isBlank()) {
             return ToolResult.fail(name(), "[NODE_ID_REQUIRED] nodeId is required");
