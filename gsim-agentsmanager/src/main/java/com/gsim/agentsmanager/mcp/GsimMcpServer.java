@@ -72,7 +72,7 @@ public class GsimMcpServer extends AbstractMcpServer {
     // ── AbstractMcpServer template methods ───────────────────
 
     @Override
-    protected String getServerName() {
+    public String getServerName() {
         return "GSimulator-MCP";
     }
 

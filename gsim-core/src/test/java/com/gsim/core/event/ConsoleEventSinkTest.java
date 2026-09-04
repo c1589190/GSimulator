@@ -2,6 +2,7 @@ package com.gsim.core.event;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.gsim.agentsmanager.event.GSimEvent;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Map;

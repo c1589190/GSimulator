@@ -2,6 +2,7 @@ package com.gsim.core.event;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.gsim.agentsmanager.event.GSimEvent;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

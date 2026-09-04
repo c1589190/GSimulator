@@ -87,14 +87,14 @@
         </Logger>
 
         <!-- ToolLoop 调试：agent 包 DEBUG → toolloop.log；CONSOLE 仅 WARN+ -->
-        <Logger name="com.gsim.agent" level="DEBUG" additivity="false">
+        <Logger name="com.gsim.agentsmanager" level="DEBUG" additivity="false">
             <AppenderRef ref="TOOLLOOP_LOG"/>
             <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="WARN"/>
         </Logger>
 
         <!-- LLM 调试：core.llm 包 DEBUG → llm.log；CONSOLE 仅 WARN+ -->
-        <Logger name="com.gsim.core.llm" level="DEBUG" additivity="false">
+        <Logger name="com.gsim.agentsmanager.llm" level="DEBUG" additivity="false">
             <AppenderRef ref="LLM_LOG"/>
             <AppenderRef ref="DEBUG_LOG"/>
             <AppenderRef ref="CONSOLE" level="WARN"/>

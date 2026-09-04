@@ -22,11 +22,6 @@
         </dependency>
         <dependency>
             <groupId>com.gsim</groupId>
-            <artifactId>gsim-agent</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.gsim</groupId>
             <artifactId>gsim-map</artifactId>
             <version>${project.version}</version>
         </dependency>

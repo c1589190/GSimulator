@@ -14,7 +14,6 @@
         <module>gsim-docslib</module>
         <module>gsim-agentsmanager</module>
         <module>gsim-core</module>
-        <module>gsim-agent</module>
         <module>gsim-app</module>
         <module>gsim-map</module>
     </modules>
