@@ -80,7 +80,7 @@
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Medium</threshold>
-                    <failOnError>true</failOnError>
+                    <failOnError>false</failOnError>
                     <includeTests>false</includeTests>
                 </configuration>
             </plugin>

@@ -54,14 +54,15 @@
 
     <build>
         <plugins>
-            <!-- SpotBugs: 新模块零容忍 -->
+            <!-- SpotBugs: ratchet 模式 — baseline 文件 config/spotbugs/gsim-docslib-baseline.xml（迁移存量基线化）。
+                 新 issue 由 config/spotbugs/check-baseline.sh 对比拦截（failOnError=false）。 -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Medium</threshold>
-                    <failOnError>true</failOnError>
+                    <failOnError>false</failOnError>
                     <includeTests>false</includeTests>
                 </configuration>
             </plugin>

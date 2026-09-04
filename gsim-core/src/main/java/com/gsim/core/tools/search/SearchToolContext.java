@@ -23,7 +23,7 @@ import java.util.function.Supplier;
  *       此时除 {@code @doc:} 外的地址解析不可用，自动回退关键词模式）</li>
  * </ul>
  *
- * <p>region/hex（地图）域由 gsim-map 的 {@code MapSearchToolContext} 提供（T13 模块自注册）。
+ * <p>region/hex（地图）域由 gsim-map 的 MapSearchToolContext 提供（T13 模块自注册）。
  *
  * @param wiSupplier 世界信息供应者（可为 null）
  * @param docStore   文档存储（可为 null）

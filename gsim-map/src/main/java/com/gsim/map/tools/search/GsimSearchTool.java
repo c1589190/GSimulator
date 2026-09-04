@@ -172,7 +172,7 @@ public final class GsimSearchTool implements AgentTool {
     /**
      * 尝试以地址模式解析；解析失败（未知引用 / 上下文缺失）返回 null 触发关键词回退。
      *
-     * <p>worldsDir 为 null（MapSearchToolContext 以兼容四参构造）时无法构造
+     * <p>worldsDir 为 null（以兼容构造）时无法构造
      * {@link ResolverContext}（其构造器强制非空 worldsDir），视为不可解析直接回退。
      */
     private ToolResult tryResolveAddress(String query, String worldId) {
