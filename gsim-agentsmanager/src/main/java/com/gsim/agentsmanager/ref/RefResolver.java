@@ -1,4 +1,4 @@
-package com.gsim.core.ref;
+package com.gsim.agentsmanager.ref;
 
 import com.gsim.docslib.doc.DocStore;
 import java.nio.file.Path;

@@ -1,4 +1,4 @@
-package com.gsim.core.importing;
+package com.gsim.docslib.importing;
 
 import static org.junit.jupiter.api.Assertions.*;
 

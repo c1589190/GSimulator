@@ -1,5 +1,8 @@
 package com.gsim.core.worldinfo;
 
+import com.gsim.agentsmanager.QueryScope.ScopedRef;
+import java.util.List;
+
 /**
  * 元素引用 -- 附带来源节点信息的信息单元。
  *
@@ -13,7 +16,8 @@ package com.gsim.core.worldinfo;
  * @param checkpointId 检查点 ID
  * @param element      信息单元
  */
-public record ElementRef(String nodeId, int turn, String worldTime, String checkpointId, Element element) {
+public record ElementRef(String nodeId, int turn, String worldTime, String checkpointId, Element element)
+        implements ScopedRef {
     /**
      * 创建元素引用。
      *
@@ -26,5 +30,15 @@ public record ElementRef(String nodeId, int turn, String worldTime, String check
      */
     public static ElementRef from(String nodeId, int turn, String worldTime, String checkpointId, Element element) {
         return new ElementRef(nodeId, turn, worldTime, checkpointId, element);
+    }
+
+    @Override
+    public String key() {
+        return element != null ? element.key() : "";
+    }
+
+    @Override
+    public List<String> tags() {
+        return element != null ? element.tags() : List.of();
     }
 }

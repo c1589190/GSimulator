@@ -1,4 +1,4 @@
-package com.gsim.core.llm;
+package com.gsim.agentsmanager.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Collections;

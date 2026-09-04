@@ -1,7 +1,7 @@
 package com.gsim.app;
 
 import com.gsim.core.config.ConfigLoader;
-import com.gsim.core.util.LogSanitizer;
+import com.gsim.docslib.util.LogSanitizer;
 import com.gsim.map.config.MapConfig;
 import java.nio.file.Path;
 
@@ -398,7 +398,7 @@ public class AppConfig {
         if (!java.nio.file.Files.exists(llmsPath)) return false;
         try {
             // 用 LlmsConfigFile 完整解析验证
-            var file = com.gsim.core.llm.LlmsConfigFile.load(llmsPath);
+            var file = com.gsim.agentsmanager.llm.LlmsConfigFile.load(llmsPath);
             if (file.providers().isEmpty()) return false;
             // 至少有一个 provider 有非空 baseUrl 和 model
             return file.providers().stream()
@@ -422,7 +422,7 @@ public class AppConfig {
             return LlmsOverride.EMPTY;
         }
         try {
-            var file = com.gsim.core.llm.LlmsConfigFile.load(llmsPath);
+            var file = com.gsim.agentsmanager.llm.LlmsConfigFile.load(llmsPath);
             var base = file.find("base");
             if (base == null) {
                 base = file.defaultConfig();

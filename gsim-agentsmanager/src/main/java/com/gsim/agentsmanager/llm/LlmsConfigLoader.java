@@ -1,4 +1,4 @@
-package com.gsim.core.llm;
+package com.gsim.agentsmanager.llm;
 
 import java.io.IOException;
 import java.nio.file.Files;

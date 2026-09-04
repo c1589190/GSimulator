@@ -12,9 +12,9 @@ import com.gsim.agentsmanager.cache.CachesManager;
 import com.gsim.agentsmanager.cache.FileSystemCachesManager;
 import com.gsim.core.event.ConsoleEventSink;
 import com.gsim.agentsmanager.event.EventBus;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmProviderRegistry;
-import com.gsim.core.llm.LlmsConfigLoader;
+import com.gsim.agentsmanager.llm.LlmManager;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.LlmsConfigLoader;
 import com.gsim.core.session.SessionPool;
 import com.gsim.core.util.TimeProvider;
 import com.gsim.interaction.InteractionContext;
@@ -49,7 +49,7 @@ public class ApplicationContext {
     private String activeRootId;
 
     // 统一引用解析注册中心（GSimulatorApplication 装配，Main 注册 gsimap: resolver）
-    private com.gsim.core.ref.ResolverRegistry resolverRegistry;
+    private com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry;
 
     // Command instances (injected by GSimulatorApplication)
     private ChatCommand chatCommand;
@@ -168,11 +168,11 @@ public class ApplicationContext {
         this.activeRootId = rootId;
     }
 
-    public com.gsim.core.ref.ResolverRegistry getResolverRegistry() {
+    public com.gsim.agentsmanager.ref.ResolverRegistry getResolverRegistry() {
         return resolverRegistry;
     }
 
-    public void setResolverRegistry(com.gsim.core.ref.ResolverRegistry resolverRegistry) {
+    public void setResolverRegistry(com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry) {
         this.resolverRegistry = resolverRegistry;
     }
 

@@ -46,7 +46,7 @@ public class GSimulatorApplication {
     private com.gsim.commands.CompactCommand compactCommand;
     private com.gsim.docslib.doc.DocCacheManager docCacheManager;
     private com.gsim.core.config.CoreConfig coreConfig;
-    private com.gsim.core.ref.InlineRefResolver inlineRefResolver;
+    private com.gsim.agentsmanager.ref.InlineRefResolver inlineRefResolver;
     private final WorldManager worldManager;
 
     /** 当前活跃的 world ID（供 world_list 等工具使用）。 */
@@ -147,7 +147,7 @@ public class GSimulatorApplication {
         // ── 核心业务对象构造（原 registerCoreTools 内，整体上移）──
 
         // Import doc tools
-        var importDocService = new com.gsim.core.importing.ImportDocumentService(
+        var importDocService = new com.gsim.docslib.importing.ImportDocumentService(
                 config.getImportDir(), config.importDocMaxFullReadChars(), config.importDocDefaultLimit());
 
         // DocCacheManager 需在 doc 工具注册前创建（T0.1 遗留的双重初始化，幂等，保持现状）
@@ -219,10 +219,10 @@ public class GSimulatorApplication {
                         com.gsim.core.config.CoreConfig.CACHE_STAGING_THRESHOLD,
                         String.valueOf(config.cacheStagingThreshold())),
                 java.util.Map.of());
-        this.inlineRefResolver = new com.gsim.core.ref.InlineRefResolver(docStore, importDocService);
+        this.inlineRefResolver = new com.gsim.agentsmanager.ref.InlineRefResolver(docStore, importDocService);
 
         // 统一引用解析注册中心（内置 @world/@doc/@cache/@import/裸引用；gsimap: 由 Main 在 MapService 就绪后注册进同一实例）
-        com.gsim.core.ref.ResolverRegistry resolverRegistry = com.gsim.core.ref.ResolverRegistry.createWithBuiltins();
+        com.gsim.agentsmanager.ref.ResolverRegistry resolverRegistry = com.gsim.agentsmanager.ref.ResolverRegistry.createWithBuiltins();
         ctx.setResolverRegistry(resolverRegistry);
 
         // 注册核心工具（World/Doc/Import，始终注册）—— 经 gsim-agent 桥接层
@@ -315,7 +315,7 @@ public class GSimulatorApplication {
 
             // LlmApiHandler + AgentApiHandler — 配置管理
             var llmApiHandler = new com.gsim.webui.handlers.LlmApiHandler(
-                    new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds()),
+                    new com.gsim.agentsmanager.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds()),
                     ctx.getLlmProviderRegistry());
             webUiServer.registerHandler("/api/llm", llmApiHandler);
 
@@ -444,7 +444,7 @@ public class GSimulatorApplication {
 
         // ── Cache compactor（按 id="compact" 查找 llms.json 中的 provider）──
         var compactProvider = ctx.getLlmProviderRegistry().get("compact");
-        var compactLlm = (compactProvider instanceof com.gsim.core.llm.LlmManager m) ? m : null;
+        var compactLlm = (compactProvider instanceof com.gsim.agentsmanager.llm.LlmManager m) ? m : null;
         if (compactLlm != null) {
             log.info("Using compact LLM provider: id={}", compactLlm.providerId());
         } else {
@@ -552,7 +552,7 @@ public class GSimulatorApplication {
 
         // LLM + Agent config management commands
         var llmConfigManager =
-                new com.gsim.core.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds());
+                new com.gsim.agentsmanager.llm.LlmConfigManager(config.getLlmsPath(), config.getLlmTimeoutSeconds());
         var agentConfigManager = new com.gsim.agentsmanager.config.AgentConfigManager(agentFactory.store(), config.agentsDir());
         LlmCommand llmCmd = new LlmCommand(llmConfigManager, ctx.getLlmProviderRegistry());
         AgentCommand agentCmd = new AgentCommand(agentConfigManager);

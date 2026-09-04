@@ -1,7 +1,7 @@
 package com.gsim.agentsmanager.bridge;
 
+import com.gsim.agentsmanager.ref.InlineRefResolver;
 import com.gsim.core.config.CoreConfig;
-import com.gsim.core.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.WorldInformation;
 import com.gsim.docslib.doc.DocCacheManager;
 import com.gsim.docslib.doc.DocStore;

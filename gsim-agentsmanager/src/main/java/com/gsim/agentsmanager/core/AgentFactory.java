@@ -6,6 +6,7 @@ import com.gsim.agentsmanager.TaggedAgentProgressSink;
 import com.gsim.agentsmanager.cache.CacheSession;
 import com.gsim.agentsmanager.cache.CacheStore;
 import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.LlmClient;
 import com.gsim.agentsmanager.llm.LlmMessage;
 import com.gsim.agentsmanager.tool.ToolRegistry;
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public class AgentFactory {
 
     private final AgentConfigStore configStore;
     private final LlmClient llmClient;
-    private final LlmManager llm; // 向后兼容：默认 provider
+    private final LlmClient llm;
     private final ToolRegistry allTools;
     private final AgentProgressSink rootSink;
     private final String model;

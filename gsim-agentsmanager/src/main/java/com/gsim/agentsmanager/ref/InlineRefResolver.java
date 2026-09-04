@@ -1,9 +1,9 @@
-package com.gsim.core.ref;
+package com.gsim.agentsmanager.ref;
 
-import com.gsim.core.importing.ImportDocumentService;
-import com.gsim.core.importing.ImportDocumentService.ImportDocumentReadResult;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.docslib.doc.Document;
+import com.gsim.docslib.importing.ImportDocumentService;
+import com.gsim.docslib.importing.ImportDocumentService.ImportDocumentReadResult;
 import java.util.ArrayList;
 import java.util.List;
 

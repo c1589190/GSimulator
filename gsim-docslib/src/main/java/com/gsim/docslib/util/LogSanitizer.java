@@ -1,4 +1,4 @@
-package com.gsim.core.util;
+package com.gsim.docslib.util;
 
 /**
  * 日志脱敏工具 — 防止 API Key / Authorization Header 等敏感信息写入日志文件。

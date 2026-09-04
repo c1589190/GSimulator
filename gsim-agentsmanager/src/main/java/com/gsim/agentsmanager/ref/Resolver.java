@@ -1,6 +1,6 @@
-package com.gsim.core.ref;
+package com.gsim.agentsmanager.ref;
 
-import com.gsim.core.ref.RefResolver.ResolvedRef;
+import com.gsim.agentsmanager.ref.RefResolver.ResolvedRef;
 
 /**
  * 引用解析器插件接口 — 按前缀（prefix）分发到对应后端。

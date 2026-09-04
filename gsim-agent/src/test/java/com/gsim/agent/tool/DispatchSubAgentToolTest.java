@@ -10,8 +10,8 @@ import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.agentsmanager.cache.CacheStore;
 import com.gsim.agentsmanager.event.AgentProgressSink;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.LlmManager;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -76,7 +76,7 @@ class DispatchSubAgentToolTest {
         subAgentCounter = new AtomicInteger(0);
 
         var provConfig =
-                com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+                com.gsim.agentsmanager.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmManager llm = new LlmManager(provConfig);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", llm);

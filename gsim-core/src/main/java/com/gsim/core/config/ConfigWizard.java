@@ -1,7 +1,7 @@
 package com.gsim.core.config;
 
-import com.gsim.core.llm.LlmConfig;
-import com.gsim.core.llm.LlmsConfigFile;
+import com.gsim.agentsmanager.llm.LlmConfig;
+import com.gsim.agentsmanager.llm.LlmsConfigFile;
 import java.io.Console;
 import java.io.IOException;
 import java.nio.file.Files;

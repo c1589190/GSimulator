@@ -1,6 +1,5 @@
 package com.gsim.agentsmanager;
 
-import com.gsim.core.worldinfo.ElementRef;
 import java.util.List;
 
 /**
@@ -16,6 +15,19 @@ import java.util.List;
  * match 既不是 "and" 也不是 "or"（含缺省）时，本 scope 不启用，全部放行（兼容无限制配置）。
  */
 public record QueryScope(String match, List<String> tagAllowlist, List<String> addressAllowlist) {
+
+    /**
+     * 可被 scope 判定的元素引用抽象 — 由 worldinfo 的 {@code ElementRef} 实现（core 依赖 agentsmanager）。
+     */
+    public interface ScopedRef {
+        String nodeId();
+
+        String checkpointId();
+
+        String key();
+
+        List<String> tags();
+    }
 
     public static final String MATCH_AND = "and";
     public static final String MATCH_OR = "or";
@@ -82,18 +94,14 @@ public record QueryScope(String match, List<String> tagAllowlist, List<String> a
         return MATCH_OR.equals(match) ? (tagOk || addrOk) : (tagOk && addrOk);
     }
 
-    /** 便捷重载：按 {@link ElementRef} 判定。 */
-    public boolean allows(ElementRef ref) {
+    /** 便捷重载：按 {@link ScopedRef} 判定。 */
+    public boolean allows(ScopedRef ref) {
         if (ref == null) return true;
-        return allows(
-                ref.nodeId(),
-                ref.checkpointId(),
-                ref.element() != null ? ref.element().key() : "",
-                ref.element() != null ? ref.element().tags() : List.of());
+        return allows(ref.nodeId(), ref.checkpointId(), ref.key(), ref.tags());
     }
 
     /** 过滤元素引用列表，保留被允许的（保持顺序）。 */
-    public List<ElementRef> filterRefs(List<ElementRef> refs) {
+    public <T extends ScopedRef> List<T> filterRefs(List<T> refs) {
         if (refs == null || refs.isEmpty()) return refs;
         return refs.stream().filter(this::allows).toList();
     }

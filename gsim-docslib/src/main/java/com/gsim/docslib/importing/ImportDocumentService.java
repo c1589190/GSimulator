@@ -1,4 +1,4 @@
-package com.gsim.core.importing;
+package com.gsim.docslib.importing;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

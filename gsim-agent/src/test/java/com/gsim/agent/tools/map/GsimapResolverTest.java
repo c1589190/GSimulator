@@ -2,8 +2,8 @@ package com.gsim.agent.tools.map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.gsim.core.ref.ResolverContext;
-import com.gsim.core.ref.ResolverRegistry;
+import com.gsim.agentsmanager.ref.ResolverContext;
+import com.gsim.agentsmanager.ref.ResolverRegistry;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import com.gsim.map.map.MapData;
 import com.gsim.map.map.MapStore;

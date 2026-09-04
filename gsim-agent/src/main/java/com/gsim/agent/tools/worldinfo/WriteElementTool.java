@@ -5,7 +5,7 @@ import com.gsim.agentsmanager.tool.AgentTool.Permission;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocCacheManager;
-import com.gsim.core.ref.InlineRefResolver;
+import com.gsim.agentsmanager.ref.InlineRefResolver;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;
 import com.gsim.core.worldinfo.WorldInformation;

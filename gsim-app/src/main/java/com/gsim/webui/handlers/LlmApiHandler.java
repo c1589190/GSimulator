@@ -1,7 +1,7 @@
 package com.gsim.webui.handlers;
 
-import com.gsim.core.llm.LlmConfigManager;
-import com.gsim.core.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.LlmConfigManager;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
 import com.gsim.docslib.util.JsonUtils;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;

@@ -1,4 +1,4 @@
-package com.gsim.core.llm;
+package com.gsim.agentsmanager.llm;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

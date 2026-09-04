@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.ref.ResolverContext;
-import com.gsim.core.ref.ResolverRegistry;
+import com.gsim.agentsmanager.ref.ResolverContext;
+import com.gsim.agentsmanager.ref.ResolverRegistry;
 import com.gsim.docslib.util.JsonUtils;
 import com.gsim.core.worldinfo.loader.WorldIndexManager;
 import com.gsim.map.map.MapData;

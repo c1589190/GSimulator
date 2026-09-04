@@ -1,8 +1,8 @@
 package com.gsim.agent.tools.map;
 
-import com.gsim.core.ref.RefResolver.ResolvedRef;
-import com.gsim.core.ref.Resolver;
-import com.gsim.core.ref.ResolverContext;
+import com.gsim.agentsmanager.ref.RefResolver.ResolvedRef;
+import com.gsim.agentsmanager.ref.Resolver;
+import com.gsim.agentsmanager.ref.ResolverContext;
 import com.gsim.docslib.util.JsonUtils;
 import com.gsim.map.map.MapData;
 import com.gsim.map.service.MapService;
@@ -22,7 +22,7 @@ import java.util.Map;
  * </ul>
  *
  * <p>依赖 {@link MapService}，因此位于 gsim-agent 层（gsim-core 不依赖 gsim-map）；
- * 由应用装配时注册进 {@link com.gsim.core.ref.ResolverRegistry}。
+ * 由应用装配时注册进 {@link com.gsim.agentsmanager.ref.ResolverRegistry}。
  */
 public final class GsimapResolver implements Resolver {
 

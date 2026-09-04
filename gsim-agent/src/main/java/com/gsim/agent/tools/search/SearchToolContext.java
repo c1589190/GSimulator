@@ -1,6 +1,6 @@
 package com.gsim.agent.tools.search;
 
-import com.gsim.core.ref.ResolverContext;
+import com.gsim.agentsmanager.ref.ResolverContext;
 import com.gsim.core.worldinfo.WorldInformation;
 import java.nio.file.Path;
 import java.util.function.Supplier;
@@ -34,7 +34,7 @@ public record SearchToolContext(
         Supplier<WorldInformation> wiSupplier,
         com.gsim.map.service.MapService mapService,
         com.gsim.docslib.doc.DocStore docStore,
-        com.gsim.core.ref.ResolverRegistry registry,
+        com.gsim.agentsmanager.ref.ResolverRegistry registry,
         Path worldsDir,
         Path importDir,
         Path cacheDir) {
@@ -48,7 +48,7 @@ public record SearchToolContext(
             Supplier<WorldInformation> wiSupplier,
             com.gsim.map.service.MapService mapService,
             com.gsim.docslib.doc.DocStore docStore,
-            com.gsim.core.ref.ResolverRegistry registry) {
+            com.gsim.agentsmanager.ref.ResolverRegistry registry) {
         this(wiSupplier, mapService, docStore, registry, null, null, null);
     }
 }

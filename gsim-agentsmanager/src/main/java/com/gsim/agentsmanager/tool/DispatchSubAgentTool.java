@@ -6,9 +6,9 @@ import com.gsim.agentsmanager.EventBusAgentProgressSink;
 import com.gsim.agentsmanager.core.AgentFactory;
 import com.gsim.agentsmanager.core.AgentResult;
 import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.llm.LlmClient;
 import com.gsim.agentsmanager.llm.ToolDef;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.core.llm.LlmManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,7 +39,7 @@ public class DispatchSubAgentTool implements AgentTool {
 
     private static final Logger log = LoggerFactory.getLogger(DispatchSubAgentTool.class);
 
-    private final LlmManager llmManager;
+    private final LlmClient llmManager;
     private final ToolRegistry toolRegistry;
     private final String model;
     private final AgentProgressSink progressSink;
@@ -51,7 +51,7 @@ public class DispatchSubAgentTool implements AgentTool {
     private volatile com.gsim.agentsmanager.management.AgentsManager agentsManager;
 
     public DispatchSubAgentTool(
-            LlmManager llmManager,
+            LlmClient llmManager,
             ToolRegistry toolRegistry,
             String model,
             AgentProgressSink progressSink,

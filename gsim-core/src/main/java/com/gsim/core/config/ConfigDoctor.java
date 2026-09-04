@@ -1,10 +1,10 @@
 package com.gsim.core.config;
 
+import com.gsim.agentsmanager.llm.LlmManager;
 import com.gsim.agentsmanager.llm.LlmMessage;
 import com.gsim.agentsmanager.llm.LlmRequest;
 import com.gsim.agentsmanager.llm.LlmResult;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.ProviderConfig;
+import com.gsim.agentsmanager.llm.ProviderConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

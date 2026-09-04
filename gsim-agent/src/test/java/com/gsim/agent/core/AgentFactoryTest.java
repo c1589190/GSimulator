@@ -7,8 +7,8 @@ import com.gsim.agentsmanager.tool.ToolRegistry;
 import com.gsim.agentsmanager.cache.CacheStore;
 import com.gsim.agentsmanager.event.AgentProgressEvent;
 import com.gsim.agentsmanager.event.AgentProgressSink;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.LlmManager;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,7 +70,7 @@ class AgentFactoryTest {
 
         // Set up LLM provider registry with a test provider
         var provConfig =
-                com.gsim.core.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
+                com.gsim.agentsmanager.llm.ProviderConfig.generic("test", "http://localhost", "key", "test-model", 0.3, 30);
         LlmProviderRegistry llmRegistry = new LlmProviderRegistry();
         llmRegistry.register("base", new LlmManager(provConfig));
 

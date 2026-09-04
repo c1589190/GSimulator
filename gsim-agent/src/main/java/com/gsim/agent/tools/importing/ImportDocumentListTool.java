@@ -4,7 +4,7 @@ import com.gsim.agentsmanager.tool.AgentTool;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
 import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
-import com.gsim.core.importing.ImportDocumentService;
+import com.gsim.docslib.importing.ImportDocumentService;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

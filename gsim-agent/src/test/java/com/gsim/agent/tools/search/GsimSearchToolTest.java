@@ -8,7 +8,7 @@ import com.gsim.agentsmanager.tool.ToolCall;
 import com.gsim.agentsmanager.tool.ToolResult;
 import com.gsim.docslib.doc.DocStore;
 import com.gsim.docslib.doc.DocType;
-import com.gsim.core.ref.ResolverRegistry;
+import com.gsim.agentsmanager.ref.ResolverRegistry;
 import com.gsim.core.worldinfo.Checkpoint;
 import com.gsim.core.worldinfo.Element;
 import com.gsim.core.worldinfo.NodeSnapshot;

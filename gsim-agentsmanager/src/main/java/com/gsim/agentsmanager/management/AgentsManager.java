@@ -11,11 +11,11 @@ import com.gsim.agentsmanager.core.AgentResult;
 import com.gsim.agentsmanager.event.AgentProgressSink;
 import com.gsim.agentsmanager.event.EventBus;
 import com.gsim.agentsmanager.event.GSimEvent;
+import com.gsim.agentsmanager.llm.LlmClient;
 import com.gsim.agentsmanager.llm.LlmMessage;
+import com.gsim.agentsmanager.llm.LlmProvider;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
 import com.gsim.agentsmanager.tool.ToolRegistry;
-import com.gsim.core.llm.LlmManager;
-import com.gsim.core.llm.LlmProvider;
-import com.gsim.core.llm.LlmProviderRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,7 +148,7 @@ public class AgentsManager {
         }
 
         LlmProvider provider = llmRegistry.get(config.llmProvider());
-        AbstractAgent agent = new AbstractAgent(config, (LlmManager) provider, allTools, rootSink, model, resultPolicy);
+        AbstractAgent agent = new AbstractAgent(config, (LlmClient) provider, allTools, rootSink, model, resultPolicy);
         agent.setAgentId(instanceId);
         agent.setMessageSaver(msg -> cacheStore.appendMessage(resolvedCacheId, msg.toCacheMap()));
 

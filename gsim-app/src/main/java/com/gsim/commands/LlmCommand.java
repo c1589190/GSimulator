@@ -1,7 +1,7 @@
 package com.gsim.commands;
 
-import com.gsim.core.llm.LlmConfigManager;
-import com.gsim.core.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.LlmConfigManager;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
 import java.util.List;
 
 /**

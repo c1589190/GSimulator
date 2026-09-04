@@ -1,12 +1,12 @@
 package com.gsim.agentsmanager.bridge;
 
 import com.gsim.agentsmanager.event.AgentProgressSink;
+import com.gsim.agentsmanager.ref.ResolverRegistry;
 import com.gsim.core.embedding.EmbeddingClient;
-import com.gsim.core.importing.ImportDocumentService;
-import com.gsim.core.ref.ResolverRegistry;
 import com.gsim.core.skill.SkillIndex;
 import com.gsim.docslib.doc.DocCacheManager;
 import com.gsim.docslib.doc.DocStore;
+import com.gsim.docslib.importing.ImportDocumentService;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 

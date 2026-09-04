@@ -67,7 +67,7 @@ class Log4j2ConfigResourceExistsTest {
     }
 
     @Test
-    @DisplayName("log4j2.xml 为 com.gsim.agent 和 com.gsim.core.llm 配置了独立 Logger")
+    @DisplayName("log4j2.xml 为 com.gsim.agent 和 com.gsim.agentsmanager.llm 配置了独立 Logger")
     void log4j2ConfigHasAgentAndLlmLoggers() throws Exception {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         String content;
@@ -77,6 +77,8 @@ class Log4j2ConfigResourceExistsTest {
         }
 
         assertTrue(content.contains("com.gsim.agent"), "Should configure com.gsim.agent logger for ToolLoop");
-        assertTrue(content.contains("com.gsim.core.llm"), "Should configure com.gsim.core.llm logger for LLM");
+        assertTrue(
+                content.contains("com.gsim.agentsmanager.llm"),
+                "Should configure com.gsim.agentsmanager.llm logger for LLM");
     }
 }

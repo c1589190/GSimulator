@@ -1,9 +1,9 @@
 package com.gsim.agentsmanager.tool;
 
+import com.gsim.agentsmanager.llm.LlmProvider;
+import com.gsim.agentsmanager.llm.LlmProviderRegistry;
+import com.gsim.agentsmanager.llm.ProviderConfig;
 import com.gsim.agentsmanager.tool.AgentTool.Permission;
-import com.gsim.core.llm.LlmProvider;
-import com.gsim.core.llm.LlmProviderRegistry;
-import com.gsim.core.llm.ProviderConfig;
 import java.util.List;
 import java.util.Map;
 
